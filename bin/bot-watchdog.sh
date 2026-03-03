@@ -48,9 +48,11 @@ send_discord_webhook() {
         webhook_url=$(python3 -c "import json,sys; d=json.load(open('$MONITORING_CONFIG')); print(d.get('webhook',{}).get('url',''))" 2>/dev/null || true)
     fi
     if [[ -n "$webhook_url" ]]; then
+        local payload
+        payload=$(jq -n --arg content "$message" '{"content": $content}')
         curl -sf -o /dev/null \
             -H "Content-Type: application/json" \
-            -d "{\"content\": \"${message}\"}" \
+            -d "$payload" \
             "$webhook_url" 2>/dev/null || true
     fi
 }

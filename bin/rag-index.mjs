@@ -12,16 +12,16 @@ import { homedir } from 'node:os';
 import { config } from 'dotenv';
 
 // Load .env for cron environment (OPENAI_API_KEY)
-config({ path: join(process.env.BOT_HOME || join(homedir(), 'claude-discord-bridge'), 'discord', '.env') });
+config({ path: join(process.env.BOT_HOME || join(homedir(), '.jarvis'), 'discord', '.env') });
 
 if (!process.env.OPENAI_API_KEY) {
-  console.error('[rag-index] FATAL: OPENAI_API_KEY not set. Check ~/claude-discord-bridge/discord/.env');
+  console.error('[rag-index] FATAL: OPENAI_API_KEY not set. Check ~/.jarvis/discord/.env');
   process.exit(1);
 }
 
 import { RAGEngine } from '../lib/rag-engine.mjs';
 
-const BOT_HOME = join(process.env.BOT_HOME || join(homedir(), 'claude-discord-bridge'));
+const BOT_HOME = join(process.env.BOT_HOME || join(homedir(), '.jarvis'));
 const STATE_FILE = join(BOT_HOME, 'rag', 'index-state.json');
 
 async function loadState() {

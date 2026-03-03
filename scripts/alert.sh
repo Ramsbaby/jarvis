@@ -1,11 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Alert System v2.0
 # Discord Webhook + ntfy 이중 알림
 
 set -euo pipefail
 
-MONITORING_CONFIG="$HOME/claude-discord-bridge/config/monitoring.json"
-ALERT_STATE_DIR="$HOME/claude-discord-bridge/state"
+BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
+ALERT_STATE_DIR="$BOT_HOME/state"
 LAST_ALERT_FILE="$ALERT_STATE_DIR/last-alert"
 
 # ============================================================================
@@ -99,22 +100,25 @@ send_alert() {
     local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
     local hostname=$(hostname -s)
 
-    # JSON 이스케이프
-    local escaped_title=$(echo "$title" | sed 's/"/\\"/g' | tr '\n' ' ')
-    local escaped_message=$(echo "$message" | sed 's/"/\\"/g' | sed 's/\\n/\\\\n/g' | tr '\n' ' ')
-
-    # Embed JSON 생성
+    # Embed JSON 생성 (jq로 특수문자 안전 처리)
     local embed_json
     if [[ -n "$fields" ]] && [[ "$fields" != "[]" ]]; then
-        embed_json=$(cat <<EOF
-{"embeds":[{"title":"$emoji $escaped_title","description":"$escaped_message","color":$color,"timestamp":"$timestamp","fields":$fields,"footer":{"text":"Bot Monitor · $hostname"}}]}
-EOF
-)
+        embed_json=$(jq -n \
+            --arg title "$emoji $title" \
+            --arg desc "$message" \
+            --argjson color "$color" \
+            --arg ts "$timestamp" \
+            --argjson fields "$fields" \
+            --arg footer "Bot Monitor · $hostname" \
+            '{"embeds":[{"title":$title,"description":$desc,"color":$color,"timestamp":$ts,"fields":$fields,"footer":{"text":$footer}}]}')
     else
-        embed_json=$(cat <<EOF
-{"embeds":[{"title":"$emoji $escaped_title","description":"$escaped_message","color":$color,"timestamp":"$timestamp","footer":{"text":"Bot Monitor · $hostname"}}]}
-EOF
-)
+        embed_json=$(jq -n \
+            --arg title "$emoji $title" \
+            --arg desc "$message" \
+            --argjson color "$color" \
+            --arg ts "$timestamp" \
+            --arg footer "Bot Monitor · $hostname" \
+            '{"embeds":[{"title":$title,"description":$desc,"color":$color,"timestamp":$ts,"footer":{"text":$footer}}]}')
     fi
 
     # Webhook 전송

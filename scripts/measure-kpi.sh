@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -eu
+set -euo pipefail
 
 # measure-kpi.sh - 자비스 컴퍼니 팀별 KPI 자동 측정
 # Usage: measure-kpi.sh [--discord] [--days N]

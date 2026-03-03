@@ -31,8 +31,6 @@ const USER_PROFILE_PATH = join(BOT_HOME, 'context', 'user-profile.md');
 const CONV_HISTORY_DIR = join(BOT_HOME, 'context', 'discord-history');
 const LOG_PATH = join(BOT_HOME, 'logs', 'discord-bot.jsonl');
 
-const CLAUDE_TIMEOUT_MS = 300_000;
-
 // ---------------------------------------------------------------------------
 // Logging utilities
 // ---------------------------------------------------------------------------

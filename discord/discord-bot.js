@@ -32,7 +32,7 @@ import { handleMessage } from './lib/handlers.js';
 // ---------------------------------------------------------------------------
 
 const HOME = homedir();
-const BOT_HOME = join(process.env.BOT_HOME || join(HOME, 'claude-discord-bridge'));
+const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.jarvis'));
 const SESSIONS_PATH = join(BOT_HOME, 'state', 'sessions.json');
 const RATE_TRACKER_PATH = join(BOT_HOME, 'state', 'rate-tracker.json');
 const MAX_CONCURRENT = 2;
@@ -157,6 +157,14 @@ async function handleInteraction(interaction) {
   }
 
   if (!interaction.isChatInputCommand()) return;
+
+  // Owner-only guard for sensitive commands
+  const OWNER_ID = process.env.OWNER_DISCORD_ID;
+  const SENSITIVE = ['run', 'schedule', 'remember', 'alert', 'stop', 'clear'];
+  if (OWNER_ID && SENSITIVE.includes(interaction.commandName) && interaction.user.id !== OWNER_ID) {
+    await interaction.reply({ content: '⛔ 이 명령어는 봇 오너만 사용할 수 있습니다.', ephemeral: true });
+    return;
+  }
 
   const { commandName } = interaction;
 
@@ -326,7 +334,7 @@ async function handleInteraction(interaction) {
     mkdirSync(queueDir, { recursive: true });
     const fname = join(queueDir, `${Date.now()}_${Math.random().toString(36).slice(2)}.json`);
     const payload = { prompt: task, schedule_at: scheduleAt, created_by: interaction.user.tag, channel: interaction.channelId };
-    import('node:fs').then(({ writeFileSync }) => writeFileSync(fname, JSON.stringify(payload, null, 2)));
+    writeFileSync(fname, JSON.stringify(payload, null, 2));
     await interaction.reply(`✅ **${delay}** 후 실행 예약됨\n> ${task}`);
 
   } else if (commandName === 'usage') {

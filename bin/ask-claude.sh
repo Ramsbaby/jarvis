@@ -76,12 +76,12 @@ SYSTEM_PROMPT=""
 
 # RAG 컨텍스트 로드 (시맨틱 검색 → 정적 파일 fallback)
 RAG_CONTEXT=""
-if command -v node >/dev/null 2>&1 && [[ -f "$HOME/claude-discord-bridge/lib/rag-query.mjs" ]]; then
-    RAG_CONTEXT=$(node "$HOME/claude-discord-bridge/lib/rag-query.mjs" "$PROMPT" 2>/dev/null || echo "")
+if command -v node >/dev/null 2>&1 && [[ -f "$BOT_HOME/lib/rag-query.mjs" ]]; then
+    RAG_CONTEXT=$(node "$BOT_HOME/lib/rag-query.mjs" "$PROMPT" 2>/dev/null || echo "")
 fi
 # Fallback: RAG 엔진 실패 시 정적 메모리 파일 사용
-if [[ -z "$RAG_CONTEXT" ]] && [[ -f "$HOME/claude-discord-bridge/rag/memory.md" ]]; then
-    RAG_CONTEXT=$(head -c 2000 "$HOME/claude-discord-bridge/rag/memory.md")
+if [[ -z "$RAG_CONTEXT" ]] && [[ -f "$BOT_HOME/rag/memory.md" ]]; then
+    RAG_CONTEXT=$(head -c 2000 "$BOT_HOME/rag/memory.md")
 fi
 if [[ -n "$RAG_CONTEXT" ]]; then
     SYSTEM_PROMPT="## Long-term Memory (RAG)
