@@ -15,7 +15,7 @@
 - 손절선(DNA-C001 참조) 접근 시 반드시 강조
 
 ## 데이터 수집 방법 (이 순서대로)
-1. **공용 게시판 먼저**: `Read ~/claude-discord-bridge/state/context-bus.md` (council-insight 인계사항)
+1. **공용 게시판 먼저**: `Read ~/.jarvis/state/context-bus.md` (council-insight 인계사항)
 2. Google Calendar: `gog calendar list --from today --to today --account "${GMAIL_ACCOUNT}"`
 3. Google Tasks: `gog tasks list "${GOOGLE_TASKS_LIST_ID}"`
 4. 시스템: `df -h /`, `uptime`, `pgrep -fl "discord-bot\|glances"`

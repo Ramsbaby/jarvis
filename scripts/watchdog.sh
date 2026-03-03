@@ -9,7 +9,7 @@ BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 STATE_DIR="$BOT_HOME/watchdog"
 LOG_FILE="$BOT_HOME/logs/watchdog.log"
 HEALING_LOCK="/tmp/bot-healing.lock"
-DISCORD_SERVICE="${DISCORD_SERVICE:-ai.discord-bot}"
+DISCORD_SERVICE="${DISCORD_SERVICE:-ai.jarvis.discord-bot}"
 DISCORD_PLIST="$HOME/Library/LaunchAgents/${DISCORD_SERVICE}.plist"
 ROUTE_RESULT="$BOT_HOME/bin/route-result.sh"
 
@@ -19,6 +19,7 @@ CLAUDE_STALE_MINUTES=10
 BACKOFF_DELAYS=(10 30 90 180 300)
 MAX_RETRIES=5
 CRASH_DECAY_HOURS=6
+FATAL_ALERT_COOLDOWN_SEC=3600  # FATAL 알림 최소 1시간 간격
 
 mkdir -p "$STATE_DIR" "$(dirname "$LOG_FILE")"
 
@@ -236,7 +237,17 @@ case "$bot_status" in
         crash_count=$(get_crash_count)
 
         if (( crash_count >= MAX_RETRIES )); then
-            send_alert "[Bot Watchdog] FATAL: Discord bot crashed $crash_count times, max retries reached. Manual intervention required."
+            local fatal_last="$STATE_DIR/fatal-alert-last"
+            local now_ts
+            now_ts=$(date +%s)
+            local last_ts=0
+            [[ -f "$fatal_last" ]] && last_ts=$(cat "$fatal_last")
+            if (( now_ts - last_ts >= FATAL_ALERT_COOLDOWN_SEC )); then
+                send_alert "[Bot Watchdog] FATAL: Discord bot crashed ${crash_count} times, max retries reached. Manual intervention required."
+                echo "$now_ts" > "$fatal_last"
+            else
+                log "FATAL alert suppressed (cooldown: $(( FATAL_ALERT_COOLDOWN_SEC - (now_ts - last_ts) ))s remaining)"
+            fi
             health_status="fatal:max_retries"
         elif is_in_cooldown; then
             health_status="cooldown"

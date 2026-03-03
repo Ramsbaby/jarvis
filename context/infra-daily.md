@@ -5,18 +5,18 @@
 
 ## 🔰 태스크 시작 시 필독 (온보딩)
 ```
-1. Check ~/claude-discord-bridge/rag/teams/shared-inbox/    # 인프라팀 수신 메시지 확인
-2. cat ~/claude-discord-bridge/state/health.json            # 최근 헬스체크 상태 확인
+1. Check ~/.jarvis/rag/teams/shared-inbox/    # 인프라팀 수신 메시지 확인
+2. cat ~/.jarvis/state/health.json            # 최근 헬스체크 상태 확인
 3. launchctl list | grep "ai\."               # LaunchAgent 상태 확인
 ```
 
 ## 감시 대상
 - LaunchAgent: ai.discord-bot, ai.discord-watchdog
 - Glances 웹 대시보드 (포트 61208) — 선택적 외부 서비스 (`launchctl list | grep glances`)
-- Discord Bot 로그 freshness: ~/claude-discord-bridge/logs/ 최근 5분 이내 갱신 여부
+- Discord Bot 로그 freshness: ~/.jarvis/logs/ 최근 5분 이내 갱신 여부
 - 디스크: / 파티션 90% 이하 유지
 - 메모리: 시스템 여유 메모리 2GB 이상 유지
-- 크론 성공률: ~/claude-discord-bridge/logs/cron.log 최근 24시간
+- 크론 성공률: ~/.jarvis/logs/cron.log 최근 24시간
 
 ## 장애 판정
 - LaunchAgent PID 없음 → CRITICAL
@@ -27,10 +27,10 @@
 ## 📤 태스크 완료 후 필수 작업
 ```
 1. 일일 점검 보고서 저장:
-   ~/claude-discord-bridge/rag/teams/reports/infra-$(date +%F).md
+   ~/.jarvis/rag/teams/reports/infra-$(date +%F).md
 
 2. CRITICAL/HIGH 발견 시 shared-inbox에 council팀에게 알림:
-   ~/claude-discord-bridge/rag/teams/shared-inbox/$(date +%Y-%m-%d)_infra_to_council.md
+   ~/.jarvis/rag/teams/shared-inbox/$(date +%Y-%m-%d)_infra_to_council.md
 ```
 
 ## Discord 전송 채널

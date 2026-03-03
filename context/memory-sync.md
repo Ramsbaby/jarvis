@@ -1,6 +1,6 @@
 # Memory Sync 태스크
 
-목적: ~/claude-discord-bridge/rag/ 파일 정리 및 최적화
+목적: ~/.jarvis/rag/ 파일 정리 및 최적화
 
 - handoff.md에서 30일 이상 된 완료 항목 삭제
 - memory.md 크기 10KB 초과 시 요약 압축 요청

@@ -6,10 +6,10 @@
 ## PDCA — Act 단계 핵심 리포트
 
 ## 데이터 수집 방법
-- 크론 전체 성공률: `grep -c "SUCCESS" ~/claude-discord-bridge/logs/cron.log`
-- RAG 임베딩 누적: `tail -5 ~/claude-discord-bridge/logs/rag-index.log`
-- 시스템 크래시: `grep -c "CRASH\|ERROR\|RESTART" ~/claude-discord-bridge/logs/watchdog.log 2>/dev/null || echo 0`
-- 태스크 빈도: `grep "START" ~/claude-discord-bridge/logs/cron.log | awk '{print $3}' | sort | uniq -c | sort -rn | head -5`
+- 크론 전체 성공률: `grep -c "SUCCESS" ~/.jarvis/logs/cron.log`
+- RAG 임베딩 누적: `tail -5 ~/.jarvis/logs/rag-index.log`
+- 시스템 크래시: `grep -c "CRASH\|ERROR\|RESTART" ~/.jarvis/logs/watchdog.log 2>/dev/null || echo 0`
+- 태스크 빈도: `grep "START" ~/.jarvis/logs/cron.log | awk '{print $3}' | sort | uniq -c | sort -rn | head -5`
 
 ## 리포트 구조
 ### 📅 월간 회고 (YYYY년 M월)

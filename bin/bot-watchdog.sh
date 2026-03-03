@@ -15,7 +15,7 @@ BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 BOT_LOG="$BOT_HOME/logs/discord-bot.out.log"
 WATCHDOG_LOG="$BOT_HOME/logs/bot-watchdog.log"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
-DISCORD_SERVICE="${DISCORD_SERVICE:-ai.discord-bot}"
+DISCORD_SERVICE="${DISCORD_SERVICE:-ai.jarvis.discord-bot}"
 STATE_DIR="$BOT_HOME/watchdog"
 COOLDOWN_FILE="$STATE_DIR/bot-watchdog-last-alert"
 

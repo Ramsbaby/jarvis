@@ -3,7 +3,7 @@
  * Also provides shared logging and ntfy notification utilities (absorbed from logger.js).
  *
  * Exports: spawnClaude, parseStreamEvents, execRagAsync, saveConversationTurn,
- *          sendNtfy, log, ts
+ *          sendNtfy, log, ts, detectFeedback, processFeedback
  */
 
 import {
@@ -19,6 +19,81 @@ import { join, resolve, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { userMemory } from './user-memory.js';
+
+// ---------------------------------------------------------------------------
+// Feedback detection — recognize user signals for learning loop
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect user feedback signals from message text.
+ * Returns { type, fact? } or null if no feedback detected.
+ *
+ * Types:
+ *   'remember'   — explicit memory request ("기억해: ..." or "/remember ...")
+ *   'positive'   — positive feedback (좋아, 잘했어, 완벽, etc.)
+ *   'negative'   — negative feedback (별로야, 틀렸어, 다시 해, etc.)
+ *   'correction' — behavioral correction ("앞으로는 ...", "다음부터는 ...")
+ */
+export function detectFeedback(text) {
+  const t = text.trim().toLowerCase();
+
+  // Explicit memory request
+  if (t.startsWith('기억해:') || t.startsWith('/remember ')) {
+    const fact = text.replace(/^(기억해:|\/remember\s+)/i, '').trim();
+    return fact ? { type: 'remember', fact } : null;
+  }
+
+  // Positive feedback
+  if (/^(좋아|잘했어|이게 맞아|완벽|ㄱㅌ|굿|맞아|정확해|완벽해)/.test(t)) {
+    return { type: 'positive' };
+  }
+
+  // Negative feedback
+  if (/^(별로야|틀렸어|다시 해|아니야|이건 아닌|잘못됐어|틀려)/.test(t)) {
+    return { type: 'negative' };
+  }
+
+  // Correction / behavioral instruction
+  const corrMatch = text.match(/^(앞으로는|다음부터는)\s+(.+)/);
+  if (corrMatch) {
+    return { type: 'correction', fact: corrMatch[2] };
+  }
+
+  return null;
+}
+
+/**
+ * Process detected feedback and persist to user memory.
+ * @param {string} userId - Discord user ID
+ * @param {string} text   - raw user message
+ * @returns {{ type: string, fact?: string } | null} feedback object or null
+ */
+export function processFeedback(userId, text) {
+  const fb = detectFeedback(text);
+  if (!fb) return null;
+
+  if (fb.type === 'remember' && fb.fact) {
+    userMemory.addFact(userId, fb.fact);
+    log('info', 'Feedback: remember', { userId, fact: fb.fact.slice(0, 100) });
+  } else if (fb.type === 'correction' && fb.fact) {
+    const data = userMemory.get(userId);
+    if (!data.corrections.includes(fb.fact)) {
+      data.corrections.push(fb.fact);
+      data.updatedAt = new Date().toISOString();
+      const usersDir = join(process.env.BOT_HOME || join(homedir(), '.jarvis'), 'state', 'users');
+      mkdirSync(usersDir, { recursive: true });
+      writeFileSync(join(usersDir, `${userId}.json`), JSON.stringify(data, null, 2));
+    }
+    log('info', 'Feedback: correction', { userId, fact: fb.fact.slice(0, 100) });
+  } else if (fb.type === 'positive') {
+    log('info', 'Feedback: positive', { userId });
+  } else if (fb.type === 'negative') {
+    log('info', 'Feedback: negative', { userId });
+  }
+
+  return fb;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -127,7 +202,7 @@ export function saveConversationTurn(userMsg, botMsg, channelName) {
 // spawnClaude — subprocess with 4-layer token isolation
 // ---------------------------------------------------------------------------
 
-export function spawnClaude(prompt, { sessionId, threadId, channelId, ragContext, attachments = [], contextBudget } = {}) {
+export function spawnClaude(prompt, { sessionId, threadId, channelId, ragContext, attachments = [], contextBudget, userId } = {}) {
   const stableDir = join('/tmp', 'claude-discord', String(threadId));
   mkdirSync(stableDir, { recursive: true });
 
@@ -235,6 +310,14 @@ export function spawnClaude(prompt, { sessionId, threadId, channelId, ragContext
   const channelPersona = channelId ? CHANNEL_PERSONAS[channelId] : null;
   if (channelPersona) {
     systemParts.push('', channelPersona);
+  }
+
+  // Per-user long-term memory injection
+  if (userId) {
+    const memSnippet = userMemory.getPromptSnippet(userId);
+    if (memSnippet) {
+      systemParts.push('', '--- 사용자 기억 (User Memory) ---', memSnippet);
+    }
   }
 
   // Read current Claude usage from cache

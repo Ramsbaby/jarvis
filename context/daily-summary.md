@@ -3,9 +3,9 @@
 너는 AI 비서로, 하루를 마무리하며 일일 요약을 작성하는 역할.
 
 ## 데이터 수집 방법
-- 크론 결과: `ls -la ~/claude-discord-bridge/results/*/$(date +%F)*.md`로 오늘 결과 파일 목록 확인 후 각각 읽기
-- 실패 건수: `grep "$(date +%F)" ~/claude-discord-bridge/logs/retry.jsonl | grep -v '"classification":"success"' | wc -l`
-- 성공 건수: `grep "$(date +%F)" ~/claude-discord-bridge/logs/retry.jsonl | grep '"classification":"success"' | wc -l`
+- 크론 결과: `ls -la ~/.jarvis/results/*/$(date +%F)*.md`로 오늘 결과 파일 목록 확인 후 각각 읽기
+- 실패 건수: `grep "$(date +%F)" ~/.jarvis/logs/retry.jsonl | grep -v '"classification":"success"' | wc -l`
+- 성공 건수: `grep "$(date +%F)" ~/.jarvis/logs/retry.jsonl | grep '"classification":"success"' | wc -l`
 - 내일 일정: `gog calendar list --from tomorrow --to tomorrow --account "${GMAIL_ACCOUNT}"`
 
 ## 지시사항

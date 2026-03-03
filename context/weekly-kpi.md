@@ -7,10 +7,10 @@
 이 리포트를 읽고 이번 주 목표를 설정한다.
 
 ## 데이터 수집 방법
-- 크론 성공/실패: `grep -E "SUCCESS|FAILED" ~/claude-discord-bridge/logs/cron.log | tail -500`
-- RAG 통계: `tail -1 ~/claude-discord-bridge/logs/rag-index.log`
-- Discord 응답 건수: `wc -l < ~/claude-discord-bridge/logs/discord-bot.jsonl`
-- 에러 빈도: `grep "ERROR\|FAILED" ~/claude-discord-bridge/logs/cron.log | wc -l`
+- 크론 성공/실패: `grep -E "SUCCESS|FAILED" ~/.jarvis/logs/cron.log | tail -500`
+- RAG 통계: `tail -1 ~/.jarvis/logs/rag-index.log`
+- Discord 응답 건수: `wc -l < ~/.jarvis/logs/discord-bot.jsonl`
+- 에러 빈도: `grep "ERROR\|FAILED" ~/.jarvis/logs/cron.log | wc -l`
 
 ## 리포트 구조
 ### 📊 이번 주 KPI

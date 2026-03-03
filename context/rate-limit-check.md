@@ -4,7 +4,7 @@
 30분마다 Claude Max rate limit 사용량을 확인하고 80% 초과 시 경고한다.
 
 ## 지시사항
-1. `~/claude-discord-bridge/state/rate-tracker.json` 읽기
+1. `~/.jarvis/state/rate-tracker.json` 읽기
 2. 파일이 타임스탬프 배열 형식이거나 사용량 데이터 없으면: `Rate limit: 정상 (사용량 데이터 없음)` 출력
 3. 사용량 객체가 있으면 `current / max * 100` 계산:
    - 80% 미만: `Rate limit: 정상 (XX%)`

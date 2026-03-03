@@ -15,7 +15,9 @@ import {
   parseStreamEvents,
   execRagAsync,
   saveConversationTurn,
+  processFeedback,
 } from './claude-runner.js';
+import { userMemory } from './user-memory.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -83,6 +85,18 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
     return;
   }
 
+  // Text-based /remember or 기억해: command
+  const rememberMatch = message.content.match(/^\/remember\s+(.+)/s) || message.content.match(/^기억해:\s*(.+)/s);
+  if (rememberMatch) {
+    const fact = rememberMatch[1].trim();
+    if (fact) {
+      userMemory.addFact(message.author.id, fact);
+      await message.reply('기억했습니다 🧠');
+      log('info', 'User memory saved via text command', { userId: message.author.id, fact: fact.slice(0, 100) });
+    }
+    return;
+  }
+
   // Rate limit check
   const rate = rateTracker.check();
   if (rate.reject) {
@@ -111,6 +125,13 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
   let workDir = null;
   let imageAttachments = [];
   let userPrompt = message.content;
+
+  // Learning feedback loop: detect and persist user feedback signals
+  const feedback = processFeedback(message.author.id, userPrompt);
+  if (feedback) {
+    log('info', 'Feedback detected', { userId: message.author.id, type: feedback.type });
+  }
+
   const reactions = new Set();
 
   async function react(emoji) {
@@ -204,6 +225,7 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
         channelId: effectiveChannelId,
         ragContext,
         attachments: imageAttachments,
+        userId: message.author.id,
       });
       workDir = wd;
 

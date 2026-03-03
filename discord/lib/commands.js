@@ -9,6 +9,7 @@ import { readFileSync, existsSync, appendFileSync, writeFileSync, mkdirSync } fr
 import { join } from 'node:path';
 import { EmbedBuilder } from 'discord.js';
 import { log, sendNtfy } from './claude-runner.js';
+import { userMemory } from './user-memory.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -112,8 +113,9 @@ export async function handleInteraction(interaction, deps) {
     const memPath = join(BOT_HOME, 'rag', 'memory.md');
     const timestamp = new Date().toISOString().slice(0, 10);
     appendFileSync(memPath, `\n- [${timestamp}] ${text}`);
-    await interaction.reply({ content: `\uae30\uc5b5\ud588\uc2b5\ub2c8\ub2e4: ${text}` });
-    log('info', 'Memory saved via /remember', { text: text.slice(0, 100) });
+    userMemory.addFact(interaction.user.id, text);
+    await interaction.reply({ content: `기억했습니다 🧠 ${text}` });
+    log('info', 'Memory saved via /remember', { userId: interaction.user.id, text: text.slice(0, 100) });
 
   } else if (commandName === 'search') {
     await interaction.deferReply();

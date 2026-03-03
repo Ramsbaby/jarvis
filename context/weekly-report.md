@@ -4,10 +4,10 @@
 매주 일요일 20:00에 한 주간 시스템 운영 요약 리포트를 생성한다.
 
 ## 데이터 수집 방법
-- 크론 성공/실패: `grep -c "SUCCESS\|FAIL" ~/claude-discord-bridge/logs/cron.log` (이번 주분)
-- 시스템 이슈: `cat ~/claude-discord-bridge/logs/watchdog.log` 최근 7일
-- RAG 통계: `NODE_PATH=~/claude-discord-bridge/discord/node_modules node -e "import {RAGEngine} from '$HOME/claude-discord-bridge/lib/rag-engine.mjs'; const e=new RAGEngine(); await e.init(); console.log(JSON.stringify(await e.getStats()))" --input-type=module`
-- Discord 활동: `wc -l ~/claude-discord-bridge/logs/discord-bot.jsonl`
+- 크론 성공/실패: `grep -c "SUCCESS\|FAIL" ~/.jarvis/logs/cron.log` (이번 주분)
+- 시스템 이슈: `cat ~/.jarvis/logs/watchdog.log` 최근 7일
+- RAG 통계: `NODE_PATH=~/.jarvis/discord/node_modules node -e "import {RAGEngine} from '$HOME/.jarvis/lib/rag-engine.mjs'; const e=new RAGEngine(); await e.init(); console.log(JSON.stringify(await e.getStats()))" --input-type=module`
+- Discord 활동: `wc -l ~/.jarvis/logs/discord-bot.jsonl`
 
 ## 리포트 구조
 ### 📊 주간 KPI
