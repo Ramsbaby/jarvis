@@ -20,7 +20,7 @@ check() {
 }
 
 # 1. Discord Bot (launchd)
-bot_status=$(launchctl list 2>/dev/null | grep "ai.discord-bot" || echo "")
+bot_status=$(launchctl list 2>/dev/null | grep "ai.jarvis.discord-bot" || echo "")
 if [[ -z "$bot_status" ]]; then
     check "discord-bot" "fail" "not loaded in launchd"
 else
@@ -40,7 +40,7 @@ else
 fi
 
 # 2. Watchdog (launchd)
-wd_status=$(launchctl list 2>/dev/null | grep "ai.discord-watchdog" || echo "")
+wd_status=$(launchctl list 2>/dev/null | grep "ai.jarvis.watchdog" || echo "")
 if [[ -z "$wd_status" ]]; then
     check "watchdog" "fail" "not loaded in launchd"
 else
@@ -48,11 +48,11 @@ else
 fi
 
 # 3. Cron tasks
-cron_count=$(crontab -l 2>/dev/null | grep -c "bot-cron\|launchd-guardian" || echo "0")
+cron_count=$(crontab -l 2>/dev/null | grep -c "jarvis-cron\|bot-cron\|launchd-guardian\|event-trigger\|calendar-alert" || echo "0")
 check "cron-tasks" "ok" "${cron_count} entries"
 
 # 4. Stale claude -p processes
-stale=$(ps -eo pid,etime,command 2>/dev/null | grep "[c]laude.*-p" | wc -l | tr -d ' ')
+stale=$(ps -eo pid,etime,command 2>/dev/null | { grep "[c]laude -p " || true; } | wc -l | tr -d ' ')
 if [[ "$stale" -gt 2 ]]; then
     check "claude-procs" "warn" "${stale} running (max 2 expected)"
 else
@@ -71,13 +71,13 @@ fi
 
 # 6. Recent cron results
 today=$(date +%F)
-success=$(grep "$today" "$BOT_HOME/logs/retry.jsonl" 2>/dev/null | grep -c '"success"' || echo "0")
-failures=$(grep "$today" "$BOT_HOME/logs/retry.jsonl" 2>/dev/null | grep -cv '"success"' || echo "0")
+success=$(grep "$today" "$BOT_HOME/logs/task-runner.jsonl" 2>/dev/null | { grep -c '"success"' || true; })
+failures=$(grep "$today" "$BOT_HOME/logs/task-runner.jsonl" 2>/dev/null | { grep -c '"error"\|"timeout"' || true; })
 check "cron-results" "ok" "today: ${success} success, ${failures} failures"
 
 # 7. Crash counter
 crash_count=0
-[[ -f "$BOT_HOME/watchdog/crash-counter" ]] && crash_count=$(cat "$BOT_HOME/watchdog/crash-counter")
+[[ -f "$BOT_HOME/watchdog/crash-count" ]] && crash_count=$(cat "$BOT_HOME/watchdog/crash-count")
 if [[ "$crash_count" -gt 3 ]]; then
     check "crash-count" "warn" "${crash_count} crashes"
 else

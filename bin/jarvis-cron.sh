@@ -1,0 +1,1 @@
+/Users/ramsbaby/.jarvis/bin/bot-cron.sh
