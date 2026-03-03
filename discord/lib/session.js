@@ -374,8 +374,23 @@ export class StreamingMessage {
   }
 
   _findSplitPoint(text, maxLen) {
-    const lastNewline = text.lastIndexOf('\n', maxLen);
-    if (lastNewline > maxLen * 0.6) return lastNewline + 1;
+    const candidate = text.lastIndexOf('\n', maxLen);
+    if (candidate > maxLen * 0.6) {
+      // Don't split inside a markdown table — find the end of the table block
+      const afterSplit = text.slice(candidate + 1).trimStart();
+      const inTable = text.slice(0, candidate).split('\n').slice(-3).some(l => l.trimStart().startsWith('|'));
+      if (inTable && afterSplit.startsWith('|')) {
+        // We're mid-table: backtrack to before the table begins
+        const lines = text.slice(0, candidate).split('\n');
+        let i = lines.length - 1;
+        while (i >= 0 && lines[i].trimStart().startsWith('|')) i--;
+        if (i >= 0) {
+          const safePoint = lines.slice(0, i + 1).join('\n').length;
+          if (safePoint > maxLen * 0.4) return safePoint + 1;
+        }
+      }
+      return candidate + 1;
+    }
     const lastSpace = text.lastIndexOf(' ', maxLen);
     if (lastSpace > maxLen * 0.6) return lastSpace + 1;
     return maxLen;
