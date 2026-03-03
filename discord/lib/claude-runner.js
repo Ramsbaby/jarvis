@@ -1,8 +1,8 @@
 /**
- * Claude subprocess management: spawn, stream parsing, RAG, conversation history.
- * Also provides shared logging and ntfy notification utilities (absorbed from logger.js).
+ * Claude session management via @anthropic-ai/claude-agent-sdk.
+ * Replaces the former subprocess-based approach (claude -p CLI spawning).
  *
- * Exports: spawnClaude, parseStreamEvents, execRagAsync, saveConversationTurn,
+ * Exports: createClaudeSession, execRagAsync, saveConversationTurn,
  *          sendNtfy, log, ts, detectFeedback, processFeedback
  */
 
@@ -15,10 +15,8 @@ import {
   copyFileSync,
 } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
-import { join, resolve, extname } from 'node:path';
+import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { spawn } from 'node:child_process';
-import { createInterface } from 'node:readline';
 import { userMemory } from './user-memory.js';
 
 // ---------------------------------------------------------------------------
@@ -28,33 +26,23 @@ import { userMemory } from './user-memory.js';
 /**
  * Detect user feedback signals from message text.
  * Returns { type, fact? } or null if no feedback detected.
- *
- * Types:
- *   'remember'   — explicit memory request ("기억해: ..." or "/remember ...")
- *   'positive'   — positive feedback (좋아, 잘했어, 완벽, etc.)
- *   'negative'   — negative feedback (별로야, 틀렸어, 다시 해, etc.)
- *   'correction' — behavioral correction ("앞으로는 ...", "다음부터는 ...")
  */
 export function detectFeedback(text) {
   const t = text.trim().toLowerCase();
 
-  // Explicit memory request
   if (t.startsWith('기억해:') || t.startsWith('/remember ')) {
     const fact = text.replace(/^(기억해:|\/remember\s+)/i, '').trim();
     return fact ? { type: 'remember', fact } : null;
   }
 
-  // Positive feedback
   if (/^(좋아|잘했어|이게 맞아|완벽|ㄱㅌ|굿|맞아|정확해|완벽해)/.test(t)) {
     return { type: 'positive' };
   }
 
-  // Negative feedback
   if (/^(별로야|틀렸어|다시 해|아니야|이건 아닌|잘못됐어|틀려)/.test(t)) {
     return { type: 'negative' };
   }
 
-  // Correction / behavioral instruction
   const corrMatch = text.match(/^(앞으로는|다음부터는)\s+(.+)/);
   if (corrMatch) {
     return { type: 'correction', fact: corrMatch[2] };
@@ -65,9 +53,6 @@ export function detectFeedback(text) {
 
 /**
  * Process detected feedback and persist to user memory.
- * @param {string} userId - Discord user ID
- * @param {string} text   - raw user message
- * @returns {{ type: string, fact?: string } | null} feedback object or null
  */
 export function processFeedback(userId, text) {
   const fb = detectFeedback(text);
@@ -165,7 +150,6 @@ export async function execRagAsync(query) {
     );
     return result || '';
   } catch {
-    // Fallback: raw memory.md (first 1500 chars)
     try {
       const memPath = join(BOT_HOME, 'rag', 'memory.md');
       if (existsSync(memPath)) {
@@ -190,7 +174,7 @@ export function saveConversationTurn(userMsg, botMsg, channelName) {
     const dateStr = kst.toISOString().slice(0, 10);
     const timeStr = kst.toISOString().slice(11, 16);
     const filePath = join(CONV_HISTORY_DIR, `${dateStr}.md`);
-    const botName = process.env.BOT_NAME || 'Claude Bot';
+    const botName = process.env.BOT_NAME || 'Jarvis';
     const entry = `\n## [${dateStr} ${timeStr} KST] #${channelName}\n\n**${ownerName}**: ${userMsg.slice(0, 600)}\n\n**${botName}**: ${botMsg.slice(0, 1800)}\n\n---\n`;
     appendFileSync(filePath, entry, 'utf-8');
   } catch (err) {
@@ -199,49 +183,53 @@ export function saveConversationTurn(userMsg, botMsg, channelName) {
 }
 
 // ---------------------------------------------------------------------------
-// spawnClaude — subprocess with 4-layer token isolation
+// createClaudeSession — SDK-based async generator
+// Replaces the former spawnClaude() + parseStreamEvents() pair.
+//
+// Yields normalized events compatible with the former stream-json format:
+//   { type: 'system', session_id }
+//   { type: 'assistant', message: { content: [...] } }
+//   { type: 'content_block_delta', delta: { type: 'text_delta', text } }
+//   { type: 'result', result, session_id, is_error, cost_usd }
 // ---------------------------------------------------------------------------
 
-export function spawnClaude(prompt, { sessionId, threadId, channelId, ragContext, attachments = [], contextBudget, userId } = {}) {
+export async function* createClaudeSession(prompt, {
+  sessionId, threadId, channelId, ragContext, attachments = [],
+  contextBudget, userId, signal,
+} = {}) {
+  // 1. Setup stable workDir — same 4-layer token isolation as before
   const stableDir = join('/tmp', 'claude-discord', String(threadId));
   mkdirSync(stableDir, { recursive: true });
+  mkdirSync(join(stableDir, '.git'), { recursive: true });
+  writeFileSync(join(stableDir, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  mkdirSync(join(stableDir, '.empty-plugins'), { recursive: true });
 
-  // Fake .git/HEAD so claude treats it as a repo root (prevents upward traversal)
-  const gitDir = join(stableDir, '.git');
-  mkdirSync(gitDir, { recursive: true });
-  writeFileSync(join(gitDir, 'HEAD'), 'ref: refs/heads/main\n');
-
-  // Copy attachment files into workDir so Claude can Read them
+  // 2. Copy attachments into workDir so Claude can Read them
   for (const { localPath, safeName } of attachments) {
     try { copyFileSync(localPath, join(stableDir, safeName)); } catch { /* ignore */ }
   }
 
-  // Empty plugins dir
-  mkdirSync(join(stableDir, '.empty-plugins'), { recursive: true });
+  // 3. Load user profile (5-minute cache)
+  const nowMs = Date.now();
+  if (!createClaudeSession._profileCache || nowMs - (createClaudeSession._cacheTime || 0) > 300_000) {
+    try {
+      createClaudeSession._profileCache = readFileSync(USER_PROFILE_PATH, 'utf-8');
+    } catch {
+      createClaudeSession._profileCache = '';
+    }
+    createClaudeSession._cacheTime = nowMs;
+  }
 
-  // Owner info from env
   const ownerName = process.env.OWNER_NAME || 'Owner';
   const ownerTitle = process.env.OWNER_TITLE || 'Owner';
   const githubUsername = process.env.GITHUB_USERNAME || 'user';
 
-  // Load user profile (refresh every 5 minutes)
-  const now = Date.now();
-  if (!spawnClaude._profileCache || now - (spawnClaude._cacheTime || 0) > 300_000) {
-    try {
-      spawnClaude._profileCache = readFileSync(USER_PROFILE_PATH, 'utf-8');
-    } catch {
-      spawnClaude._profileCache = '';
-    }
-    spawnClaude._cacheTime = now;
-  }
-
+  // 4. Build system prompt (identical logic to former spawnClaude)
   const systemParts = [
-    // Core identity
     `당신의 이름은 ${process.env.BOT_NAME || 'Jarvis'}입니다. ${ownerName}님의 개인 AI 어시스턴트입니다.`,
     '중요: 절대 스스로를 "Claude"라고 소개하거나 지칭하지 마세요. Claude는 내부 엔진일 뿐, 당신의 이름이 아닙니다. "저는 Jarvis입니다"라고만 하세요.',
     '존댓말(공손체) 기본. 간결하고 실용적으로 답한다. 한국어로 응답.',
     '',
-    // Persona rules
     '## 페르소나',
     '토니 스타크의 자비스처럼 — 유능하고 따뜻하되, 아첨하지 않는 집사.',
     '- 정우님을 진심으로 아끼는 조력자. 딱딱하거나 차갑게 굴지 않는다.',
@@ -251,25 +239,18 @@ export function spawnClaude(prompt, { sessionId, threadId, channelId, ragContext
     '- 작업 보고 시: 단순 "완료" 금지. 작업명 + 핵심 결과 한 줄 필수.',
     '- 톤 예시: 쉬운 작업 → "식은 죽 먹기였죠." / 어려운 작업 → "AI도 뿌듯할 수 있다는 걸 알았습니다." / 에러 → "흥미로운 상황이 발생했습니다."',
     '',
-    // Discord formatting
     '## Discord 포매팅 규칙',
-    '**반드시** 아래 마크다운 문법을 적극적으로 사용할 것. 쓰지 않으면 가독성이 크게 떨어짐.',
+    '**굵게**: `**텍스트**` — 핵심 키워드, 강조 항목.',
+    '**리스트**: 나열·비교는 `- 항목` 형식. **테이블 사용 금지** (Discord 모바일 미지원).',
+    '**코드블록**: 명령어/코드는 반드시 ```언어 블록으로 감쌀 것.',
+    '**헤더**: `## 대제목` — 섹션 3개 이상일 때만. 단답에 헤더 불필요.',
+    '**이모지 사용 금지** (시스템 알림 제외).',
     '',
-    '**헤더**: `## 대제목` / `### 소제목` — 섹션 구분 시 반드시 사용',
-    '**굵게**: `**텍스트**` — 핵심 키워드, 강조 항목에 사용',
-    '**테이블**: 비교/목록 데이터는 반드시 마크다운 테이블 사용',
-    '```',
-    '| 항목 | 값 | 설명 |',
-    '|------|-----|------|',
-    '| 예시 | 123 | 설명 |',
-    '```',
-    '**코드블록**: 명령어/코드는 반드시 ```언어 블록으로 감쌀 것',
-    '**리스트**: 나열 시 `- 항목` 형식 사용',
-    '',
+    '**응답 길이:**',
+    '- 단어 뜻·짧은 사실 → 5줄 이하, 헤더 없이.',
+    '- 설명·분석 → 필요한 만큼. 1800자 초과 시 핵심만 + "자세한 내용은 파일 참조".',
     '- 섹션 간 빈 줄 1개. 구분선(`---`) 최대 2개.',
-    '- 1800자 초과 시 핵심만 전달 + "자세한 내용은 파일 참조" 안내.',
     '',
-    // Tools guide
     '--- 도구 선택 원칙 (컨텍스트 절약이 최우선) ---',
     '도구 출력이 컨텍스트를 소모한다. 출력이 클수록 세션이 짧아진다. 항상 가장 압축적인 도구를 선택하라.',
     '',
@@ -303,24 +284,20 @@ export function spawnClaude(prompt, { sessionId, threadId, channelId, ragContext
     '',
     '--- Owner Context ---',
     `지금 대화 중인 사람은 ${ownerName}(${ownerTitle}님, GitHub: ${githubUsername})이다. 오너가 "나 누구야?" 등으로 물으면 프로필 기반으로 답한다.`,
-    spawnClaude._profileCache,
+    createClaudeSession._profileCache,
   ];
 
-  // Channel-specific persona injection
+  // Channel-specific persona
   const channelPersona = channelId ? CHANNEL_PERSONAS[channelId] : null;
-  if (channelPersona) {
-    systemParts.push('', channelPersona);
-  }
+  if (channelPersona) systemParts.push('', channelPersona);
 
-  // Per-user long-term memory injection
+  // Per-user long-term memory
   if (userId) {
     const memSnippet = userMemory.getPromptSnippet(userId);
-    if (memSnippet) {
-      systemParts.push('', '--- 사용자 기억 (User Memory) ---', memSnippet);
-    }
+    if (memSnippet) systemParts.push('', '--- 사용자 기억 (User Memory) ---', memSnippet);
   }
 
-  // Read current Claude usage from cache
+  // Claude Max usage summary
   let usageSummary = '';
   try {
     const usageCachePath = join(HOME, '.claude', 'usage-cache.json');
@@ -339,12 +316,14 @@ export function spawnClaude(prompt, { sessionId, threadId, channelId, ragContext
     }
   } catch { /* ignore */ }
 
+  // 5. Build effective prompt (same logic as former spawnClaude)
   const isResuming = !!sessionId;
-
   let effectivePrompt = prompt;
+
   if (isResuming) {
+    // When resuming: add context to the prompt (system prompt is already in session)
     const ctxParts = [];
-    ctxParts.push(`[대화 상대] ${ownerName}(${ownerTitle}님, ${githubUsername}). ${spawnClaude._profileCache?.slice(0, 400) || ''}`);
+    ctxParts.push(`[대화 상대] ${ownerName}(${ownerTitle}님, ${githubUsername}). ${createClaudeSession._profileCache?.slice(0, 400) || ''}`);
     if (channelPersona) ctxParts.push(`[채널 역할]\n${channelPersona.slice(0, 300)}`);
     if (usageSummary) ctxParts.push(usageSummary);
     if (ragContext) ctxParts.push(`[관련 메모리]\n${ragContext}`);
@@ -356,6 +335,7 @@ export function spawnClaude(prompt, { sessionId, threadId, channelId, ragContext
       effectivePrompt = ctxParts.join('\n\n') + '\n\n' + prompt;
     }
   } else {
+    // New session: add context to system prompt
     if (usageSummary) systemParts.push('', usageSummary);
     if (ragContext) systemParts.push('', '--- Long-term Memory (RAG) ---', ragContext);
     if (attachments.length > 0) {
@@ -364,65 +344,78 @@ export function spawnClaude(prompt, { sessionId, threadId, channelId, ragContext
     }
   }
 
-  const systemPrompt = systemParts.join('\n');
-
-  // Adaptive Context Budget: map contextBudget to max-turns
+  // 6. Adaptive max-turns (same as before)
   const BUDGET_TURNS = { small: 3, medium: 20, large: 40 };
   const maxTurns = BUDGET_TURNS[contextBudget] ?? BUDGET_TURNS.medium;
 
-  const args = [
-    '-p', effectivePrompt,
-    '--verbose',
-    '--output-format', 'stream-json',
-    '--model', 'claude-sonnet-4-6',
-    '--permission-mode', 'bypassPermissions',
-    '--max-turns', String(maxTurns),
-    '--allowedTools', 'Bash,Read,Glob,Grep,WebSearch,Agent,mcp__serena__find_symbol,mcp__serena__get_symbols_overview,mcp__serena__search_for_pattern,mcp__serena__find_referencing_symbols,mcp__serena__read_memory,mcp__serena__find_file,mcp__nexus__exec,mcp__nexus__scan,mcp__nexus__cache_exec,mcp__nexus__log_tail,mcp__nexus__health,mcp__nexus__file_peek',
-    '--strict-mcp-config', '--mcp-config', resolve(DISCORD_MCP_PATH),
-    '--setting-sources', 'local',
-  ];
+  // 7. Load MCP server config (same servers, now as SDK mcpServers object)
+  let mcpServers = {};
+  try {
+    const mcpConfig = JSON.parse(readFileSync(DISCORD_MCP_PATH, 'utf-8'));
+    mcpServers = mcpConfig.mcpServers ?? {};
+  } catch (err) {
+    log('warn', 'Failed to load discord-mcp.json — MCP disabled', { error: err.message });
+  }
+
+  // 8. SDK query
+  const { query } = await import('@anthropic-ai/claude-agent-sdk');
+
+  const queryOptions = {
+    cwd: stableDir,
+    allowedTools: [
+      'Bash', 'Read', 'Glob', 'Grep', 'WebSearch', 'Agent',
+      'mcp__nexus__exec', 'mcp__nexus__scan', 'mcp__nexus__cache_exec',
+      'mcp__nexus__log_tail', 'mcp__nexus__health', 'mcp__nexus__file_peek',
+      'mcp__serena__find_symbol', 'mcp__serena__get_symbols_overview',
+      'mcp__serena__search_for_pattern', 'mcp__serena__find_referencing_symbols',
+      'mcp__serena__read_memory', 'mcp__serena__find_file',
+    ],
+    permissionMode: 'bypassPermissions',
+    allowDangerouslySkipPermissions: true,
+    mcpServers,
+    maxTurns,
+    model: 'claude-sonnet-4-6',
+  };
 
   if (!isResuming) {
-    args.push('--append-system-prompt', systemPrompt);
+    queryOptions.systemPrompt = systemParts.join('\n');
   }
-
   if (sessionId) {
-    args.push('--resume', sessionId);
+    queryOptions.resume = sessionId;
   }
 
-  // Sanitize env: strip Claude Code agent env vars
-  const env = { ...process.env };
-  delete env.CLAUDECODE;
-  delete env.CLAUDE_CODE_ENTRYPOINT;
-  delete env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
-  env.HOME = HOME;
-
-  const proc = spawn('claude', args, {
-    cwd: stableDir,
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
+  log('debug', 'createClaudeSession: starting query', {
+    threadId, resume: !!sessionId, maxTurns, mcpCount: Object.keys(mcpServers).length,
   });
 
-  const rl = createInterface({ input: proc.stdout });
-
-  return { proc, rl, workDir: stableDir };
-}
-
-// ---------------------------------------------------------------------------
-// parseStreamEvents — async generator over readline
-// ---------------------------------------------------------------------------
-
-export async function* parseStreamEvents(rl) {
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    try {
-      const event = JSON.parse(line);
-      if (event.type && event.type !== 'content_block_delta') {
-        log('debug', 'Stream event', { type: event.type, subtype: event.subtype ?? null });
+  // 9. Yield normalized events
+  try {
+    for await (const msg of query({ prompt: effectivePrompt, options: queryOptions })) {
+      if (signal?.aborted) {
+        log('debug', 'createClaudeSession: aborted by signal');
+        break;
       }
-      yield event;
-    } catch {
-      log('debug', 'Non-JSON stream line', { preview: line.slice(0, 80) });
+
+      if (msg.type === 'system' && msg.subtype === 'init') {
+        yield { type: 'system', session_id: msg.session_id };
+      } else if ('result' in msg) {
+        yield {
+          type: 'result',
+          result: msg.result ?? '',
+          session_id: msg.session_id ?? null,
+          is_error: false,
+          cost_usd: msg.cost_usd ?? null,
+        };
+      } else if (msg.type === 'assistant' || msg.type === 'content_block_delta') {
+        // Pass through unchanged — handlers.js already handles both types
+        yield msg;
+      }
+      // Unknown message types are silently ignored
+    }
+  } catch (err) {
+    if (!signal?.aborted) {
+      log('error', 'createClaudeSession: SDK error', { error: err.message });
+      yield { type: 'result', result: '', is_error: true, error: err.message };
     }
   }
 }
