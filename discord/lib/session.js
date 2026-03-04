@@ -25,7 +25,7 @@ const RATE_WINDOW_HOURS = 5;
 const RATE_MAX_REQUESTS = 900;
 const PERSIST_DEBOUNCE_MS = 150;
 const MAX_GLOBAL_CONCURRENT = 4;
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.claude-discord-bridge');
 const GLOBAL_COUNT_FILE = join(BOT_HOME, 'state', 'claude-global.count');
 const GLOBAL_LOCK_FILE = join(BOT_HOME, 'state', 'claude-global.lock');
 

@@ -63,13 +63,147 @@ setup_personas() {
     fi
 }
 
+# --- Read DISCORD_SERVICE from .env (default: ai.claude-discord-bot) ---
+read_discord_service() {
+    local svc="ai.claude-discord-bot"
+    if [ -f "${BOT_HOME}/discord/.env" ]; then
+        local val
+        val=$(grep -E '^DISCORD_SERVICE=' "${BOT_HOME}/discord/.env" | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        [ -n "$val" ] && svc="$val"
+    fi
+    echo "$svc"
+}
+
+# --- macOS: install LaunchAgent for auto-start + KeepAlive ---
+install_launchagent() {
+    local service_name="$1"
+    local node_bin
+    node_bin="$(command -v node)"
+    local plist_path="$HOME/Library/LaunchAgents/${service_name}.plist"
+
+    mkdir -p "$HOME/Library/LaunchAgents"
+    cat > "$plist_path" << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${service_name}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${node_bin}</string>
+        <string>${BOT_HOME}/discord/discord-bot.js</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>${BOT_HOME}/discord</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>BOT_HOME</key>
+        <string>${BOT_HOME}</string>
+        <key>NODE_ENV</key>
+        <string>production</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>${BOT_HOME}/logs/discord-bot.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>${BOT_HOME}/logs/discord-bot.err.log</string>
+    <key>KeepAlive</key>
+    <true/>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>
+EOF
+
+    launchctl unload "$plist_path" 2>/dev/null || true
+    launchctl load "$plist_path"
+    info "LaunchAgent installed: ${service_name}"
+    info "  Start:   launchctl start ${service_name}"
+    info "  Stop:    launchctl stop ${service_name}"
+    info "  Logs:    tail -f ${BOT_HOME}/logs/discord-bot.out.log"
+}
+
+# --- Linux: install systemd user service ---
+install_systemd() {
+    local service_name="$1"
+    local node_bin
+    node_bin="$(command -v node)"
+    local unit_dir="$HOME/.config/systemd/user"
+    local unit_path="${unit_dir}/${service_name}.service"
+
+    mkdir -p "$unit_dir"
+    cat > "$unit_path" << EOF
+[Unit]
+Description=Claude Discord Bridge Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=${BOT_HOME}/discord
+ExecStart=${node_bin} ${BOT_HOME}/discord/discord-bot.js
+Restart=always
+RestartSec=10
+Environment=BOT_HOME=${BOT_HOME}
+Environment=NODE_ENV=production
+StandardOutput=append:${BOT_HOME}/logs/discord-bot.out.log
+StandardError=append:${BOT_HOME}/logs/discord-bot.err.log
+
+[Install]
+WantedBy=default.target
+EOF
+
+    systemctl --user daemon-reload
+    systemctl --user enable "${service_name}"
+    systemctl --user start "${service_name}"
+    info "systemd user service installed: ${service_name}"
+    info "  Status:  systemctl --user status ${service_name}"
+    info "  Logs:    journalctl --user -u ${service_name} -f"
+    info "  Stop:    systemctl --user stop ${service_name}"
+}
+
+# --- Install cron jobs (bot-watchdog + launchd-guardian) ---
+install_cron() {
+    local service_name="$1"
+    local cron_env="BOT_HOME=${BOT_HOME} DISCORD_SERVICE=${service_name}"
+
+    # bot-watchdog every 5 minutes
+    local watchdog_entry="*/5 * * * * ${cron_env} ${BOT_HOME}/bin/bot-watchdog.sh >> ${BOT_HOME}/logs/cron.log 2>&1"
+    # launchd-guardian every 3 minutes
+    local guardian_entry="*/3 * * * * ${cron_env} ${BOT_HOME}/scripts/launchd-guardian.sh >> ${BOT_HOME}/logs/cron.log 2>&1"
+
+    # Add to crontab if not already present
+    local current_cron
+    current_cron=$(crontab -l 2>/dev/null || true)
+
+    local new_cron="$current_cron"
+    if ! echo "$current_cron" | grep -q "bot-watchdog.sh"; then
+        new_cron="${new_cron}
+${watchdog_entry}"
+        info "Added bot-watchdog.sh to cron (every 5 min)"
+    else
+        info "bot-watchdog.sh already in cron — skipped"
+    fi
+    if ! echo "$current_cron" | grep -q "launchd-guardian.sh"; then
+        new_cron="${new_cron}
+${guardian_entry}"
+        info "Added launchd-guardian.sh to cron (every 3 min)"
+    else
+        info "launchd-guardian.sh already in cron — skipped"
+    fi
+
+    echo "$new_cron" | crontab -
+}
+
 # --- Docker mode ---
 install_docker() {
     info "Installing Claude Discord Bridge (Docker mode)"
 
     check_command docker "https://docs.docker.com/get-docker/" || exit 1
     check_command "docker compose" "Docker Desktop or docker-compose-plugin" || {
-        # fallback: check docker-compose
         check_command docker-compose "https://docs.docker.com/compose/install/" || exit 1
     }
 
@@ -113,7 +247,7 @@ install_local() {
     cd "${BOT_HOME}/discord"
     npm install --production
 
-    # Ensure relative node_modules symlinks (relative paths work regardless of install location)
+    # node_modules symlinks so lib/ and bin/ scripts can resolve packages
     if [ ! -e "${BOT_HOME}/lib/node_modules" ]; then
         ln -s ../discord/node_modules "${BOT_HOME}/lib/node_modules"
         info "Created lib/node_modules symlink"
@@ -125,12 +259,35 @@ install_local() {
 
     # Create runtime directories
     mkdir -p "${BOT_HOME}/context" "${BOT_HOME}/state/pids" \
-             "${BOT_HOME}/logs" "${BOT_HOME}/rag" "${BOT_HOME}/results"
+             "${BOT_HOME}/logs" "${BOT_HOME}/rag" "${BOT_HOME}/results" \
+             "${BOT_HOME}/watchdog"
+
+    local service_name
+    service_name=$(read_discord_service)
+
+    # Install service manager integration
+    echo ""
+    if command -v launchctl >/dev/null 2>&1; then
+        info "macOS detected — installing LaunchAgent (auto-start + KeepAlive)"
+        install_launchagent "$service_name"
+    elif command -v systemctl >/dev/null 2>&1; then
+        info "Linux detected — installing systemd user service"
+        install_systemd "$service_name"
+    else
+        warn "No service manager found. Start manually:"
+        warn "  cd ${BOT_HOME}/discord && node discord-bot.js"
+    fi
+
+    # Install cron watchdogs
+    if command -v crontab >/dev/null 2>&1; then
+        install_cron "$service_name"
+    else
+        warn "crontab not found — skipping watchdog cron setup"
+    fi
 
     echo ""
-    info "Installation complete!"
-    info "Start the bot: cd ${BOT_HOME}/discord && node discord-bot.js"
-    info "Or use Docker: ./install.sh --docker"
+    info "Installation complete! Service: ${service_name}"
+    info "Logs: tail -f ${BOT_HOME}/logs/discord-bot.out.log"
 }
 
 # --- Main ---
@@ -140,7 +297,7 @@ case "$MODE" in
     *)
         echo "Usage: ./install.sh [--docker | --local]"
         echo "  --docker  Build and run with Docker Compose (default)"
-        echo "  --local   Install dependencies locally and run directly"
+        echo "  --local   Install dependencies + register as system service (macOS/Linux)"
         exit 1
         ;;
 esac

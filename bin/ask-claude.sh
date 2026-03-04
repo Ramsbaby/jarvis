@@ -16,8 +16,17 @@ MAX_BUDGET="${5:-}"
 RESULT_RETENTION="${6:-7}"
 MODEL="${7:-}"
 
+# --- Cross-platform helpers ---
+# timeout: use gtimeout (macOS/homebrew) or timeout (Linux/GNU)
+TIMEOUT_CMD=""
+if command -v gtimeout >/dev/null 2>&1; then
+    TIMEOUT_CMD="gtimeout"
+elif command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_CMD="timeout"
+fi
+
 # --- Dependency check ---
-for cmd in gtimeout claude jq; do
+for cmd in claude jq; do
     command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: $cmd not found in PATH" >&2; exit 2; }
 done
 
@@ -64,9 +73,11 @@ echo 'ref: refs/heads/main' > "$WORK_DIR/.git/HEAD"
 # Layer 4: Empty plugins directory
 mkdir -p "$WORK_DIR/.empty-plugins"
 
-# Sleep prevention (double defense with launchd)
-caffeinate -i -w $$ &
-CAFFEINATE_PID=$!
+# Sleep prevention: macOS only (caffeinate); Linux skips gracefully
+if command -v caffeinate >/dev/null 2>&1; then
+    caffeinate -i -w $$ &
+    CAFFEINATE_PID=$!
+fi
 
 log_jsonl "start" "Task starting" "0"
 START_TIME=$(date +%s)
@@ -74,12 +85,11 @@ START_TIME=$(date +%s)
 # --- Build system prompt with context ---
 SYSTEM_PROMPT=""
 
-# RAG 컨텍스트 로드 (시맨틱 검색 → 정적 파일 fallback)
+# RAG context: semantic search → static file fallback
 RAG_CONTEXT=""
 if command -v node >/dev/null 2>&1 && [[ -f "$BOT_HOME/lib/rag-query.mjs" ]]; then
     RAG_CONTEXT=$(node "$BOT_HOME/lib/rag-query.mjs" "$PROMPT" 2>/dev/null || echo "")
 fi
-# Fallback: RAG 엔진 실패 시 정적 메모리 파일 사용
 if [[ -z "$RAG_CONTEXT" ]] && [[ -f "$BOT_HOME/rag/memory.md" ]]; then
     RAG_CONTEXT=$(head -c 2000 "$BOT_HOME/rag/memory.md")
 fi
@@ -95,12 +105,12 @@ if [[ -f "$CONTEXT_FILE" ]]; then
     SYSTEM_PROMPT="${SYSTEM_PROMPT}$(cat "$CONTEXT_FILE")"
 fi
 
-# 공용 게시판 주입 — council-insight가 매일 23:00 갱신하는 크로스채널 신호
+# Shared context bus (optional — populated by scheduled insight tasks)
 CONTEXT_BUS="${BOT_HOME}/state/context-bus.md"
 if [[ -f "$CONTEXT_BUS" ]]; then
     SYSTEM_PROMPT="${SYSTEM_PROMPT}
 
-## 📌 공용 게시판 (모든 팀 공유)
+## Shared Context
 $(cat "$CONTEXT_BUS")
 "
 fi
@@ -166,18 +176,26 @@ cd "$WORK_DIR"
 
 CLAUDE_OUTPUT_TMP="${WORK_DIR}/claude-output.json"
 
+CLAUDE_CMD=(claude -p "$PROMPT"
+    --output-format json
+    --permission-mode bypassPermissions
+    --allowedTools "$ALLOWED_TOOLS"
+    --append-system-prompt "$SYSTEM_PROMPT"
+    --strict-mcp-config --mcp-config "${BOT_HOME}/config/empty-mcp.json"
+    --plugin-dir "$WORK_DIR/.empty-plugins"
+    --setting-sources local
+)
+[[ -n "$MAX_BUDGET" ]] && CLAUDE_CMD+=(--max-budget-usd "$MAX_BUDGET")
+[[ -n "$MODEL" ]]      && CLAUDE_CMD+=(--model "$MODEL")
+
 CLAUDE_EXIT=0
-run_with_retry gtimeout "${TIMEOUT}" claude -p "$PROMPT" \
-    --output-format json \
-    --permission-mode bypassPermissions \
-    --allowedTools "$ALLOWED_TOOLS" \
-    --append-system-prompt "$SYSTEM_PROMPT" \
-    --strict-mcp-config --mcp-config "${BOT_HOME}/config/empty-mcp.json" \
-    --plugin-dir "$WORK_DIR/.empty-plugins" \
-    --setting-sources local \
-    ${MAX_BUDGET:+--max-budget-usd "$MAX_BUDGET"} \
-    ${MODEL:+--model "$MODEL"} \
-    > "$CLAUDE_OUTPUT_TMP" 2>"$STDERR_LOG" || CLAUDE_EXIT=$?
+if [[ -n "$TIMEOUT_CMD" ]]; then
+    run_with_retry "$TIMEOUT_CMD" "${TIMEOUT}" "${CLAUDE_CMD[@]}" \
+        > "$CLAUDE_OUTPUT_TMP" 2>"$STDERR_LOG" || CLAUDE_EXIT=$?
+else
+    run_with_retry "${CLAUDE_CMD[@]}" \
+        > "$CLAUDE_OUTPUT_TMP" 2>"$STDERR_LOG" || CLAUDE_EXIT=$?
+fi
 
 RAW_OUTPUT=""
 [[ -s "$CLAUDE_OUTPUT_TMP" ]] && RAW_OUTPUT=$(cat "$CLAUDE_OUTPUT_TMP")
@@ -185,7 +203,6 @@ RAW_OUTPUT=""
 if [[ $CLAUDE_EXIT -ne 0 ]]; then
     END_TIME=$(date +%s)
     DURATION=$(( END_TIME - START_TIME ))
-    # Save raw output even on error (for debugging)
     if [[ -s "$CLAUDE_OUTPUT_TMP" ]]; then
         cp "$CLAUDE_OUTPUT_TMP" "${RESULT_FILE%.md}-error.json"
     fi
@@ -233,20 +250,39 @@ COST_EXTRA=$(printf '"cost_usd":%s,"input_tokens":%s,"output_tokens":%s' \
 # --- Save result ---
 echo "$RESULT" > "$RESULT_FILE"
 
-# --- Rotate old results (keep 7 days) ---
+# --- Rotate old results ---
 find "$RESULTS_DIR" -name "*.md" -mtime +"$RESULT_RETENTION" -delete 2>/dev/null || true
 
 # --- Update rate-tracker (shared with Discord bot, 5-hour sliding window) ---
 RATE_TRACKER="${BOT_HOME}/state/rate-tracker.json"
-python3 -c "
-import json, time, fcntl, os
-path = '${RATE_TRACKER}'
-cutoff = int(time.time() * 1000) - 5 * 3600 * 1000
-now_ms = int(time.time() * 1000)
+update_rate_tracker() {
+    local path="$1"
+    local cutoff now_ms
+    cutoff=$(( $(date +%s) * 1000 - 5 * 3600 * 1000 ))
+    now_ms=$(( $(date +%s) * 1000 ))
+    mkdir -p "$(dirname "$path")"
+
+    # Use node if available (avoids python3 dependency)
+    if command -v node >/dev/null 2>&1; then
+        node -e "
+const fs = require('fs'), path = '${path}';
+const cutoff = ${cutoff}, now = ${now_ms};
+let data = [];
+try { data = JSON.parse(fs.readFileSync(path, 'utf8')); } catch {}
+if (!Array.isArray(data)) data = [];
+data = data.filter(t => t > cutoff);
+data.push(now);
+fs.writeFileSync(path, JSON.stringify(data));
+" 2>/dev/null || true
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c "
+import json, time, os
+path = '${path}'
+cutoff = ${cutoff}
+now_ms = ${now_ms}
 os.makedirs(os.path.dirname(path), exist_ok=True)
 try:
     with open(path, 'r+') as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
         data = json.load(f)
         if not isinstance(data, list): data = []
         data = [t for t in data if t > cutoff]
@@ -257,6 +293,9 @@ except (FileNotFoundError, json.JSONDecodeError):
     with open(path, 'w') as f:
         json.dump([now_ms], f)
 " 2>/dev/null || true
+    fi
+}
+update_rate_tracker "$RATE_TRACKER"
 
 log_jsonl "success" "Completed in ${DURATION}s" "$DURATION" "$COST_EXTRA"
 

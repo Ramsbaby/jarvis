@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # semaphore.sh - mkdir-based slot locking with cross-process global counter
-# Usage: source ~/.jarvis/bin/semaphore.sh
+# Usage: source <BOT_HOME>/bin/semaphore.sh
 
 BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 LOCK_DIR="/tmp/claude-discord-locks"
@@ -15,13 +15,22 @@ GLOBAL_LOCK_FILE="${BOT_HOME}/state/claude-global.lock"
 # Ensure state directory exists
 mkdir -p "${BOT_HOME}/state"
 
-# --- Global counter helpers (mkdir-based locking, macOS compatible) ---
+# --- Cross-platform file modification time ---
+_file_mtime() {
+    local path="$1"
+    if stat -f %m "$path" 2>/dev/null; then
+        return
+    fi
+    # Linux fallback
+    stat -c %Y "$path" 2>/dev/null || echo "0"
+}
+
+# --- Global counter helpers (mkdir-based locking, POSIX compatible) ---
 
 _read_global_count() {
     local count=0
     if [[ -f "$GLOBAL_COUNT_FILE" ]]; then
         count=$(cat "$GLOBAL_COUNT_FILE" 2>/dev/null || echo "0")
-        # Validate numeric
         if ! [[ "$count" =~ ^[0-9]+$ ]]; then
             count=0
         fi
@@ -38,14 +47,13 @@ _acquire_global_lock() {
             # Stale lock check (> 30s old)
             local lock_mtime now_ts
             now_ts=$(date +%s)
-            lock_mtime=$(stat -f %m "$GLOBAL_LOCK_FILE" 2>/dev/null || echo "0")
+            lock_mtime=$(_file_mtime "$GLOBAL_LOCK_FILE")
             if (( now_ts - lock_mtime > 30 )); then
                 rm -rf "$GLOBAL_LOCK_FILE" 2>/dev/null || true
             else
                 return 1
             fi
         fi
-        # Brief spin (0.05s)
         sleep 0.05
     done
     return 0
@@ -104,13 +112,26 @@ check_stale_locks() {
             continue
         fi
         # Check if lock is older than STALE_TIMEOUT
-        mtime=$(stat -f %m "$slot_dir")
+        mtime=$(_file_mtime "$slot_dir")
         if (( now - mtime > STALE_TIMEOUT )); then
             if rm -rf "$slot_dir" 2>/dev/null; then
                 _decrement_global_count
             fi
         fi
     done
+
+    # Reconcile: count must not exceed actual slot dirs.
+    # Handles crash-without-release where slot dirs are gone but count is stale.
+    local active_slots
+    active_slots=$(ls -d "${LOCK_DIR}/slot-"* 2>/dev/null | wc -l | tr -d ' ')
+    if _acquire_global_lock; then
+        local current_count
+        current_count=$(_read_global_count)
+        if [[ "$current_count" -gt "$active_slots" ]]; then
+            echo "$active_slots" > "$GLOBAL_COUNT_FILE"
+        fi
+        _release_global_lock
+    fi
 }
 
 acquire_slot() {

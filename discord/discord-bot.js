@@ -31,7 +31,7 @@ import { handleInteraction } from './lib/commands.js';
 // ---------------------------------------------------------------------------
 
 const HOME = homedir();
-const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.jarvis'));
+const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.claude-discord-bridge'));
 const SESSIONS_PATH = join(BOT_HOME, 'state', 'sessions.json');
 const RATE_TRACKER_PATH = join(BOT_HOME, 'state', 'rate-tracker.json');
 const MAX_CONCURRENT = 2;
