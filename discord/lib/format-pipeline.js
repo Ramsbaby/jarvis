@@ -66,9 +66,9 @@ const tableToList = withCodeFenceGuard((text) =>
   ),
 );
 
-/** Downshift headings: # → ##, ## → ###, … up to h4→h5. h5/h6 unchanged. */
+/** Downshift headings: # → ##, ## → ###. Discord only renders up to ###. */
 const normalizeHeadings = withCodeFenceGuard((text) =>
-  text.replace(/^(#{1,4}) /gm, (_, hashes) => '#' + hashes + ' '),
+  text.replace(/^(#{1,2}) /gm, (_, hashes) => '#' + hashes + ' '),
 );
 
 /** Collapse 3+ consecutive blank lines to 2. */
