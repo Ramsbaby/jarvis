@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-# Claude Discord Bridge E2E Test Suite
-# Usage: ~/claude-discord-bridge/scripts/e2e-test.sh [--ntfy] (--ntfy sends test push notification)
+# Jarvis E2E Test Suite
+# Usage: ~/.jarvis/scripts/e2e-test.sh [--ntfy] (--ntfy sends test push notification)
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -33,7 +33,7 @@ skip() {
 }
 
 echo "═══════════════════════════════════════════"
-echo "  Claude Discord Bridge E2E Test Suite"
+echo "  Jarvis E2E Test Suite"
 echo "  $(date '+%Y-%m-%d %H:%M:%S')"
 echo "═══════════════════════════════════════════"
 echo ""
@@ -150,7 +150,7 @@ echo ""
 echo "▶ ntfy Push Notification"
 if [[ "$SEND_NTFY" == "--ntfy" ]]; then
   check "ntfy test send" curl -sf -o /dev/null \
-    -H "Title: Claude Discord Bridge E2E Test" \
+    -H "Title: Jarvis E2E Test" \
     -H "Priority: low" \
     -H "Tags: test_tube" \
     -d "E2E test passed at $(date '+%H:%M:%S')" \

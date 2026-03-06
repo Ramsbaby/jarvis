@@ -1,7 +1,7 @@
 {
-  "name": "claude-discord-bridge",
+  "name": "jarvis",
   "version": "1.0.0",
-  "description": "Claude Discord Bridge - Self-hosted Discord AI bot using claude -p",
+  "description": "Jarvis — AI Company-in-a-Box using claude -p",
   "main": "discord-bot.js",
   "type": "module",
   "scripts": {

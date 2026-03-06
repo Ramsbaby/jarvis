@@ -12,6 +12,7 @@ import {
   AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
+  EmbedBuilder,
   MessageFlags,
 } from 'discord.js';
 import { log } from './claude-runner.js';

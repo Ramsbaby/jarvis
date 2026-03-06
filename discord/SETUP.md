@@ -1,4 +1,4 @@
-# Claude Discord Bridge 설정 가이드
+# Jarvis 설정 가이드
 
 ## 1. Discord Bot 생성
 
@@ -17,7 +17,7 @@
 ## 2. .env 설정
 
 ```bash
-cd ~/claude-discord-bridge/discord
+cd ~/.jarvis/discord
 ```
 
 `.env` 파일 수정:
@@ -30,7 +30,7 @@ CHANNEL_ID=채널_ID  (채널 우클릭 → Copy Channel ID)
 ## 3. 수동 실행 테스트
 
 ```bash
-cd ~/claude-discord-bridge/discord && node discord-bot.js
+cd ~/.jarvis/discord && node discord-bot.js
 ```
 
 정상이면: `[INFO] Bot logged in as MyBot#1234`
@@ -52,9 +52,9 @@ launchctl list | grep ai.discord
 
 ```bash
 # 로그 확인
-tail -f ~/claude-discord-bridge/logs/discord-bot.out.log
-tail -f ~/claude-discord-bridge/logs/discord-bot.err.log
-tail -f ~/claude-discord-bridge/logs/watchdog.log
+tail -f ~/.jarvis/logs/discord-bot.out.log
+tail -f ~/.jarvis/logs/discord-bot.err.log
+tail -f ~/.jarvis/logs/watchdog.log
 
 # 수동 재시작
 launchctl kickstart -k gui/$(id -u)/ai.discord-bot

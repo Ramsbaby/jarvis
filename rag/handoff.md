@@ -6,7 +6,7 @@
 - ROADMAP.md 기반 Phase 2~5 순차 진행
 
 ## 다음 세션 (P0 — 즉시)
-- [ ] Company DNA 단일 파일 생성 (`~/claude-discord-bridge/config/company-dna.md`) — SSoT 위반 해소
+- [ ] Company DNA 단일 파일 생성 (`~/.jarvis/config/company-dna.md`) — SSoT 위반 해소
 - [ ] architecture.md 실제 구현과 동기화 (6건 경로 불일치 수정)
 - [ ] README.md 상태 업데이트 ("설계 완료" → "운영 중")
 - [ ] obsidian-git 플러그인 설치 (자동 commit/push 활성화)

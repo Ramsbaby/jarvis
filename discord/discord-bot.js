@@ -1,5 +1,5 @@
 /**
- * Claude Discord Bridge — Main Entry Point
+ * Jarvis — Main Entry Point
  *
  * Wraps `claude -p` CLI with streaming JSON output.
  * Manages slash commands, shared state, and client lifecycle.

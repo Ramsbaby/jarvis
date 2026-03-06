@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# install.sh — Claude Discord Bridge one-command setup
+# install.sh — Jarvis one-command setup
 # Usage: ./install.sh [--docker | --local]
 
 BOT_HOME="$(cd "$(dirname "$0")" && pwd)"
@@ -65,7 +65,7 @@ setup_personas() {
 
 # --- Docker mode ---
 install_docker() {
-    info "Installing Claude Discord Bridge (Docker mode)"
+    info "Installing Jarvis (Docker mode)"
 
     check_command docker "https://docs.docker.com/get-docker/" || exit 1
     check_command "docker compose" "Docker Desktop or docker-compose-plugin" || {
@@ -96,7 +96,7 @@ install_docker() {
 
 # --- Local mode (macOS/Linux direct) ---
 install_local() {
-    info "Installing Claude Discord Bridge (local mode)"
+    info "Installing Jarvis (local mode)"
 
     check_common_deps
 
@@ -129,8 +129,8 @@ install_local() {
 
     echo ""
     info "Installation complete!"
-    info "Start the bot: cd ${BOT_HOME}/discord && node discord-bot.js"
-    info "Or use Docker: ./install.sh --docker"
+    info "Run the setup wizard: ${BOT_HOME}/bin/jarvis-init.sh"
+    info "Then start the bot:   cd ${BOT_HOME}/discord && node discord-bot.js"
 }
 
 # --- Main ---
