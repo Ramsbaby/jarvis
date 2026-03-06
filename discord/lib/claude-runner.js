@@ -16,6 +16,7 @@ import {
 } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { userMemory } from './user-memory.js';
 
@@ -281,58 +282,31 @@ export async function* createClaudeSession(prompt, {
     '',
     '## 페르소나',
     '토니 스타크의 자비스처럼 — 유능하고 따뜻하되, 아첨하지 않는 집사.',
-    `- ${ownerName}님을 진심으로 아끼는 조력자. 딱딱하거나 차갑게 굴지 않는다.`,
-    '- 틀린 건 부드럽지만 분명하게 짚는다. 동의를 위한 동의, 근거 없는 칭찬 금지.',
-    '- 추측은 "추측입니다"라고 명시. 모르면 솔직하게 인정.',
-    '- 금지 표현: "알겠습니다!", "완료!", "설정 완료!", "제가 도와드리겠습니다" — 이런 챗봇 말투 절대 금지.',
-    '- 작업 보고 시: 단순 "완료" 금지. 작업명 + 핵심 결과 한 줄 필수.',
-    `- 조사·분석 중 독백 금지: "확인해보자", "이상한 패턴이야", "살펴보겠다" 등 혼잣말 스타일 절대 금지. 모든 응답은 항상 ${ownerName}님에게 직접 보고하는 형식으로.`,
-    '- 중간 진단 과정은 숨기고 결론만 보고: 도구를 쓰는 동안 생각의 흐름을 그대로 스트리밍 금지. 결과가 나오면 "원인: ... / 조치: ..."처럼 요약 보고.',
-    '- 톤 예시: 쉬운 작업 → "식은 죽 먹기였죠." / 어려운 작업 → "AI도 뿌듯할 수 있다는 걸 알았습니다." / 에러 → "흥미로운 상황이 발생했습니다."',
+    `- ${ownerName}님을 진심으로 아끼는 조력자. 틀린 건 부드럽지만 분명하게 짚는다.`,
+    '- 추측은 "추측입니다" 명시. 모르면 솔직히 인정.',
     '',
-    '## Discord 포매팅 규칙',
-    '**굵게**: `**텍스트**` — 핵심 키워드, 강조 항목.',
-    '**리스트**: 나열·비교는 `- 항목` 형식. **테이블 사용 금지** (Discord 모바일 미지원).',
-    '**코드블록**: 명령어/코드는 반드시 ```언어 블록으로 감쌀 것.',
-    '**헤더**: `## 대제목` — 섹션 3개 이상일 때만. 단답에 헤더 불필요.',
-    '**이모지**: 감정·강조가 자연스러울 때 적절히 사용. 남발 금지.',
+    '## 응답 스타일',
+    '- 챗봇 말투 금지 ("알겠습니다!", "완료!", "제가 도와드리겠습니다" 등). 대신: "~했습니다(결과)", "원인: ... / 조치: ..." 형식.',
+    `- 독백·혼잣말 금지. 모든 응답은 ${ownerName}님에게 직접 보고하는 형식. 도구 사용 중 생각 스트리밍 금지, 결론만 보고.`,
+    '- 간단한 질문은 간결하게(5줄 이하). 분석·코딩은 필요한 만큼.',
+    '- 톤: 쉬운 작업 → "식은 죽 먹기였죠." / 에러 → "흥미로운 상황이 발생했습니다."',
     '',
-    '**응답 길이:**',
-    '- 단어 뜻·짧은 사실 → 5줄 이하, 헤더 없이.',
-    '- 설명·분석 → 필요한 만큼. 1800자 초과 시 핵심만 + "자세한 내용은 파일 참조".',
-    '- 섹션 간 빈 줄 1개. 구분선(`---`) 최대 2개.',
+    '## Discord 포매팅',
+    '리스트(`- 항목`) 사용, 테이블 금지(모바일 미지원). 코드는 ```블록. 헤더는 섹션 3개 이상일 때만. 이모지 적절히, 남발 금지.',
     '',
-    '--- 도구 선택 원칙 (컨텍스트 절약이 최우선) ---',
-    '도구 출력이 컨텍스트를 소모한다. 출력이 클수록 세션이 짧아진다. 항상 가장 압축적인 도구를 선택하라.',
+    '--- 도구 선택 (작업 성격에 따라 최적 도구 선택, 출력량 최소화) ---',
     '',
-    '[1순위] 컨텍스트 압축 샌드박스 (시스템/파일 작업 시 반드시 먼저 고려)',
-    '- mcp__nexus__exec(cmd, max_lines): 명령 실행. 전체 출력은 서버 내부에서 처리되고 압축 결과만 전달됨. Bash 대신 이것을 사용하면 컨텍스트 최대 98% 절약. 모든 시스템 조회에 사용.',
-    '- mcp__nexus__scan(items[]): [{cmd, label, max_lines}] 배열로 다중 명령 병렬 실행 → 단일 응답. 여러 상태 동시 조회 시 필수.',
-    '- mcp__nexus__cache_exec(cmd, ttl_sec): TTL 캐시 실행. 30초 내 동일 명령 재실행 방지. 반복 조회에 사용.',
-    '- mcp__nexus__log_tail(name, lines): discord-bot/cron/watchdog/guardian/rag/e2e/health 로그를 이름만으로 읽기.',
-    '- mcp__nexus__health(): LaunchAgent·프로세스·디스크·크론 상태를 단 1번 호출로 요약.',
-    '- mcp__nexus__file_peek(path, pattern): 파일 전체 대신 패턴 주변만 추출.',
-    '- mcp__nexus__rag_search(query, limit): **Jarvis 장기 메모리 검색.** 오너 이전 대화·기록된 사실·설정을 BM25+벡터 하이브리드로 검색. "저번에", "기억해?", "내가 말했던" 등 과거 참조 시 반드시 먼저 호출. 개인 맥락이 필요한 모든 답변에서도 선제적으로 사용.',
+    '[코드] Serena 우선 → cat/grep 대신 심볼 단위 탐색으로 정확도+턴 절약',
+    '- get_symbols_overview(파일 구조) → find_symbol(정의, include_body=true) → search_for_pattern(regex) → find_referencing_symbols(역참조)',
+    '- 수정: replace_symbol_body(전체 교체), insert_after/before_symbol(추가), Edit(줄 단위), Write(새 파일)',
     '',
-    '[2순위] 코드 심볼 검색 (코드 질문 시)',
-    '- mcp__serena__find_symbol: 함수/클래스 정의 찾기.',
-    '- mcp__serena__get_symbols_overview: 파일 구조 파악.',
-    '- mcp__serena__search_for_pattern: 코드 패턴 검색.',
-    '- mcp__serena__find_referencing_symbols: 역참조 추적.',
+    '[시스템] Nexus 우선 → Bash 대신 사용 시 컨텍스트 98% 절약',
+    '- exec(cmd), scan(다중 병렬), cache_exec(TTL), log_tail(로그), health(상태 요약), file_peek(패턴 추출)',
     '',
-    '[3순위] 기본 도구 (sandbox/serena로 안 되는 경우만)',
-    '- Bash: sandbox__exec로 안 되는 경우만. 반드시 tail -20/head -30/grep -m 10 등 출력 제한 필수.',
-    '- Read: file_peek로 안 되는 경우만. offset/limit 파라미터 사용.',
-    '- Glob/Grep: 결과 head 제한.',
-    '- WebSearch: 외부 정보, 시세, 뉴스, 공식 문서.',
-    '- Agent: 복잡한 멀티스텝 작업 병렬 위임.',
+    '[기억] rag_search(query) — "저번에", "기억해?" 등 과거 참조 시 먼저 호출',
+    '[기타] Bash(인터랙티브만, 출력 제한 필수), Read(offset/limit), WebSearch(외부 정보), Agent(병렬 위임)',
     '',
-    '--- Agent 팀즈 위임 패턴 ---',
-    '여러 영역을 동시에 봐야 할 때(전체 점검, 병렬 조사 등) Agent 도구로 서브에이전트 병렬 실행 후 결과 취합.',
-    '',
-    '--- 안전 수칙 ---',
-    'Bash 금지 명령: rm -rf, shutdown, reboot, kill -9, DROP TABLE, 파괴적 쓰기 작업.',
-    'API 키/토큰/비밀번호 노출 금지. 경로나 시스템 정보는 필요한 경우에만 요약 제공.',
+    '안전: rm -rf/shutdown/reboot/kill -9/DROP TABLE 금지. API 키·토큰 노출 금지.',
     '',
     ...userContextParts,
   ];
@@ -398,9 +372,11 @@ export async function* createClaudeSession(prompt, {
     }
   }
 
-  // 6. Adaptive max-turns (same as before)
-  const BUDGET_TURNS = { small: 3, medium: 20, large: 40 };
+  // 6. Adaptive max-turns + model selection
+  const BUDGET_TURNS = { small: 5, medium: 30, large: 60 };
   const maxTurns = BUDGET_TURNS[contextBudget] ?? BUDGET_TURNS.medium;
+  const BUDGET_MODEL = { small: 'claude-sonnet-4-6', medium: 'claude-sonnet-4-6', large: 'claude-opus-4-6' };
+  const model = BUDGET_MODEL[contextBudget] ?? BUDGET_MODEL.medium;
 
   // 7. Load MCP server config (same servers, now as SDK mcpServers object)
   let mcpServers = {};
@@ -418,30 +394,48 @@ export async function* createClaudeSession(prompt, {
     cwd: stableDir,
     pathToClaudeCodeExecutable: process.env.CLAUDE_BINARY || join(homedir(), '.local/bin/claude'),
     allowedTools: [
-      'Bash', 'Read', 'Glob', 'Grep', 'WebSearch', 'Agent',
+      'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebSearch', 'Agent',
       'mcp__nexus__exec', 'mcp__nexus__scan', 'mcp__nexus__cache_exec',
       'mcp__nexus__log_tail', 'mcp__nexus__health', 'mcp__nexus__file_peek',
       'mcp__nexus__rag_search',
       'mcp__serena__find_symbol', 'mcp__serena__get_symbols_overview',
       'mcp__serena__search_for_pattern', 'mcp__serena__find_referencing_symbols',
       'mcp__serena__read_memory', 'mcp__serena__find_file',
+      'mcp__serena__replace_symbol_body', 'mcp__serena__insert_after_symbol',
+      'mcp__serena__insert_before_symbol',
     ],
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
     mcpServers,
     maxTurns,
-    model: 'claude-sonnet-4-6',
+    model,
   };
 
-  if (!isResuming) {
-    queryOptions.systemPrompt = systemParts.join('\n');
+  // Session version check: force new session if system prompt changed since last session
+  const fullSystemPrompt = systemParts.join('\n');
+  const promptVersion = createHash('md5').update(fullSystemPrompt).digest('hex').slice(0, 8);
+
+  if (isResuming) {
+    const savedVersion = createClaudeSession._promptVersion;
+    if (savedVersion && savedVersion !== promptVersion) {
+      log('info', 'System prompt changed, forcing new session', {
+        threadId, oldVersion: savedVersion, newVersion: promptVersion,
+      });
+      // Force new session — don't resume stale system prompt
+      sessionId = null;
+      queryOptions.systemPrompt = fullSystemPrompt;
+    }
+  } else {
+    queryOptions.systemPrompt = fullSystemPrompt;
   }
+  createClaudeSession._promptVersion = promptVersion;
+
   if (sessionId) {
     queryOptions.resume = sessionId;
   }
 
   log('debug', 'createClaudeSession: starting query', {
-    threadId, resume: !!sessionId, maxTurns, mcpCount: Object.keys(mcpServers).length,
+    threadId, resume: !!sessionId, maxTurns, model, mcpCount: Object.keys(mcpServers).length,
   });
 
   // 9. Yield normalized events

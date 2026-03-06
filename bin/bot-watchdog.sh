@@ -12,7 +12,7 @@ set -euo pipefail
 
 # --- Configuration ---
 BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-BOT_LOG="$BOT_HOME/logs/discord-bot.out.log"
+BOT_LOG="$BOT_HOME/logs/discord-bot.jsonl"
 WATCHDOG_LOG="$BOT_HOME/logs/bot-watchdog.log"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 DISCORD_SERVICE="${DISCORD_SERVICE:-ai.jarvis.discord-bot}"
@@ -76,17 +76,14 @@ if [[ ! -f "$BOT_LOG" ]]; then
     exit 0
 fi
 
-# Parse last timestamp from log
-# Format: [2026-03-02T04:01:08.742Z] level: message
-last_line=$(tail -20 "$BOT_LOG" | grep -oE '^\[[-0-9T:.Z]+\]' | tail -1 || true)
+# Parse last timestamp from JSONL log
+# Format: {"ts":"2026-03-02T04:01:08.742Z",...}
+last_ts=$(tail -20 "$BOT_LOG" | grep -oE '"ts":"[-0-9T:.Z]+"' | tail -1 | sed 's/"ts":"//;s/"//' || true)
 
-if [[ -z "$last_line" ]]; then
-    log "WARN: No timestamp found in recent log lines"
+if [[ -z "$last_ts" ]]; then
+    log "WARN: No timestamp found in recent JSONL lines"
     exit 0
 fi
-
-# Strip brackets: [2026-03-02T04:01:08.742Z] -> 2026-03-02T04:01:08.742Z
-last_ts="${last_line//[\[\]]/}"
 # Convert to epoch (strip milliseconds for date compatibility)
 last_ts_clean="${last_ts%%.*}Z"
 last_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$last_ts_clean" "+%s" 2>/dev/null || echo 0)
@@ -107,6 +104,17 @@ if (( silence_sec < SILENCE_THRESHOLD_SEC )); then
 fi
 
 # --- Silent death detected ---
+
+# Check if watchdog.sh is already handling recovery (shared healing lock)
+HEALING_LOCK="/tmp/bot-healing.lock"
+if [[ -d "$HEALING_LOCK" ]]; then
+    lock_age=$(( $(date +%s) - $(stat -f %m "$HEALING_LOCK") ))
+    if (( lock_age < 600 )); then
+        log "SKIP: watchdog.sh healing in progress (lock age=${lock_age}s)"
+        exit 0
+    fi
+fi
+
 log "ALERT: Bot silent for ${silence_sec}s (>${SILENCE_THRESHOLD_SEC}s). Restarting."
 
 # Check if process is actually running (confirms silent death vs real crash)

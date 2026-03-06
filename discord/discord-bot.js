@@ -12,6 +12,7 @@
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import {
   Client,
   GatewayIntentBits,
@@ -158,6 +159,7 @@ let lastMessageAt = Date.now();
 
 client.once('clientReady', async () => {
   log('info', `Logged in as ${client.user.tag}`, { id: client.user.id });
+  try { rmSync('/tmp/jarvis-token-backoff', { force: true }); } catch {} // Reset token backoff on success
 
   const guildId = process.env.GUILD_ID;
   if (guildId) {
@@ -318,8 +320,15 @@ process.on('unhandledRejection', (reason) => {
   const code = reason?.code;
   const msg = reason instanceof Error ? reason.message : String(reason);
   if (code === 'TokenInvalid' || msg.includes('TokenInvalid') || msg.includes('invalid token')) {
-    log('error', 'TokenInvalid detected, exiting for launchd restart');
-    process.exit(1);
+    const backoffFile = '/tmp/jarvis-token-backoff';
+    let count = 0;
+    try { count = parseInt(readFileSync(backoffFile, 'utf-8'), 10) || 0; } catch {}
+    count++;
+    writeFileSync(backoffFile, String(count));
+    const delaySec = Math.min(count * 30, 300); // 30s, 60s, 90s... max 5min
+    log('error', `TokenInvalid #${count}, waiting ${delaySec}s before exit`);
+    setTimeout(() => process.exit(1), delaySec * 1000);
+    return; // prevent further processing
   }
   sendNtfy(`${BOT_NAME} Crash`, msg, 'urgent');
 });

@@ -74,19 +74,26 @@ summarize_commits_kr() {
     dir_summary=$(echo "$changed_files" | awk -F/ 'NF>1{print $1}' | sort | uniq -c | sort -rn | head -3 | awk '{printf "%s(%s건) ", $2, $1}')
 
     local prompt
+    local file_count
+    file_count=$(echo "$changed_files" | grep -c . 2>/dev/null || echo "0")
+
     prompt="아래는 Jarvis 시스템의 git 커밋 내역이다. 이걸 Discord에 표시할 한글 요약으로 바꿔라.
 
 커밋 메시지:
 ${commit_msgs}
 
 변경 영역: ${dir_summary}
+변경 파일 수: ${file_count}개
 
 규칙:
-- 불릿(•) 형식, 최대 3줄
-- 각 줄은 20자 이내, 구어체 금지
+- 불릿(•) 형식, 줄 수 제한 없음 (변경사항 빠짐없이 모두 나열)
+- 각 줄은 70자 이내, 구어체 금지
+- 무엇을 왜 변경했는지 구체적으로 써라 (예: 'rag-quality-check.sh UTC 타임존 오변환 → KST 9시간 오탐 알림 수정')
+- 버그 수정은 증상과 원인을 함께 써라 (예: '좀비 에이전트 3일간 미정리 → watchdog 감지 패턴 보강')
+- 신규 파일은 파일명과 용도를 써라 (예: 'kill-team.sh 신규 — 팀 에이전트 일괄 종료 스크립트')
+- '스크립트 수정', '문서 정비', '라이브러리 업데이트' 같은 뭉뚱그린 표현 금지
 - 기술 용어 OK, 하지만 비개발자도 대략 알 수 있게
-- 여러 커밋이 같은 주제면 하나로 합쳐라
-- 예시: • Discord 알림 메시지 포맷 개선 / • 개인정보 제거 + 오픈소스 준비 / • 설치 스크립트에 LaunchAgent 자동 등록 추가
+- 여러 커밋이 같은 주제면 하나로 합치되, 중요한 변경은 각각 써라
 - 불릿 외의 텍스트 출력 금지 (인사말, 설명, 마크다운 등 절대 금지)"
 
     local result=""
@@ -100,11 +107,11 @@ ${commit_msgs}
 
     # claude 실패 시 fallback: prefix 제거한 영문 메시지
     if [[ -z "$result" ]]; then
-        result=$(echo "$commit_msgs" | sed -E 's/^[a-z]+(\([^)]*\))?:[[:space:]]*/• /' | head -3)
+        result=$(echo "$commit_msgs" | sed -E 's/^[a-z]+(\([^)]*\))?:[[:space:]]*/• /')
     fi
 
     # 앞뒤 공백/빈줄 정리
-    echo "$result" | sed '/^$/d' | head -3
+    echo "$result" | sed '/^$/d'
 }
 
 # ============================================================================
@@ -143,7 +150,10 @@ action_line=$(detect_action "$changed_files")
 
 # --- 메시지 조립 ---
 title="🔄 Jarvis 업데이트"
-description="${korean_summary}"$'\n'"${action_line}"
+file_count=$(echo "$changed_files" | grep -c . 2>/dev/null || echo "0")
+dir_summary=$(echo "$changed_files" | awk -F/ 'NF>1{print $1}' | sort | uniq -c | sort -rn | head -3 | awk '{printf "%s(%s) ", $2, $1}')
+meta_line="📦 커밋 ${commit_count}건 · 파일 ${file_count}개 · ${dir_summary}"
+description="${korean_summary}"$'\n'"${meta_line}"$'\n'"${action_line}"
 
 # 봇 재시작 필요하면 노랑, 아니면 파랑
 color=3447003

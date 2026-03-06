@@ -27,9 +27,28 @@ const INPUT_MAX_CHARS = 4000;
 const TYPING_INTERVAL_MS = 8000;
 
 const EMOJI = {
-  DONE: '\u2705',
-  ERROR: '\u274c',
+  DONE:      '\u2705',   // ✅
+  ERROR:     '\u274c',   // ❌
+  THINKING:  '\u23f3',   // ⏳ 응답 대기 중
+  CODE:      '\ud83d\udcbb', // 💻
+  MARKET:    '\ud83d\udcb9', // 💹
+  SYSTEM:    '\ud83d\udda5', // 🖥️  (fe0f는 variation selector, react엔 기본 형태)
+  TRANSLATE: '\ud83c\udf0d', // 🌍
+  EDUCATION: '\ud83d\udcda', // 📚
+  IMAGE:     '\ud83d\uddbc', // 🖼️
 };
+
+/** 메시지 내용에 따라 처리 중 표시할 컨텍스트 이모지 반환 */
+function getContextualEmoji(prompt, hasImages) {
+  if (hasImages) return EMOJI.IMAGE;
+  const lower = (prompt || '').toLowerCase();
+  if (/코드|함수|클래스|버그|디버그|리뷰|리팩터|개발|구현|에러|오류|스크립트|컴파일/.test(lower)) return EMOJI.CODE;
+  if (/시장|주가|투자|tqqq|나스닥|soxl|nvda|환율|코인|매수|매도|차트/.test(lower)) return EMOJI.MARKET;
+  if (/시스템|서버|인프라|로그|상태|크론|디스크|메모리|cpu|프로세스|배포/.test(lower)) return EMOJI.SYSTEM;
+  if (/번역|영어|english|translate|영문|표현/.test(lower)) return EMOJI.TRANSLATE;
+  if (/수업|학생|교육|한국어|커리큘럼|topik|문법/.test(lower)) return EMOJI.EDUCATION;
+  return null; // 기본 — THINKING만 표시
+}
 
 // ---------------------------------------------------------------------------
 // Dynamic tool display — contextual emoji + description per tool
@@ -199,12 +218,24 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
     } catch { /* Missing permissions or message deleted */ }
   }
 
+  async function unreact(emoji) {
+    try {
+      const r = message.reactions.cache.get(emoji);
+      if (r) await r.users.remove(message.client.user.id);
+      reactions.delete(emoji);
+    } catch { /* ignore */ }
+  }
 
   const startTime = Date.now();
   try {
     thread = message.channel;
     sessionKey = isThread ? thread.id : `${thread.id}-${message.author.id}`;
     sessionId = sessions.get(sessionKey);
+
+    // 능동형 응답대기 리액션 — 메시지 수신 즉시 처리 시작 표시
+    await react(EMOJI.THINKING);
+    const ctxEmoji = getContextualEmoji(userPrompt, imageAttachments.length > 0);
+    if (ctxEmoji) await react(ctxEmoji);
 
     await thread.sendTyping();
     typingInterval = setInterval(() => {
@@ -256,7 +287,7 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
         promptLen: userPrompt.length,
       });
 
-      const LARGE_KEYWORDS = /코드|분석|파일|구조|함수|클래스|디버그|확인|리뷰|왜|어떻게|explain|debug|analyze|review/i;
+      const LARGE_KEYWORDS = /코드|분석|파일|구조|함수|클래스|디버그|확인|리뷰|왜|어떻게|동작|안됨|안되|안돼|수정|추가|만들어|고쳐|바꿔|구현|삭제|에러|오류|버그|리팩터|개발|스크립트|explain|debug|analyze|review|fix|implement|edit|refactor/i;
       const contextBudget = userPrompt.length > 200 || LARGE_KEYWORDS.test(userPrompt) ? 'large' : 'medium';
 
       // AbortController replaces proc.kill() — clean async cancellation
@@ -362,6 +393,8 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
 
           const cost = event.cost_usd ?? null;
 
+          // ⏳ 제거 → ✅ 교체
+          await unreact(EMOJI.THINKING);
           await react(EMOJI.DONE);
 
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -375,7 +408,10 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
             .setTimestamp();
           await thread.send({ embeds: [embed] });
 
-          log('info', 'Claude completed', { threadId: thread.id, cost, toolCount, sessionId: resultSessionId });
+          log('info', 'Claude completed', {
+            threadId: thread.id, cost, toolCount, sessionId: resultSessionId,
+            stopReason: event.stop_reason ?? 'unknown', elapsed: `${elapsed}s`,
+          });
 
           if (lastAssistantText.length > 20) {
             const chName = isThread ? (message.channel.parent?.name ?? 'thread') : (message.channel.name ?? 'dm');
@@ -398,7 +434,7 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
         await streamer.finalize();
       }
 
-      return { retryNeeded, needsContinuation, lastAssistantText };
+      return { retryNeeded, needsContinuation, lastAssistantText, toolCount };
     }
 
     // First attempt
@@ -430,7 +466,7 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
     while (runResult.needsContinuation) {
       const contSessionId = sessions.get(sessionKey);
       log('info', 'Auto-continuing session', { threadId: thread.id, sessionId: contSessionId });
-      userPrompt = '이전 응답이 중간에 끊겼어. 끊긴 부분부터 이어서 완료해줘.';
+      userPrompt = `이전 응답이 턴 제한으로 중단됐다. 지금까지 도구 ${runResult.toolCount ?? 0}회 사용. 남은 작업만 집중해서 완료해줘. 이미 한 작업은 반복하지 마.`;
       runResult = await runClaude(contSessionId, streamer);
     }
 
