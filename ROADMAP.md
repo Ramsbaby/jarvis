@@ -291,7 +291,7 @@ chokidar로 `~/.jarvis/context/`, `~/.jarvis/rag/`, `~/.jarvis/results/` 감시.
 - [x] **Task 5-1**: E2E 자가 진단 크론화 (e2e-cron.sh, 매일 03:30, 실패 시 ntfy 에스컬레이션)
 - [x] **Task 5-2**: 비용 모니터링 (cost-monitor, 매주 일요일 09:00)
 - [x] **Task 5-3**: 성과 대시보드 (weekly-kpi 프롬프트에 통합)
-- [x] **Task 5-4**: Obsidian 가이드 문서화 (`docs/obsidian-sync-guide.md`)
+- [x] **Task 5-4**: Obsidian 가이드 문서화 (archived)
 
 ### 🟡 수동 작업 필요 (코드 외)
 

@@ -1,0 +1,20 @@
+{
+  "description": "팀별 일일 토큰 예산 (USD). board-meeting.sh와 ask-claude.sh에서 참조.",
+  "daily_budget_usd": {
+    "board-meeting": 5.00,
+    "infra": 3.00,
+    "council": 2.00,
+    "market": 2.50,
+    "career": 1.00,
+    "brand": 1.00,
+    "academy": 1.00,
+    "record": 1.00,
+    "system": 2.00
+  },
+  "alert_threshold": 0.8,
+  "hard_cap_multiplier": 1.5,
+  "tracking": {
+    "file": "~/.jarvis/state/budget-tracker.json",
+    "resetTime": "00:00 KST"
+  }
+}

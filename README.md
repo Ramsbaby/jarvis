@@ -7,10 +7,10 @@
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
 </p>
 
-<h1 align="center">Claude Discord Bridge</h1>
+<h1 align="center">Jarvis — AI Company-in-a-Box</h1>
 
 <p align="center">
-  <strong>Your Claude Max subscription is idle 23 hours a day.<br>This turns it into a 24/7 Discord AI assistant — at $0 extra cost.</strong>
+  <strong>Your Claude Max subscription is idle 23 hours a day.<br>This turns it into a 24/7 AI operations system — 7 AI teams, cron orchestration, knowledge management — at $0 extra cost.</strong>
 </p>
 
 <p align="center">
