@@ -113,5 +113,10 @@
 
   "cmd.lounge.desc": "AI Lounge 활성 태스크 보기",
   "cmd.lounge.empty": "라운지에 활성 태스크가 없습니다.",
-  "cmd.lounge.title": "AI Lounge \u2014 활성 태스크 ({count}개)"
+  "cmd.lounge.title": "AI Lounge \u2014 활성 태스크 ({count}개)",
+
+  "recovery.title": "\ud83d\ude47 불편을 드려 죄송합니다",
+  "recovery.desc.single": "{mentions}님, 조금 전 오류로 응답하지 못해 죄송합니다.\n지금은 정상 복구되었으니 다시 말씀해 주세요!",
+  "recovery.desc.general": "조금 전 오류가 발생하여 정상적으로 응답하지 못했습니다.\n지금은 복구되었으니 다시 말씀해 주세요!",
+  "recovery.footer": "자동 복구"
 }

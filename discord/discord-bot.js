@@ -28,6 +28,7 @@ import { handleInteraction } from './lib/commands.js';
 import { handleApprovalInteraction, pollL3Requests } from './lib/approval.js';
 import { t } from './lib/i18n.js';
 import { initAlertBatcher, botAlerts } from './lib/alert-batcher.js';
+import { sendRecoveryApologies } from './lib/error-tracker.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -170,6 +171,13 @@ client.once('clientReady', async () => {
     if (alertCh) initAlertBatcher(alertCh);
   }
 
+  // Send recovery apologies for errors from the previous run
+  try {
+    await sendRecoveryApologies(client);
+  } catch (err) {
+    log('error', 'Failed to send recovery apologies', { error: err.message });
+  }
+
   // 10-minute heartbeat (shorter than bot-watchdog.sh 15-min threshold)
   setInterval(() => {
     const wsStatus = client.ws?.status ?? -1;
@@ -251,6 +259,9 @@ client.on('shardReconnecting', (shardId) => {
 
 client.on('shardResume', (shardId, replayedEvents) => {
   log('info', 'Discord resumed', { shardId, replayedEvents });
+  sendRecoveryApologies(client).catch((err) => {
+    log('error', 'Recovery apology after resume failed', { error: err.message });
+  });
 });
 
 client.on('shardError', (err, shardId) => {

@@ -17,6 +17,7 @@ import {
 } from './claude-runner.js';
 import { userMemory } from './user-memory.js';
 import { t } from './i18n.js';
+import { recordError } from './error-tracker.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -447,6 +448,7 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
       } else {
         await thread.send({ embeds: [embed] });
       }
+      recordError(thread.id, message.author.id, 'no_response');
     }
   } catch (err) {
     log('error', 'handleMessage error', { error: err.message, stack: err.stack });
@@ -466,6 +468,7 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
         return handleMessage(message, { sessions, rateTracker, semaphore, activeProcesses, client });
       } catch (retryErr) {
         log('error', 'Auto-retry also failed', { error: retryErr.message });
+        recordError(target.id, message.author.id, retryErr.message?.slice(0, 200));
       }
     }
 
@@ -478,6 +481,7 @@ export async function handleMessage(message, { sessions, rateTracker, semaphore,
     try {
       await target.send({ embeds: [embed] });
     } catch { /* Can't send to channel either */ }
+    recordError(target.id, message.author.id, err.message?.slice(0, 200));
     sendNtfy(`${process.env.BOT_NAME || 'Claude Bot'} Error`, err.message, 'high');
   } finally {
     if (typingInterval) clearInterval(typingInterval);
