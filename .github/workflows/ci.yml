@@ -32,7 +32,7 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Syntax check
         run: |
-          find discord/lib/ -name '*.mjs' -type f | while read -r f; do
+          find discord/ -name '*.js' -o -name '*.mjs' | grep -v node_modules | while read -r f; do
             echo "Checking $f"
             node --check "$f"
           done

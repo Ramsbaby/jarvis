@@ -75,7 +75,17 @@ success=$(grep "$today" "$BOT_HOME/logs/task-runner.jsonl" 2>/dev/null | { grep 
 failures=$(grep "$today" "$BOT_HOME/logs/task-runner.jsonl" 2>/dev/null | { grep -c '"error"\|"timeout"' || true; })
 check "cron-results" "ok" "today: ${success} success, ${failures} failures"
 
-# 7. Crash counter
+# 7. Discord bot error log (infra 팀장용 가시성)
+bot_errors_today=$(grep "$(date +%F)" "$BOT_HOME/logs/discord-bot.jsonl" 2>/dev/null | { grep -c '"level":"error"' || true; })
+if [[ "$bot_errors_today" -gt 10 ]]; then
+    check "bot-errors" "fail" "today: ${bot_errors_today} errors (critical)"
+elif [[ "$bot_errors_today" -gt 0 ]]; then
+    check "bot-errors" "warn" "today: ${bot_errors_today} errors"
+else
+    check "bot-errors" "ok" "today: 0 errors"
+fi
+
+# 8. Crash counter
 crash_count=0
 if [[ -f "$BOT_HOME/watchdog/crash-count" ]]; then crash_count=$(cat "$BOT_HOME/watchdog/crash-count"); fi
 if [[ "$crash_count" -gt 3 ]]; then
