@@ -7,10 +7,10 @@
   <img src="https://img.shields.io/badge/라이선스-MIT-blue?style=flat-square" alt="License">
 </p>
 
-<h1 align="center">Claude Discord Bridge</h1>
+<h1 align="center">Jarvis — AI Company-in-a-Box</h1>
 
 <p align="center">
-  <strong>Claude Max 구독은 하루 23시간 놀고 있습니다.<br>이 봇이 24/7 Discord AI 비서로 만들어 줍니다 — 추가 비용 $0.</strong>
+  <strong>Claude Max 구독은 하루 23시간 놀고 있습니다.<br>이것을 7개 AI 팀이 운영하는 24/7 AI 운영 시스템으로 만들어 줍니다 — 추가 비용 $0.</strong>
 </p>
 
 <p align="center">
