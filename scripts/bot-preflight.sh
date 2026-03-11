@@ -48,6 +48,16 @@ fail_and_heal() {
         attempts=$(cat "$HEAL_ATTEMPTS_FILE" 2>/dev/null || echo 0)
     fi
 
+    # 6시간 이상 안정적이었으면 카운터 자동 리셋 (일시적 장애가 영구 차단하지 않게)
+    if [[ -f "$HEAL_ATTEMPTS_FILE" ]]; then
+        last_attempt_age=$(( $(date +%s) - $(stat -f %m "$HEAL_ATTEMPTS_FILE" 2>/dev/null || echo 0) ))
+        if (( last_attempt_age > 21600 )); then
+            log "6시간 이상 경과 — 복구 카운터 자동 리셋 (이전 시도: ${attempts}회)"
+            rm -f "$HEAL_ATTEMPTS_FILE"
+            attempts=0
+        fi
+    fi
+
     if (( attempts >= MAX_HEAL_ATTEMPTS )); then
         log "CRITICAL: 복구 시도 ${MAX_HEAL_ATTEMPTS}회 초과 — 수동 개입 필요"
         send_ntfy "Jarvis 자동복구 한도 초과 (${MAX_HEAL_ATTEMPTS}회). 수동 개입 필요: $reason"
@@ -78,8 +88,11 @@ fail_and_heal() {
         }
     fi
 
-    log "180초 대기 후 재시도..."
-    sleep 180
+    BACKOFF_DELAYS=(30 90 180)
+    local delay_idx=$(( attempts < ${#BACKOFF_DELAYS[@]} ? attempts : ${#BACKOFF_DELAYS[@]} - 1 ))
+    local sleep_sec="${BACKOFF_DELAYS[$delay_idx]}"
+    log "${sleep_sec}초 대기 후 재시도 (시도 $(( attempts + 1 ))/${MAX_HEAL_ATTEMPTS})..."
+    sleep "$sleep_sec"
     exit 1
 }
 

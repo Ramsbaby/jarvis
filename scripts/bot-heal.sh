@@ -11,6 +11,7 @@ ERROR_REASON="${1:-알 수 없는 시작 실패}"
 LOG_FILE="$BOT_HOME/logs/bot-heal.log"
 MONITORING="$BOT_HOME/config/monitoring.json"
 HEAL_LOCK="$BOT_HOME/state/heal-in-progress"
+RECOVERY_LEARNINGS_FILE="$BOT_HOME/state/recovery-learnings.md"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [heal] $*" | tee -a "$LOG_FILE"; }
 
@@ -51,6 +52,12 @@ BOT_LOG_ERRORS=$(tail -50 "$BOT_HOME/logs/discord-bot.log" 2>/dev/null \
     | grep -iE "Error:|TypeError|SyntaxError|Cannot find|ENOENT|FATAL" \
     | tail -10 || echo "없음")
 
+# ── 과거 복구 학습 로드 ─────────────────────────────────────────────────────────
+PAST_LEARNINGS="없음"
+if [[ -f "$RECOVERY_LEARNINGS_FILE" ]]; then
+    PAST_LEARNINGS=$(tail -30 "$RECOVERY_LEARNINGS_FILE" 2>/dev/null || echo "없음")
+fi
+
 HEAL_PROMPT="[Jarvis 봇 자동복구 태스크]
 
 Discord 봇이 시작 실패했습니다. 원인을 분석하고 파일을 수정해주세요.
@@ -67,6 +74,11 @@ ${BOT_ERR}
 
 ## 봇 에러 로그 라인
 ${BOT_LOG_ERRORS}
+
+## 과거 복구 이력 (참고)
+${PAST_LEARNINGS}
+
+(위 이력에서 같은 원인이 반복된다면 근본 원인을 찾아 영구 수정하라)
 
 ## 수행 지시
 1. 위 정보를 바탕으로 실패 원인을 정확히 파악하라
@@ -92,6 +104,14 @@ HEAL_RESULT=$("$BOT_HOME/bin/ask-claude.sh" \
 if [[ $HEAL_EXIT -ne 0 ]]; then
     log "Claude 복구 실패 (exit $HEAL_EXIT) — 수동 개입 필요"
     send_ntfy "Jarvis 자동복구 실패" "Claude가 해결하지 못했습니다.\n로그: ~/.jarvis/logs/bot-heal.log\n수동 확인 필요" "urgent"
+    # 실패 이력 기록
+    {
+        echo ""
+        echo "## $(date '+%Y-%m-%d %H:%M') — 복구 실패"
+        echo "- 원인: $ERROR_REASON"
+        echo "- Claude exit: $HEAL_EXIT"
+        echo "- 결과: 수동 개입 필요"
+    } >> "$RECOVERY_LEARNINGS_FILE" 2>/dev/null || true
     # 세션 정리 (다음 복구 시도가 새 세션으로 시작할 수 있게)
     ( sleep 3 && tmux kill-session -t jarvis-heal 2>/dev/null ) &
     exit 1
@@ -100,5 +120,12 @@ fi
 log "Claude 완료: $HEAL_RESULT"
 send_ntfy "Jarvis 자동복구 완료" "$HEAL_RESULT\n\n봇이 곧 재기동됩니다." "default"
 log "=== 복구 완료 — launchd가 봇을 재시작합니다 ==="
+# 성공 이력 기록
+{
+    echo ""
+    echo "## $(date '+%Y-%m-%d %H:%M') — 복구 성공"
+    echo "- 원인: $ERROR_REASON"
+    echo "- 해결: $HEAL_RESULT"
+} >> "$RECOVERY_LEARNINGS_FILE" 2>/dev/null || true
 # 세션 정리 (좀비 방지 — 스스로를 kill할 수 없으므로 백그라운드 지연 처리)
 ( sleep 3 && tmux kill-session -t jarvis-heal 2>/dev/null ) &
