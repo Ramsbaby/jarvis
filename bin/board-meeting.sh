@@ -116,9 +116,43 @@ if [[ -f "${BOT_HOME}/agents/ceo.md" ]]; then
     CEO_PROFILE=$(cat "${BOT_HOME}/agents/ceo.md")
 fi
 
+# Load specialist profiles (역할+판정기준만 추출해 프롬프트 비대화 방지)
+_load_agent_profile() {
+    local file="$1"
+    [[ -f "$file" ]] || { echo ""; return; }
+    # ## 역할 섹션 추출 (최대 5줄)
+    awk '/^## 역할/{p=1} /^## 수집 항목|^## 보고 형식|^## 산출물/{p=0} p{print}' "$file" | head -5
+    echo "---"
+    # ## 판정 기준 섹션 추출 (최대 8줄)
+    awk 'BEGIN{p=0} /^## 판정 기준/{p=1; print; next} p && /^## /{p=0} p{print}' "$file" | head -8
+}
+INFRA_PROFILE=""
+if [[ -f "${BOT_HOME}/agents/infra-chief.md" ]]; then
+    INFRA_PROFILE=$(_load_agent_profile "${BOT_HOME}/agents/infra-chief.md")
+fi
+STRATEGY_PROFILE=""
+if [[ -f "${BOT_HOME}/agents/strategy-advisor.md" ]]; then
+    STRATEGY_PROFILE=$(_load_agent_profile "${BOT_HOME}/agents/strategy-advisor.md")
+fi
+RECORD_PROFILE=""
+if [[ -f "${BOT_HOME}/agents/record-keeper.md" ]]; then
+    RECORD_PROFILE=$(_load_agent_profile "${BOT_HOME}/agents/record-keeper.md")
+fi
+
 # --- Build prompt ---
 PROMPT="$(cat <<PROMPT_EOF
 ${CEO_PROFILE}
+
+## 전문가 패널 관점 (CEO 판단의 참고 자료)
+
+### 인프라 수석 관점
+${INFRA_PROFILE}
+
+### 전략 고문 관점
+${STRATEGY_PROFILE}
+
+### 기록 담당 관점
+${RECORD_PROFILE}
 
 아래 사전 수집 데이터를 종합 분석하고 산출물 4종을 작성해.
 
@@ -434,6 +468,31 @@ find "$MINUTES_DIR" -name "*.md" -mtime +90 -delete 2>/dev/null || true
 
 # --- Cleanup ---
 rm -f "$CLAUDE_OUTPUT_TMP"
+
+# --- goals.json KR1-1 크론 성공률 자동 갱신 (bash 직접 측정) ---
+if [[ "$CRON_RATE" =~ ^[0-9]+$ ]] && command -v python3 >/dev/null 2>&1; then
+    GOALS_PATH="${BOT_HOME}/config/goals.json"
+    CRON_RATE_VAL="$CRON_RATE"
+    TODAY_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    python3 - <<PYEOF 2>/dev/null && log "goals.json KR1-1 updated: cron rate ${CRON_RATE_VAL}%" || log "WARN: goals.json KR1-1 update skipped"
+import json, datetime
+path = '${GOALS_PATH}'
+with open(path) as f:
+    goals = json.load(f)
+updated = False
+for obj in goals.get('objectives', []):
+    for kr in obj.get('keyResults', []):
+        if kr.get('id') == 'KR1-1':
+            kr['current'] = '${CRON_RATE_VAL}%'
+            kr['lastUpdated'] = '${TODAY_ISO}'
+            updated = True
+if updated:
+    goals['lastUpdated'] = '${TODAY_ISO}'
+    with open(path, 'w') as f:
+        json.dump(goals, f, ensure_ascii=False, indent=2)
+    print('updated')
+PYEOF
+fi
 
 echo "$RESULT"
 

@@ -49,13 +49,16 @@ count_team() {
     for task_id in "$@"; do
         matched=$(printf '%s\n' "$RECENT_LOG" | grep "\"task\":\"${task_id}\"" 2>/dev/null) || matched=""
         if [[ -n "$matched" ]]; then
-            t_total=$(printf '%s\n' "$matched" | grep -cv "\"status\":\"start\"" 2>/dev/null) || t_total=0
-            t_ok=$(printf '%s\n' "$matched" | grep -c  "\"status\":\"success\"" 2>/dev/null) || t_ok=0
+            t_total=$(printf '%s\n' "$matched" | grep -cv "\"status\":\"start\"" 2>/dev/null || echo 0)
+            t_ok=$(printf '%s\n' "$matched" | grep -c  "\"status\":\"success\"" 2>/dev/null || echo 0)
+            # 개행/공백 제거 후 정수 변환
+            t_total=$(printf '%d' "${t_total//[^0-9]/}" 2>/dev/null || echo 0)
+            t_ok=$(printf '%d' "${t_ok//[^0-9]/}" 2>/dev/null || echo 0)
             total=$((total + t_total))
             ok=$((ok + t_ok))
         fi
     done
-    echo "$ok $total"
+    printf '%d %d\n' "$ok" "$total"
 }
 
 # 팀 정의: "key label task1 task2 ..."

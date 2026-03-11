@@ -63,9 +63,33 @@ main() {
         find /tmp -maxdepth 1 -name "jarvis-*" -mtime +1 -delete 2>/dev/null && cleaned=1 || true
         find /tmp -maxdepth 1 -name "claude-*" -mtime +1 -delete 2>/dev/null && cleaned=1 || true
     fi
-    [[ $cleaned -eq 1 ]] && _log "임시 파일 정리 완료" || _log "임시 파일: 정리 대상 없음"
+    if [[ $cleaned -eq 1 ]]; then _log "임시 파일 정리 완료"; else _log "임시 파일: 정리 대상 없음"; fi
 
-    # 6. 오래된 debug 로그 정리 (3일 이상 된 파일)
+    # 6. state/ 디렉토리 정리
+    _log "state/ 디렉토리 정리"
+
+    # state/events/ — event-watcher 미구현, 7일 초과 파일 제거
+    if [[ -d "${BOT_HOME}/state/events" ]]; then
+        find "${BOT_HOME}/state/events" -type f -mtime +7 -delete
+        _log "state/events/ 오래된 파일 정리 완료"
+    fi
+
+    # state/triggers/ — update-broadcast.sh 외 미사용, 30일 초과 파일 제거
+    if [[ -d "${BOT_HOME}/state/triggers" ]]; then
+        find "${BOT_HOME}/state/triggers" -type f -mtime +30 -delete
+    fi
+
+    # state/board-minutes/ — 90일 초과 제거 (vault-sync.sh가 Vault에 이미 복사함)
+    if [[ -d "${BOT_HOME}/state/board-minutes" ]]; then
+        find "${BOT_HOME}/state/board-minutes" -type f -mtime +90 -delete
+    fi
+
+    # state/decisions/ — 90일 초과 제거 (vault-sync.sh가 Vault에 이미 복사함)
+    if [[ -d "${BOT_HOME}/state/decisions" ]]; then
+        find "${BOT_HOME}/state/decisions" -type f -mtime +90 -delete
+    fi
+
+    # 7. 오래된 debug 로그 정리 (3일 이상 된 파일)
     local debug_dir="${BOT_HOME}/logs/../.claude/debug"
     if [[ -d "$HOME/.claude/debug" ]]; then
         local before_count after_count
