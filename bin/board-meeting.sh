@@ -200,11 +200,111 @@ keyResults의 current 값을 오늘 데이터 기반으로 업데이트. lastUpd
 시장: SAFE/CAUTION/CRITICAL | TQQQ \$XX.XX
 주목: [1줄]
 결정: [1~2줄]
+
+## Connections 도출 (필수)
+오늘 분석된 주요 인사이트들 사이의 연관성을 최대 5개 찾아주세요.
+응답 마지막에 반드시 아래 형식으로 출력:
+CONNECTIONS_JSON:[{"from":"인사이트A 핵심 키워드","to":"인사이트B 핵심 키워드","relationship":"연관 이유 한 줄","strength":0.0}]
+(한 줄에 전부, 줄바꿈 없이)
 PROMPT_EOF
 )"
 
 # --- Prevent nested claude ---
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+
+# --- Consolidation skip check ---
+# board-meeting이 수집하는 주요 결과 디렉토리 목록
+TRACKED_DIRS=(
+    "${BOT_HOME}/results/infra-daily"
+    "${BOT_HOME}/results/news-briefing"
+    "${BOT_HOME}/results/system-health"
+    "${BOT_HOME}/results/tqqq-monitor"
+    "${BOT_HOME}/state/context-bus.md"
+)
+
+# 마지막 board-meeting 실행 시점 (results/board-meeting 디렉토리의 최신 파일 mtime)
+SKIP_STATE_FILE="${BOT_HOME}/state/board-meeting-skip.json"
+LAST_RUN_MTIME=0
+LAST_BOARD_FILE=$(ls -t "${RESULTS_DIR}/"*.md 2>/dev/null | head -1 || true)
+if [[ -n "$LAST_BOARD_FILE" ]]; then
+    LAST_RUN_MTIME=$(stat -f '%m' "$LAST_BOARD_FILE" 2>/dev/null || stat -c '%Y' "$LAST_BOARD_FILE" 2>/dev/null || echo 0)
+fi
+
+# 마지막 board-meeting 이후 변경된 추적 파일 수 계산
+CHANGED_COUNT=0
+for tracked in "${TRACKED_DIRS[@]}"; do
+    if [[ -f "$tracked" ]]; then
+        # 단일 파일 (context-bus.md 등)
+        FILE_MTIME=$(stat -f '%m' "$tracked" 2>/dev/null || stat -c '%Y' "$tracked" 2>/dev/null || echo 0)
+        if (( FILE_MTIME > LAST_RUN_MTIME )); then
+            (( CHANGED_COUNT++ )) || true
+        fi
+    elif [[ -d "$tracked" ]]; then
+        # 디렉토리 — 최신 파일 mtime 확인
+        LATEST_IN_DIR=$(ls -t "${tracked}/"*.md 2>/dev/null | head -1 || true)
+        if [[ -n "$LATEST_IN_DIR" ]]; then
+            DIR_MTIME=$(stat -f '%m' "$LATEST_IN_DIR" 2>/dev/null || stat -c '%Y' "$LATEST_IN_DIR" 2>/dev/null || echo 0)
+            if (( DIR_MTIME > LAST_RUN_MTIME )); then
+                (( CHANGED_COUNT++ )) || true
+            fi
+        fi
+    fi
+done
+
+SKIP_THRESHOLD=2
+
+# 연속 스킵 횟수 읽기 (최대 2회 연속 스킵 시 강제 실행)
+CONSECUTIVE_SKIPS=0
+if [[ -f "$SKIP_STATE_FILE" ]]; then
+    CONSECUTIVE_SKIPS=$(python3 -c "
+import json, sys
+try:
+    with open('${SKIP_STATE_FILE}') as f:
+        print(json.load(f).get('consecutive_skips', 0))
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+fi
+
+MAX_CONSECUTIVE_SKIPS=2
+
+if (( CHANGED_COUNT < SKIP_THRESHOLD && CONSECUTIVE_SKIPS < MAX_CONSECUTIVE_SKIPS )); then
+    log "[board-meeting] 새 변경 ${CHANGED_COUNT}개 (임계값 ${SKIP_THRESHOLD}) — 통합 불필요, 스킵 (연속 ${CONSECUTIVE_SKIPS}회)"
+    # 연속 스킵 카운터 증가
+    python3 -c "
+import json
+try:
+    with open('${SKIP_STATE_FILE}') as f:
+        data = json.load(f)
+except Exception:
+    data = {}
+data['consecutive_skips'] = ${CONSECUTIVE_SKIPS} + 1
+data['last_skipped'] = '${TIMESTAMP}'
+with open('${SKIP_STATE_FILE}', 'w') as f:
+    json.dump(data, f)
+" 2>/dev/null || true
+    exit 0
+fi
+
+# 실행 시 연속 스킵 카운터 리셋
+python3 -c "
+import json
+try:
+    with open('${SKIP_STATE_FILE}') as f:
+        data = json.load(f)
+except Exception:
+    data = {}
+data['consecutive_skips'] = 0
+data['last_run'] = '${TIMESTAMP}'
+with open('${SKIP_STATE_FILE}', 'w') as f:
+    json.dump(data, f)
+" 2>/dev/null || true
+
+if (( CONSECUTIVE_SKIPS >= MAX_CONSECUTIVE_SKIPS )); then
+    log "[board-meeting] 연속 스킵 ${CONSECUTIVE_SKIPS}회 도달 — 변경 ${CHANGED_COUNT}개이지만 강제 실행"
+else
+    log "[board-meeting] 새 변경 ${CHANGED_COUNT}개 (임계값 ${SKIP_THRESHOLD}) — 통합 실행"
+fi
 
 # --- Lock ---
 LOCK_FILE="/tmp/jarvis-board-meeting.lock"
@@ -281,6 +381,21 @@ fi
 # Save result
 echo "$RESULT" > "$RESULT_FILE"
 log "SUCCESS (${DURATION}s, cost \$${COST})"
+
+# --- Extract and store insight connections ---
+CONNECTIONS_FILE="${BOT_HOME}/state/connections.jsonl"
+SESSION_LABEL=$(date +%H | awk '{print ($1+0 < 12) ? "am" : "pm"}')
+python3 -c "
+import sys, json, re
+result = open('${RESULT_FILE}').read()
+m = re.search(r'CONNECTIONS_JSON:(\[.+\])', result)
+if not m:
+    sys.exit(0)
+conns = json.loads(m.group(1))
+record = json.dumps({'date': '$(date +%Y-%m-%d)', 'session': '${SESSION_LABEL}', 'connections': conns}, ensure_ascii=False)
+with open('${CONNECTIONS_FILE}', 'a') as f:
+    f.write(record + '\n')
+" 2>/dev/null || log "WARN: connections 파싱 실패 (결과에 CONNECTIONS_JSON 없을 수 있음)"
 
 # --- Route to Discord (pm은 council-insight(23:00)가 담당하므로 스킵) ---
 if [[ "$MEETING_TYPE" != "pm" ]]; then
