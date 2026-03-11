@@ -28,17 +28,16 @@ log "Starting ${MEETING_TYPE} board meeting"
 
 # --- Pre-collect data (bash 단계에서 수집, claude 토큰 절약) ---
 TODAY="$(date +%F)"
-# 최근 24시간 task-runner.jsonl 기반 성공률 계산 (stale cron.log 대신)
-# cron.log 기반 성공률 계산 (최근 24시간, YYYY-MM-DD HH 형식 비교)
+# cron.log 기반 성공률 계산 (최근 7일, YYYY-MM-DD 형식 비교)
 CRON_LOG="${BOT_HOME}/logs/cron.log"
-CUTOFF_DATE=$(date -v-24H '+%Y-%m-%d %H' 2>/dev/null || date -d '24 hours ago' '+%Y-%m-%d %H')
+SEVEN_DAYS_PATTERN=$(for i in $(seq 0 6); do date -v-${i}d '+%Y-%m-%d' 2>/dev/null || date -d "-${i} days" '+%Y-%m-%d' 2>/dev/null; done | tr '\n' '|' | sed 's/|$//')
 CRON_SUCCESS=0
 CRON_FAIL=0
 if [[ -f "$CRON_LOG" ]]; then
-    CRON_SUCCESS=$(awk -v cutoff="$CUTOFF_DATE" \
-        'substr($0,2,13) >= cutoff && / SUCCESS/' "$CRON_LOG" | wc -l | tr -d ' ') || CRON_SUCCESS=0
-    CRON_FAIL=$(awk -v cutoff="$CUTOFF_DATE" \
-        'substr($0,2,13) >= cutoff && / (FAILED|ABORTED)/' "$CRON_LOG" | wc -l | tr -d ' ') || CRON_FAIL=0
+    CRON_SUCCESS=$(grep -E "^\[($SEVEN_DAYS_PATTERN)" "$CRON_LOG" 2>/dev/null | \
+        awk '/ SUCCESS/' | wc -l | tr -d ' ') || CRON_SUCCESS=0
+    CRON_FAIL=$(grep -E "^\[($SEVEN_DAYS_PATTERN)" "$CRON_LOG" 2>/dev/null | \
+        awk '/ (FAILED|ABORTED)/' | wc -l | tr -d ' ') || CRON_FAIL=0
 fi
 CRON_SUCCESS="${CRON_SUCCESS:-0}"
 CRON_FAIL="${CRON_FAIL:-0}"

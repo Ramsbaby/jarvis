@@ -421,8 +421,8 @@ export async function handleInteraction(interaction, deps) {
         `try {`,
         `  const t = await db.openTable('documents');`,
         `  const n = await t.countRows();`,
-        `  const test = await t.search([0.1]).limit(1).toArray().catch(()=>null);`,
-        `  console.log(JSON.stringify({chunks:n,queryOk:test!==null}));`,
+        `  const ftsTest = await t.search("jarvis").limit(1).toArray().catch(()=>null);`,
+        `  console.log(JSON.stringify({chunks:n,queryOk:ftsTest!==null && ftsTest.length>0}));`,
         `} catch(e) { console.log(JSON.stringify({error:e.message.slice(0,80)})); }`,
       ].join('\n');
       const ragOut = spawnSync('node', ['--input-type=module'], {
@@ -486,6 +486,18 @@ export async function handleInteraction(interaction, deps) {
         }
       }
       rows.push(['Glances', glancesStatus]);
+
+      // 6. Weekly usage stats
+      let weeklyMsgs = '?';
+      try {
+        const usageOut = spawnSync('bash', [join(BOT_HOME, 'scripts', 'usage-stats.sh'), '7'], {
+          encoding: 'utf-8', timeout: 5000,
+          env: { ...process.env, HOME, BOT_HOME },
+        });
+        const match = (usageOut.stdout || '').match(/총 대화: (\d+)건/);
+        if (match) weeklyMsgs = match[1];
+      } catch { /* skip */ }
+      rows.push(['주간 대화', `${weeklyMsgs}건`]);
 
       // Build embed
       const hasErrors = rows.some(([, s]) => s.startsWith('❌'));
