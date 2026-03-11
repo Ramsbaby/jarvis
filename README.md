@@ -126,7 +126,7 @@ Every task has **exponential backoff retry** (3 attempts), **rate-limit awarenes
 | Behavior model | **Proactive** (30 cron + 8 teams) | Reactive only | Reactive only |
 | Context management | **Nexus CIG** (98% compression) | None / basic | Basic |
 | RAG / memory | LanceDB (vector + BM25 hybrid) | Rarely | Plugin-dependent |
-| Self-healing | 3-layer watchdog | Manual restart | Varies |
+| Self-healing | 4-layer watchdog + AI auto-recovery | Manual restart | Varies |
 | AI team agents | 7 specialized teams | None | None |
 | KPI + auto-tuning | Anomaly detection + L3 approval | None | None |
 | Human approval gate | Discord button workflow | None | None |
@@ -310,21 +310,41 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
 
 ## Self-Healing Infrastructure
 
-Three independent layers. If any one fails, the others compensate:
+Four independent layers. Each failure mode is caught by a different layer:
 
 ```
-Layer 1: launchd  (KeepAlive = true)
-  └─ discord-bot.js auto-restarts on any exit
+Layer 0: bot-preflight.sh  (every cold start)
+  ├─ Validates: node binary, discord-bot.js, .env keys (4 required), JSON configs
+  ├─ Failure → tmux jarvis-heal session → Claude auto-fixes files
+  │   ├─ ANTHROPIC_API_KEY passed via tmux -e flag (launchd env isolation)
+  │   ├─ Recovery Learnings: past fixes accumulated in state/recovery-learnings.md
+  │   └─ MAX_HEAL_ATTEMPTS=3, exponential backoff 30s→90s→180s, 6h auto-decay
+  └─ Success → exec node (process replacement — launchd tracks node PID directly)
 
-Layer 2: cron */5 min  →  bot-watchdog.sh
+Layer 1: launchd  (KeepAlive + Crashed:true)
+  └─ discord-bot.js auto-restarts on any exit (ThrottleInterval=10s)
+
+Layer 2: cron */5 min  →  watchdog.sh
   ├─ Checks log freshness (15 min silence = unhealthy)
-  ├─ Kills stale claude -p processes
-  └─ Restarts bot if unresponsive
+  ├─ Crash loop detection: PID tracking, 3 restarts/30 min → ntfy alert
+  ├─ Out-of-band alerts: ntfy direct HTTP (works even when Discord bot is down)
+  └─ Kills stale claude -p processes
 
 Layer 3: cron */3 min  →  launchd-guardian.sh
   ├─ Detects unloaded LaunchAgents
-  ├─ Re-registers them automatically
-  └─ Stall detection: kickstarts services whose logs haven't updated in 3x their interval
+  └─ Re-registers them automatically
+
+Deploy gate: deploy-with-smoke.sh
+  └─ 47-item smoke test before any restart (syntax, files, functions, JSON, .env)
+```
+
+**AI Auto-Recovery flow (bot-preflight.sh → bot-heal.sh):**
+```
+preflight FAIL
+  → tmux new-session jarvis-heal (PTY environment)
+    → claude -p reads logs, edits broken files
+      → "복구완료: <summary>" written
+        → launchd restarts → preflight runs again
 ```
 
 **Rate limiting:** shared `state/rate-tracker.json` — 900 requests per 5-hour window, split between bot and cron tasks.
@@ -567,7 +587,10 @@ The RAG engine runs an incremental index hourly. When you ask a question, releva
 │   ├── jarvis-cron.sh          # → bot-cron.sh symlink (backward compat)
 │   ├── board-meeting.sh        # Board Meeting CEO agent (daily 08:10, 21:55)
 │   ├── decision-dispatcher.sh  # Auto-execute decisions + team scoring
+│   ├── bot-preflight.sh        # Pre-start validation + AI auto-recovery trigger
+│   ├── bot-heal.sh             # AI auto-recovery (runs in tmux PTY, calls claude -p)
 │   ├── bot-watchdog.sh         # Discord bot process monitor
+│   ├── deploy-with-smoke.sh    # 47-item smoke test deploy gate
 │   ├── jarvis-init.sh          # Fresh install initializer
 │   ├── kill-team.sh            # Batch terminate team agents
 │   ├── lounge-announce.sh      # Lounge channel announcements
@@ -620,6 +643,7 @@ The RAG engine runs an incremental index hourly. When you ask a question, releva
 └── state/
     ├── sessions.json           # Active session tracking
     ├── rate-tracker.json       # 5-hour rate limit window
+    ├── recovery-learnings.md   # AI auto-recovery: accumulated fix history
     ├── team-scorecard.json     # Team performance tracking (merit/penalty/status)
     ├── decisions/              # Board meeting decision audit log (JSONL)
     ├── board-minutes/          # Board meeting minutes archive
