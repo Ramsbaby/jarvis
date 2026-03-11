@@ -448,23 +448,14 @@ export async function* createClaudeSession(prompt, {
   const isOwner = activeUserProfile?.type === 'owner';
   const isGuest = !activeUserProfile;
 
-  // 4a. Build user context section
-  const userContextParts = isOwner
-    ? [
-        '--- Owner Context ---',
-        `지금 대화 중인 사람은 ${ownerName}(${ownerTitle}님, GitHub: ${githubUsername})이다. 오너가 "나 누구야?" 등으로 물으면 프로필 기반으로 답한다.`,
-        createClaudeSession._profileCache,
-      ]
-    : isGuest
-    ? [
-        '--- 게스트 접근 ---',
-        '미등록 사용자입니다. 일반 대화만 가능하며 개인 정보, 메모리, 도구 실행 등의 기능은 제공하지 않습니다.',
-      ]
-    : [
-        '--- 사용자 컨텍스트 ---',
-        `지금 대화 중인 사람은 ${activeUserProfile.name}(${activeUserProfile.title})이다. ${activeUserProfile.bio || ''}`.trim(),
-        activeUserProfile.persona ? `응답 가이드: ${activeUserProfile.persona}` : '',
-      ].filter(Boolean);
+  // 4a. Build user context section (SSoT: prompt-sections.js)
+  const userContextParts = buildUserContextSection({
+    activeUserProfile,
+    ownerName,
+    ownerTitle,
+    githubUsername,
+    profileCache: createClaudeSession._profileCache,
+  });
 
   const BOT_HOME = process.env.BOT_HOME || `${homedir()}/.jarvis`;
 

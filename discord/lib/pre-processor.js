@@ -8,14 +8,13 @@
 import { homedir } from 'node:os';
 import { log } from './claude-runner.js';
 import { PAST_REF_PATTERN, searchRagForContext as _defaultSearch } from './rag-helper.js';
+import { isPreplyQuery } from './prompt-sections.js';
 
 // ---------------------------------------------------------------------------
-// Patterns (copied verbatim from handlers.js lines 154–157)
+// Patterns (processor-specific; isPreplyQuery() used for combined check)
 // ---------------------------------------------------------------------------
 const PREPLY_INCOME_PATTERN = /수입|매출|레슨\s*금액|얼마|정산|취소\s*보상|오늘\s*얼마/i;
 const PREPLY_SCHEDULE_PATTERN = /프레플리|preply|오늘\s*수업|내일\s*수업|이번\s*주\s*수업|수업\s*일정|수업\s*몇|레슨|오늘\s*일정|내일\s*일정|이번\s*주\s*일정/i;
-// 하위 호환: 두 패턴 합집합
-const PREPLY_PATTERN = new RegExp(`${PREPLY_INCOME_PATTERN.source}|${PREPLY_SCHEDULE_PATTERN.source}`, 'i');
 
 const BORAM_CHANNEL_IDS = ['1472965899790061680', '1470011814803935274'];
 
@@ -188,7 +187,7 @@ export class RagContextProcessor extends BasePreProcessor {
 
   matches(ctx) {
     return PAST_REF_PATTERN.test(ctx.originalPrompt) &&
-           !PREPLY_PATTERN.test(ctx.originalPrompt);
+           !isPreplyQuery(ctx.originalPrompt);
   }
 
   async enrich(prompt, ctx) {

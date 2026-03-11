@@ -65,6 +65,7 @@ import { classifyBudget } from './context-budget.js';
 import { pendingQueue, enqueue, processQueue } from './queue-processor.js';
 import { MessageDebouncer } from './message-debouncer.js';
 import { ProcessorContext, createPreProcessorRegistry } from './pre-processor.js';
+import { isPreplyQuery } from './prompt-sections.js';
 
 // ---------------------------------------------------------------------------
 // Message debouncer — 연속 메시지를 1.5s 대기 후 배치로 묶어 단일 Claude 호출
@@ -154,11 +155,6 @@ function _clearPendingTask(sessionKey) {
 const INPUT_MAX_CHARS = 4000;
 const TYPING_INTERVAL_MS = 8000;
 
-// Preply 패턴 분리: 수입/금액 조회 vs 일정/스케줄 조회
-const PREPLY_INCOME_PATTERN = /수입|매출|레슨\s*금액|얼마|정산|취소\s*보상|오늘\s*얼마/i;
-const PREPLY_SCHEDULE_PATTERN = /프레플리|preply|오늘\s*수업|내일\s*수업|이번\s*주\s*수업|수업\s*일정|수업\s*몇|레슨|오늘\s*일정|내일\s*일정|이번\s*주\s*일정/i;
-// 하위 호환: 두 패턴 합집합
-const PREPLY_PATTERN = new RegExp(`${PREPLY_INCOME_PATTERN.source}|${PREPLY_SCHEDULE_PATTERN.source}`, 'i');
 
 // Dedup: prevent same message from being processed twice (shard resume / race condition)
 const processingMsgIds = new Set();
@@ -585,7 +581,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       if (summary) {
         // Preply 질문인데 요약에 잘못된 MCP/캘린더 내용이 있으면 주입하지 않음
         const BAD_PREPLY_SUMMARY = /google calendar|캘린더.*mcp|mcp.*캘린더|settings\.json.*수정|재시작.*후.*다시/is;
-        const skipSummary = PREPLY_PATTERN.test(originalPrompt) && BAD_PREPLY_SUMMARY.test(summary);
+        const skipSummary = isPreplyQuery(originalPrompt) && BAD_PREPLY_SUMMARY.test(summary);
         if (!skipSummary) {
           userPrompt = summary + userPrompt;
           log('info', 'Session summary pre-injected for resume safety', { threadId: thread.id });
@@ -608,7 +604,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       // Budget based on original prompt (not inflated by summary/RAG injection)
       // Preply queries always get at least medium — short prompts like "오늘 수업?" get large injection
       let contextBudget = classifyBudget(originalPrompt, imageAttachments.length > 0);
-      if (contextBudget === 'small' && PREPLY_PATTERN.test(originalPrompt)) {
+      if (contextBudget === 'small' && isPreplyQuery(originalPrompt)) {
         contextBudget = 'medium';
         log('info', 'Budget upgraded: small→medium (Preply query detected)', { threadId: thread.id });
       }
@@ -918,7 +914,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       }
 
       // RAG re-inject on retry: skip for Preply queries (data already pre-injected)
-      if (!PREPLY_PATTERN.test(originalPrompt)) {
+      if (!isPreplyQuery(originalPrompt)) {
         const ragContext = await searchRagForContext(originalPrompt).catch(() => null);
         if (ragContext) {
           const ragSnippet = ragContext.length > 600 ? ragContext.slice(0, 600) + '...' : ragContext;
