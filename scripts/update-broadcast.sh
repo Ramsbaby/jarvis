@@ -64,6 +64,46 @@ detect_action() {
     echo "✅ 자동 적용됨"
 }
 
+# --- Auto-deploy (새 커밋 감지 시) ---
+auto_deploy() {
+    local changed_files="$1"
+
+    # 봇 재시작이 필요한 변경인지 판단 (detect_action 함수 재활용)
+    local action
+    action=$(detect_action "$changed_files")
+
+    if echo "$action" | grep -q "봇 재시작 권장"; then
+        log "Auto-deploy: 봇 재시작 필요 변경 감지 — git pull + smoke test 시작"
+
+        # git pull
+        if git -C "$BOT_HOME" pull --ff-only origin main >> "$LOG" 2>&1; then
+            log "Auto-deploy: git pull 성공"
+        else
+            log "Auto-deploy: git pull 실패 (충돌?), 배포 중단"
+            send_embed "🚨 Auto-deploy 실패" "git pull 실패 — 수동 확인 필요" 15158332 || true
+            return 1
+        fi
+
+        # smoke test + 재시작
+        if bash "$BOT_HOME/scripts/deploy-with-smoke.sh" >> "$LOG" 2>&1; then
+            log "Auto-deploy: smoke test 통과, 봇 재시작 완료"
+            send_embed "🚀 자동 배포 완료" "smoke test 통과 · 봇 재시작 성공" 3066993 || true
+        else
+            log "Auto-deploy: smoke test 실패, git 롤백"
+            git -C "$BOT_HOME" reset --hard HEAD~1 >> "$LOG" 2>&1 || true
+            send_embed "🚨 자동 배포 실패" "smoke test 실패 — 이전 버전으로 롤백됨" 15158332 || true
+            return 1
+        fi
+    else
+        # 봇 재시작 불필요한 변경 (scripts/, bin/ 등) → git pull만
+        if git -C "$BOT_HOME" pull --ff-only origin main >> "$LOG" 2>&1; then
+            log "Auto-deploy: git pull 완료 (재시작 불필요)"
+        else
+            log "Auto-deploy: git pull 실패"
+        fi
+    fi
+}
+
 # --- 커밋 메시지 → claude 한글 요약 ---
 summarize_commits_kr() {
     local commit_msgs="$1"
@@ -167,3 +207,6 @@ if send_embed "$title" "$description" "$color"; then
 else
     log "브로드캐스트 실패"
 fi
+
+# --- 자동 배포 (알림 전송 성공 여부와 무관하게 실행) ---
+auto_deploy "$changed_files" || true

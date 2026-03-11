@@ -1,0 +1,27 @@
+name: Deploy Notification
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify-deploy:
+    name: Notify deploy ready
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send ntfy notification
+        # NTFY_TOPIC secret이 설정된 경우만 실행
+        if: ${{ secrets.NTFY_TOPIC != '' }}
+        run: |
+          curl -s -X POST "https://ntfy.sh/${{ secrets.NTFY_TOPIC }}" \
+            -H "Title: Jarvis 새 커밋 푸시됨" \
+            -H "Priority: default" \
+            -H "Tags: jarvis,deploy" \
+            -d "브랜치: ${{ github.ref_name }} | 커밋: ${{ github.sha }} | 작성자: ${{ github.actor }} | update-broadcast.sh가 자동 픽업합니다"
+        continue-on-error: true
+
+      - name: Log deploy notification
+        run: |
+          echo "Deploy notification sent for commit ${{ github.sha }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Author: ${{ github.actor }}"

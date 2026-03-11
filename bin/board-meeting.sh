@@ -469,25 +469,112 @@ find "$MINUTES_DIR" -name "*.md" -mtime +90 -delete 2>/dev/null || true
 # --- Cleanup ---
 rm -f "$CLAUDE_OUTPUT_TMP"
 
-# --- goals.json KR1-1 크론 성공률 자동 갱신 (bash 직접 측정) ---
-if [[ "$CRON_RATE" =~ ^[0-9]+$ ]] && command -v python3 >/dev/null 2>&1; then
+# --- goals.json KR 자동 갱신 (bash 직접 측정) ---
+if command -v python3 >/dev/null 2>&1; then
     GOALS_PATH="${BOT_HOME}/config/goals.json"
-    CRON_RATE_VAL="$CRON_RATE"
+    CRON_RATE_VAL="${CRON_RATE}"
     TODAY_ISO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    python3 - <<PYEOF 2>/dev/null && log "goals.json KR1-1 updated: cron rate ${CRON_RATE_VAL}%" || log "WARN: goals.json KR1-1 update skipped"
-import json, datetime
+    python3 - <<PYEOF 2>/dev/null && log "goals.json KR 자동 갱신 완료" || log "WARN: goals.json KR 갱신 부분 실패"
+import json, re, os
+
 path = '${GOALS_PATH}'
 with open(path) as f:
     goals = json.load(f)
+
+today_iso = '${TODAY_ISO}'
 updated = False
+
+# --- KR1-2: 월간 다운타임 (health.json crash_count 기반) ---
+health_path = os.path.expanduser('~/.jarvis/state/health.json')
+crash_count = 0
+try:
+    with open(health_path) as f:
+        health = json.load(f)
+    crash_count = health.get('crash_count', 0)
+except Exception:
+    pass
+downtime_str = f"약 {crash_count}분" if crash_count > 0 else "0분"
+
+# --- KR1-3: E2E 테스트 통과율 ---
+e2e_str = None
+try:
+    log_path = os.path.expanduser('~/.jarvis/logs/e2e-cron.log')
+    with open(log_path) as f:
+        lines = f.readlines()
+    result_line = next((l for l in reversed(lines) if 'passed' in l), None)
+    if result_line:
+        m = re.search(r'(\d+)/(\d+)\s+passed', result_line)
+        if m:
+            passed, total = int(m.group(1)), int(m.group(2))
+            pct = round(passed / total * 100, 1) if total > 0 else 0
+            e2e_str = f"{pct}% ({passed}/{total})"
+except Exception:
+    pass
+
+# --- KR3-1: TQQQ/손절선 모니터링 커버리지 (cron.log 기반) ---
+tqqq_str = None
+try:
+    log_path = os.path.expanduser('~/.jarvis/logs/cron.log')
+    with open(log_path) as f:
+        content = f.read()
+    tqqq_lines = [l for l in content.split('\n') if 'tqqq-monitor' in l]
+    tqqq_ok = sum(1 for l in tqqq_lines if 'SUCCESS' in l)
+    tqqq_total = sum(1 for l in tqqq_lines if 'SUCCESS' in l or 'FAIL' in l)
+    if tqqq_total > 0:
+        tqqq_pct = round(tqqq_ok / tqqq_total * 100)
+        tqqq_str = f"{tqqq_pct}% ({tqqq_ok}/{tqqq_total})"
+except Exception:
+    pass
+
+# --- KR4-2: 월간 운영 비용 (Claude Max 정액제 = $0 추가비용) ---
+# Claude Max는 $100/월 정액 구독 — API 사용량과 무관하게 추가 비용 없음
+# OpenAI API(RAG enrichment)는 ENABLE_RAG_ENRICHMENT=1일 때만 발생 (현재 비활성)
+cost_str = "$0 (Claude Max 정액)"
+
+# --- 수동측정 note 대상 키워드 ---
+MANUAL_KEYWORDS = ('학습', '포트폴리오', '이력서', '알림', 'RAG')
+
+# --- KR 순회 및 갱신 ---
 for obj in goals.get('objectives', []):
     for kr in obj.get('keyResults', []):
-        if kr.get('id') == 'KR1-1':
-            kr['current'] = '${CRON_RATE_VAL}%'
-            kr['lastUpdated'] = '${TODAY_ISO}'
+        metric = kr.get('metric', '')
+        kr_id = kr.get('id', '')
+
+        if kr_id == 'KR1-1':
+            cron_rate_val = '${CRON_RATE_VAL}'
+            if re.match(r'^\d+$', cron_rate_val):
+                kr['current'] = f"{cron_rate_val}%"
+                kr['lastUpdated'] = today_iso
+                updated = True
+
+        elif '다운타임' in metric:
+            kr['current'] = downtime_str
+            kr['lastUpdated'] = today_iso
             updated = True
+
+        elif 'E2E' in metric:
+            if e2e_str is not None:
+                kr['current'] = e2e_str
+                kr['lastUpdated'] = today_iso
+                updated = True
+
+        elif '손절선' in metric or 'TQQQ' in metric:
+            if tqqq_str is not None:
+                kr['current'] = tqqq_str
+                kr['lastUpdated'] = today_iso
+                updated = True
+
+        elif '비용' in metric:
+            if cost_str is not None:
+                kr['current'] = cost_str
+                kr['lastUpdated'] = today_iso
+                updated = True
+
+        elif any(kw in metric for kw in MANUAL_KEYWORDS):
+            kr.setdefault('note', '수동측정')
+
 if updated:
-    goals['lastUpdated'] = '${TODAY_ISO}'
+    goals['lastUpdated'] = today_iso
     with open(path, 'w') as f:
         json.dump(goals, f, ensure_ascii=False, indent=2)
     print('updated')
