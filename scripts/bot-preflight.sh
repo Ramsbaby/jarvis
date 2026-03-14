@@ -50,7 +50,7 @@ fail_and_heal() {
 
     # 6시간 이상 안정적이었으면 카운터 자동 리셋 (일시적 장애가 영구 차단하지 않게)
     if [[ -f "$HEAL_ATTEMPTS_FILE" ]]; then
-        last_attempt_age=$(( $(date +%s) - $(stat -f %m "$HEAL_ATTEMPTS_FILE" 2>/dev/null || echo 0) ))
+        last_attempt_age=$(( $(date +%s) - $(stat -f %m "$HEAL_ATTEMPTS_FILE" 2>/dev/null || stat -c '%Y' "$HEAL_ATTEMPTS_FILE" 2>/dev/null || echo 0) ))
         if (( last_attempt_age > 21600 )); then
             log "6시간 이상 경과 — 복구 카운터 자동 리셋 (이전 시도: ${attempts}회)"
             rm -f "$HEAL_ATTEMPTS_FILE"

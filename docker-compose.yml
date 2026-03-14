@@ -11,11 +11,10 @@ services:
       - JARVIS_HOME=/jarvis
       - NODE_ENV=production
     volumes:
-      # Claude CLI 인증 (macOS/Linux 전용. Windows 비WSL2 환경에서는 제거 또는 주석 처리)
-      # Windows 비WSL2: HOME 환경변수가 Linux 경로로 미설정 시 마운트 실패
-      # Windows CMD: set HOME=C:\Users\USERNAME 후 docker compose up
-      # WSL2/Linux: 자동 확장됨 (정상)
-      - ${HOME}/.claude:/root/.claude:ro
+      # Claude CLI 인증 마운트
+      # macOS/Linux/WSL2: HOME 자동 확장 (정상)
+      # Windows CMD: .env에 CLAUDE_HOME=C:/Users/USERNAME 설정 후 사용
+      - ${CLAUDE_HOME:-${HOME}}/.claude:/root/.claude:ro
       # 데이터 영속화
       - ./rag:/jarvis/rag
       - ./inbox:/jarvis/inbox

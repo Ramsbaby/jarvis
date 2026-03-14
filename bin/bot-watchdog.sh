@@ -113,7 +113,7 @@ fi
 # Check if watchdog.sh is already handling recovery (shared healing lock)
 HEALING_LOCK="/tmp/bot-healing.lock"
 if [[ -d "$HEALING_LOCK" ]]; then
-    lock_age=$(( $(date +%s) - $(stat -f %m "$HEALING_LOCK") ))
+    lock_age=$(( $(date +%s) - $(stat -f %m "$HEALING_LOCK" 2>/dev/null || stat -c '%Y' "$HEALING_LOCK" 2>/dev/null || echo "$(date +%s)") ))
     if (( lock_age < 600 )); then
         log "SKIP: watchdog.sh healing in progress (lock age=${lock_age}s)"
         exit 0
