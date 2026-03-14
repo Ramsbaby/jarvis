@@ -21,6 +21,10 @@ RUN cd discord && npm ci --omit=dev
 # 전체 소스 복사
 COPY . .
 
+# lib/*.mjs 가 discord/node_modules를 찾을 수 있도록 루트에 심볼릭 링크
+# (rag-watch.mjs, rag-engine.mjs 등이 dotenv/chokidar/lancedb 사용)
+RUN ln -sf /jarvis/discord/node_modules /jarvis/node_modules
+
 # 엔트리포인트 스크립트 복사 및 실행 권한 부여
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
