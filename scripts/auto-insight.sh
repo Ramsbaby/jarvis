@@ -62,7 +62,11 @@ FRONTMATTER
 fi
 
 # frontmatter updated 갱신
-sed -i '' "s/^updated: .*/updated: ${TODAY}/" "$FILE" 2>/dev/null || true
+if ${IS_MACOS:-false}; then
+    sed -i '' "s/^updated: .*/updated: ${TODAY}/" "$FILE" 2>/dev/null || true
+else
+    sed -i "s/^updated: .*/updated: ${TODAY}/" "$FILE" 2>/dev/null || true
+fi
 
 # 인사이트 항목 추가
 cat >> "$FILE" <<ENTRY

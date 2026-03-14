@@ -28,6 +28,9 @@ RUN chmod +x /docker-entrypoint.sh
 # 디렉토리 생성
 RUN mkdir -p logs inbox rag context state results
 
+# 런타임 락 디렉토리 초기화 (컨테이너 재시작 시 stale lock 방지)
+RUN mkdir -p /tmp/jarvis-locks
+
 ENV JARVIS_HOME=/jarvis \
     NODE_ENV=production
 

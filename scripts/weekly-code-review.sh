@@ -16,8 +16,10 @@ mkdir -p "$REVIEW_DIR" "$(dirname "$LOG")"
 log() { echo "[$(date -u +%FT%TZ)] code-review: $*" >> "$LOG"; }
 log "=== Weekly code review started ==="
 
+_TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+
 # 의존성 확인
-for _cmd in claude jq gtimeout; do
+for _cmd in claude jq; do
     if ! command -v "$_cmd" >/dev/null 2>&1; then
         log "FATAL: $_cmd not found"
         exit 2
@@ -108,7 +110,10 @@ ${REVIEW_CONTEXT}"
 # --- LLM 실행 ---
 log "Calling claude -p for semantic review..."
 REVIEW_RESULT=""
-if REVIEW_RESULT=$(gtimeout 180 claude -p "$PROMPT" \
+_review_cmd=()
+if [[ -n "${_TIMEOUT_CMD:-}" ]]; then _review_cmd+=("${_TIMEOUT_CMD}" 180); fi
+_review_cmd+=(claude -p "$PROMPT")
+if REVIEW_RESULT=$("${_review_cmd[@]}" \
     --model claude-sonnet-4-20250514 \
     --max-turns 1 \
     2>/dev/null); then
@@ -144,6 +149,104 @@ fi
 
 # --- 오래된 리뷰 정리 (90일) ---
 find "$REVIEW_DIR" -name "*.md" -mtime +90 -delete 2>/dev/null || true
+
+# --- STATUS.md 자동 생성 (사람용 현황 문서) ---
+(
+STATUS_FILE="$HOME/Jarvis-Vault/01-system/STATUS.md"
+log "Generating STATUS.md..."
+
+IS_MACOS=false
+[[ "$(uname -s 2>/dev/null)" == "Darwin" ]] && IS_MACOS=true
+PROCS=$(${IS_MACOS} && launchctl list | grep jarvis | awk '{print "- " $3 ": " ($1 == "-" ? "⚪ 미실행" : "🟢 PID " $1) " (exit " $2 ")"}' || echo "N/A (non-macOS)")
+RAG_LAST=$(tail -1 "$BOT_HOME/logs/rag-index.log" 2>/dev/null || echo "로그 없음")
+DISK=$(df -h / | tail -1 | awk '{print $5 " 사용 (" $3 "/" $2 ")"}')
+CRON_COUNT=$(crontab -l 2>/dev/null | grep -v '^#\|^$' | wc -l | tr -d ' ')
+INCIDENTS=$(tail -20 "$BOT_HOME/rag/incidents.md" 2>/dev/null | grep '^\- \[' || echo "없음")
+
+cat > "$STATUS_FILE" << STATUSEOF
+# Jarvis 시스템 현황
+
+> 매주 일요일 05:00 자동 업데이트 (weekly-code-review.sh)
+> 마지막 갱신: $(date '+%Y-%m-%d %H:%M')
+
+## 프로세스 상태
+$PROCS
+
+## RAG 인덱싱
+\`\`\`
+$RAG_LAST
+\`\`\`
+
+## 리소스
+- 디스크: $DISK
+- 크론 태스크: ${CRON_COUNT}개
+
+## 최근 인시던트
+$INCIDENTS
+STATUSEOF
+
+log "STATUS.md updated: $STATUS_FILE"
+) || log "WARN: STATUS.md generation failed (non-fatal)"
+
+# --- handoff.md rolling archive (2주 초과 → Vault 99-archive) ---
+(
+HANDOFF="$BOT_HOME/rag/handoff.md"
+ARCHIVE_DIR="$HOME/Jarvis-Vault/99-archive"
+export ARCHIVE_FILE="$ARCHIVE_DIR/handoff-archive-$(date '+%Y-%m').md"
+export CUTOFF=$(date -v-14d '+%Y-%m-%d' 2>/dev/null || date -d '14 days ago' '+%Y-%m-%d')
+
+mkdir -p "$ARCHIVE_DIR"
+
+# handoff.md에서 "## 최근 완료 (날짜)" 섹션 중 cutoff 이전 것만 추출 → 아카이브 후 원본에서 삭제
+python3 << 'PYEOF'
+import re, sys, os
+from datetime import datetime, timedelta
+
+handoff = os.path.expanduser("~/.jarvis/rag/handoff.md")
+archive = os.environ.get("ARCHIVE_FILE", "")
+cutoff = os.environ.get("CUTOFF", "")
+
+with open(handoff, 'r') as f:
+    content = f.read()
+
+# Split into sections by ## headers
+sections = re.split(r'(^## .+$)', content, flags=re.MULTILINE)
+keep = []
+archived = []
+
+i = 0
+while i < len(sections):
+    section = sections[i]
+    body = sections[i+1] if i+1 < len(sections) else ""
+
+    match = re.match(r'^## 최근 완료 \((\d{4}-\d{2}-\d{2})\)', section)
+    if match and match.group(1) < cutoff:
+        archived.append(section + body)
+    else:
+        keep.append(section)
+        if i+1 < len(sections):
+            keep.append(body)
+    i += 2 if re.match(r'^## ', section) else 1
+
+if archived and archive:
+    header = "# Handoff 아카이브 — " + datetime.now().strftime("%Y-%m") + "\n\n"
+    mode = 'a' if os.path.exists(archive) else 'w'
+    with open(archive, mode) as f:
+        if mode == 'w':
+            f.write(header + "> handoff.md에서 2주 초과 항목 자동 이동\n\n---\n\n")
+        for a in archived:
+            f.write(a)
+
+    with open(handoff, 'w') as f:
+        f.write(''.join(keep))
+
+    print(f"Archived {len(archived)} section(s) to {archive}")
+else:
+    print("Nothing to archive")
+PYEOF
+
+log "handoff.md archive check completed"
+) || log "WARN: handoff archive failed (non-fatal)"
 
 log "=== Weekly code review completed ==="
 echo "$REVIEW_RESULT"

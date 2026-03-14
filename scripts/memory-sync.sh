@@ -20,6 +20,8 @@ LOG="$BOT_HOME/logs/memory-sync.log"
 
 log() { echo "[$(date '+%F %T')] [memory-sync] $1" | tee -a "$LOG"; }
 
+_TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+
 # --- 인수 파싱 ---
 DO_SERENA=true
 DO_MEMORY_MD=true
@@ -136,7 +138,10 @@ ${adr_list}
     # 중첩 세션 방지 변수 해제 (크론에서는 없지만, 수동 실행 시 필요)
     unset CLAUDECODE
 
-    if gtimeout 180 claude -p "$prompt" \
+    _claude_cmd=()
+    if [[ -n "${_TIMEOUT_CMD:-}" ]]; then _claude_cmd+=("${_TIMEOUT_CMD}" 180); fi
+    _claude_cmd+=(claude -p "$prompt")
+    if "${_claude_cmd[@]}" \
         --allowedTools "mcp__serena__read_memory,mcp__serena__edit_memory,mcp__serena__write_memory" \
         --mcp-config "$MCP_CONFIG" \
         --output-format json \

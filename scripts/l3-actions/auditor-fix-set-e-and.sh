@@ -43,7 +43,11 @@ CMD=$(echo "$TARGET_LINE" | sed -E 's/^[[:space:]]*\[\[.*\]\]\s*&&\s*(.*)/\1/')
 REPLACEMENT="${INDENT}if ${COND}; then ${CMD}; fi"
 
 # Apply fix using sed with line number
-sed -i '' "${LINE_NUM}s|.*|${REPLACEMENT}|" "$FILE"
+if ${IS_MACOS:-false}; then
+    sed -i '' "${LINE_NUM}s|.*|${REPLACEMENT}|" "$FILE"
+else
+    sed -i "${LINE_NUM}s|.*|${REPLACEMENT}|" "$FILE"
+fi
 
 # Verify syntax
 if bash -n "$FILE" 2>/dev/null; then

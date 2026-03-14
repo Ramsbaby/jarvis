@@ -183,7 +183,8 @@ check_repeated_failures() {
     if [[ "$count" -ge 3 ]]; then
         # Discord 알림 (proposals-tracker 유무와 무관하게 항상 전송)
         # 중복 알림 방지: 오늘 날짜 기준 sentinel 파일 확인
-        local sentinel="${BOT_HOME}/logs/.repeated-fail-${task_id}-${fail_class}-$(date +%F)"
+        local sentinel
+        sentinel="${BOT_HOME}/logs/.repeated-fail-${task_id}-${fail_class}-$(date +%F)"
         if [[ ! -f "$sentinel" ]]; then
             touch "$sentinel" 2>/dev/null || true
             "$BOT_HOME/bin/route-result.sh" alert "$task_id" \
@@ -199,10 +200,19 @@ check_repeated_failures() {
             if ! grep -q "\[${task_id}\] ${fail_class}" "$tracker" 2>/dev/null; then
                 # Insert before the "반복 패턴 감지" section
                 if grep -q "아직 등록된 제안 없음" "$tracker" 2>/dev/null; then
-                    sed -i '' "s|_아직 등록된 제안 없음_|${entry}|" "$tracker" 2>/dev/null || true
+                    if ${IS_MACOS:-false}; then
+                        sed -i '' "s|_아직 등록된 제안 없음_|${entry}|" "$tracker" 2>/dev/null || true
+                    else
+                        sed -i "s|_아직 등록된 제안 없음_|${entry}|" "$tracker" 2>/dev/null || true
+                    fi
                 else
-                    sed -i '' "/^## 📌 반복 패턴 감지/i\\
+                    if ${IS_MACOS:-false}; then
+                        sed -i '' "/^## 📌 반복 패턴 감지/i\\
 ${entry}" "$tracker" 2>/dev/null || true
+                    else
+                        sed -i "/^## 📌 반복 패턴 감지/i\\
+${entry}" "$tracker" 2>/dev/null || true
+                    fi
                 fi
             fi
         fi

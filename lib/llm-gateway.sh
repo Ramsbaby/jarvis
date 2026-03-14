@@ -22,6 +22,8 @@
 LLM_GATEWAY_VERSION="1.1.0"
 LLM_GATEWAY_BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
+_TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+
 # Source structured logging
 if [[ -f "${LLM_GATEWAY_BOT_HOME}/lib/log-utils.sh" ]]; then
     source "${LLM_GATEWAY_BOT_HOME}/lib/log-utils.sh"
@@ -71,12 +73,15 @@ _llm_claude_cli() {
 
     command -v claude >/dev/null 2>&1 || return 1
 
-    local cmd=(gtimeout "$timeout" claude -p "$prompt"
+    local cmd=()
+    if [[ -n "${_TIMEOUT_CMD:-}" ]]; then
+        cmd+=("${_TIMEOUT_CMD}" "$timeout")
+    fi
+    cmd+=(claude -p "$prompt"
         --output-format json
         --permission-mode bypassPermissions
         --strict-mcp-config
         --mcp-config "${mcp_config:-${LLM_GATEWAY_BOT_HOME}/config/empty-mcp.json}"
-        --setting-sources local
     )
 
     [[ -n "$system" ]]        && cmd+=(--append-system-prompt "$system")
@@ -87,7 +92,9 @@ _llm_claude_cli() {
 
     local stderr_tmp
     stderr_tmp=$(mktemp)
-    "${cmd[@]}" > "$output" 2>"$stderr_tmp"
+    # 구독 계정 사용: ANTHROPIC_API_KEY가 있으면 claude -p가 API 잔액을 쓰므로 unset
+    # (llm-gateway의 Anthropic API 폴백은 이 함수 밖에서 ANTHROPIC_API_KEY를 직접 사용)
+    ANTHROPIC_API_KEY="" CLAUDECODE="" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
     local exit_code=$?
     if [[ $exit_code -ne 0 && -s "$stderr_tmp" ]]; then
         log_warn "claude-cli stderr: $(tail -3 "$stderr_tmp" | tr '\n' ' ')"
@@ -106,7 +113,7 @@ _llm_anthropic_api() {
     local api_model="claude-sonnet-4-20250514"
     case "${model:-}" in
         *opus*)   api_model="claude-opus-4-20250514" ;;
-        *haiku*)  api_model="claude-haiku-4-5-20251001" ;;
+        *haiku*)  api_model="claude-haiku-4-5-20251015" ;;
         *sonnet*) api_model="claude-sonnet-4-20250514" ;;
     esac
 

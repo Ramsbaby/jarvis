@@ -18,6 +18,8 @@ LOG="$BOT_HOME/logs/update-broadcast.log"
 mkdir -p "$(dirname "$STATE_FILE")" "$(dirname "$LOG")"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
+_TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+
 # --- Webhook ---
 get_webhook_url() {
     [[ -f "$MONITORING_CONFIG" ]] || return 1
@@ -139,7 +141,10 @@ ${commit_msgs}
     local result=""
     # claude -p 사용 (timeout 30초, 저비용)
     if command -v claude >/dev/null 2>&1; then
-        result=$(gtimeout 30 claude -p "$prompt" \
+        _sum_cmd=()
+        if [[ -n "${_TIMEOUT_CMD:-}" ]]; then _sum_cmd+=("${_TIMEOUT_CMD}" 30); fi
+        _sum_cmd+=(claude -p "$prompt")
+        result=$("${_sum_cmd[@]}" \
             --model claude-sonnet-4-20250514 \
             --max-turns 1 \
             2>/dev/null || true)
