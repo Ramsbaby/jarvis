@@ -39,7 +39,8 @@ _log_emit() {
 
     local upper
     upper=$(echo "$level" | tr '[:lower:]' '[:upper:]')
-    local msg="[$(_log_ts)] ${upper} [$(_log_caller)] $*"
+    local msg
+    msg="[$(_log_ts)] ${upper} [$(_log_caller)] $*"
 
     # Always write warn/error to stderr
     if [[ "$level" == "warn" || "$level" == "error" ]]; then

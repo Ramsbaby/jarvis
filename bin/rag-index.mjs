@@ -7,7 +7,7 @@
  */
 
 import { readFile, writeFile, stat, unlink } from 'node:fs/promises';
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { writeFileSync, unlinkSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { config } from 'dotenv';
@@ -25,6 +25,25 @@ import { RAGEngine } from '../lib/rag-engine.mjs';
 const BOT_HOME = join(process.env.BOT_HOME || join(homedir(), '.jarvis'));
 const STATE_FILE = join(BOT_HOME, 'rag', 'index-state.json');
 const PID_FILE = join(BOT_HOME, 'state', 'rag-index.pid');
+
+// rag-watch 인덱싱 중 동시 쓰기 방지: lock 파일만으로 판단
+// (rag-watch.mjs가 engine.indexFile() 직전에 lock 파일을 갱신함)
+const RAG_WATCH_LOCK = join(BOT_HOME, 'state', 'rag-watch-indexing.lock');
+import { statSync } from 'node:fs';
+function isRagWatchActive() {
+  // lock 파일이 2분 이내 갱신됐으면 현재 쓰기 중 → 이번 run 스킵.
+  // 프로세스 존재 여부는 체크하지 않음 (rag-watch는 항상 실행 중이므로 무의미).
+  try {
+    const s = statSync(RAG_WATCH_LOCK);
+    return Date.now() - s.mtimeMs < 120_000;
+  } catch {
+    return false; // lock 파일 없음 = 인덱싱 중 아님
+  }
+}
+if (isRagWatchActive()) {
+  console.log(`[${new Date().toISOString()}] [rag-index] rag-watch active — skipping this run to prevent concurrent writes`);
+  process.exit(0);
+}
 
 // PID 센티넬: rag-watch가 rag-index 실행 중임을 감지해 충돌 회피
 writeFileSync(PID_FILE, String(process.pid));
@@ -49,6 +68,14 @@ async function saveState(state) {
   await rename(tmp, STATE_FILE);
 }
 
+function appendIncident(type, detail) {
+  try {
+    const incidentPath = join(BOT_HOME, 'rag', 'incidents.md');
+    const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    appendFileSync(incidentPath, `\n- [${ts}] **[rag-index]** ${type}: ${detail}\n`);
+  } catch { /* non-critical */ }
+}
+
 async function getMtime(filePath) {
   try {
     const s = await stat(filePath);
@@ -63,7 +90,22 @@ async function main() {
   const engine = new RAGEngine(join(BOT_HOME, 'rag', 'lancedb'));
   await engine.init();
 
-  const state = await loadState();
+  // DB-state 무결성 검사: index-state.json에 항목이 있는데 DB가 비어있으면
+  // 동시 쓰기 충돌로 손상된 것으로 판단 → state 초기화 후 전체 재구성
+  let state = await loadState();
+  const stateEntries = Object.keys(state).length;
+  if (stateEntries > 0) {
+    const currentStats = await engine.getStats();
+    if (currentStats.totalChunks === 0) {
+      console.warn(
+        `[rag-index] WARN: DB empty but index-state has ${stateEntries} entries — state/DB mismatch. Resetting state for full rebuild.`
+      );
+      appendIncident('DB 손상 감지', `index-state ${stateEntries}개 vs DB 0 chunks 불일치 → 전체 재구성 시작`);
+      state = {};
+      await saveState(state);
+    }
+  }
+  const _hadMismatch = Object.keys(state).length === 0 && stateEntries > 0;
   let indexed = 0;
   let skipped = 0;
 
@@ -108,7 +150,7 @@ async function main() {
   } catch { /* dir may not exist */ }
 
   // 2. RAG memory files
-  for (const f of ['memory.md', 'decisions.md', 'handoff.md']) {
+  for (const f of ['memory.md', 'decisions.md', 'handoff.md', 'incidents.md']) {
     targets.push(join(BOT_HOME, 'rag', f));
   }
 
@@ -282,9 +324,23 @@ async function main() {
     }
   }
 
-  await saveState(state);
   const stats = await engine.getStats();
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  // 안전장치: 파일을 처리했는데 DB에 0 chunks이면 쓰기 실패 → state 저장하지 않아 다음 실행에서 재시도
+  if (indexed > 0 && stats.totalChunks === 0) {
+    const msg = `indexed ${indexed} files but DB has 0 chunks — write failure. State NOT saved, will retry next run.`;
+    console.error(`[${new Date().toISOString()}] [rag-index] ABORT: ${msg}`);
+    appendIncident('쓰기 실패 ABORT', msg);
+    process.exit(1);
+  }
+
+  await saveState(state);
+
+  // DB 손상 후 재구성 성공 시 incidents.md 기록
+  if (_hadMismatch && stats.totalChunks > 0) {
+    appendIncident('DB 재구성 완료', `${stats.totalChunks} chunks / ${stats.totalSources} sources 복구됨 (${duration}s)`);
+  }
 
   console.log(
     `[${new Date().toISOString()}] RAG index: ${indexed} new/modified, ${skipped} unchanged, ${stats.totalChunks} total chunks, ${stats.totalSources} sources (${duration}s)`,

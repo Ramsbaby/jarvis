@@ -1,5 +1,5 @@
 name: "정보탐험대 (Recon)"
-taskId: null
+taskId: recon-weekly
 discord: jarvis-ceo
 maxTurns: 40
 tools: [Read, Write, Bash, WebSearch, Glob, Grep, Agent, nexus]

@@ -357,6 +357,18 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
     : null;
   const hasVoice = !!voiceAtt;
   let batchContent = _buildBatchContent(messages); // Claude에 보낼 결합 프롬프트
+
+  // Reply context: 답글 대상 메시지 내용을 컨텍스트로 주입
+  const refMsg = message.reference?.messageId
+    ? await message.channel.messages.fetch(message.reference.messageId).catch(() => null)
+    : null;
+  if (refMsg) {
+    const refContent = refMsg.content?.slice(0, 800) || '';
+    if (refContent) {
+      batchContent = `[답글 대상 메시지]\n${refContent}\n\n[사용자 답글]\n${batchContent}`;
+    }
+  }
+
   // cancel token restart: processQueue → handleMessage → debouncer → 여기서 override 적용
   const _overrideKey = messages[messages.length - 1].id;
   const _override = _promptOverrides.get(_overrideKey);
@@ -406,8 +418,8 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       const partialText = activeEntry.streamer?.buffer?.slice(0, 600) ?? '';
       const prevPrompt = activeEntry.originalPrompt ?? '';
 
-      // 기존 스트림 중단
-      activeEntry.proc.kill();
+      // 기존 스트림 중단 (재시작용 취소 — 타임아웃 메시지 출력 안 함)
+      activeEntry.proc.kill('restart');
       log('info', 'Cancel token: aborted active generation for restart', { queueKey, prevPromptLen: prevPrompt.length });
 
       // 원래 요청 + 부분 응답 + 새 요청 통합 프롬프트
@@ -573,6 +585,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
     streamer = new StreamingMessage(thread, message, sessionKey, effectiveChannelId);
     streamer.setContext(getContextualThinking(userPrompt, imageAttachments.length > 0));
     await streamer.sendPlaceholder();
+    await streamer.updatePhase('🔍 요청 분석 중...');
 
     // Session summary pre-injection for resume safety
     // _continueHandled=true이면 이미 "계속" 블록에서 요약을 주입했으므로 중복 방지
@@ -614,8 +627,9 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
 
       // Compat shim: commands.js uses active.proc.kill() and active.proc.killed
       let aborted = false;
+      let killReason = 'timeout'; // 'timeout' | 'restart' — 취소 원인 구분용
       const procShim = {
-        kill: () => { aborted = true; abortController.abort(); },
+        kill: (reason = 'timeout') => { aborted = true; killReason = reason; abortController.abort(); },
         get killed() { return aborted; },
       };
 
@@ -738,27 +752,9 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
             log('warn', 'Response truncated by max-turns (continuations exhausted)', { threadId: thread.id, toolCount });
           }
 
-          await streamer.finalize();
-
           const cost = event.cost_usd ?? null;
-          const usage = event.usage ?? null;
-
-          await unreact(EMOJI.THINKING);
-          await react(EMOJI.DONE);
-
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           const rateStatus = rateTracker.check();
-
-          // 토큰 포맷: 1234 → "1,234" / 12345 → "12.3k"
-          const fmtToken = n => {
-            if (n == null) return '-';
-            return n >= 10000 ? `${(n / 1000).toFixed(1)}k` : n.toLocaleString();
-          };
-
-          // 세션 상태 레이블
-          const sessionLabel = sid
-            ? '🔗 재개됨'
-            : resultSessionId ? '🆕 신규 저장' : '🆕 신규 (미저장)';
 
           // stop_reason 사람말로
           const stopLabel = event.stop_reason === 'end_turn' ? '✅ 완료'
@@ -766,33 +762,24 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
             : event.stop_reason === 'tool_use'               ? '🛠️ 도구 종료'
             : event.stop_reason ?? '-';
 
-          // Compact one-line footer: Rate Limit % + 소요 시간 + 도구 횟수만 표시
-          // (비용·세션ID·개별 토큰 수치 제거 — 본문보다 footer가 크던 문제 개선)
-          const footerParts = [];
-          footerParts.push(`${elapsed}s`);
+          const footerParts = [`${elapsed}s`];
           if (toolCount > 0) footerParts.push(`🛠${toolCount}`);
           footerParts.push(`📊${Math.round(rateStatus.pct * 100)}%`);
-
-          // stop_reason은 비정상(max_turns/tool_use)일 때만 표시 — 정상 완료는 생략
           const stopPrefix = event.stop_reason !== 'end_turn' ? `${stopLabel} · ` : '';
 
           // 가족 채널에서는 stats 숨김
           const quietIds = (process.env.QUIET_CHANNEL_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
           const isQuiet = quietIds.includes(effectiveChannelId) || quietIds.includes(thread.id);
+
+          // stats를 finalize 전에 buffer에 붙여 Discord edit 횟수 1회로 줄임
           if (!isQuiet) {
-            // embed 대신 main 메시지에 한 줄로 붙임 — 별도 카드 없애 화면 점유 최소화
             const statsLine = `-# ${stopPrefix}${footerParts.join(' · ')}`;
-            const mainMsg = streamer.currentMessage;
-            if (mainMsg && mainMsg.content && (mainMsg.content.length + statsLine.length + 1) <= 1990) {
-              try {
-                await mainMsg.edit({ content: mainMsg.content + '\n' + statsLine, components: [] });
-              } catch {
-                await thread.send(statsLine);
-              }
-            } else {
-              await thread.send(statsLine);
-            }
+            streamer.append('\n' + statsLine);
           }
+
+          await streamer.finalize();
+          await unreact(EMOJI.THINKING);
+          await react(EMOJI.DONE);
 
           log('info', 'Claude completed', {
             threadId: thread.id, cost, toolCount, sessionId: resultSessionId,
@@ -812,11 +799,14 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       clearTimeout(timeoutHandle);
       timeoutHandle = null;
       activeProcesses.delete(sessionKey);
+      // 마지막 활성 채널 기록 → 재시작 후 알림 폴백용
+      try { writeFileSync(join(_BOT_HOME, 'state', 'last-active-channel'), thread.id); } catch { /* best effort */ }
       // active-session 파일 삭제는 finally 블록에서 통합 처리 (예외 경로 포함)
 
       // Loop ended without result event
       if (!streamer.finalized && !retryNeeded && !needsContinuation) {
-        if (aborted) {
+        if (aborted && killReason !== 'restart') {
+          // 진짜 10분 타임아웃만 메시지 출력. 새 메시지로 인한 재시작 취소는 무음 처리.
           streamer.append('\n\n' + t('msg.timeout'));
           _savePendingTask(sessionKey, originalPrompt);
         } else if (streamer.hasRealContent && toolCount > 0) {
@@ -834,8 +824,11 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       channelId: effectiveChannelId,
       threadId: thread.id,
       botHome: process.env.BOT_HOME || `${homedir()}/.jarvis`,
+      client,
     });
+    await streamer.updatePhase('🔍 컨텍스트 검색 중...');
     userPrompt = await _preProcessorRegistry.run(userPrompt, preCtx);
+    await streamer.updatePhase('🧠 claude-sonnet-4-6 호출 중...');
 
     // First attempt
     let runResult = await runClaude(sessionId, streamer);
@@ -848,6 +841,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       streamer.buffer = '';
       streamer.sentLength = 0;
       streamer.hasRealContent = false;
+      streamer._textSent = false;
       streamer._statusLines = [];
       streamer._toolCount = 0;
       streamer.fenceOpen = false;

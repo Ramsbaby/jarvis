@@ -104,7 +104,15 @@ const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.jarvis'));
 const MODELS = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'models.json'), 'utf-8'));
 const DISCORD_MCP_PATH = join(BOT_HOME, 'config', 'discord-mcp.json');
 const USER_PROFILE_PATH = join(BOT_HOME, 'context', 'user-profile.md');
+const OWNER_PROFILE_PATH = join(BOT_HOME, 'context', 'owner', 'owner-profile.md');
 const CONV_HISTORY_DIR = join(BOT_HOME, 'context', 'discord-history');
+
+// 오너 Discord ID — user_profiles.json에서 읽되, 파싱 실패 시 null (기능 비활성화)
+let OWNER_DISCORD_ID = null;
+try {
+  const _profiles = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'user_profiles.json'), 'utf-8'));
+  OWNER_DISCORD_ID = _profiles?.owner?.discordId ?? null;
+} catch { /* user_profiles.json 없으면 비활성화 */ }
 const LOG_PATH = join(BOT_HOME, 'logs', 'discord-bot.jsonl');
 
 // ---------------------------------------------------------------------------
@@ -192,14 +200,17 @@ function getUserProfile(discordUserId) {
 // ---------------------------------------------------------------------------
 
 export async function execRagAsync(query) {
-  const { execFileSync } = await import('node:child_process');
+  // execFileSync → execFile (Promise) 로 교체: 이벤트 루프 차단(최대 7초) 방지
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const execFileP = promisify(execFile);
   try {
-    const result = execFileSync(
+    const { stdout } = await execFileP(
       process.execPath,
       [join(BOT_HOME, 'lib', 'rag-query.mjs'), query],
       { timeout: 7000, encoding: 'utf-8', maxBuffer: 1024 * 200 },
     );
-    return result || '';
+    return stdout || '';
   } catch {
     try {
       const memPath = join(BOT_HOME, 'rag', 'memory.md');
@@ -281,6 +292,53 @@ async function _syncUserMemoryMarkdown(userId) {
   await wf(tmpPath, lines.join('\n'), 'utf-8');
   await rename(tmpPath, mdPath);
   log('debug', 'User memory synced to RAG markdown', { userId, facts: memData.facts.length });
+}
+
+// ---------------------------------------------------------------------------
+// _syncOwnerProfileMarkdown — 오너 전용: 추출 사실을 owner-profile.md에 자동 반영
+// ---------------------------------------------------------------------------
+
+const OWNER_AUTO_SECTION = '## 자동 추출 기억';
+
+async function _syncOwnerProfileMarkdown(newFacts) {
+  if (!newFacts?.length) return;
+  try {
+    let content = '';
+    try { content = readFileSync(OWNER_PROFILE_PATH, 'utf-8'); } catch { /* 파일 없으면 새로 생성 */ }
+
+    const sectionIdx = content.indexOf(OWNER_AUTO_SECTION);
+    let existingFacts = [];
+
+    if (sectionIdx !== -1) {
+      // 섹션이 이미 있음 — 기존 항목 파싱 (중복 방지용)
+      const sectionBody = content.slice(sectionIdx + OWNER_AUTO_SECTION.length);
+      existingFacts = sectionBody.match(/^- .+/gm)?.map(l => l.slice(2).trim()) ?? [];
+    }
+
+    const toAdd = newFacts.filter(f => !existingFacts.includes(f));
+    if (!toAdd.length) return; // 이미 다 있음
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const newLines = toAdd.map(f => `- ${f} _(${timestamp})_`).join('\n');
+
+    if (sectionIdx !== -1) {
+      // 기존 섹션 끝에 append
+      const insertAt = sectionIdx + OWNER_AUTO_SECTION.length;
+      const before = content.slice(0, insertAt);
+      const after = content.slice(insertAt);
+      content = before + '\n' + newLines + after;
+    } else {
+      // 섹션 없음 — 파일 끝에 추가
+      content = content.trimEnd() + '\n\n' + OWNER_AUTO_SECTION + '\n' + newLines + '\n';
+    }
+
+    const tmpPath = `${OWNER_PROFILE_PATH}.tmp.${process.pid}`;
+    await writeFileAsync(tmpPath, content, 'utf-8');
+    await renameAsync(tmpPath, OWNER_PROFILE_PATH);
+    log('info', 'Owner profile auto-updated', { added: toAdd.length, facts: toAdd.map(f => f.slice(0, 60)) });
+  } catch (err) {
+    log('debug', '_syncOwnerProfileMarkdown failed (non-critical)', { error: err.message });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +453,13 @@ export async function autoExtractMemory(userId, userMsg, botMsg) {
       await _syncUserMemoryMarkdown(userId).catch((syncErr) =>
         log('debug', 'User memory RAG sync failed (non-critical)', { userId, error: syncErr.message })
       );
+      // 오너인 경우 owner-profile.md에도 자동 반영 (어느 채널이든)
+      if (OWNER_DISCORD_ID && userId === OWNER_DISCORD_ID) {
+        const savedFacts = facts.filter(f => typeof f === 'string' && f.length > 5 && f.length < 200);
+        await _syncOwnerProfileMarkdown(savedFacts).catch((e) =>
+          log('debug', 'Owner profile sync failed (non-critical)', { error: e?.message })
+        );
+      }
     }
   } catch (err) {
     log('debug', 'autoExtractMemory failed (non-critical)', { userId, error: err.message });
@@ -476,7 +541,7 @@ export async function* createClaudeSession(prompt, {
     buildToolsSection({ botHome: BOT_HOME }),
 
     // ── 안전 ─────────────────────────────────────────────────────────────────
-    buildSafetySection(),
+    buildSafetySection({ botHome: BOT_HOME }),
 
     // ── 사용자 컨텍스트 ──────────────────────────────────────────────────────
     ...userContextParts,
@@ -506,6 +571,14 @@ export async function* createClaudeSession(prompt, {
   }
 
   // Claude Max usage summary
+  // "사용량" 키워드면 캐시 갱신 먼저 실행 (실시간 반영)
+  const isUsageQuery = /사용량|사용향|usage|한도|rate.?limit/i.test(prompt);
+  if (isUsageQuery) {
+    try {
+      const { spawnSync } = await import('node:child_process');
+      spawnSync('python3', [join(HOME, '.claude', 'scripts', 'update-usage-cache.py')], { timeout: 8000 });
+    } catch { /* ignore */ }
+  }
   let usageSummary = '';
   try {
     const usageCachePath = join(HOME, '.claude', 'usage-cache.json');
@@ -540,16 +613,20 @@ export async function* createClaudeSession(prompt, {
       : `${activeUserProfile.name}(${activeUserProfile.title})`;
     ctxParts.push(`[대화 상대] ${senderLabel}`);
     // 사용량 현황은 80% 이상일 때만 주입 — 낮을 때 주입하면 Claude self-throttling 유발
+    // 예외: 사용자가 "사용량" 키워드로 직접 조회할 때는 항상 주입
     if (usageSummary) {
-      let highUsage = false;
-      try {
-        const usageCachePath = join(HOME, '.claude', 'usage-cache.json');
-        const { existsSync, readFileSync } = await import('node:fs');
-        if (existsSync(usageCachePath)) {
-          const uc = JSON.parse(readFileSync(usageCachePath, 'utf-8'));
-          highUsage = (uc.fiveH?.pct ?? 0) > 80 || (uc.sevenD?.pct ?? 0) > 80;
-        }
-      } catch { /* ignore */ }
+      const isUsageQuery = /사용량|usage|한도|rate.?limit/i.test(prompt);
+      let highUsage = isUsageQuery;
+      if (!highUsage) {
+        try {
+          const usageCachePath = join(HOME, '.claude', 'usage-cache.json');
+          const { existsSync, readFileSync } = await import('node:fs');
+          if (existsSync(usageCachePath)) {
+            const uc = JSON.parse(readFileSync(usageCachePath, 'utf-8'));
+            highUsage = (uc.fiveH?.pct ?? 0) > 80 || (uc.sevenD?.pct ?? 0) > 80;
+          }
+        } catch { /* ignore */ }
+      }
       if (highUsage) ctxParts.push(usageSummary);
     }
     // RAG는 mcp__nexus__rag_search 도구로 아젠틱하게 검색 (사전 주입 제거)
@@ -578,10 +655,12 @@ export async function* createClaudeSession(prompt, {
   const model = BUDGET_MODEL[contextBudget] ?? BUDGET_MODEL.medium;
 
   // 7. Load MCP server config (same servers, now as SDK mcpServers object)
+  // ${ENV_VAR} 형식의 env var를 실제 값으로 치환 지원 (GITHUB_TOKEN 등)
   let mcpServers = {};
   try {
-    const mcpConfig = JSON.parse(readFileSync(DISCORD_MCP_PATH, 'utf-8'));
-    mcpServers = mcpConfig.mcpServers ?? {};
+    const rawMcp = readFileSync(DISCORD_MCP_PATH, 'utf-8')
+      .replace(/\$\{([^}]+)\}/g, (_, name) => process.env[name] ?? '');
+    mcpServers = (JSON.parse(rawMcp)).mcpServers ?? {};
   } catch (err) {
     log('warn', 'Failed to load discord-mcp.json — MCP disabled', { error: err.message });
   }

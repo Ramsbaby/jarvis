@@ -33,5 +33,24 @@
    ~/.jarvis/rag/teams/shared-inbox/$(date +%Y-%m-%d)_infra_to_council.md
 ```
 
+## Discord 출력 포맷
+> 공통 규칙: `output-format.md` 참조
+
+```
+━━━━━━━━━━━━━━━━━━━━
+🖥️ MM-DD (요일) 인프라 점검
+━━━━━━━━━━━━━━━━━━━━
+한 줄: [상황 요약]
+
+[🔴 긴급 항목 — 있을 때만]
+[🟡 주의 항목 — 있을 때만]
+
+💾 디스크       XX% 사용
+🧠 메모리       정상 / XX GB 여유
+⚙️ LaunchAgent  정상 / [이슈]
+📊 크론         성공률 XX% (XX/XX)
+━━━━━━━━━━━━━━━━━━━━
+```
+
 ## Discord 전송 채널
 #jarvis-system

@@ -62,9 +62,17 @@ const eventData = (() => {
 function loadJSON(path) {
   try { return JSON.parse(readFileSync(path, 'utf-8')); } catch { return {}; }
 }
+// MCP 설정 전용 로더: ${ENV_VAR} 보간 지원
+function loadMcpJSON(path) {
+  try {
+    const raw = readFileSync(path, 'utf-8')
+      .replace(/\$\{([^}]+)\}/g, (_, name) => process.env[name] ?? '');
+    return JSON.parse(raw);
+  } catch { return {}; }
+}
 
 const monitoring = loadJSON(join(BOT_HOME, 'config', 'monitoring.json'));
-const mcpCfg     = loadJSON(join(BOT_HOME, 'config', 'discord-mcp.json'));
+const mcpCfg     = loadMcpJSON(join(BOT_HOME, 'config', 'discord-mcp.json'));
 const MCP        = mcpCfg.mcpServers ?? {};
 
 const NOW  = new Date();

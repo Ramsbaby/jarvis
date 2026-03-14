@@ -26,7 +26,7 @@ declare -a note_titles=()
 declare -a note_paths=()
 
 while IFS= read -r -d '' file; do
-    relpath="${file#$VAULT/}"
+    relpath="${file#"$VAULT/"}"
     filename=$(basename "$file" .md)
 
     # 제외 대상
@@ -54,7 +54,7 @@ log "Collected ${#note_titles[@]} linkable targets"
 linked=0
 
 while IFS= read -r -d '' file; do
-    relpath="${file#$VAULT/}"
+    relpath="${file#"$VAULT/"}"
     filename=$(basename "$file" .md)
 
     # 메타 파일 스킵

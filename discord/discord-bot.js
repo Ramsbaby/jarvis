@@ -12,7 +12,7 @@
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { existsSync, readFileSync, writeFileSync, rmSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, renameSync } from 'node:fs';
 import {
   Client,
   GatewayIntentBits,
@@ -41,7 +41,7 @@ const HOME = homedir();
 const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.jarvis'));
 const SESSIONS_PATH = join(BOT_HOME, 'state', 'sessions.json');
 const RATE_TRACKER_PATH = join(BOT_HOME, 'state', 'rate-tracker.json');
-const MAX_CONCURRENT = 2;
+const MAX_CONCURRENT = 3;
 const BOT_NAME = process.env.BOT_NAME || 'Claude Bot';
 
 // ---------------------------------------------------------------------------
@@ -229,6 +229,7 @@ client.once('clientReady', async () => {
       if (Date.now() - data.ts < 300_000) {
         reason = data.reason || 'unknown';
         notifyChannels = data.channels || [];
+        if (data.requestedRestart) reason = 'requested';
       }
     } catch {
       // restart-notify.json 없음 → heartbeat로 비정상 종료 추정
@@ -262,10 +263,15 @@ client.once('clientReady', async () => {
 
       // 활성 세션 채널에 알림 (graceful shutdown: 진행 중이던 채널만)
       if (notifyChannels.length > 0 && !suppressApology) {
-        for (const chId of notifyChannels) {
+        const isRequestedRestart = reason === 'requested';
+        const restartMsg = isRequestedRestart
+          ? '✅ 재시작됐습니다.'
+          : `🔄 재시작됐습니다. 이전 응답이 중단되었으니 다시 말씀해 주세요.\n> 사유: ${reasonLabel}`;
+        const quietIds = (process.env.QUIET_CHANNEL_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+        for (const chId of notifyChannels.filter(id => !quietIds.includes(id))) {
           const ch = client.channels.cache.get(chId) || await client.channels.fetch(chId).catch(() => null);
           if (ch) {
-            await ch.send(`🔄 재시작됐습니다. 이전 응답이 중단되었으니 다시 말씀해 주세요.\n> 사유: ${reasonLabel}`).catch(() => {});
+            await ch.send(restartMsg).catch(() => {});
           }
         }
         try { writeFileSync(apologyCooldownFile, String(Date.now())); } catch { /* best effort */ }
@@ -306,7 +312,7 @@ client.once('clientReady', async () => {
   // ---------------------------------------------------------------------------
   const HEALTH_INTERVAL = 300_000;      // 5분
   const SILENCE_THRESHOLD = 600_000;    // 10분 무메시지 → 의심
-  const FORCE_RECONNECT_CHECKS = 6;     // API OK 상태로 6회(30분) 이상 침묵 → 강제 재연결
+  const FORCE_RECONNECT_CHECKS = 18;    // API OK 상태로 18회(90분) 이상 침묵 → 강제 재연결
   const heartbeatFile = join(BOT_HOME, 'state', 'bot-heartbeat');
   const writeHeartbeat = () => {
     try { writeFileSync(heartbeatFile, String(Date.now())); } catch { /* best effort */ }
@@ -331,6 +337,15 @@ client.once('clientReady', async () => {
       uptimeSec, memMB,
       guilds: client.guilds?.cache?.size ?? 0,
     });
+
+    // OOM 사전 차단: 500MB 초과 시 깨끗하게 재시작 (OOM kill보다 낫다)
+    const MEM_LIMIT_MB = 500;
+    if (memMB > MEM_LIMIT_MB) {
+      log('error', `OOM threshold exceeded (${memMB}MB > ${MEM_LIMIT_MB}MB) — restarting cleanly`, { memMB });
+      sendNtfy(`${BOT_NAME} OOM restart`, `메모리 ${memMB}MB 초과, 재시작`, 'high');
+      setTimeout(() => process.exit(1), 1000);
+      return;
+    }
 
     // Case 1: WS explicitly not ready → discord.js auto-reconnect에 맡기되 경고
     // heartbeat 안 씀 → watchdog이 15분 후 외부에서 강제 재시작
@@ -470,7 +485,9 @@ async function shutdown(signal) {
   const activeChannels = [];
   const streamerFinalizations = [];
   for (const [threadId, entry] of activeProcesses) {
-    activeChannels.push(threadId);
+    // sessionKey는 "channelId-userId" 또는 threadId 형식 — 채널 ID만 추출
+    const channelId = threadId.includes('-') ? threadId.split('-')[0] : threadId;
+    activeChannels.push(channelId);
     log('info', 'Killing active process', { threadId });
     clearTimeout(entry.timeout);
     if (entry.typingInterval) clearInterval(entry.typingInterval);
@@ -499,10 +516,18 @@ async function shutdown(signal) {
       );
     }
   }
+  // 활성 채널 없으면 마지막 활성 채널을 폴백으로 사용 (사용자 요청 재시작 알림용)
+  let requestedRestart = false;
+  if (activeChannels.length === 0) {
+    try {
+      const lastCh = readFileSync(join(BOT_HOME, 'state', 'last-active-channel'), 'utf-8').trim();
+      if (lastCh) { activeChannels.push(lastCh); requestedRestart = true; }
+    } catch { /* 파일 없으면 skip */ }
+  }
   // 종료 사유 + 활성 채널 기록 → 재시작 후 알림용
   try {
     writeFileSync(join(BOT_HOME, 'state', 'restart-notify.json'),
-      JSON.stringify({ channels: activeChannels, ts: Date.now(), reason: `graceful (${signal})` }));
+      JSON.stringify({ channels: activeChannels, ts: Date.now(), reason: `graceful (${signal})`, requestedRestart }));
   } catch { /* best effort */ }
   activeProcesses.clear();
   // 스트리머 finalize 완료 대기 (최대 8초 — hard exit timeout 10초보다 짧게)
@@ -519,6 +544,16 @@ async function shutdown(signal) {
   }
   await botAlerts.shutdown();
   sessions.save();
+  // SESSION_END marker → session-sync cron이 context-bus 즉시 갱신에 사용
+  try {
+    const histDir = join(BOT_HOME, 'context', 'discord-history');
+    mkdirSync(histDir, { recursive: true });
+    const kst = new Date(Date.now() + 9 * 3600 * 1000);
+    const dateStr = kst.toISOString().slice(0, 10);
+    const timeStr = kst.toISOString().slice(11, 16);
+    const marker = `\n## [${dateStr} ${timeStr} KST] SESSION_END\n\n봇 종료 (${signal}). session-sync가 context-bus를 갱신합니다.\n\n---\n`;
+    appendFileSync(join(histDir, `${dateStr}.md`), marker, 'utf-8');
+  } catch { /* best effort — 실패해도 종료는 진행 */ }
   client.destroy();
   log('info', 'Shutdown complete');
   process.exit(0);
@@ -562,23 +597,45 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason) => {
-  log('error', 'Unhandled rejection', {
-    error: reason instanceof Error ? reason.message : String(reason),
-  });
   const code = reason?.code;
   const msg = reason instanceof Error ? reason.message : String(reason);
+
+  // 무시해도 안전한 노이즈성 에러 (discord.js 내부 rate-limit, 네트워크 일시 오류)
+  const BENIGN_PATTERNS = [
+    'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND',
+    'DiscordAPIError[10008]',  // Unknown Message (삭제된 메시지 편집 시도)
+    'DiscordAPIError[10062]',  // Unknown interaction (timeout)
+    'DiscordAPIError[40060]',  // Interaction already acknowledged
+    'Missing Permissions',
+    'Cannot send messages to this user',
+  ];
+  const isBenign = BENIGN_PATTERNS.some(p => msg.includes(p));
+
+  if (isBenign) {
+    log('warn', 'Unhandled rejection (benign, ignored)', { error: msg });
+    return;
+  }
+
+  log('error', 'Unhandled rejection', {
+    error: msg,
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+
   if (code === 'TokenInvalid' || msg.includes('TokenInvalid') || msg.includes('invalid token')) {
     const backoffFile = '/tmp/jarvis-token-backoff';
     let count = 0;
     try { count = parseInt(readFileSync(backoffFile, 'utf-8'), 10) || 0; } catch {}
     count++;
     writeFileSync(backoffFile, String(count));
-    const delaySec = Math.min(count * 30, 300); // 30s, 60s, 90s... max 5min
+    const delaySec = Math.min(count * 30, 300);
     log('error', `TokenInvalid #${count}, waiting ${delaySec}s before exit`);
     setTimeout(() => process.exit(1), delaySec * 1000);
-    return; // prevent further processing
+    return;
   }
+
+  // 알 수 없는 치명적 rejection → ntfy 후 3초 뒤 종료 (launchd 재시작)
   sendNtfy(`${BOT_NAME} Crash`, msg, 'urgent');
+  setTimeout(() => process.exit(1), 3000);
 });
 
 // ---------------------------------------------------------------------------

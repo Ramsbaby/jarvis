@@ -9,7 +9,7 @@ BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 LOG_FILE="${BOT_HOME}/logs/pre-cron-auth-check.log"
 MONITORING_CONFIG="${BOT_HOME}/config/monitoring.json"
 
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
 
 # ntfy 알림
 send_ntfy() {
@@ -66,10 +66,16 @@ log "Claude 인증 사전 확인 시작"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
-# claude -p 인증 테스트 (10초 타임아웃)
+_TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+
+# claude -p 인증 테스트 (30초 타임아웃)
 AUTH_RESULT=""
 AUTH_EXIT=0
-AUTH_RESULT=$(gtimeout 30 claude -p "ok" --output-format json 2>&1) || AUTH_EXIT=$?
+if [[ -n "${_TIMEOUT_CMD:-}" ]]; then
+    AUTH_RESULT=$(${_TIMEOUT_CMD} 30 claude -p "ok" --output-format json 2>&1) || AUTH_EXIT=$?
+else
+    AUTH_RESULT=$(claude -p "ok" --output-format json 2>&1) || AUTH_EXIT=$?
+fi
 
 ACCOUNT_INFO=$(get_account_info)
 

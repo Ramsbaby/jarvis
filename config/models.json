@@ -1,5 +1,5 @@
 {
-  "budget": "claude-haiku-4-5-20251015",
+  "budget": "claude-haiku-4-5",
   "small": "claude-sonnet-4-6",
   "medium": "claude-sonnet-4-6",
   "large": "claude-opus-4-6"

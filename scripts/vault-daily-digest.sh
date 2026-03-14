@@ -32,7 +32,7 @@ changed_files=""
 changed_count=0
 
 while IFS= read -r -d '' file; do
-    relpath="${file#$VAULT/}"
+    relpath="${file#"$VAULT/"}"
 
     # 메타 파일 스킵
     case "$relpath" in

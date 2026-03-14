@@ -3,7 +3,7 @@
   "name": "System Health Check",
   "version": "1.0.0",
   "description": "Periodic system health monitoring (disk, memory, CPU, processes)",
-  "model": "claude-haiku-4-5-20251001",
+  "model": "claude-haiku-4-5-20251015",
   "schedule": "*/30 * * * *",
   "timeout": 120,
   "prompt": "Check system status: 1) Disk usage (df -h) 2) Memory (vm_stat) 3) CPU load (uptime) 4) Key process survival. If issues found, warn. If normal, output 'OK' in one line.",

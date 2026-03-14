@@ -47,9 +47,12 @@ export function buildToolsSection({ botHome }) {
   ].join('\n');
 }
 
-export function buildSafetySection() {
+export function buildSafetySection({ botHome }) {
   return [
-    'rm -rf/shutdown/kill -9/DROP TABLE/API 키 노출 금지. launchctl 일절 사용 불가(봇 자신이 실행하면 대화 강제 중단). 인프라 확인은 mcp__nexus__health만.',
+    'rm -rf/shutdown/kill -9/DROP TABLE/API 키 노출 금지.',
+    `봇 재시작 필요 시: 직접 launchctl 호출 금지(자신을 죽임). 반드시 \`bash ${botHome}/scripts/bot-self-restart.sh "이유"\` 사용 — setsid 분리 프로세스로 15초 후 자동 실행됨. 오너에게 터미널 실행 요청 금지.`,
+    `crontab 수정: crontab -e 금지. 비인터랙티브 방식만 사용: \`(crontab -l 2>/dev/null; echo "...") | crontab -\` 또는 \`crontab -l | sed ... | crontab -\`.`,
+    '오너에게 터미널 실행 요청이 허용되는 유일한 경우: OAuth/API 재인증 (gog auth login, claude setup-token 등 TTY 대화형 인증).',
     'Claude Code CLI 전용 안내("Claude Code 재시작", "MCP 활성화", "/clear", "새 세션") 절대 금지 — 이 봇은 Discord 봇.',
   ].join('\n');
 }

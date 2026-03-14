@@ -16,6 +16,20 @@ TASK_ID="${2:?Usage: route-result.sh MODE TASK_ID MESSAGE}"
 MESSAGE="${3:?Usage: route-result.sh MODE TASK_ID MESSAGE}"
 CHANNEL="${4:-}"  # optional: channel name from tasks.json discordChannel field
 
+# --- Marker extraction (before clean_message) ---
+# CHART_DATA:<json>  → QuickChart 이미지 embed
+# EMBED_DATA:<json>  → Discord rich embed (color card)
+CHART_JSON=""
+EMBED_JSON=""
+if printf '%s' "$MESSAGE" | grep -q '^CHART_DATA:'; then
+    CHART_JSON=$(printf '%s' "$MESSAGE" | grep '^CHART_DATA:' | head -1 | sed 's/^CHART_DATA://')
+    MESSAGE=$(printf '%s' "$MESSAGE" | grep -v '^CHART_DATA:' || true)
+fi
+if printf '%s' "$MESSAGE" | grep -q '^EMBED_DATA:'; then
+    EMBED_JSON=$(printf '%s' "$MESSAGE" | grep '^EMBED_DATA:' | head -1 | sed 's/^EMBED_DATA://')
+    MESSAGE=$(printf '%s' "$MESSAGE" | grep -v '^EMBED_DATA:' || true)
+fi
+
 # --- Message quality filter (central pre-send hook) ---
 # Strips internal debug/noise lines before sending to any external channel
 clean_message() {
@@ -43,18 +57,61 @@ if [[ -f "$FORMAT_SCRIPT" ]]; then
     if [[ -n "$FORMATTED" ]]; then MESSAGE="$FORMATTED"; fi
 fi
 
+# --- Webhook URL resolver ---
+get_webhook_url() {
+    local url
+    if [[ -n "$CHANNEL" ]]; then
+        url=$(jq -r --arg ch "$CHANNEL" '.webhooks[$ch] // .webhook.url' "$CONFIG")
+        if [[ -z "$url" || "$url" == "null" ]]; then url=$(jq -r '.webhook.url' "$CONFIG"); fi
+    else
+        url=$(jq -r '.webhook.url' "$CONFIG")
+    fi
+    printf '%s' "$url"
+}
+
+# --- Rich embed sender (Discord color card) ---
+send_embed() {
+    local embed_json="$1"
+    local webhook_url
+    webhook_url=$(get_webhook_url)
+    local payload
+    payload=$(jq -n --argjson embed "$embed_json" '{"embeds":[$embed]}')
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || true
+    if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
+        echo "WARN: embed webhook returned HTTP $http_code" >&2
+    fi
+}
+
+# --- Chart embed sender (QuickChart.io → Discord image embed) ---
+send_chart_embed() {
+    local chart_json="$1"
+    local webhook_url
+    webhook_url=$(get_webhook_url)
+
+    # Build QuickChart GET URL (node for safe URL encoding)
+    local chart_url
+    chart_url=$(node -e "process.stdout.write('https://quickchart.io/chart?w=700&h=350&bkg=white&c=' + encodeURIComponent(process.argv[1]))" "$chart_json" 2>/dev/null) || return 0
+    if [[ -z "$chart_url" ]]; then return 0; fi
+
+    local payload
+    payload=$(jq -n --arg url "$chart_url" '{"embeds":[{"image":{"url":$url},"color":3447003}]}')
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || true
+    if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
+        echo "WARN: chart embed webhook returned HTTP $http_code" >&2
+    fi
+}
+
 # --- Discord: 2000-char chunking ---
 send_discord() {
     local message="$1"
     local webhook_url
-    # Channel-specific webhook lookup (falls back to default if empty or missing)
-    if [[ -n "$CHANNEL" ]]; then
-        webhook_url=$(jq -r --arg ch "$CHANNEL" '.webhooks[$ch] // .webhook.url' "$CONFIG")
-        # If channel webhook is empty string, fallback to default
-        if [[ -z "$webhook_url" || "$webhook_url" == "null" ]]; then webhook_url=$(jq -r '.webhook.url' "$CONFIG"); fi
-    else
-        webhook_url=$(jq -r '.webhook.url' "$CONFIG")
-    fi
+    webhook_url=$(get_webhook_url)
     local total=${#message}
     local offset=0
 
@@ -73,6 +130,18 @@ send_discord() {
         # Rate limit protection between chunks
         if [[ $offset -lt $total ]]; then sleep 1; fi
     done
+
+    # --- Rich embed (if EMBED_DATA present, send as color card) ---
+    if [[ -n "$EMBED_JSON" ]]; then
+        sleep 0.3
+        send_embed "$EMBED_JSON"
+    fi
+
+    # --- Chart embed (append after text/embed if CHART_JSON present) ---
+    if [[ -n "$CHART_JSON" ]]; then
+        sleep 0.5
+        send_chart_embed "$CHART_JSON"
+    fi
 }
 
 # --- ntfy push ---

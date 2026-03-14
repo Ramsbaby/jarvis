@@ -10,6 +10,14 @@
 load_context() {
     SYSTEM_PROMPT=""
 
+    # --- Global capabilities guide (항상 첫 번째로 주입) ---
+    local capabilities_file="${BOT_HOME}/context/_capabilities.md"
+    if [[ -f "$capabilities_file" ]]; then
+        SYSTEM_PROMPT="$(cat "$capabilities_file")
+
+"
+    fi
+
     # --- RAG context (semantic search -> static file fallback) ---
     local rag_context=""
     if command -v node >/dev/null 2>&1 && [[ -f "$BOT_HOME/lib/rag-query.mjs" ]]; then

@@ -32,5 +32,23 @@
    echo "내용" > ~/.jarvis/rag/teams/shared-inbox/$(date +%Y-%m-%d)_academy_to_council.md
 ```
 
+## Discord 출력 포맷
+> 공통 규칙: `output-format.md` 참조
+
+```
+━━━━━━━━━━━━━━━━━━━━
+🎓 MM-DD 학습팀 리포트
+━━━━━━━━━━━━━━━━━━━━
+한 줄: [상황 요약]
+
+[🔴 긴급 항목 — 있을 때만]
+[🟡 주의 항목 — 있을 때만]
+
+📚 학습     [이번 주 핵심 포인트]
+💼 커리어   [시장 동향 한 줄]
+✅ Tasks   XX건 미완료 / 없음
+━━━━━━━━━━━━━━━━━━━━
+```
+
 ## Discord 전송 채널
 #bot-ceo

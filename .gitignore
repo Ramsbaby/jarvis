@@ -2,6 +2,11 @@
 .env
 discord/.env
 config/monitoring.json
+config/google-calendar-token.json
+config/*-token.json
+
+# 대화 로그 (API 키 포함 가능)
+inbox/
 config/tasks.json
 config/company-dna.md
 config/discord-mcp.json

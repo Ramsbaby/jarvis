@@ -10,7 +10,6 @@ STATE_DIR="$BOT_HOME/state"
 ALERTED_FILE="$STATE_DIR/alerted-events.json"
 WEBHOOK_CONFIG="$BOT_HOME/config/monitoring.json"
 LOG="$BOT_HOME/logs/calendar-alert.log"
-GOOGLE_ACCOUNT="${GOOGLE_ACCOUNT:-$(grep '^GOOGLE_ACCOUNT=' "$BOT_HOME/discord/.env" 2>/dev/null | sed 's/^GOOGLE_ACCOUNT=//' || echo "")}"
 ALERT_WINDOW_MIN=25
 ALERT_WINDOW_MAX=35
 
@@ -18,21 +17,16 @@ mkdir -p "$STATE_DIR" "$(dirname "$LOG")"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
-# gog 없으면 조용히 종료
-if ! command -v gog &>/dev/null; then
-    exit 0
-fi
-
 # python3 필요
 if ! command -v python3 &>/dev/null; then
     log "ERROR: python3 not found"
     exit 0
 fi
 
-# GOOGLE_ACCOUNT 빈 값 검사 — 인증 없이 gog 호출하면 exit 0 + 오류 텍스트가
-# stdout으로 출력되어 JSON 파싱 실패로 이어질 수 있음
-if [[ -z "$GOOGLE_ACCOUNT" ]]; then
-    log "WARN: GOOGLE_ACCOUNT not set, skipping"
+# Google Calendar OAuth 토큰 파일 확인
+TOKEN_FILE="$BOT_HOME/config/google-calendar-token.json"
+if [[ ! -f "$TOKEN_FILE" ]]; then
+    log "ERROR: $TOKEN_FILE 없음. calendar-setup-oauth.sh를 먼저 실행하세요."
     exit 0
 fi
 
@@ -44,21 +38,62 @@ fi
 # 시간 윈도우 계산 (macOS date -v)
 WINDOW_FROM="$(date -v+"${ALERT_WINDOW_MIN}"M '+%Y-%m-%dT%H:%M:%S')"
 WINDOW_TO="$(date -v+"${ALERT_WINDOW_MAX}"M '+%Y-%m-%dT%H:%M:%S')"
-FROM_DATE="$(date -v+"${ALERT_WINDOW_MIN}"M '+%Y-%m-%d')"
-TO_DATE="$(date -v+"${ALERT_WINDOW_MAX}"M '+%Y-%m-%d %H:%M')"
 
-# Google Calendar에서 이벤트 조회 (gog 실패 시 빈 결과 반환)
+# Google Calendar API로 이벤트 조회 (curl 기반, keychain 불필요)
 CALENDAR_OUTPUT=""
-if CALENDAR_OUTPUT="$(gog calendar list \
-    --from "$FROM_DATE" \
-    --to "$TO_DATE" \
-    --account "$GOOGLE_ACCOUNT" \
-    --json 2>/dev/null)"; then
-    :
-else
-    log "WARN: gog calendar failed (exit $?), using empty events"
+CALENDAR_OUTPUT=$(python3 - "$TOKEN_FILE" "$WINDOW_FROM" "$WINDOW_TO" << 'GCALEOF'
+import json, sys, urllib.request, urllib.parse
+
+token_file = sys.argv[1]
+window_from = sys.argv[2]  # 2026-03-12T10:25:00
+window_to = sys.argv[3]    # 2026-03-12T10:35:00
+
+with open(token_file) as f:
+    creds = json.load(f)
+
+client_id = creds["client_id"]
+client_secret = creds["client_secret"]
+refresh_token = creds["refresh_token"]
+
+# 1) Refresh access token
+token_data = urllib.parse.urlencode({
+    "client_id": client_id,
+    "client_secret": client_secret,
+    "refresh_token": refresh_token,
+    "grant_type": "refresh_token"
+}).encode()
+req = urllib.request.Request("https://oauth2.googleapis.com/token", data=token_data)
+with urllib.request.urlopen(req, timeout=10) as resp:
+    access_token = json.loads(resp.read())["access_token"]
+
+# 2) Fetch calendar events (timeMin/timeMax in RFC3339)
+time_min = urllib.parse.quote(window_from + "+09:00")
+time_max = urllib.parse.quote(window_to + "+09:00")
+cal_url = (
+    f"https://www.googleapis.com/calendar/v3/calendars/primary/events"
+    f"?timeMin={time_min}&timeMax={time_max}"
+    f"&singleEvents=true&orderBy=startTime&maxResults=10"
+)
+cal_req = urllib.request.Request(cal_url, headers={"Authorization": f"Bearer {access_token}"})
+with urllib.request.urlopen(cal_req, timeout=10) as resp:
+    cal_data = json.loads(resp.read())
+
+# 3) Map to {"events": [...]} format (기존 Python 코드 호환)
+events = []
+for item in cal_data.get("items", []):
+    events.append({
+        "id": item.get("id", ""),
+        "summary": item.get("summary", "(제목 없음)"),
+        "start": item.get("start", {}),
+        "end": item.get("end", {})
+    })
+
+print(json.dumps({"events": events}, ensure_ascii=False))
+GCALEOF
+) 2>/dev/null || {
+    log "WARN: Google Calendar API 호출 실패, using empty events"
     CALENDAR_OUTPUT='{"events":[]}'
-fi
+}
 
 # Webhook URL 가져오기
 WEBHOOK_URL=""

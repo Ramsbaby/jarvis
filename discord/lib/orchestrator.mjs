@@ -361,6 +361,20 @@ async function main() {
     } catch (e) { log('warn', `cleanup error: ${e.message}`); }
   }, 6 * 3600_000);
 
+  // Claude CLI → RAG 싱크 (매 10분): CLI 대화를 inbox에 저장 → rag-watch 자동 인덱싱
+  const cliRagSyncScript = join(BOT_HOME, 'scripts', 'claude-cli-rag-sync.mjs');
+  const cliRagSyncTimer = setInterval(async () => {
+    try {
+      const { execFile } = await import('node:child_process');
+      execFile(process.execPath, [cliRagSyncScript], { timeout: 30000 }, (err, stdout, stderr) => {
+        if (err) { log('warn', `cli-rag-sync error: ${err.message}`); return; }
+        const lastLine = stdout.trim().split('\n').pop() || '';
+        if (lastLine.includes('synced: 0')) return; // 변경 없으면 로그 생략
+        log('info', `cli-rag-sync: ${lastLine}`);
+      });
+    } catch (e) { log('warn', `cli-rag-sync launch error: ${e.message}`); }
+  }, 10 * 60_000);
+
   log('info', 'Orchestrator ready — entering poll loop');
 
   // Main poll loop
@@ -374,6 +388,7 @@ async function main() {
   // Final flush before exit
   clearInterval(kpiTimer);
   clearInterval(cleanupTimer);
+  clearInterval(cliRagSyncTimer);
   try { flushOwnKpi(mq); } catch { /* best effort */ }
   try { mq.close(); } catch { /* best effort */ }
 

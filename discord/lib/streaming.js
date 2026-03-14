@@ -7,7 +7,6 @@ import {
   AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
-  EmbedBuilder,
   MessageFlags,
 } from 'discord.js';
 import { readFileSync, writeFileSync, renameSync } from 'node:fs';
@@ -197,7 +196,9 @@ export class StreamingMessage {
     this.timer = null;
     this.fenceOpen = false;
     this.finalized = false;
-    this.hasRealContent = false;
+    this.hasRealContent = false;  // buffer에 텍스트가 있음 (finalize 판단용)
+    this._textSent = false;       // Discord에 실제 텍스트 전송됨 (embed 업데이트 중단 기준)
+    this._customPhase = false;    // updatePhase 호출됨 — progressTick 덮어쓰기 방지
     this._statusLines = [];
     this._statusTimer = null;
     this._thinkingMsg = t('stream.thinking');
@@ -208,6 +209,9 @@ export class StreamingMessage {
     this._isPlaceholder = false;
     this._flushing = false;
     this._flushDone = null;   // Promise | null — 진행 중인 flush 완료 신호
+    // 보람 채널 등 quiet 채널: tool 상태 표시 생략
+    const quietIds = (process.env.QUIET_CHANNEL_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+    this._isQuiet = channelId ? quietIds.includes(channelId) : false;
   }
 
   /** Build the Stop button row (null if no sessionKey) */
@@ -227,16 +231,14 @@ export class StreamingMessage {
     this._initialThinkingMsg = msg;
   }
 
-  /** Send an embed placeholder with Stop button and start progress timer. */
+  /** Send a plain-text placeholder with Stop button and start progress timer. */
   async sendPlaceholder() {
     if (this.currentMessage) return;
     this._placeholderSentAt = Date.now();
     const row = this._stopRow();
-    const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setDescription(this._thinkingMsg);
     const payload = {
-      embeds: [embed],
+      content: this._thinkingMsg,
+      embeds: [],
       components: row ? [row] : [],
       flags: MessageFlags.SuppressEmbeds,
     };
@@ -257,11 +259,13 @@ export class StreamingMessage {
 
   /** Check elapsed time and update thinking message progressively. */
   _progressTick() {
-    if (this.hasRealContent || this.finalized) {
+    if (this._textSent || this.finalized) {
       clearInterval(this._progressTimer);
       this._progressTimer = null;
       return;
     }
+    // updatePhase로 커스텀 메시지가 설정된 경우 덮어쓰지 않음
+    if (this._customPhase) return;
     const elapsed = Date.now() - this._placeholderSentAt;
     const newMsg = this._getProgressMessage(elapsed);
     if (newMsg !== this._thinkingMsg) {
@@ -279,10 +283,25 @@ export class StreamingMessage {
     return this._initialThinkingMsg;
   }
 
-  /** Update placeholder embed with a tool status line (before streaming starts). */
+  /** Update placeholder with a tool status line (before streaming starts). */
   updateStatus(line) {
-    if (this.hasRealContent || this.finalized || !this.currentMessage) return;
+    if (this._isQuiet || this._textSent || this.finalized || !this.currentMessage) return;
     this._toolCount++;
+    // 마지막 줄과 동일하면 카운터로 합침 (예: "🔍 검색 중 ×3")
+    if (this._statusLines.length > 0) {
+      const last = this._statusLines[this._statusLines.length - 1];
+      const baseMatch = last.match(/^(.*?)(?:\s×\d+)?$/);
+      const base = baseMatch ? baseMatch[1] : last;
+      if (base === line) {
+        const prevCount = last.match(/×(\d+)$/);
+        const count = prevCount ? parseInt(prevCount[1]) + 1 : 2;
+        this._statusLines[this._statusLines.length - 1] = `${line} ×${count}`;
+        // debounce flush만 하고 조기 리턴
+        if (this._statusTimer) clearTimeout(this._statusTimer);
+        this._statusTimer = setTimeout(() => { this._statusTimer = null; this._flushStatus(); }, 800);
+        return;
+      }
+    }
     this._statusLines.push(line);
     // Keep only the 3 most recent tool lines to avoid clutter
     if (this._statusLines.length > 3) {
@@ -296,20 +315,27 @@ export class StreamingMessage {
     }, 800);
   }
 
+  // 단계별 progress 메시지 즉시 업데이트 (quiet 채널은 생략)
+  async updatePhase(msg) {
+    if (this._isQuiet || this._textSent || this.finalized) return;
+    log('debug', 'updatePhase', { msg, hasMsg: !!this.currentMessage });
+    this._thinkingMsg = msg;
+    this._customPhase = true;  // progressTick 덮어쓰기 방지
+    await this._flushStatus();
+  }
+
   async _flushStatus() {
-    if (this.hasRealContent || !this.currentMessage) return;
-    const parts = [this._thinkingMsg, ''];
-    if (this._toolCount > 3) {
-      parts.push(t('stream.toolCount', { count: this._toolCount }));
+    if (this._textSent || !this.currentMessage) return;
+    const parts = [this._thinkingMsg];
+    if (this._statusLines.length > 0) {
+      parts.push('', ...this._statusLines);
     }
-    parts.push(...this._statusLines);
-    const embed = new EmbedBuilder()
-      .setColor(0x5865f2)
-      .setDescription(parts.join('\n'));
     const row = this._stopRow();
     try {
-      await this.currentMessage.edit({ embeds: [embed], components: row ? [row] : [] });
-    } catch { /* ignore */ }
+      await this.currentMessage.edit({ content: parts.join('\n'), embeds: [], components: row ? [row] : [] });
+    } catch (err) {
+      log('warn', 'flushStatus edit failed', { error: err.message, code: err.code });
+    }
   }
 
   /**
@@ -328,7 +354,10 @@ export class StreamingMessage {
     if (!text || text.length === 0) return;
     this.hasRealContent = true;
     this.buffer += text;
-    this._scheduleFlush();
+    // A형: 버퍼에만 쌓고 Discord edit 안 함. 버퍼가 Discord 한도 초과 시에만 분할 전송.
+    if (this.buffer.length >= STREAM_MAX_CHARS) {
+      this._flush();
+    }
   }
 
   _trackFences(text) {
@@ -403,6 +432,8 @@ export class StreamingMessage {
   }
 
   async _sendOrEdit(content, isFinal) {
+    this._textSent = true;  // Discord에 텍스트 전송 시작 — embed 업데이트 중단
+    log('debug', '_sendOrEdit called', { contentLen: content.length, isFinal, isPlaceholder: this._isPlaceholder, finalized: this.finalized });
     // Clear timers on transition from placeholder to streaming
     if (this._statusTimer) {
       clearTimeout(this._statusTimer);
@@ -504,6 +535,7 @@ export class StreamingMessage {
       _unregisterPlaceholder(this.currentMessage.id);
     }
     await this._extractCodeBlockFiles();
+    await this._extractAndSendMarkers();
     // GC 힌트: 대형 버퍼 참조 해제 (응답이 길수록 효과적)
     this.buffer = '';
     this._statusLines = [];
@@ -544,6 +576,51 @@ export class StreamingMessage {
       await this.channel.send({ files, flags: MessageFlags.SuppressEmbeds });
     } catch (err) {
       log('error', 'Code block file extraction failed', { error: err.message });
+    }
+  }
+
+  /** Post-finalize: extract EMBED_DATA:/CHART_DATA: markers and send as Discord rich embeds. */
+  async _extractAndSendMarkers() {
+    if (!this.currentMessage) return;
+    let content = this.currentMessage.content || '';
+
+    let embedJson = null;
+    let chartJson = null;
+
+    const embedMatch = content.match(/^EMBED_DATA:(.+)$/m);
+    if (embedMatch) {
+      try { embedJson = JSON.parse(embedMatch[1]); } catch { /* malformed — skip */ }
+      content = content.replace(/^EMBED_DATA:.+\n?/m, '');
+    }
+
+    const chartMatch = content.match(/^CHART_DATA:(.+)$/m);
+    if (chartMatch) {
+      try { chartJson = JSON.parse(chartMatch[1]); } catch { /* malformed — skip */ }
+      content = content.replace(/^CHART_DATA:.+\n?/m, '');
+    }
+
+    if (!embedJson && !chartJson) return;
+
+    // Collapse excess blank lines left after marker removal
+    content = content.replace(/\n{3,}/g, '\n\n').trim();
+
+    try {
+      // Edit message: remove raw marker lines
+      await this.currentMessage.edit({ content: content || '\u200b', components: [] });
+
+      // Send EMBED_DATA as Discord rich embed card
+      if (embedJson) {
+        await this.channel.send({ embeds: [embedJson] });
+      }
+
+      // Send CHART_DATA as QuickChart image embed
+      if (chartJson) {
+        const chartUrl = 'https://quickchart.io/chart?w=700&h=350&bkg=white&c='
+          + encodeURIComponent(JSON.stringify(chartJson));
+        await this.channel.send({ embeds: [{ image: { url: chartUrl }, color: 3447003 }] });
+      }
+    } catch (err) {
+      log('error', '_extractAndSendMarkers failed', { error: err.message });
     }
   }
 }

@@ -6,6 +6,8 @@
  */
 
 import { homedir } from 'node:os';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { log } from './claude-runner.js';
 import { PAST_REF_PATTERN, searchRagForContext as _defaultSearch } from './rag-helper.js';
 import { isPreplyQuery } from './prompt-sections.js';
@@ -22,11 +24,79 @@ const BORAM_CHANNEL_IDS = ['1472965899790061680', '1470011814803935274'];
 // ProcessorContext — immutable snapshot passed to every processor
 // ---------------------------------------------------------------------------
 export class ProcessorContext {
-  constructor({ originalPrompt, channelId, threadId, botHome }) {
+  constructor({ originalPrompt, channelId, threadId, botHome, client }) {
     this.originalPrompt = originalPrompt; // immutable original
     this.channelId = channelId;
     this.threadId = threadId;
     this.botHome = botHome;
+    this.client = client || null; // Discord.js client (optional)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Owner alert — boram 채널 unmatchedStudents → 정우님 채널 에스컬레이션
+// 하루 한 번만 알림 (state 파일로 debounce)
+// ---------------------------------------------------------------------------
+// 진행 중인 알림 추적 — race condition 방지 (동일 학생 동시 이중 전송 차단)
+const _notifyInProgress = new Set();
+
+async function _notifyOwnerUnmatched(unmatchedStudents, botHome, client) {
+  if (!unmatchedStudents?.length || !client) return;
+
+  const ownerChannelId = process.env.OWNER_ALERT_CHANNEL_ID;
+  if (!ownerChannelId) return;
+
+  // 오늘 날짜 (KST)
+  const kstDate = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const stateDir = join(botHome, 'state');
+  const statePath = join(stateDir, 'unmatched-notified.json');
+
+  // 이미 오늘 알림 보냈거나 현재 진행 중인 학생 제외 (race condition 방지)
+  let notified = {};
+  try {
+    notified = JSON.parse(readFileSync(statePath, 'utf-8'));
+  } catch { /* 파일 없으면 빈 객체 */ }
+
+  const newStudents = unmatchedStudents.filter(s =>
+    notified[s] !== kstDate && !_notifyInProgress.has(s),
+  );
+  if (!newStudents.length) return;
+
+  // 진행 중 표시 (동시 호출 중복 차단)
+  for (const s of newStudents) _notifyInProgress.add(s);
+
+  try {
+    // 오너 채널 가져오기
+    const ch = client.channels.cache.get(ownerChannelId)
+      || await client.channels.fetch(ownerChannelId).catch(() => null);
+    if (!ch) {
+      log('warn', '[owner-alert] OWNER_ALERT_CHANNEL_ID 채널을 찾을 수 없음', { ownerChannelId });
+      return;
+    }
+
+    const studentList = newStudents.map(s => `• **${s}**`).join('\n');
+    const msg = `📌 **보람님 Preply 단가 미확인 학생**\n${studentList}\n\n단가가 등록되지 않아 수입 계산에서 제외됩니다.\nPreply 예약 메일이 오면 자동 반영되니, 수업이 확정된 경우 메일 수신 여부를 확인해 주세요.`;
+
+    // 전송 성공 시에만 state 업데이트
+    await ch.send(msg);
+    log('info', '[owner-alert] 오너 채널에 단가 미확인 알림 전송', { students: newStudents });
+
+    for (const s of newStudents) notified[s] = kstDate;
+    // 30일 이상 지난 항목 정리
+    const cutoff = new Date(Date.now() - 30 * 86400 * 1000 + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    for (const [k, v] of Object.entries(notified)) {
+      if (v < cutoff) delete notified[k];
+    }
+    try {
+      mkdirSync(stateDir, { recursive: true });
+      writeFileSync(statePath, JSON.stringify(notified, null, 2));
+    } catch (e) {
+      log('warn', '[owner-alert] state 저장 실패', { error: e.message });
+    }
+  } catch (err) {
+    log('warn', '[owner-alert] 메시지 전송 실패 (state 미업데이트)', { error: err.message });
+  } finally {
+    for (const s of newStudents) _notifyInProgress.delete(s);
   }
 }
 
@@ -139,7 +209,8 @@ export class PreplyIncomeProcessor extends BasePreProcessor {
   get name() { return 'PreplyIncomeProcessor'; }
 
   matches(ctx) {
-    return PREPLY_INCOME_PATTERN.test(ctx.originalPrompt);
+    return PREPLY_INCOME_PATTERN.test(ctx.originalPrompt) &&
+           BORAM_CHANNEL_IDS.includes(ctx.channelId);
   }
 
   async enrich(prompt, ctx) {
@@ -167,6 +238,15 @@ export class PreplyIncomeProcessor extends BasePreProcessor {
     const enriched = `[Preply ${dateLabel} 수입 데이터 — 이미 로드됨]\n아래 JSON이 실제 Preply 수입 데이터다. 도구 호출 없이 이 데이터만 보고 바로 답해라. Google Calendar, MCP, 세션 재시작 언급 절대 금지.\n\n${JSON.stringify(json, null, 2)}\n\n질문: ${ctx.originalPrompt}`;
 
     log('info', 'Preply income data pre-injected', { threadId: ctx.threadId, dateArg, count: json.scheduledCount });
+
+    // unmatchedStudents 있으면 오너 채널로 에스컬레이션 (비동기, 응답 blocking 안 함)
+    // 조건: 보람 채널 + 오늘 날짜 조회일 때만 (과거 날짜 조회는 이미 해결된 케이스일 수 있으므로 제외)
+    const kstToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const isToday = !dateArg || dateArg === kstToday;
+    if (json.unmatchedStudents?.length && ctx.client && BORAM_CHANNEL_IDS.includes(ctx.channelId) && isToday) {
+      _notifyOwnerUnmatched(json.unmatchedStudents, botHome, ctx.client);
+    }
+
     return enriched;
   }
 }

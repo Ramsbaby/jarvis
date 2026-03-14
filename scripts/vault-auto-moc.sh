@@ -46,7 +46,7 @@ fi
 # 어떤 _index.md나 다른 노트에서도 링크되지 않은 파일 찾기
 orphan_list=""
 while IFS= read -r -d '' file; do
-    relpath="${file#$VAULT/}"
+    relpath="${file#"$VAULT/"}"
     filename=$(basename "$file" .md)
 
     # _index, Home, README, 템플릿, 아카이브는 스킵

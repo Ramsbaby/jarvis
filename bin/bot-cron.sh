@@ -41,8 +41,10 @@ log() {
 
 # --- Completion trap: 비정상 종료 시에도 반드시 로그 기록 ---
 _TASK_DONE=false
+_SENTINEL_FILE=""
 _cleanup() {
     local rc=$?
+    [[ -n "$_SENTINEL_FILE" ]] && rmdir "$_SENTINEL_FILE" 2>/dev/null || true
     if [[ "$_TASK_DONE" == "false" ]]; then
         log "ABORTED (unexpected exit: $rc — signal or set -e trigger)"
     fi
@@ -113,6 +115,41 @@ if [[ "$REQUIRES_MARKET" == "true" ]]; then
     fi
 fi
 
+# --- Duplicate run guard (atomic mkdir lock) ---
+# mkdir은 POSIX에서 atomic 연산이므로 check-then-act race condition 없음.
+# 기존 방식(-f 체크 후 touch)은 두 프로세스가 동시에 파일 없음을 확인하면
+# 이중 실행이 발생하는 TOCTOU race condition이 있었음.
+_SENTINEL_DIR="${BOT_HOME}/state/active-tasks"
+_sentinel_path="${_SENTINEL_DIR}/${TASK_ID}.lock"
+mkdir -p "$_SENTINEL_DIR"
+if ! mkdir "$_sentinel_path" 2>/dev/null; then
+    log "SKIPPED — already running (lock dir exists)"
+    _TASK_DONE=true
+    exit 0
+fi
+_SENTINEL_FILE="$_sentinel_path"  # cleanup 대상: mkdir 성공 후에만 설정
+
+# --- Circuit breaker: 연속 실패 3회+ 시 60분 skip ---
+# 목적: API 불가 상태 시 동일 태스크가 수백 건 누적 실패하는 패턴 방지
+_CB_DIR="${BOT_HOME}/state/circuit-breaker"
+_CB_FILE="${_CB_DIR}/${TASK_ID}.json"
+mkdir -p "$_CB_DIR"
+_cb_fail=0
+_cb_last_fail=0
+if [[ -f "$_CB_FILE" ]]; then
+    _cb_fail=$(python3 -c "import json; d=json.load(open('$_CB_FILE')); print(d.get('consecutive_fails',0))" 2>/dev/null || echo 0)
+    _cb_last_fail=$(python3 -c "import json; d=json.load(open('$_CB_FILE')); print(d.get('last_fail_ts',0))" 2>/dev/null || echo 0)
+fi
+_cb_now=$(date +%s)
+_CB_COOLDOWN=3600  # 60분 쿨다운
+if [[ "$_cb_fail" -ge 3 ]] && (( _cb_now - _cb_last_fail < _CB_COOLDOWN )); then
+    _cb_remaining=$(( _CB_COOLDOWN - (_cb_now - _cb_last_fail) ))
+    log "SKIPPED — circuit breaker OPEN (연속 ${_cb_fail}회 실패, 쿨다운 ${_cb_remaining}s 남음)"
+    _TASK_DONE=true
+    exit 0
+fi
+unset _cb_now _CB_COOLDOWN
+
 log "START"
 
 # --- Lounge announce: task started ---
@@ -137,12 +174,19 @@ fi
 if [[ $EXIT_CODE -ne 0 ]]; then
     "$BOT_HOME/bin/lounge-announce.sh" "$TASK_ID" "--done" 2>/dev/null || true
     log "FAILED (exit: $EXIT_CODE)"
+    # circuit breaker: 실패 횟수 증가
+    _cb_new=$(( _cb_fail + 1 ))
+    printf '{"consecutive_fails":%d,"last_fail_ts":%d,"task_id":"%s"}\n' \
+        "$_cb_new" "$(date +%s)" "$TASK_ID" > "$_CB_FILE" 2>/dev/null || true
+    unset _cb_new
     _TASK_DONE=true
     exit "$EXIT_CODE"
 fi
 
 "$BOT_HOME/bin/lounge-announce.sh" "$TASK_ID" "--done" 2>/dev/null || true
 log "SUCCESS"
+# circuit breaker: 성공 시 초기화
+[[ -f "$_CB_FILE" ]] && rm -f "$_CB_FILE" 2>/dev/null || true
 
 # --- Truncate result to maxChars before routing ---
 if [[ ${#RESULT} -gt $RESULT_MAX_CHARS ]]; then
