@@ -12,10 +12,19 @@ BOT_HOME="${BOT_HOME:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 CALENDAR_ID="ecce39118ebc8f15510d9f8bd6d837f89b17e7f9baf57a6d4587105b235ce7ea@group.calendar.google.com"
 TOKEN_CACHE="$BOT_HOME/state/gcal-token.json"
 GOG_CREDS="$HOME/Library/Application Support/gogcli/credentials.json"
-GOG_EMAIL="yuiopnm1931@gmail.com"
+GOG_EMAIL="${GOOGLE_ACCOUNT:-}"
+if [[ -z "$GOG_EMAIL" ]]; then
+    if [[ -f "$BOT_HOME/discord/.env" ]]; then
+        set -a; source "$BOT_HOME/discord/.env"; set +a
+    fi
+    GOG_EMAIL="${GOOGLE_ACCOUNT:-}"
+fi
+if [[ -z "$GOG_EMAIL" ]]; then
+    echo '{"error":"GOOGLE_ACCOUNT not set. Add GOOGLE_ACCOUNT=your@gmail.com to discord/.env"}' >&2; exit 1
+fi
 
 if [[ ! -f "$GOG_CREDS" ]]; then
-    echo '{"error":"gog credentials not found. Run: gog auth add yuiopnm1931@gmail.com --services calendar"}'
+    echo "{\"error\":\"gog credentials not found. Run: gog auth add $GOG_EMAIL --services calendar\"}" >&2
     exit 1
 fi
 

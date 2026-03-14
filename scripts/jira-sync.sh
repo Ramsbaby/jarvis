@@ -21,12 +21,13 @@ d = json.load(open('$MONITORING'))
 print(d['webhooks']['jarvis-blog'])
 ")
 
+OWNER_DISPLAY_NAME="${OWNER_DISPLAY_NAME:-$(echo "$JIRA_EMAIL" | cut -d@ -f1)}"
 echo "[jira-sync] 티켓 수집 시작..."
 
-python3 - "$JIRA_EMAIL" "$JIRA_API_TOKEN" "$JIRA_ACCOUNT_ID" "$VAULT_FILE" "$BLOG_WEBHOOK" << 'PYEOF'
+python3 - "$JIRA_EMAIL" "$JIRA_API_TOKEN" "$JIRA_ACCOUNT_ID" "$VAULT_FILE" "$BLOG_WEBHOOK" "$OWNER_DISPLAY_NAME" "$JIRA_URL" << 'PYEOF'
 import sys, urllib.request, base64, json, datetime, urllib.error
 
-email, token, account_id, vault_file, webhook_url = sys.argv[1:]
+email, token, account_id, vault_file, webhook_url, display_name, jira_url = sys.argv[1:]
 
 creds = base64.b64encode(f"{email}:{token}".encode()).decode()
 headers = {
@@ -37,7 +38,7 @@ headers = {
 
 def jira_post(endpoint, payload):
     req = urllib.request.Request(
-        f"https://skdnd.atlassian.net{endpoint}",
+        f"{jira_url}{endpoint}",
         data=json.dumps(payload).encode(),
         headers=headers, method="POST"
     )
@@ -95,7 +96,7 @@ lines = [
     f"updated: {now}",
     "---",
     "",
-    "# 회사 JIRA 작업 이력 (이정우)",
+    f"# JIRA 작업 이력 ({display_name})",
     "",
     f"> 마지막 동기화: {now}  ",
     f"> 총 담당 티켓: **{len(all_issues)}개**",
@@ -167,7 +168,7 @@ discord_payload = {
     "username": "Jarvis Career",
     "embeds": [{
         "title": "📋 JIRA 작업 이력 동기화 완료",
-        "description": f"**블루(이정우)** 님의 담당 티켓이 Vault에 저장됐습니다.",
+        "description": f"**{display_name}** 님의 담당 티켓이 Vault에 저장됐습니다.",
         "color": 0x0052CC,
         "fields": [
             {"name": "총 티켓", "value": str(len(all_issues)), "inline": True},
@@ -177,7 +178,7 @@ discord_payload = {
             {"name": "저장 위치", "value": "`~/Jarvis-Vault/05-career/jira-work-history.md`", "inline": False},
         ],
         "footer": {"text": f"동기화 시각: {now}"},
-        "url": "https://skdnd.atlassian.net/jira/your-work"
+        "url": f"{jira_url}/jira/your-work"
     }]
 }
 

@@ -1,6 +1,8 @@
 # 민감 정보 (개인 설정)
 .env
 discord/.env
+config/jira.env
+.env.test
 config/monitoring.json
 config/google-calendar-token.json
 config/*-token.json
