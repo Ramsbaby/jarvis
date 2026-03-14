@@ -5,6 +5,15 @@
 set -uo pipefail
 
 BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
+# .env 로딩 — 크론 환경에 OPENAI_API_KEY 등 누락 방지
+if [[ -f "${BOT_HOME}/.env" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "${BOT_HOME}/.env"
+  set +a
+fi
+
 LOG_FILE="${BOT_HOME}/logs/e2e-cron.log"
 RESULT_FILE="${BOT_HOME}/results/e2e-health/$(date +%F).txt"
 MONITORING="${BOT_HOME}/config/monitoring.json"

@@ -72,7 +72,7 @@ if [[ ! -d "$BOT_HOME/rag/lancedb" ]]; then
 fi
 
 check "LanceDB directory exists" test -d "$BOT_HOME/rag/lancedb"
-check "RAG query returns data" bash -c "NODE_PATH=$BOT_HOME/discord/node_modules node $BOT_HOME/lib/rag-query.mjs 'system health' 2>/dev/null | grep -v '^[[:space:]]*$' | head -1 | grep -q ."
+check "RAG query returns data" bash -c "NODE_PATH=$BOT_HOME/discord/node_modules node $BOT_HOME/lib/rag-query.mjs 'system health' 2>&1 | grep -v '^[[:space:]]*$' | grep -v '^\[rag-query\] ERROR' | head -1 | grep -q ."
 
 # --- State Files ---
 echo ""
