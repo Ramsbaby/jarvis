@@ -60,7 +60,7 @@ import { recordError } from './error-tracker.js';
 
 // Extracted modules
 import { PAST_REF_PATTERN, searchRagForContext } from './rag-helper.js';
-import { saveSessionSummary, loadSessionSummary } from './session-summary.js';
+import { saveSessionSummary, loadSessionSummary, saveCompactionSummary, compactSessionWithAI } from './session-summary.js';
 import { classifyBudget } from './context-budget.js';
 import { pendingQueue, enqueue, processQueue } from './queue-processor.js';
 import { MessageDebouncer } from './message-debouncer.js';
@@ -155,9 +155,40 @@ function _clearPendingTask(sessionKey) {
 const INPUT_MAX_CHARS = 4000;
 const TYPING_INTERVAL_MS = 8000;
 
+// 텍스트/문서 첨부 확장자 (handleMessage + _processBatch 공용)
+const TEXT_DOC_EXTS = /\.(txt|md|html|htm|css|js|mjs|ts|java|py|json|xml|csv|yaml|yml|sh|bash|sql|log|properties|env|conf|toml|ini|kt|go|rs|cpp|c|h|rb|php|swift|gradle|pdf)$/i;
+
 
 // Dedup: prevent same message from being processed twice (shard resume / race condition)
 const processingMsgIds = new Set();
+
+// Session compaction: 토큰 기반 컨텍스트 관리
+// Sonnet 200k 컨텍스트의 ~40% 지점에서 선제적 compaction
+const COMPACT_THRESHOLD_TOKENS = 80_000;
+const sessionTokenCounts = new Map(); // sessionKey → 누적 input_tokens (인메모리)
+// 재시작 시 in-memory 카운트는 sessions.getTokenCount()으로 복구
+
+
+/**
+ * compact 후 이전 JSONL 삭제 — 다음 resume 시 메모리 재폭증 방지.
+ * JSONL 위치: ~/.claude/projects/-private-tmp-claude-discord-<threadId>/<sessionId>.jsonl
+ */
+function _deleteSessionJsonl(sessionId, threadId) {
+  if (!sessionId || !threadId) return;
+  try {
+    const claudeDir = join(homedir(), '.claude', 'projects');
+    // threadId를 경로로 인코딩: /private/tmp/claude-discord/<threadId> → -private-tmp-claude-discord-<threadId>
+    const projectSlug = `/private/tmp/claude-discord/${threadId}`.replace(/\//g, '-');
+    const jsonlPath = join(claudeDir, projectSlug, `${sessionId}.jsonl`);
+    if (existsSync(jsonlPath)) {
+      rmSync(jsonlPath);
+      log('info', '_deleteSessionJsonl: deleted', { sessionId, threadId, path: jsonlPath });
+    }
+  } catch (err) {
+    log('debug', '_deleteSessionJsonl: failed (non-critical)', { error: err.message });
+  }
+}
+
 
 const EMOJI = {
   DONE:      '\u2705',   // checkmark
@@ -301,7 +332,14 @@ export async function handleMessage(message, state) {
       )
     : null;
   const hasVoice = !!voiceAtt;
-  if (!message.content && !hasImages && !hasVoice) { processingMsgIds.delete(message.id); return; }
+  // 텍스트/문서 첨부 감지 (txt, md, html, java, py, json, pdf 등)
+  const hasDocAtt = message.attachments.size > 0 &&
+    Array.from(message.attachments.values()).some((a) => {
+      const isPdf  = a.contentType === 'application/pdf' || /\.pdf$/i.test(a.name ?? '');
+      const isText = TEXT_DOC_EXTS.test(a.name ?? '') || a.contentType?.startsWith('text/');
+      return isPdf || isText;
+    });
+  if (!message.content && !hasImages && !hasVoice && !hasDocAtt) { processingMsgIds.delete(message.id); return; }
   if (message.content.length > INPUT_MAX_CHARS) {
     await message.reply(t('msg.tooLong', { length: message.content.length, max: INPUT_MAX_CHARS }));
     processingMsgIds.delete(message.id);
@@ -321,9 +359,9 @@ export async function handleMessage(message, state) {
     return;
   }
 
-  // 이미지 첨부 → debounce 없이 즉시 처리 (CDN URL 만료 위험)
+  // 이미지/문서 첨부 → debounce 없이 즉시 처리 (CDN URL 만료 위험)
   // 슬래시 명령 → 즉시 처리
-  const isBypassDebounce = hasImages || message.content.startsWith('/');
+  const isBypassDebounce = hasImages || hasDocAtt || message.content.startsWith('/');
   const debounceKey = isThread ? message.channel.id : `${message.channel.id}-${message.author.id}`;
 
   if (isBypassDebounce) {
@@ -491,6 +529,42 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
     sessionKey = isThread ? thread.id : `${thread.id}-${message.author.id}`;
     sessionId = sessions.get(sessionKey);
 
+    // /compact 명령어: 수동 세션 컴팩트
+    if (userPrompt.trim().toLowerCase() === '/compact') {
+      const turns = sessionTokenCounts.get(sessionKey) ?? 0;
+      const oldSessionId = sessions.get(sessionKey);
+      // AI 시맨틱 compact 백그라운드 실행
+      compactSessionWithAI(sessionKey).catch(e =>
+        log('debug', 'compactSessionWithAI manual bg failed', { error: e?.message })
+      );
+      // JSONL 삭제
+      if (oldSessionId) _deleteSessionJsonl(oldSessionId, thread?.id ?? message.channel?.id);
+      sessions.delete(sessionKey);
+      sessionTokenCounts.set(sessionKey, 0);
+      log('info', 'Manual compact triggered', { sessionKey, turns });
+      await message.reply(`🗜️ 세션 컴팩트 완료. (${turns}턴 → 리셋)\n다음 메시지부터 이전 대화 요약으로 재시작합니다.`);
+      processingMsgIds.delete(message.id);
+      return;
+    }
+
+    // Auto-compact: 토큰 임계치 초과 시 자동 세션 리셋 + haiku 요약
+    if (sessionId) {
+      const tokens = sessionTokenCounts.get(sessionKey) ?? sessions.getTokenCount(sessionKey);
+      if (tokens >= COMPACT_THRESHOLD_TOKENS) {
+        const reason = `토큰 임계치 초과 (${tokens.toLocaleString()} >= ${COMPACT_THRESHOLD_TOKENS.toLocaleString()})`;
+        log('info', 'Auto-compact triggered', { reason, sessionKey, tokens });
+        // 1. JSONL 삭제 — resume 시 메모리 재폭증 차단
+        _deleteSessionJsonl(sessionId, thread.id);
+        // 2. AI 시맨틱 요약 백그라운드 실행 (agent SDK 사용, @anthropic-ai/sdk 불필요)
+        compactSessionWithAI(sessionKey).catch(
+          (e) => log('warn', 'Auto-compact AI summary failed', { error: e.message }),
+        );
+        sessions.delete(sessionKey);
+        sessionId = null;
+        sessionTokenCounts.set(sessionKey, 0);
+      }
+    }
+
     // "계속" 감지: 타임아웃으로 중단된 작업 재개
     const CONTINUE_PATTERN = /^(계속|continue|이어서|이어서\s*해줘?|계속\s*해줘?|continue from where you left off)$/i;
     let _continueHandled = false; // 세션 요약 중복 주입 방지 플래그
@@ -577,6 +651,71 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
         log('warn', 'Failed to download attachment', { id: att.id, error: err.message });
       }
     }
+    // Download text/document attachments from Discord CDN
+    // 지원: txt, md, html, java, py, json, xml, csv, yaml, sh, sql, pdf 등
+    const MAX_TEXT_BYTES = 2_000_000; // 2MB 상한 (PDF 이력서 등 고려)
+    for (const [, att] of message.attachments) {
+      const isImg = att.contentType?.startsWith('image/') ||
+        /\.(jpg|jpeg|png|gif|webp)$/i.test(att.name ?? '');
+      const isAud = att.contentType?.startsWith('audio/') ||
+        /\.(ogg|mp3|m4a|wav)$/i.test(att.name ?? '');
+      if (isImg || isAud) continue; // 이미 처리됨
+
+      const fname   = att.name ?? '';
+      const isPdf   = att.contentType === 'application/pdf' || /\.pdf$/i.test(fname);
+      const isText  = TEXT_DOC_EXTS.test(fname) || att.contentType?.startsWith('text/');
+      if (!isPdf && !isText) continue;
+
+      try {
+        const resp = await fetch(att.url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const contentLength = parseInt(resp.headers.get('content-length') ?? '0', 10);
+        if (contentLength > MAX_TEXT_BYTES) {
+          await thread.send(`⚠️ 파일 "${fname}"이 너무 큽니다 (${(contentLength / 1024).toFixed(0)}KB, 최대 2MB).`);
+          continue;
+        }
+        const buf = Buffer.from(await resp.arrayBuffer());
+        log('info', 'Downloaded text/doc attachment', { name: fname, bytes: buf.length });
+
+        if (isPdf) {
+          // PDF → pdftotext 추출 시도, 실패 또는 빈 텍스트면 Claude Read 폴백
+          const pdfPath = join('/tmp', `claude-doc-${att.id}.pdf`);
+          writeFileSync(pdfPath, buf);
+          let usedFallback = false;
+          try {
+            const { stdout } = await execFileAsync('/opt/homebrew/bin/pdftotext', [pdfPath, '-'], { maxBuffer: 2 * 1024 * 1024 });
+            const extracted = stdout.trim();
+            if (extracted) {
+              rmSync(pdfPath, { force: true });
+              userPrompt = `[첨부 PDF: ${fname}]
+${extracted}
+
+` + (userPrompt || '이 파일을 분석해주세요.');
+            } else {
+              // 이미지 기반 PDF 등 텍스트 추출 불가 → Claude Read 폴백
+              usedFallback = true;
+              log('info', 'pdftotext returned empty, falling back to Claude Read', { name: fname });
+            }
+          } catch {
+            // pdftotext 오류 → Claude Read 폴백
+            usedFallback = true;
+            log('info', 'pdftotext failed, falling back to Claude Read', { name: fname });
+          }
+          if (usedFallback) {
+            const safeName = fname.replace(/[^a-zA-Z0-9._-]/g, '_');
+            imageAttachments.push({ localPath: pdfPath, safeName });
+          }        } else {
+          // 텍스트 계열 — 내용 직접 프롬프트에 주입
+          const text = buf.toString('utf-8');
+          const label = fname || `첨부_${att.id}`;
+          userPrompt = `[첨부 파일: ${label}]\n${text}\n\n` + (userPrompt || '이 파일을 분석해주세요.');
+        }
+      } catch (err) {
+        log('warn', 'Failed to process text/doc attachment', { id: att.id, error: err.message });
+        await thread.send(`⚠️ 파일 "${att.name ?? att.id}" 처리 실패: ${err.message}`).catch(() => {});
+      }
+    }
+
     if (!userPrompt.trim() && imageAttachments.length > 0) {
       userPrompt = t('msg.analyzeImage');
     }
@@ -589,7 +728,8 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
 
     // Session summary pre-injection for resume safety
     // _continueHandled=true이면 이미 "계속" 블록에서 요약을 주입했으므로 중복 방지
-    if (sessionId && !_continueHandled) {
+    // sessionId 조건 제거: compact 직후 첫 턴(sessionId=null)에도 요약 주입
+    if (!_continueHandled) {
       const summary = loadSessionSummary(sessionKey);
       if (summary) {
         // Preply 질문인데 요약에 잘못된 MCP/캘린더 내용이 있으면 주입하지 않음
@@ -668,6 +808,13 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
             // thinking 블록이 있어도 저장. resume 실패 시 retryNeeded=true로 자동 폴백됨.
             sessions.set(sessionKey, event.session_id);
             log('info', 'Session saved', { threadId: thread.id, sessionId: event.session_id });
+          }
+          // 네이티브 SDK 컴팩션 완료 — 토큰 카운터 리셋 (SDK가 컨텍스트를 정리했음)
+          if (event.subtype === 'compact_boundary') {
+            log('info', 'Native compact_boundary received — resetting token counter', {
+              threadId: thread.id, preTokens: event.pre_tokens,
+            });
+            sessionTokenCounts.set(sessionKey, 0);
           }
         } else if (event.type === 'stream_event') {
           const se = event.event;
@@ -790,6 +937,14 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
             const chName = isThread ? (message.channel.parent?.name ?? 'thread') : (message.channel.name ?? 'dm');
             saveConversationTurn(originalPrompt, lastAssistantText, chName, message.author.id);
             saveSessionSummary(sessionKey, originalPrompt, lastAssistantText);
+            // 토큰 누적: result 이벤트의 usage.input_tokens (claude-runner.js에서 포워딩)
+            const inputTokens = event.usage?.input_tokens ?? 0;
+            if (inputTokens > 0) {
+              const newTotal = (sessionTokenCounts.get(sessionKey) ?? sessions.getTokenCount(sessionKey) ?? 0) + inputTokens;
+              sessionTokenCounts.set(sessionKey, newTotal);
+              sessions.addTokens(sessionKey, inputTokens); // 영속화
+              log('debug', 'Token count updated', { sessionKey, inputTokens, total: newTotal });
+            }
             // 비동기 메모리 추출 — 메인 응답에 영향 없는 fire-and-forget
             autoExtractMemory(message.author.id, originalPrompt, lastAssistantText).catch((e) => log('debug', 'autoExtractMemory outer catch', { error: e?.message }));
           }

@@ -90,8 +90,19 @@ export class SessionStore {
     return entry.id;
   }
 
-  set(threadId, sessionId) {
-    this.data[threadId] = { id: sessionId, updatedAt: Date.now() };
+  set(threadId, sessionId, tokenCount = null) {
+    const existing = this.data[threadId]?.tokenCount ?? 0;
+    this.data[threadId] = { id: sessionId, updatedAt: Date.now(), tokenCount: tokenCount !== null ? tokenCount : existing };
+    this.save();
+  }
+
+  getTokenCount(threadId) {
+    return this.data[threadId]?.tokenCount ?? 0;
+  }
+
+  addTokens(threadId, delta) {
+    if (!this.data[threadId]) return;
+    this.data[threadId].tokenCount = (this.data[threadId].tokenCount ?? 0) + delta;
     this.save();
   }
 
