@@ -201,13 +201,13 @@ MSG
     fi
 fi
 
-# 5) LanceDB 크기 경고 (500MB 이상 → compact 권장)
+# 5) LanceDB 크기 경고 (1GB 이상 → compact 권장)
 if [[ -d "$DB_PATH" ]]; then
     db_mb=$(du -sm "$DB_PATH" 2>/dev/null | awk '{print $1}')
-    if (( db_mb > 500 )); then
+    if (( db_mb > 1000 )); then
         alert_and_exit "$(cat <<MSG
 ⚠️ LanceDB 크기 경고
-현재: ${db_mb}MB (기준: 500MB)
+현재: ${db_mb}MB (기준: 1GB)
 조치: rag-compact 실행 권장 (cd ${JARVIS_HOME:-$HOME/.jarvis}/discord && BOT_HOME=${JARVIS_HOME:-$HOME/.jarvis} node --input-type=module -e "import {RAGEngine} from '${JARVIS_HOME:-$HOME/.jarvis}/lib/rag-engine.mjs'; const r=new RAGEngine(); await r.init(); await r.compact(); process.exit(0)")
 MSG
 )"
