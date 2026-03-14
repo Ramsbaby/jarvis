@@ -36,3 +36,5 @@ jobs:
             echo "Checking $f"
             node --check "$f"
           done
+      - name: Smoke test (no Discord token required)
+        run: node discord/cli-test.js --smoke-test

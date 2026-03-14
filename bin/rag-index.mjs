@@ -6,8 +6,8 @@
  * Targets: context .md, rag .md, results (7 days)
  */
 
-import { readFile, writeFile, stat, unlink } from 'node:fs/promises';
-import { writeFileSync, unlinkSync, appendFileSync } from 'node:fs';
+import { readFile, writeFile, stat, unlink, open as fsOpen } from 'node:fs/promises';
+import { writeFileSync, unlinkSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { config } from 'dotenv';
@@ -26,7 +26,65 @@ const BOT_HOME = join(process.env.BOT_HOME || join(homedir(), '.jarvis'));
 const STATE_FILE = join(BOT_HOME, 'rag', 'index-state.json');
 const PID_FILE = join(BOT_HOME, 'state', 'rag-index.pid');
 
-// rag-watch 인덱싱 중 동시 쓰기 방지: lock 파일만으로 판단
+// ─── Global RAG write mutex (cross-process, /tmp/jarvis-rag-write.lock) ───────
+// Prevents concurrent LanceDB writes between rag-index cron and rag-watch daemon.
+// Uses open(O_EXCL) which is atomic on POSIX — no TOCTOU race.
+const RAG_WRITE_LOCK = '/tmp/jarvis-rag-write.lock';
+const RAG_WRITE_LOCK_TIMEOUT_MS = 30_000; // 30s max wait
+const RAG_WRITE_LOCK_POLL_MS   = 500;     // poll interval
+const RAG_WRITE_LOCK_STALE_MS  = 120_000; // 2min — stale lock auto-cleanup
+
+let _ragWriteLockFd = null; // FileHandle for the lock file (kept open while held)
+
+async function _tryAcquireWriteLock() {
+  // Check for stale lock before attempting (handles crash without cleanup)
+  try {
+    const st = await stat(RAG_WRITE_LOCK);
+    if (Date.now() - st.mtimeMs > RAG_WRITE_LOCK_STALE_MS) {
+      try { await unlink(RAG_WRITE_LOCK); } catch { /* race ok */ }
+    }
+  } catch { /* lock file doesn't exist yet — OK */ }
+
+  try {
+    // O_EXCL: fails with EEXIST if file already exists — atomic on POSIX
+    _ragWriteLockFd = await fsOpen(RAG_WRITE_LOCK, 'wx');
+    await _ragWriteLockFd.writeFile(`${process.pid}\n`);
+    return true;
+  } catch (e) {
+    if (e.code === 'EEXIST') return false;
+    throw e; // unexpected error
+  }
+}
+
+async function acquireWriteLock() {
+  const deadline = Date.now() + RAG_WRITE_LOCK_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (await _tryAcquireWriteLock()) return true;
+    await new Promise(r => setTimeout(r, RAG_WRITE_LOCK_POLL_MS));
+  }
+  return false;
+}
+
+function releaseWriteLock() {
+  try { if (_ragWriteLockFd) { _ragWriteLockFd.close().catch(() => {}); _ragWriteLockFd = null; } } catch {}
+  try { unlinkSync(RAG_WRITE_LOCK); } catch {}
+}
+
+// Acquire global write lock before any LanceDB writes.
+// Wait up to 30s for rag-watch to finish its current file, then skip if still busy.
+const gotWriteLock = await acquireWriteLock();
+if (!gotWriteLock) {
+  console.log(`[${new Date().toISOString()}] [rag-index] RAG write lock timeout (30s) — another process is writing. Skipping this run.`);
+  process.exit(0);
+}
+
+// Cleanup: release lock on all exit paths
+const _cleanupLock = () => { releaseWriteLock(); };
+process.on('exit', _cleanupLock);
+process.on('SIGTERM', () => { _cleanupLock(); process.exit(0); });
+process.on('SIGINT',  () => { _cleanupLock(); process.exit(0); });
+
+// rag-watch 인덱싱 중 동시 쓰기 방지: lock 파일만으로 판단 (레거시 호환 유지)
 // (rag-watch.mjs가 engine.indexFile() 직전에 lock 파일을 갱신함)
 const RAG_WATCH_LOCK = join(BOT_HOME, 'state', 'rag-watch-indexing.lock');
 import { statSync } from 'node:fs';
@@ -40,10 +98,9 @@ function isRagWatchActive() {
     return false; // lock 파일 없음 = 인덱싱 중 아님
   }
 }
-if (isRagWatchActive()) {
-  console.log(`[${new Date().toISOString()}] [rag-index] rag-watch active — skipping this run to prevent concurrent writes`);
-  process.exit(0);
-}
+// NOTE: rag-watch check retained for defence-in-depth, but global write lock
+// above is the primary mutex. If rag-watch held the lock, acquireWriteLock()
+// would have already timed out above.
 
 // PID 센티넬: rag-watch가 rag-index 실행 중임을 감지해 충돌 회피
 writeFileSync(PID_FILE, String(process.pid));
