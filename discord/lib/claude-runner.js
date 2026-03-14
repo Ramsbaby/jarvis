@@ -275,7 +275,7 @@ async function _syncUserMemoryMarkdown(userId) {
     `_마지막 업데이트: ${new Date().toISOString()}_`,
     '',
     '## 사실 (Facts)',
-    ...memData.facts.slice(-30).map(f => `- ${_redactForRag(f)}`),
+    ...memData.facts.slice(-30).map(f => `- ${_redactForRag(typeof f === 'string' ? f : (f?.text ?? ''))}`),
   ];
   if (memData.preferences?.length) {
     lines.push('', '## 선호 패턴 (Preferences)');
@@ -385,8 +385,66 @@ export async function autoExtractMemory(userId, userMsg, botMsg) {
   try {
     // subprocess(claude -p)는 non-TTY 환경에서 무한 대기(exit 143)하므로 Anthropic API 직접 호출
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    // 구독제 환경에서는 API 키가 없음 — 기능 비활성화 (로그 없이 조용히 반환)
-    if (!apiKey) return;
+
+    // 구독제(Claude Max) 환경: API 키 없음 → SDK query 경량 호출로 대체
+    if (!apiKey) {
+      try {
+        const { query } = await import('@anthropic-ai/claude-agent-sdk');
+        let sdkResult = '';
+        const extractOpts = {
+          cwd: BOT_HOME,
+          allowedTools: [],
+          permissionMode: 'bypassPermissions',
+          maxTurns: 1,
+          model: MODELS.small,
+          systemPrompt: '아래 텍스트에서 기억할 사실을 JSON 배열로 추출하세요. ["사실1", "사실2"] 형식만 반환. 없으면 [].',
+        };
+        for await (const msg of query({ prompt, options: extractOpts })) {
+          if ('result' in msg) { sdkResult = msg.result ?? ''; break; }
+          if (msg.type === 'assistant') {
+            const blk = msg.message?.content?.find?.(c => c.type === 'text');
+            if (blk?.text) sdkResult = blk.text;
+          }
+        }
+        // 결과 파싱은 아래 공통 로직 재사용을 위해 result 변수에 넣고 계속 진행
+        // (단, fetch 경로를 우회하므로 인라인 처리)
+        const raw2 = sdkResult.trim();
+        let facts2 = null;
+        let se2 = raw2.length - 1;
+        while (se2 >= 0 && !facts2) {
+          const cb = raw2.lastIndexOf(']', se2);
+          if (cb === -1) break;
+          let depth = 0, ob = -1;
+          for (let j = cb; j >= 0; j--) {
+            if (raw2[j] === ']') depth++;
+            else if (raw2[j] === '[') { depth--; if (depth === 0) { ob = j; break; } }
+          }
+          if (ob === -1) { se2 = cb - 1; continue; }
+          try {
+            const p2 = JSON.parse(raw2.slice(ob, cb + 1));
+            if (Array.isArray(p2) && p2.every(x => typeof x === 'string')) facts2 = p2;
+          } catch { /* try next */ }
+          se2 = ob - 1;
+        }
+        if (facts2) {
+          let saved2 = 0;
+          for (const f of facts2) {
+            if (typeof f === 'string' && f.length > 5 && f.length < 200) {
+              userMemory.addFact(userId, f); saved2++;
+              log('info', 'Auto memory extracted (SDK)', { userId, fact: f.slice(0, 80) });
+            }
+          }
+          if (saved2 > 0) {
+            await _syncUserMemoryMarkdown(userId).catch(() => {});
+            if (OWNER_DISCORD_ID && userId === OWNER_DISCORD_ID) {
+              const sf2 = facts2.filter(f => typeof f === 'string' && f.length > 5 && f.length < 200);
+              await _syncOwnerProfileMarkdown(sf2).catch(() => {});
+            }
+          }
+        }
+      } catch { /* Claude Max SDK 호출 실패 시 조용히 무시 */ }
+      return;
+    }
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -394,11 +452,16 @@ export async function autoExtractMemory(userId, userMsg, botMsg) {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'output-schemas-2025-02-19',
       },
       body: JSON.stringify({
         model: MODELS.small,
         max_tokens: 512,
         messages: [{ role: 'user', content: prompt }],
+        output_schema: {
+          type: 'array',
+          items: { type: 'string' },
+        },
       }),
       signal: AbortSignal.timeout(30_000),
     });
@@ -406,36 +469,14 @@ export async function autoExtractMemory(userId, userMsg, botMsg) {
     const data = await response.json();
     const result = data?.content?.[0]?.text ?? '';
 
-    const raw = result.trim();
-    // 후행 텍스트에 [] 포함 시 lastIndexOf 오탐 방지:
-    // 끝에서부터 ]를 찾고, 그에 대응하는 [ 까지 역탐색 (bracket matching)
-    // → 여러 후보 중 마지막에 위치한 유효한 JSON string 배열만 사용
+    // Structured Outputs 보장으로 bracket-matching 불필요 — 직접 파싱
     let facts = null;
-    let searchEnd = raw.length - 1;
-    while (searchEnd >= 0 && !facts) {
-      const closeBracket = raw.lastIndexOf(']', searchEnd);
-      if (closeBracket === -1) break;
-      let depth = 0;
-      let openBracket = -1;
-      for (let j = closeBracket; j >= 0; j--) {
-        if (raw[j] === ']') depth++;
-        else if (raw[j] === '[') {
-          depth--;
-          if (depth === 0) { openBracket = j; break; }
-        }
-      }
-      if (openBracket === -1) { searchEnd = closeBracket - 1; continue; }
-      const candidate = raw.slice(openBracket, closeBracket + 1);
-      try {
-        const parsed = JSON.parse(candidate);
-        if (Array.isArray(parsed) && parsed.every(x => typeof x === 'string')) {
-          facts = parsed;
-        }
-      } catch { /* not valid JSON array, try next */ }
-      searchEnd = openBracket - 1;
-    }
+    try {
+      const parsed = JSON.parse(result.trim());
+      if (Array.isArray(parsed) && parsed.every(x => typeof x === 'string')) facts = parsed;
+    } catch { /* invalid JSON — skip */ }
     if (!facts) {
-      log('debug', 'autoExtractMemory: no valid JSON array found', { userId, raw: raw.slice(-150) });
+      log('debug', 'autoExtractMemory: no valid JSON array found', { userId, raw: result.slice(-150) });
       return;
     }
 
@@ -653,6 +694,7 @@ export async function* createClaudeSession(prompt, {
   const maxTurns = BUDGET_TURNS[contextBudget] ?? BUDGET_TURNS.medium;
   const BUDGET_MODEL = { small: MODELS.small, medium: MODELS.medium, large: MODELS.large };
   const model = BUDGET_MODEL[contextBudget] ?? BUDGET_MODEL.medium;
+  const BUDGET_EFFORT = { small: 'low', medium: 'medium', large: 'high' };
 
   // 7. Load MCP server config (same servers, now as SDK mcpServers object)
   // ${ENV_VAR} 형식의 env var를 실제 값으로 치환 지원 (GITHUB_TOKEN 등)
@@ -687,8 +729,19 @@ export async function* createClaudeSession(prompt, {
     mcpServers,
     maxTurns,
     model,
+    effort: BUDGET_EFFORT[contextBudget] ?? 'medium',
+    // inference_geo: 환경변수 설정 시에만 적용 (미설정 시 Anthropic 기본 라우팅)
+    ...(process.env.INFERENCE_GEO ? { inference_geo: process.env.INFERENCE_GEO } : {}),
     includePartialMessages: true,
   };
+
+  // 1M 토큰 컨텍스트: contextBudget 'large' 세션에서 활성화
+  if (contextBudget === 'large') {
+    if (!queryOptions.betas) queryOptions.betas = [];
+    if (!queryOptions.betas.includes('context-1m-2025-08-07')) {
+      queryOptions.betas.push('context-1m-2025-08-07');
+    }
+  }
 
   // _promptVersionMap: per-threadId 버전 캐시 (글로벌 싱글턴은 다채널 동시실행 시 오염됨)
   if (!createClaudeSession._promptVersionMap) createClaudeSession._promptVersionMap = new Map();
@@ -725,8 +778,9 @@ export async function* createClaudeSession(prompt, {
     threadId, resume: !!sessionId, maxTurns, model, mcpCount: Object.keys(mcpServers).length,
   });
 
-  // 9. Yield normalized events (with 90-second per-message timeout guard)
-  const SESSION_TIMEOUT_MS = 90_000;
+  // 9. Yield normalized events (with per-message timeout guard)
+  // 180s: Agent 서브에이전트 지연 대응 (3일 연속 타임아웃 INC-TIMEOUT 2026-03-14)
+  const SESSION_TIMEOUT_MS = 180_000;
 
   /**
    * Race a single iterator.next() call against a timeout.

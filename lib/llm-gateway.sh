@@ -318,6 +318,21 @@ print(json.dumps(out))
     return 0
 }
 
+# Variable Thinking: 프롬프트 복잡도 기반 모델 자동 선택
+# Returns: "budget" | "small" | "large"
+_detect_complexity() {
+    local prompt="$1"
+    local word_count
+    word_count=$(echo "$prompt" | wc -w | tr -d ' \n')
+    if [[ "$word_count" -lt 50 ]] && ! echo "$prompt" | grep -qiE '분석|설계|비교|전략|아키텍처|코드|구현'; then
+        echo "budget"
+    elif [[ "$word_count" -lt 300 ]]; then
+        echo "small"
+    else
+        echo "large"
+    fi
+}
+
 # --- Main entry point ---
 # llm_call --prompt "..." --system "..." --timeout 180 --model "..." --output "/tmp/out.json" \
 #          [--allowed-tools "Read,Bash"] [--max-budget "1.00"] [--work-dir "/tmp"] [--mcp-config "path"]
@@ -344,6 +359,18 @@ llm_call() {
     if [[ -z "$prompt" || -z "$output" ]]; then
         log_error "llm_call requires --prompt and --output"
         return 2
+    fi
+
+    # Variable Thinking: model 미지정 시 복잡도 기반 자동 선택
+    if [[ -z "$model" ]]; then
+        local complexity
+        complexity=$(_detect_complexity "$prompt")
+        case "$complexity" in
+            budget) model="claude-haiku-4-5-20251015" ;;
+            small)  model="claude-sonnet-4-20250514" ;;
+            large)  model="claude-opus-4-20250514" ;;
+        esac
+        log_debug "auto-selected model=$model (complexity=$complexity)"
     fi
 
     # Determine if task requires tool use (non-text-only)

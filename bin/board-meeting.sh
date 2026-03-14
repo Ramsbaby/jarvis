@@ -39,9 +39,9 @@ CRON_SUCCESS=0
 CRON_FAIL=0
 if [[ -f "$CRON_LOG" ]]; then
     CRON_SUCCESS=$(grep -E "^\[($SEVEN_DAYS_PATTERN)" "$CRON_LOG" 2>/dev/null | \
-        awk '/ SUCCESS/' | wc -l | tr -d ' ') || CRON_SUCCESS=0
+        awk '/ SUCCESS/' | wc -l | tr -d ' \n') || CRON_SUCCESS=0
     CRON_FAIL=$(grep -E "^\[($SEVEN_DAYS_PATTERN)" "$CRON_LOG" 2>/dev/null | \
-        awk '/ (FAILED|ABORTED)/' | wc -l | tr -d ' ') || CRON_FAIL=0
+        awk '/ (FAILED|ABORTED)/' | wc -l | tr -d ' \n') || CRON_FAIL=0
 fi
 # 공백/개행 제거 후 숫자 강제 변환 (set -e에서 빈 문자열 → unbound variable crash 방지)
 CRON_SUCCESS=$(printf '%d' "${CRON_SUCCESS:-0}" 2>/dev/null || echo 0)

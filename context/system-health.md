@@ -34,3 +34,8 @@
 3. CPU: uptime load average (> 8.0 경고)
 4. 프로세스: pgrep -f "discord-bot\|glances" 확인
 5. Google Calendar 인증: gog calendar list --from today --to today --account $GOOGLE_ACCOUNT 2>&1 | head -3 실행. "auth" 또는 "error" 또는 "token" 포함 시 "⚠️ Google Calendar 인증 만료" 경고
+6. gh auth 상태: `gh auth status` 실행. 오류 발생 시 "⚠️ gh auth 인증 오류" 경고. 출력에 "Token expires in X days" 패턴 감지 시 만료 임박 Discord 알림 발송 (X가 7 이하이면 🔴 긴급, 14 이하이면 🟡 주의)
+
+## 출력 형식 (Structured)
+응답의 마지막 줄에 반드시 아래 JSON 1줄을 포함하세요:
+{"status":"green"|"yellow"|"red","summary":"한 줄 요약","action_required":true|false}

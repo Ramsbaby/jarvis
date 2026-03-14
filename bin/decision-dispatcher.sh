@@ -451,6 +451,18 @@ if alerts:
 " 2>"${BOT_HOME}/logs/dispatcher-py.err" || log "WARN: disciplinary check failed"
 }
 
+# --- 독립 액션 판별: scorecard 수정이나 전역 상태에 영향 없는 순수 실행 액션 ---
+# 이 목록의 액션만 백그라운드 병렬화 대상 (restart-service, sync-vault, run-e2e 등 상태 변경/긴 작업은 순차 유지)
+_is_parallel_safe() {
+    local action_type="$1"
+    case "$action_type" in
+        kill-stale|cleanup-logs|cleanup-disk|cleanup-results|analyze-cron)
+            return 0 ;;
+        *)
+            return 1 ;;
+    esac
+}
+
 # ============================================================
 # MAIN
 # ============================================================
@@ -470,11 +482,18 @@ FAIL_COUNT=0
 SKIP_COUNT=0
 SUMMARY=""
 
+# 병렬 실행 임시 결과 저장 디렉터리 (스크립트 종료 시 자동 정리)
+PARALLEL_TMP_DIR=$(mktemp -d /tmp/dispatch-parallel-$$.XXXXXX)
+trap 'rm -f "$LOCK_FILE"; rm -rf "$PARALLEL_TMP_DIR"' EXIT
+
+# 1단계: 결정 파싱 및 분류 → 독립 액션은 백그라운드 병렬 실행
+declare -a SERIAL_LINES=()   # 순차 처리할 결정 원본 라인
+declare -a SERIAL_HASHES=()  # 대응 해시
+_parallel_idx=0
+
 while IFS= read -r line || [[ -n "$line" ]]; do
-    # 빈 줄 건너뛰기
     if [[ -z "$line" ]]; then continue; fi
 
-    # 이미 처리된 결정인지 체크 (decision 해시)
     line_hash=$(echo "$line" | md5 -q 2>/dev/null || echo "$line" | shasum | cut -d' ' -f1)
     if grep -q "$line_hash" "$PROCESSED_FILE" 2>/dev/null; then
         log "SKIP (already processed): ${line}"
@@ -485,11 +504,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     team=$(echo "$line" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('team','unknown'))" 2>/dev/null || echo "unknown")
     status=$(echo "$line" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('status',''))" 2>/dev/null || echo "")
 
-    if [[ -z "$decision" ]]; then
-        continue
-    fi
-
-    # confirmed 상태만 실행
+    if [[ -z "$decision" ]]; then continue; fi
     if [[ "$status" != "confirmed" ]]; then
         log "SKIP (not confirmed): ${decision}"
         continue
@@ -497,7 +512,93 @@ while IFS= read -r line || [[ -n "$line" ]]; do
 
     DISPATCH_COUNT=$((DISPATCH_COUNT + 1))
 
-    # 실행
+    # 이 결정의 액션 타입 미리 판별
+    matched_action=$(match_action "$decision")
+    if echo "$decision" | grep -qi "크론.*실패.*분석\|cron.*fail.*analy"; then
+        matched_action="analyze-cron"
+    fi
+
+    if [[ -n "$matched_action" ]] && _is_parallel_safe "$matched_action"; then
+        # 독립 액션: 백그라운드로 실행, 결과를 임시 파일에 저장
+        _pidx=$_parallel_idx
+        _parallel_idx=$((_parallel_idx + 1))
+        result_file="${PARALLEL_TMP_DIR}/result-${_pidx}.txt"
+        (
+            _out=$(dispatch_decision "$decision" "$team")
+            _exit=$?
+            printf '%s\n%s\n%s\n%s\n%s\n' "$_out" "$_exit" "$decision" "$team" "$line_hash" > "$result_file"
+        ) &
+        log "PARALLEL: ${matched_action} dispatched in background (idx=${_pidx})"
+    else
+        # 순차 처리 대상: 배열에 저장
+        SERIAL_LINES+=("$line")
+        SERIAL_HASHES+=("$line_hash")
+    fi
+done < "$DECISIONS_FILE"
+
+# 병렬 작업 완료 대기
+if [[ $_parallel_idx -gt 0 ]]; then
+    log "Waiting for ${_parallel_idx} parallel action(s)..."
+    wait
+    log "All parallel actions completed"
+
+    # 병렬 결과 집계 (순서 보장: result-0.txt, result-1.txt, ...)
+    _i=0
+    while [[ $_i -lt $_parallel_idx ]]; do
+        result_file="${PARALLEL_TMP_DIR}/result-${_i}.txt"
+        if [[ ! -f "$result_file" ]]; then
+            log "WARN: parallel result file missing (idx=${_i})"
+            _i=$((_i + 1))
+            continue
+        fi
+        # 파일 형식: line1=dispatch_output, line2=exit, line3=decision, line4=team, line5=hash
+        dispatch_output=$(sed -n '1p' "$result_file")
+        dispatch_exit=$(sed -n '2p' "$result_file")
+        decision=$(sed -n '3p' "$result_file")
+        team=$(sed -n '4p' "$result_file")
+        line_hash=$(sed -n '5p' "$result_file")
+
+        action_type=$(echo "$dispatch_output" | cut -d'|' -f1)
+        result_detail=$(echo "$dispatch_output" | cut -d'|' -f2)
+
+        if [[ "$action_type" == "REPORT_ONLY" ]] || [[ "$action_type" == "UNMATCHED" ]]; then
+            update_scorecard "$team" "skipped" "$decision"
+            SKIP_COUNT=$((SKIP_COUNT + 1))
+            SUMMARY="${SUMMARY}\n  - [SKIP] ${decision} (${action_type})"
+        elif [[ "$dispatch_exit" -eq 2 ]]; then
+            update_scorecard "$team" "skipped" "$decision"
+            SKIP_COUNT=$((SKIP_COUNT + 1))
+            SUMMARY="${SUMMARY}\n  - [SKIP] ${decision}: ${result_detail}"
+        elif [[ "$dispatch_exit" -eq 0 ]] && echo "$result_detail" | grep -q "^OK"; then
+            update_scorecard "$team" "success" "$decision"
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            SUMMARY="${SUMMARY}\n  + [OK] ${decision}"
+        else
+            update_scorecard "$team" "failure" "$decision"
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            SUMMARY="${SUMMARY}\n  ! [FAIL] ${decision}: ${result_detail}"
+        fi
+
+        jq -n --arg ts "$(date -u +%FT%TZ)" --arg decision "$decision" --arg team "$team" \
+            --arg action "$action_type" --arg result "$result_detail" --argjson exit "$dispatch_exit" \
+            '{ts:$ts, decision:$decision, team:$team, action:$action, result:$result, exit:$exit}' \
+            >> "$DISPATCH_RESULTS"
+        echo "$line_hash" >> "$PROCESSED_FILE"
+        _i=$((_i + 1))
+    done
+fi
+
+# 2단계: 순차 처리 (restart-service, sync-vault, run-e2e 등 의존성 있는 액션)
+_sidx=0
+for line in "${SERIAL_LINES[@]}"; do
+    line_hash="${SERIAL_HASHES[$_sidx]}"
+    _sidx=$((_sidx + 1))
+
+    decision=$(echo "$line" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('decision',''))" 2>/dev/null || echo "")
+    team=$(echo "$line" | python3 -c "import sys,json; print(json.loads(sys.stdin.read()).get('team','unknown'))" 2>/dev/null || echo "unknown")
+
+    if [[ -z "$decision" ]]; then continue; fi
+
     dispatch_output=""
     dispatch_exit=0
     dispatch_output=$(dispatch_decision "$decision" "$team") || dispatch_exit=$?
@@ -505,13 +606,11 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     action_type=$(echo "$dispatch_output" | cut -d'|' -f1)
     result_detail=$(echo "$dispatch_output" | cut -d'|' -f2)
 
-    # 성과 기록
     if [[ "$action_type" == "REPORT_ONLY" ]] || [[ "$action_type" == "UNMATCHED" ]]; then
         update_scorecard "$team" "skipped" "$decision"
         SKIP_COUNT=$((SKIP_COUNT + 1))
         SUMMARY="${SUMMARY}\n  - [SKIP] ${decision} (${action_type})"
     elif [[ "$dispatch_exit" -eq 2 ]]; then
-        # exit 2 = 대상 미인식 (SKIP) — 팀 책임 아님
         update_scorecard "$team" "skipped" "$decision"
         SKIP_COUNT=$((SKIP_COUNT + 1))
         SUMMARY="${SUMMARY}\n  - [SKIP] ${decision}: ${result_detail}"
@@ -525,16 +624,12 @@ while IFS= read -r line || [[ -n "$line" ]]; do
         SUMMARY="${SUMMARY}\n  ! [FAIL] ${decision}: ${result_detail}"
     fi
 
-    # dispatch 결과 기록
     jq -n --arg ts "$(date -u +%FT%TZ)" --arg decision "$decision" --arg team "$team" \
         --arg action "$action_type" --arg result "$result_detail" --argjson exit "$dispatch_exit" \
         '{ts:$ts, decision:$decision, team:$team, action:$action, result:$result, exit:$exit}' \
         >> "$DISPATCH_RESULTS"
-
-    # 처리 완료 마크
     echo "$line_hash" >> "$PROCESSED_FILE"
-
-done < "$DECISIONS_FILE"
+done
 
 # 징계 상태 체크
 DISCIPLINARY_ALERTS=$(check_disciplinary)

@@ -112,6 +112,28 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
 
     log_retry "$attempt" "$exit_code" "$classification" "$duration_s"
 
+    # --- Output quality check (exit_code=0이어도 결과 품질 검증) ---
+    if [[ "$classification" == "success" ]]; then
+        RESULT_LEN=0
+        if [[ -f "$RESULT_TMP" ]]; then
+            RESULT_LEN=$(wc -c < "$RESULT_TMP" | tr -d ' ')
+        fi
+        RESULT_HAS_ERROR=false
+        if [[ -f "$RESULT_TMP" ]] && grep -qiE "^Error:|^\[Error\]|\"error\":" "$RESULT_TMP" 2>/dev/null; then
+            RESULT_HAS_ERROR=true
+        fi
+
+        if [[ "$RESULT_LEN" -eq 0 ]]; then
+            classification="retryable"
+            printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"quality_fail":"empty_output"}\n' \
+                "$(date -u +%FT%TZ)" "$TASK_ID" "$attempt" >> "$RETRY_LOG"
+        elif [[ "$RESULT_HAS_ERROR" == "true" ]]; then
+            classification="retryable"
+            printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"quality_fail":"error_in_output"}\n' \
+                "$(date -u +%FT%TZ)" "$TASK_ID" "$attempt" >> "$RETRY_LOG"
+        fi
+    fi
+
     # Success - output result and exit
     if [[ "$classification" == "success" ]]; then
         cat "$RESULT_TMP"

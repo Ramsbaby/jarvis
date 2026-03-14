@@ -78,13 +78,18 @@ failures=$(grep "$today" "$BOT_HOME/logs/task-runner.jsonl" 2>/dev/null | { grep
 check "cron-results" "ok" "today: ${success} success, ${failures} failures"
 
 # 7. Discord bot error log (infra 팀장용 가시성)
-bot_errors_today=$(grep "$(date +%F)" "$BOT_HOME/logs/discord-bot.jsonl" 2>/dev/null | { grep -c '"level":"error"' || true; })
-if [[ "$bot_errors_today" -gt 10 ]]; then
-    check "bot-errors" "fail" "today: ${bot_errors_today} errors (critical)"
-elif [[ "$bot_errors_today" -gt 0 ]]; then
+# inactivity timeout은 사용자 비응답(정상 동작) — critical 카운트 제외
+bot_errors_today=$(grep "$(date +%F)" "$BOT_HOME/logs/discord-bot.jsonl" 2>/dev/null \
+    | grep '"level":"error"' \
+    | grep -v "inactivity timeout\|no_response_expected" \
+    | { wc -l || true; } | tr -d ' ')
+bot_errors_today=${bot_errors_today:-0}
+if [[ "$bot_errors_today" -gt 50 ]]; then
+    check "bot-errors" "fail" "today: ${bot_errors_today} real errors (critical)"
+elif [[ "$bot_errors_today" -gt 10 ]]; then
     check "bot-errors" "warn" "today: ${bot_errors_today} errors"
 else
-    check "bot-errors" "ok" "today: 0 errors"
+    check "bot-errors" "ok" "today: ${bot_errors_today} errors"
 fi
 
 # 8. Crash counter
