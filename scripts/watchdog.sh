@@ -78,7 +78,10 @@ detect_crash_loop() {
             last_error=$(tail -30 "$BOT_HOME/logs/discord-bot.log" 2>/dev/null \
                 | grep -iE "Error:|TypeError|SyntaxError|Cannot find|ENOENT|FATAL" \
                 | tail -1 || echo "로그 없음")
-            send_alert "[Bot Watchdog] CRASH LOOP: ${restart_count}회 재시작 (30분 내). 마지막 에러: ${last_error}"
+            # 실제 에러 로그가 있을 때만 알림 — 의도적 재시작(에러 없음)은 무시
+            if [[ "$last_error" != "로그 없음" ]]; then
+                send_alert "[Bot Watchdog] CRASH LOOP: ${restart_count}회 재시작 (30분 내). 마지막 에러: ${last_error}"
+            fi
             # 크래시 루프 감지 후 restart-times 초기화 (중복 알림 방지)
             true > "$restart_log"
         fi

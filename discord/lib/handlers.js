@@ -540,7 +540,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       // JSONL 삭제
       if (oldSessionId) _deleteSessionJsonl(oldSessionId, thread?.id ?? message.channel?.id);
       sessions.delete(sessionKey);
-      sessionTokenCounts.set(sessionKey, 0);
+      sessionTokenCounts.delete(sessionKey);
       log('info', 'Manual compact triggered', { sessionKey, turns });
       await message.reply(`🗜️ 세션 컴팩트 완료. (${turns}턴 → 리셋)\n다음 메시지부터 이전 대화 요약으로 재시작합니다.`);
       processingMsgIds.delete(message.id);
@@ -561,7 +561,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
         );
         sessions.delete(sessionKey);
         sessionId = null;
-        sessionTokenCounts.set(sessionKey, 0);
+        sessionTokenCounts.delete(sessionKey);
       }
     }
 
@@ -814,7 +814,7 @@ ${extracted}
             log('info', 'Native compact_boundary received — resetting token counter', {
               threadId: thread.id, preTokens: event.pre_tokens,
             });
-            sessionTokenCounts.set(sessionKey, 0);
+            sessionTokenCounts.delete(sessionKey);
           }
         } else if (event.type === 'stream_event') {
           const se = event.event;
