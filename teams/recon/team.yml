@@ -1,15 +1,16 @@
 name: "정보탐험대 (Recon)"
 taskId: recon-weekly
 discord: jarvis-ceo
-maxTurns: 40
+model: sonnet
+maxTurns: 45
 tools: [Read, Write, Bash, WebSearch, Glob, Grep, Agent, nexus]
 agents:
   scout:
-    description: "최신 AI 업데이트/경쟁사 동향을 웹에서 수집하는 정찰병"
-    tools: [WebSearch, Read]
+    description: "최신 AI 업데이트/경쟁사 동향을 웹에서 수집하는 정찰병. 4개 영역 순차 검색, Rate Limit 시 폴백 실행"
+    tools: [WebSearch, Read, Bash]
   analyst:
-    description: "수집된 정보를 Jarvis 시스템과 대조 분석하여 적용 가능성 평가"
-    tools: [Read, Glob, Grep, nexus]
+    description: "수집된 정보를 Jarvis 시스템과 대조 분석하여 Quick Win / Medium / Long-term으로 분류. 로그 확인 및 버전 비교 포함"
+    tools: [Read, Glob, Grep, Bash, nexus]
   architect:
-    description: "구체적인 Jarvis 업그레이드 계획을 설계하고 우선순위를 매기는 설계자"
+    description: "구체적인 코드 스니펫 포함 업그레이드 보고서 작성. 파일명+라인번호+실제코드 필수. 자체 QA 후 저장"
     tools: [Read, Write, Bash, nexus]

@@ -800,6 +800,16 @@ export async function* createClaudeSession(prompt, {
           is_error: false,
           cost_usd: msg.cost_usd ?? null,
           stop_reason: msg.stop_reason ?? null,
+          // 토큰 사용량 포워딩 — handlers.js의 compaction trigger에서 사용
+          usage: msg.usage ?? null,
+        };
+      } else if (msg.type === 'system' && msg.subtype === 'compact_boundary') {
+        // 네이티브 SDK 컴팩션 완료 이벤트 — handlers.js에서 토큰 카운터 리셋
+        yield {
+          type: 'system',
+          subtype: 'compact_boundary',
+          pre_tokens: msg.compact_metadata?.pre_tokens ?? 0,
+          session_id: msg.session_id ?? null,
         };
       } else if (msg.type === 'assistant' || msg.type === 'stream_event') {
         // Pass through: assistant (complete turn), stream_event (real-time streaming)

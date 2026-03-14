@@ -74,6 +74,8 @@ Nexus CIG intercepts every tool call output before it hits Claude's context wind
 
 Without compression, context fills in ~30 min on heavy-output tasks. With Nexus CIG active on tool-heavy workloads, multi-turn threads sustain for several hours before context pressure builds.
 
+At 80k tokens, auto-compact triggers: the session is summarized into a 5-section structured digest by a haiku sub-agent, then continues fresh with full context preserved.
+
 </td>
 </tr>
 </table>
@@ -233,7 +235,10 @@ Copy from `config/tasks.json.example` to get started with 3 example tasks (morni
 ## Architecture
 
 ```
-Discord message
+Discord message (text · image · PDF attachment)
+      │
+      ├─ PDF → pdftotext extract → text injection
+      │         (fallback: Claude Read if pdftotext empty)
       │
       ▼
 discord-bot.js ──► lib/handlers.js ──► lib/claude-runner.js
@@ -321,13 +326,14 @@ Layer 0: bot-preflight.sh  (every cold start)
   │   └─ MAX_HEAL_ATTEMPTS=3, exponential backoff 30s→90s→180s, 6h auto-decay
   └─ Success → exec node (process replacement — launchd tracks node PID directly)
 
-Layer 1: launchd  (KeepAlive + Crashed:true)
+Layer 1: launchd  (KeepAlive unconditional — restarts on SIGTERM, crash, or clean exit)
   └─ discord-bot.js auto-restarts on any exit (ThrottleInterval=10s)
 
-Layer 2: cron */5 min  →  watchdog.sh
+Layer 2: cron */5 min  →  watchdog.sh (macOS + Linux/Docker)
   ├─ Checks log freshness (15 min silence = unhealthy)
   ├─ Crash loop detection: PID tracking, 3 restarts/30 min → ntfy alert
   ├─ Out-of-band alerts: ntfy direct HTTP (works even when Discord bot is down)
+  ├─ macOS: launchctl kickstart | Linux: pm2 restart jarvis-bot
   └─ Kills stale claude -p processes
 
 Layer 3: cron */3 min  →  launchd-guardian.sh
