@@ -17,6 +17,10 @@
   <a href="README.ko.md">한국어</a> · <a href="ROADMAP.md">Roadmap</a> · <a href="discord/SETUP.md">Setup Guide</a>
 </p>
 
+<p align="center">
+  <img src="docs/demo.gif" alt="Jarvis demo" width="700">
+</p>
+
 ---
 
 ---

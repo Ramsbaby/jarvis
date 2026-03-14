@@ -17,6 +17,10 @@
   <a href="README.md">English</a> · <a href="ROADMAP.md">로드맵</a> · <a href="discord/SETUP.md">설치 가이드</a>
 </p>
 
+<p align="center">
+  <img src="docs/demo.gif" alt="Jarvis 데모" width="700">
+</p>
+
 ---
 
 ---
