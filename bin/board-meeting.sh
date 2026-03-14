@@ -323,9 +323,11 @@ fi
 echo $$ > "$LOCK_FILE"
 
 CAFFEINATE_PID=""
-caffeinate -i -w $$ &
-CAFFEINATE_PID=$!
-trap 'rm -f "$LOCK_FILE"; kill "$CAFFEINATE_PID" 2>/dev/null || true' EXIT
+if $IS_MACOS; then
+  caffeinate -i -w $$ &
+  CAFFEINATE_PID=$!
+fi
+trap 'rm -f "$LOCK_FILE"; ${CAFFEINATE_PID:+kill "$CAFFEINATE_PID" 2>/dev/null || true}' EXIT
 
 # --- Rate limit guard ---
 RATE_FILE="${BOT_HOME}/state/rate-tracker.json"

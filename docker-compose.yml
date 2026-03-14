@@ -11,8 +11,8 @@ services:
       - JARVIS_HOME=/jarvis
       - NODE_ENV=production
     volumes:
-      # Claude CLI 인증 (read-only)
-      - ~/.claude:/root/.claude:ro
+      # Claude CLI 인증 (macOS/Linux 전용. Windows 비WSL2 환경에서는 제거 또는 주석 처리)
+      - ${HOME}/.claude:/root/.claude:ro
       # 데이터 영속화
       - ./rag:/jarvis/rag
       - ./inbox:/jarvis/inbox
