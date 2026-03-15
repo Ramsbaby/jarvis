@@ -30,7 +30,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:$
 export HOME="${HOME:-/Users/$(id -un)}"
 
 BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
-EMIT_EVENT="${BOT_HOME}/bin/emit-event.sh"
+EMIT_EVENT="${BOT_HOME}/scripts/emit-event.sh"
 LOG="${BOT_HOME}/logs/webhook-listener.log"
 WEBHOOK_PORT="${WEBHOOK_PORT:-9000}"
 NO_SMEE=false
