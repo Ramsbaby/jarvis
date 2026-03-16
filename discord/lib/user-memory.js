@@ -10,6 +10,22 @@ import { homedir } from 'node:os';
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
 const USERS_DIR = join(BOT_HOME, 'state', 'users');
 
+// 카테고리 자동 감지 — 텍스트 키워드 기반 분류
+const CATEGORY_RULES = [
+  { cat: 'trading',  re: /tqqq|주식|트레이딩|레버리지|etf|매수|매도|포트폴리오|s&p|nasdaq|코스피|cpi|fomc|금리|배당|수익률/i },
+  { cat: 'work',     re: /sk\s*d&d|sk디앤디|백엔드|spring|kafka|grpc|redis|aws|이직|면접|연봉|프로젝트|업무|회사|사수|팀장|개발/i },
+  { cat: 'family',   re: /보람님|아내|와이프|preply|수업|레슨|학생|강의|한국어\s*강사|수강생/i },
+  { cat: 'travel',   re: /여행|치앙마이|삿포로|해외|항공|숙소|노보리베쓰|휴가|출장/i },
+  { cat: 'health',   re: /건강|운동|병원|의사|약|몸무게|다이어트|수면|피로|두통/i },
+];
+
+function detectCategory(text) {
+  for (const { cat, re } of CATEGORY_RULES) {
+    if (re.test(text)) return cat;
+  }
+  return 'general';
+}
+
 function _path(userId) {
   return join(USERS_DIR, `${userId}.json`);
 }
@@ -43,11 +59,15 @@ export const userMemory = {
 
   addFact(userId, fact) {
     const data = _load(userId);
-    // facts는 string 또는 {text, addedAt} 혼용 허용 (하위 호환)
-    const normalize = (f) => (typeof f === 'string' ? f : f?.text ?? '');
-    const exists = data.facts.some(f => normalize(f) === fact);
+    // facts는 string 또는 {text, addedAt[, category]} 혼용 허용 (하위 호환)
+    const normText = (f) => (typeof f === 'string' ? f : f?.text ?? '');
+    const exists = data.facts.some(f => normText(f) === fact);
     if (!exists) {
-      data.facts.push({ text: fact, addedAt: new Date().toISOString() });
+      data.facts.push({
+        text: fact,
+        addedAt: new Date().toISOString(),
+        category: detectCategory(fact),
+      });
       data.updatedAt = new Date().toISOString();
       _save(data);
     }
@@ -93,14 +113,17 @@ export const userMemory = {
       const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
       const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-      // facts 정규화
+      // facts 정규화 (category 포함, 레거시 호환)
       const normalize = (f) => typeof f === 'string'
-        ? { text: f, addedAt: null }
-        : { text: f?.text ?? '', addedAt: f?.addedAt ?? null };
+        ? { text: f, addedAt: null, category: detectCategory(f) }
+        : { text: f?.text ?? '', addedAt: f?.addedAt ?? null, category: f?.category ?? detectCategory(f?.text ?? '') };
 
       const allFacts = data.facts
         .map(normalize)
         .filter(f => f.text.length > 0);
+
+      // 프롬프트 카테고리 감지 → 해당 카테고리 fact 부스트
+      const promptCategory = detectCategory(currentPrompt);
 
       // 각 fact에 관련성 점수 산출
       const scored = allFacts.map(f => {
@@ -119,6 +142,8 @@ export const userMemory = {
           if (age <= SEVEN_DAYS_MS) score += 0.3;
           if (age <= THREE_DAYS_MS) score += 0.2;
         }
+        // 카테고리 매칭 부스트 — 같은 주제끼리 우선 surfacing
+        if (f.category !== 'general' && f.category === promptCategory) score += 0.4;
         return { ...f, score };
       });
 
@@ -170,10 +195,10 @@ export const userMemory = {
     const lines = [];
 
     if (data.facts.length) {
-      // facts는 string(레거시) 또는 {text, addedAt} 혼용 허용
+      // facts는 string(레거시) 또는 {text, addedAt[, category]} 혼용 허용
       const normalize = (f) => typeof f === 'string'
-        ? { text: f, addedAt: null }
-        : { text: f?.text ?? '', addedAt: f?.addedAt ?? null };
+        ? { text: f, addedAt: null, category: detectCategory(f) }
+        : { text: f?.text ?? '', addedAt: f?.addedAt ?? null, category: f?.category ?? detectCategory(f?.text ?? '') };
 
       const now = Date.now();
       const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;

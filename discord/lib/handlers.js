@@ -106,14 +106,14 @@ function _pruneExpiredPendingTasks(tasks) {
   return pruned;
 }
 
-function _savePendingTask(sessionKey, prompt) {
+function _savePendingTask(sessionKey, prompt, checkpoints = []) {
   try {
     let tasks = {};
     if (existsSync(PENDING_TASKS_PATH)) {
       tasks = JSON.parse(readFileSync(PENDING_TASKS_PATH, 'utf-8'));
     }
     _pruneExpiredPendingTasks(tasks); // 저장 시 만료 항목 일괄 정리
-    tasks[sessionKey] = { prompt, savedAt: Date.now() };
+    tasks[sessionKey] = { prompt, savedAt: Date.now(), checkpoints };
     const tmp = `${PENDING_TASKS_PATH}.tmp`;
     writeFileSync(tmp, JSON.stringify(tasks));
     renameSync(tmp, PENDING_TASKS_PATH);
@@ -130,7 +130,8 @@ function _loadPendingTask(sessionKey) {
       _clearPendingTask(sessionKey);
       return null;
     }
-    return task.prompt;
+    // 전체 task 객체 반환 (하위 호환: prompt 필드 보장)
+    return { prompt: task.prompt, checkpoints: task.checkpoints ?? [] };
   } catch { return null; }
 }
 
@@ -632,9 +633,12 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
         log('info', 'Session summary injected for 계속 resume', { threadId: thread.id });
       }
       if (pending) {
-        contextParts.push(`## 중단된 작업\n타임아웃으로 중단된 작업입니다. 아래 원래 요청을 이어서 완료해줘.\n원래 요청: "${pending}"`);
+        const checkpointLines = (pending.checkpoints ?? []).length > 0
+          ? '\n이미 완료된 단계:\n' + pending.checkpoints.map((c, i) => `  ${i + 1}. ${c}`).join('\n')
+          : '';
+        contextParts.push(`## 중단된 작업\n타임아웃으로 중단된 작업입니다. 아래 원래 요청을 이어서 완료해줘.\n원래 요청: "${pending.prompt}"${checkpointLines}`);
         _clearPendingTask(sessionKey);
-        log('info', 'Pending task resumed via 계속', { threadId: thread.id, pendingLen: pending.length });
+        log('info', 'Pending task resumed via 계속', { threadId: thread.id, pendingLen: pending.prompt.length, checkpoints: pending.checkpoints?.length ?? 0 });
       }
       // 프롬프트 앞에 컨텍스트 주입 (세션 요약 → pending task → 유저 원문 순)
       userPrompt = contextParts.join('\n\n') + '\n\n' + '위 맥락을 바탕으로 중단된 작업을 이어서 진행해줘.';
@@ -832,6 +836,7 @@ ${extracted}
       let needsContinuation = false;
       let hasStreamEvents = false;
       let lastStreamBlockWasTool = false; // 툴 블록 직후 텍스트 개행 삽입용
+      const completedTools = []; // ② 세션 연속성: 완료된 툴 호출 체크포인트
 
       // Phase 2: resume 성공 시에도 이전 요약 주입
       // 조건: resume 세션 존재 && 마지막 활동 30분+ 경과 && 요약 파일 존재
@@ -902,6 +907,11 @@ ${extracted}
             toolCount++;
             const display = getToolDisplay(se.content_block.name || '');
             streamer.updateStatus(display.desc);
+            // ② 세션 연속성: 툴 호출 이름 기록 (최대 20개, 민감 툴 제외)
+            const toolName = se.content_block.name || '';
+            if (toolName && !toolName.includes('secret') && completedTools.length < 20) {
+              completedTools.push(toolName);
+            }
             log('info', `Tool: ${se.content_block.name}`, { threadId: thread.id });
           }
         } else if (event.type === 'assistant') {
@@ -1023,12 +1033,22 @@ ${extracted}
       try { writeFileSync(join(_BOT_HOME, 'state', 'last-active-channel'), thread.id); } catch { /* best effort */ }
       // active-session 파일 삭제는 finally 블록에서 통합 처리 (예외 경로 포함)
 
+      // pending-oauth-restart 체크 — 마지막 세션 완료 시 graceful restart
+      if (activeProcesses.size === 0) {
+        const pendingOauthRestart = join(_BOT_HOME, 'state', 'pending-oauth-restart');
+        if (existsSync(pendingOauthRestart)) {
+          try { rmSync(pendingOauthRestart, { force: true }); } catch { /* ok */ }
+          log('info', 'Pending OAuth restart: last session completed, restarting in 5s');
+          setTimeout(() => process.kill(process.pid, 'SIGTERM'), 5000);
+        }
+      }
+
       // Loop ended without result event
       if (!streamer.finalized && !retryNeeded && !needsContinuation) {
         if (aborted && killReason !== 'restart') {
           // 진짜 10분 타임아웃만 메시지 출력. 새 메시지로 인한 재시작 취소는 무음 처리.
           streamer.append('\n\n' + t('msg.timeout'));
-          _savePendingTask(sessionKey, originalPrompt);
+          _savePendingTask(sessionKey, originalPrompt, completedTools);
         } else if (streamer.hasRealContent && toolCount > 0) {
           streamer.append('\n\n' + t('msg.truncated'));
         }

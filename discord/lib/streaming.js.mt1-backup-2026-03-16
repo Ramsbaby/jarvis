@@ -350,9 +350,7 @@ export class StreamingMessage {
     if (!text || text.length === 0) return;
     this.hasRealContent = true;
     this.buffer += text;
-    // 2초마다 Discord edit 발동 (타이핑 효과 스트리밍)
-    this._scheduleFlush();
-    // 버퍼가 Discord 한도 초과 시 즉시 분할 전송
+    // A형: 버퍼에만 쌓고 Discord edit 안 함. 버퍼가 Discord 한도 초과 시에만 분할 전송.
     if (this.buffer.length >= STREAM_MAX_CHARS) {
       this._flush();
     }

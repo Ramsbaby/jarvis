@@ -70,7 +70,7 @@ case "$TASK_ID" in
     # 22:30 / 23:00 집중 완화
     record-daily)     _jitter=120 ;;
     council-insight)  _jitter=30  ;;
-    # dev-event-watcher: 제거됨 (2026-03-16, 미사용 잔재)
+    dev-event-watcher) _jitter=45 ;;
 esac
 if [[ "$_jitter" -gt 0 ]]; then
     sleep "$_jitter"
@@ -92,26 +92,6 @@ if [[ "$(echo "$TASK_CONFIG" | jq -r '.disabled // false')" == "true" ]]; then
 fi
 
 PROMPT=$(echo "$TASK_CONFIG" | jq -r '.prompt')
-BYPASS_RAG=$(echo "$TASK_CONFIG" | jq -r '.bypassRag // false')
-CONTEXT_FILE_NAME=$(echo "$TASK_CONFIG" | jq -r '.contextFile // empty')
-
-# LT-2: bypassRag=true 이면 contextFile 내용을 프롬프트에 직접 주입 (Read 툴 호출 생략)
-if [[ "$BYPASS_RAG" == "true" && -n "$CONTEXT_FILE_NAME" ]]; then
-    _ctx_path="${BOT_HOME}/context/${CONTEXT_FILE_NAME}"
-    if [[ -f "$_ctx_path" ]]; then
-        _ctx_content=$(cat "$_ctx_path")
-        PROMPT="[컨텍스트 직접 주입: ${CONTEXT_FILE_NAME}]
-
-${_ctx_content}
-
----
-
-${PROMPT}"
-        log "RAG bypass: ${CONTEXT_FILE_NAME} injected ($(wc -c < "$_ctx_path" | tr -d ' ') bytes)"
-        unset _ctx_path _ctx_content
-    fi
-fi
-
 ALLOWED_TOOLS=$(echo "$TASK_CONFIG" | jq -r '.allowedTools // "Read"')
 TIMEOUT=$(echo "$TASK_CONFIG" | jq -r '.timeout // 180')
 MAX_BUDGET=$(echo "$TASK_CONFIG" | jq -r '.maxBudget // empty')
@@ -121,7 +101,6 @@ MODEL=$(echo "$TASK_CONFIG" | jq -r '.model // empty')
 DISCORD_CHANNEL=$(echo "$TASK_CONFIG" | jq -r '.discordChannel // empty')
 REQUIRES_MARKET=$(echo "$TASK_CONFIG" | jq -r '.requiresMarket // false')
 ALLOW_EMPTY_RESULT=$(echo "$TASK_CONFIG" | jq -r '.allowEmptyResult // false')
-SUCCESS_PATTERN=$(echo "$TASK_CONFIG" | jq -r '.successPattern // empty')
 SCRIPT=$(echo "$TASK_CONFIG" | jq -r '.script // empty')
 SCRIPT_ARGS=$(echo "$TASK_CONFIG" | jq -r '.scriptArgs // "daily"')
 # output is a JSON array like ["discord","file"]
@@ -162,7 +141,7 @@ if [[ -f "$_CB_FILE" ]]; then
     _cb_last_fail=$(python3 -c "import json; d=json.load(open('$_CB_FILE')); print(d.get('last_fail_ts',0))" 2>/dev/null || echo 0)
 fi
 _cb_now=$(date +%s)
-_CB_COOLDOWN=$(echo "$TASK_CONFIG" | jq -r '.circuitBreakerCooldown // 3600')  # 태스크별 설정 가능, 기본 60분
+_CB_COOLDOWN=3600  # 60분 쿨다운
 if [[ "$_cb_fail" -ge 3 ]] && (( _cb_now - _cb_last_fail < _CB_COOLDOWN )); then
     _cb_remaining=$(( _CB_COOLDOWN - (_cb_now - _cb_last_fail) ))
     log "SKIPPED — circuit breaker OPEN (연속 ${_cb_fail}회 실패, 쿨다운 ${_cb_remaining}s 남음)"
@@ -192,13 +171,6 @@ else
     RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL") || EXIT_CODE=$?
 fi
 
-if [[ $EXIT_CODE -ne 0 ]]; then
-    # successPattern: 출력에 패턴이 있으면 exit code 무시하고 성공 처리
-    if [[ -n "$SUCCESS_PATTERN" ]] && echo "$RESULT" | grep -qF "$SUCCESS_PATTERN"; then
-        log "SUCCESS (exit=${EXIT_CODE} overridden by successPattern match)"
-        EXIT_CODE=0
-    fi
-fi
 if [[ $EXIT_CODE -ne 0 ]]; then
     "$BOT_HOME/bin/lounge-announce.sh" "$TASK_ID" "--done" 2>/dev/null || true
     log "FAILED (exit: $EXIT_CODE)"

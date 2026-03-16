@@ -108,10 +108,20 @@ JSEOF
 
 log "✅ 갱신 완료 — 새 만료: $(node -e "process.stdout.write(new Date(${NEW_EXPIRES_AT}).toISOString())")"
 
-# 봇이 구 토큰을 쓰고 있었다면 재시작
+# 봇 재시작 — 활성 세션 중이면 대화 완료 후 재시작 (graceful defer)
+ACTIVE_SESSION_FILE="${BOT_HOME}/state/active-session"
+PENDING_RESTART_FILE="${BOT_HOME}/state/pending-oauth-restart"
+
 if $IS_MACOS && launchctl list ai.jarvis.discord-bot &>/dev/null; then
-  log "봇 재시작 (새 토큰 반영)"
-  launchctl kickstart -k "gui/$(id -u)/ai.jarvis.discord-bot" &>/dev/null || true
+  if [[ -f "$ACTIVE_SESSION_FILE" ]]; then
+    # 활성 세션 진행 중 → 즉시 kill 금지. 마커 남기고 봇이 스스로 재시작하도록 위임
+    log "활성 세션 감지 — 재시작 보류 (pending-oauth-restart 마커 기록)"
+    touch "$PENDING_RESTART_FILE"
+  else
+    # 유휴 상태 → graceful restart (15초 딜레이, 현재 응답 전송 보장)
+    log "봇 재시작 (새 토큰 반영 — graceful)"
+    bash "${BOT_HOME}/scripts/bot-self-restart.sh" "OAuth 토큰 갱신" >> "${LOG}" 2>&1 &
+  fi
 elif ! $IS_MACOS; then
   log "봇 재시작 (새 토큰 반영 — pm2)"
   pm2 restart discord-bot 2>/dev/null || true

@@ -78,10 +78,8 @@ export function processFeedback(userId, text) {
     _syncUserMemoryMarkdown(userId).catch((e) => log('warn', 'processFeedback: RAG sync failed', { userId, error: e.message }));
   } else if (fb.type === 'correction' && fb.fact) {
     const data = userMemory.get(userId);
-    // corrections는 string(레거시) 또는 {text, addedAt} 혼용 허용 (하위 호환)
-    const normalizeCorr = (c) => (typeof c === 'string' ? c : c?.text ?? '');
-    if (!data.corrections.some(c => normalizeCorr(c) === fb.fact)) {
-      data.corrections.push({ text: fb.fact, addedAt: new Date().toISOString() });
+    if (!data.corrections.includes(fb.fact)) {
+      data.corrections.push(fb.fact);
       data.updatedAt = new Date().toISOString();
       const usersDir = join(process.env.BOT_HOME || join(homedir(), '.jarvis'), 'state', 'users');
       mkdirSync(usersDir, { recursive: true });

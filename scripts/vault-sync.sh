@@ -259,6 +259,37 @@ if [[ -d "$DECISIONS_DIR" ]]; then
 fi
 
 
+# --- 9. CEO 다이제스트 → Vault/00-ceo/weekly/ ---
+CEO_VAULT="$VAULT_BASE/00-ceo/weekly"
+mkdir -p "$CEO_VAULT"
+for digest_file in "$REPORTS_DIR"/ceo-digest-*.md; do
+    if [[ ! -f "$digest_file" ]]; then continue; fi
+    if [[ ! -s "$digest_file" ]]; then continue; fi
+    filename="$(basename "$digest_file")"
+    dest="$CEO_VAULT/$filename"
+    if [[ -f "$dest" ]] && [[ "$dest" -nt "$digest_file" ]]; then continue; fi
+    if copy_with_frontmatter "$digest_file" "$dest" "ceo-digest" 2>/dev/null; then
+        synced=$((synced + 1))
+    fi
+done
+
+# CHANGELOG → Vault/00-ceo/changelog.md
+CHANGELOG_SRC="$BOT_HOME/CHANGELOG.md"
+if [[ -f "$CHANGELOG_SRC" ]]; then
+    CHANGELOG_DEST="$VAULT_BASE/00-ceo/changelog.md"
+    today="$(date '+%Y-%m-%d')"
+    {
+        echo "---"
+        echo 'title: "Jarvis Changelog"'
+        echo "tags: [area/ceo, type/reference]"
+        echo "created: 2026-03-16"
+        echo "updated: ${today}"
+        echo "---"
+        echo ""
+        cat "$CHANGELOG_SRC"
+    } > "$CHANGELOG_DEST" 2>/dev/null && synced=$((synced + 1))
+fi
+
 log "Sync complete: ${synced} files synced, ${pruned} old reports pruned"
 
 # --- Auto-commit to git (if changes exist) ---

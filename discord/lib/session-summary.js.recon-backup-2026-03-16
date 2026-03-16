@@ -165,7 +165,7 @@ export async function compactSessionWithAI(sessionKey) {
     const stdout = await new Promise((resolve, reject) => {
       const proc = spawn(
         claudeBinary,
-        ['--model', 'claude-haiku-4-5-20251015', '--output-format', 'text', '--dangerously-skip-permissions'],
+        ['--model', 'claude-haiku-4-5', '--output-format', 'text', '--dangerously-skip-permissions'],
         {
           timeout: 60_000,
           stdio: ['pipe', 'pipe', 'pipe'],
