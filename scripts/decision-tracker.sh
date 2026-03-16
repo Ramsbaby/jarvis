@@ -175,7 +175,7 @@ if not dry_run and new_records:
 print(f"[parse] {fname}: {len(new_records)} new decisions parsed (dry_run={dry_run})")
 PYEOF
         new_count=$((new_count + 1))
-    done < <(ls "${RESULTS_DIR}/"${today}_*.md 2>/dev/null || true)
+    done < <(ls "${RESULTS_DIR}/${today}_"*.md 2>/dev/null || true)
 
     echo "[decision-tracker] board-meeting files processed: ${new_count}"
 }

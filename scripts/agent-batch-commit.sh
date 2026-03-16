@@ -92,7 +92,7 @@ cd "${BOT_HOME}"
 CHANGED=false
 for path_pattern in "${STAGE_PATHS[@]}"; do
     # glob이 포함된 경우 eval 없이 처리
-    if git add --dry-run -- ${path_pattern} 2>/dev/null | grep -q .; then
+    if git add --dry-run -- "${path_pattern}" 2>/dev/null | grep -q .; then
         CHANGED=true
         break
     fi
@@ -114,7 +114,7 @@ fi
 if [[ "$DRY_RUN" == "true" ]]; then
     log "INFO" "[dry-run] 아래 파일이 커밋 대상입니다:"
     for path_pattern in "${STAGE_PATHS[@]}"; do
-        git add --dry-run -- ${path_pattern} 2>/dev/null || true
+        git add --dry-run -- "${path_pattern}" 2>/dev/null || true
     done
     exit 0
 fi
