@@ -271,10 +271,11 @@ export class RagContextProcessor extends BasePreProcessor {
   }
 
   async enrich(prompt, ctx) {
-    const ragContext = await this.#searchFn(ctx.originalPrompt).catch(() => null);
+    // PAST_REF_PATTERN 매칭 → episodic:true로 discord-history 소스 우선 검색
+    const ragContext = await this.#searchFn(ctx.originalPrompt, 3, { sourceFilter: 'episodic' }).catch(() => null);
     if (!ragContext) return null;
     const ragSnippet = ragContext.length > 600 ? ragContext.slice(0, 600) + '...' : ragContext;
-    log('info', 'RAG injected (past-ref)', { threadId: ctx.threadId, ragLen: ragSnippet.length });
+    log('info', 'RAG injected (past-ref, episodic)', { threadId: ctx.threadId, ragLen: ragSnippet.length });
     return ragSnippet + '\n\n' + prompt;
   }
 }

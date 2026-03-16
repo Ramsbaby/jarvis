@@ -1129,7 +1129,9 @@ ${extracted}
 
       // RAG re-inject on retry: skip for Preply queries (data already pre-injected)
       if (!isPreplyQuery(originalPrompt)) {
-        const ragContext = await searchRagForContext(originalPrompt).catch(() => null);
+        // PAST_REF_PATTERN 감지 시 episodic 모드로 discord-history 우선 검색
+        const isEpisodic = PAST_REF_PATTERN.test(originalPrompt);
+        const ragContext = await searchRagForContext(originalPrompt, 3, isEpisodic ? { sourceFilter: 'episodic' } : {}).catch(() => null);
         if (ragContext) {
           const ragSnippet = ragContext.length > 600 ? ragContext.slice(0, 600) + '...' : ragContext;
           userPrompt = ragSnippet + '\n\n' + userPrompt;

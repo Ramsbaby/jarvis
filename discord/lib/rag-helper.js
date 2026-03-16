@@ -82,12 +82,13 @@ async function getRagEngine() {
  * @param {number} [limit=3] - Max results
  * @returns {Promise<string>} Formatted context block or empty string
  */
-export async function searchRagForContext(query, limit = 3) {
+export async function searchRagForContext(query, limit = 3, opts = {}) {
   const engine = await getRagEngine();
   if (!engine) return '';
   try {
     // limit * 2 로 여유 있게 검색한 뒤 개발 문서 필터링 후 limit 적용
-    const rawResults = await engine.search(query, limit * 2);
+    // opts.episodic=true 시 discord-history 소스 우선 검색 (에피소딕 메모리)
+    const rawResults = await engine.search(query, limit * 2, opts);
     if (!rawResults || rawResults.length === 0) return '';
 
     const results = filterDevSources(rawResults).slice(0, limit);
