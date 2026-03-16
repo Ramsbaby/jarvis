@@ -9,11 +9,11 @@ source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 
 LOG_FILE="${BOT_HOME}/logs/boot-auth-check.log"
 MONITORING_CONFIG="${BOT_HOME}/config/monitoring.json"
-BOOT_WAIT_SECONDS=60
+BOOT_WAIT_SECONDS=120
 
-log_info() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $*" | tee -a "$LOG_FILE"; }
-log_warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $*" | tee -a "$LOG_FILE"; }
-log_error() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" | tee -a "$LOG_FILE"; }
+log_info() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: $*"; }
+log_warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $*"; }
+log_error() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*"; }
 
 send_ntfy_alert() {
     local msg="$1"
@@ -43,18 +43,19 @@ main() {
     log_info "부팅 후 인증 검증 시작 — ${BOOT_WAIT_SECONDS}초 대기 중..."
     sleep "$BOOT_WAIT_SECONDS"
 
-    # 네트워크 연결 확인 (게이트웨이 ping)
+    # 네트워크 연결 확인 (macOS 네이티브 네트워크 상태 — 외부 ping 불필요)
     local retry=0
-    while ! ping -c 1 -t 5 8.8.8.8 >/dev/null 2>&1; do
+    local max_retries=60  # 5초×60회 = 최대 5분
+    while ! scutil --nwi 2>/dev/null | grep -q "Network reachable"; do
         retry=$((retry + 1))
-        if [[ $retry -ge 6 ]]; then
-            log_error "네트워크 연결 실패 (30초×6회). 알림 전송."
+        if [[ $retry -ge $max_retries ]]; then
+            log_error "네트워크 연결 실패 (5초×${max_retries}회). 알림 전송."
             send_ntfy_alert "🔴 맥미니 부팅 후 네트워크 연결 실패. 확인 필요."
             send_discord_alert "🔴 **[boot-auth-check]** 부팅 후 네트워크 연결 실패."
             exit 1
         fi
-        log_warn "네트워크 대기 중... (${retry}/6)"
-        sleep 30
+        log_warn "네트워크 대기 중... (${retry}/${max_retries})"
+        sleep 5
     done
     log_info "네트워크 정상"
 

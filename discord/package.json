@@ -15,10 +15,11 @@
     "@lancedb/lancedb": "~0.26.2",
     "@modelcontextprotocol/sdk": "~1.27.1",
     "@modelcontextprotocol/server-github": "^2025.4.8",
+    "@xenova/transformers": "^2.17.2",
     "apache-arrow": "~18.1.0",
     "better-sqlite3": "~12.6.2",
     "chokidar": "~5.0.0",
-    "discord.js": "^13.17.1",
+    "discord.js": "^14.25.1",
     "dotenv": "~16.6.1",
     "openai": "~6.29.0",
     "yaml": "~2.8.2"
