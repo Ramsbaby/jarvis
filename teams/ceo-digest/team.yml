@@ -1,6 +1,6 @@
 name: "CEO 다이제스트 (CEO Digest)"
-taskId: ceo-weekly-digest
+taskId: ceo-daily-digest
 discord: jarvis-ceo
-maxTurns: 20
-model: large
+maxTurns: 15
+model: medium
 tools: [Read, Write, Bash, Glob]
