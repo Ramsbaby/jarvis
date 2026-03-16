@@ -34,6 +34,7 @@ log "Starting ${MEETING_TYPE} board meeting"
 TODAY="$(date +%F)"
 # cron.log 기반 성공률 계산 (최근 7일, YYYY-MM-DD 형식 비교)
 CRON_LOG="${BOT_HOME}/logs/cron.log"
+# shellcheck disable=SC2086  # seq 출력은 단어분리 의도적 사용
 SEVEN_DAYS_PATTERN=$(for i in $(seq 0 6); do date -v-${i}d '+%Y-%m-%d' 2>/dev/null || date -d "-${i} days" '+%Y-%m-%d' 2>/dev/null; done | tr '\n' '|' | sed 's/|$//')
 CRON_SUCCESS=0
 CRON_FAIL=0
@@ -358,7 +359,7 @@ llm_call \
     --timeout 300 \
     --allowed-tools "Read,Bash,Write" \
     --max-budget "1.20" \
-    --model "claude-sonnet-4-20250514" \
+    --model "claude-sonnet-4-6" \
     --mcp-config "${BOT_HOME}/config/empty-mcp.json" \
     --output "$CLAUDE_OUTPUT_TMP" \
     2>"$STDERR_LOG" || CLAUDE_EXIT=$?
