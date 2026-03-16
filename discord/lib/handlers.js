@@ -1033,12 +1033,22 @@ ${extracted}
       try { writeFileSync(join(_BOT_HOME, 'state', 'last-active-channel'), thread.id); } catch { /* best effort */ }
       // active-session 파일 삭제는 finally 블록에서 통합 처리 (예외 경로 포함)
 
-      // pending-oauth-restart 체크 — 마지막 세션 완료 시 graceful restart
+      // 보류 중인 재시작 체크 — 마지막 세션 완료 시 graceful restart
       if (activeProcesses.size === 0) {
         const pendingOauthRestart = join(_BOT_HOME, 'state', 'pending-oauth-restart');
+        const pendingDeploymentRestart = join(_BOT_HOME, 'state', 'pending-deployment-restart');
+
         if (existsSync(pendingOauthRestart)) {
           try { rmSync(pendingOauthRestart, { force: true }); } catch { /* ok */ }
           log('info', 'Pending OAuth restart: last session completed, restarting in 5s');
+          setTimeout(() => process.kill(process.pid, 'SIGTERM'), 5000);
+        } else if (existsSync(pendingDeploymentRestart)) {
+          let reason = 'deployment';
+          try {
+            reason = readFileSync(pendingDeploymentRestart, 'utf-8').trim() || reason;
+            rmSync(pendingDeploymentRestart, { force: true });
+          } catch { /* ok */ }
+          log('info', 'Pending deployment restart: last session completed, restarting in 5s', { reason });
           setTimeout(() => process.kill(process.pid, 'SIGTERM'), 5000);
         }
       }

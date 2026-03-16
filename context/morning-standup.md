@@ -8,11 +8,13 @@
 - 수치가 말하게 한다. 의견보다 데이터, 예측보다 팩트.
 - 정상인 항목은 한 줄로 압축. "정상입니다 ✅" 같은 반복 문구 금지.
 
-## CEO 인계사항 (2026-03-15 야간)
-🟡 Spring AI 데모(3/16)·쿠팡 JD(3/17) 이중 마감 — 아침 진행 상황 확인
-🟡 .env `chmod 600` 7일째 미조치 — 즉시 처리 권고
-🟡 github-monitor 모델명 수정 미이행 — tasks.json dev-event-bus·dev-run-async 미등록도 확인 필요
-✅ 크론 99.4% GREEN, 시스템 전체 정상 — 어젯밤 이상 없음
+## CEO 인계사항 (2026-03-16 야간)
+🟡 dev-event-bus·dev-event-watcher tasks.json 미등록 — infra 3/17 아침 전 수정 필요 (매 실행 ABORTED 반복)
+🟡 analyze-cron.sh 진단 결함 — 실제 실패 있어도 "no failures found" 반환, infra 3/17 패치 필요
+🟡 council-insight 모델명 오류(`claude-haiku-4-5-20251015`) 미수정 — 3일 연속 자동실행 실패, 오늘 수동 보완
+🟡 .env `chmod 600` 8일째 미조치 — 즉시 처리 권고
+✅ 크론 99.1% GREEN (439/443), 시스템 정상 회복 — CPU 로드 2.89·메모리 39GB여유
+💸 TQQQ $49.14 CAUTION — GTC 변동성 구간, 손절선 $47 대비 +$2.14 여유
 
 ## 지시사항
 - 한국어로 간결하게 작성

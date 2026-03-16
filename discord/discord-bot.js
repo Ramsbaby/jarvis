@@ -499,7 +499,7 @@ async function shutdown(signal) {
         if (existsSync(pendingPath)) {
           try { tasks = JSON.parse(readFileSync(pendingPath, 'utf-8')); } catch { tasks = {}; }
         }
-        tasks[entry.sessionKey] = { prompt: entry.originalPrompt, savedAt: Date.now() };
+        tasks[entry.sessionKey] = { prompt: entry.originalPrompt, savedAt: Date.now(), checkpoints: [] };
         const pendingTmp = `${pendingPath}.tmp`;
         writeFileSync(pendingTmp, JSON.stringify(tasks));
         renameSync(pendingTmp, pendingPath);
@@ -577,7 +577,7 @@ process.on('uncaughtException', (err) => {
     }
     for (const [, entry] of activeProcesses) {
       if (entry.originalPrompt && entry.sessionKey) {
-        tasks[entry.sessionKey] = { prompt: entry.originalPrompt, savedAt: Date.now() };
+        tasks[entry.sessionKey] = { prompt: entry.originalPrompt, savedAt: Date.now(), checkpoints: [] };
       }
     }
     if (Object.keys(tasks).length > 0) {

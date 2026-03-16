@@ -96,7 +96,8 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
 
     # INC-1/2 안전장치: exit=1이지만 Discord 전송 성공(sent id=) 시 success로 강제
     # council-insight, dev-run-async에서 SDK 내부 exit=1이지만 기능은 성공한 케이스 대응
-    if [[ "$exit_code" -eq 1 && -f "$RESULT_TMP" ]] && grep -qE "sent id=[0-9]+" "$RESULT_TMP" 2>/dev/null; then
+    # 패턴 확장: "sent id=" 또는 "sent id =" (공백 포함) 대응
+    if [[ "$exit_code" -eq 1 && -f "$RESULT_TMP" ]] && grep -qE "sent\s+id\s*=" "$RESULT_TMP" 2>/dev/null; then
         classification="success"
         printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"override":"exit1_but_sent_id_found"}\n' \
             "$(date -u +%FT%TZ)" "$TASK_ID" "$attempt" >> "$RETRY_LOG"
@@ -257,6 +258,15 @@ if [[ "$FAIL_CLASS" == "UNKNOWN" && -f "$RESULT_TMP" ]]; then
     if grep -qiE "rate.limit|429|hit your limit|you've hit|usage limit|too many" "$RESULT_TMP" 2>/dev/null; then
         FAIL_CLASS="RATE_LIMIT"
     fi
+fi
+
+# 최후의 안전장치: RESULT_TMP에서 "sent id=" 발견 시 SUCCESS로 강제 전환 (exit=1 무시)
+# MT-3 버그: exit code 대신 출력 내용 기반 성공 판정 추가
+if [[ "$exit_code" -eq 1 && "$FAIL_CLASS" == "UNKNOWN" && -f "$RESULT_TMP" ]] && grep -qE "sent\s+id\s*=" "$RESULT_TMP" 2>/dev/null; then
+    printf '{"timestamp":"%s","task_id":"%s","output_contains_sent_id":"forced_success"}\n' \
+        "$(date -u +%FT%TZ)" "$TASK_ID" >> "$RETRY_LOG"
+    cat "$RESULT_TMP"
+    exit 0
 fi
 
 # Log to cron.log with failure classification
