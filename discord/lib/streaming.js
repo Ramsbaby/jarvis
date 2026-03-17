@@ -205,6 +205,7 @@ export class StreamingMessage {
     this._isPlaceholder = false;
     this._flushing = false;
     this._flushDone = null;   // Promise | null — 진행 중인 flush 완료 신호
+    this._finalizeComplete = false; // 진정한 멱등성: 두 번째 finalize() 호출 방지
     // 보람 채널 등 quiet 채널: tool 상태 표시 생략
     const quietIds = (process.env.QUIET_CHANNEL_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
     this._isQuiet = channelId ? quietIds.includes(channelId) : false;
@@ -488,6 +489,10 @@ export class StreamingMessage {
   }
 
   async finalize() {
+    // 멱등성 보장: 비활성 타임아웃 등 이중 호출 시 두 번째는 no-op
+    // (this.finalized는 _sendOrEdit 커서 표시에 여전히 사용되므로 별도 플래그 사용)
+    if (this._finalizeComplete) return;
+    this._finalizeComplete = true;
     this.finalized = true;
     if (this.timer) {
       clearTimeout(this.timer);

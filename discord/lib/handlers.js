@@ -1083,6 +1083,7 @@ ${extracted}
       log('info', 'Retrying Claude with fresh session', { threadId: thread.id });
       sessionId = null;
       streamer.finalized = false;
+      streamer._finalizeComplete = false;
       streamer.buffer = '';
       streamer.sentLength = 0;
       streamer.hasRealContent = false;

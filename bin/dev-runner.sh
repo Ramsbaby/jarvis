@@ -11,7 +11,9 @@ set -euo pipefail
 #   - completionCheck에 문법 검증 포함 권장
 #   - 비정상 종료 시 running → queued 자동 복구 (trap)
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# JARVIS_HOME → BOT_HOME 우선순위: 환경변수 JARVIS_HOME > BOT_HOME > 스크립트 상대경로
+JARVIS_HOME="${JARVIS_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-$JARVIS_HOME}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/compat.sh" 2>/dev/null || true
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
@@ -30,6 +32,20 @@ _log() {
     echo "[$(date '+%F %T')] [dev-runner] $1" >> "$DEV_LOG"
 }
 
+# --- Discord 긴급 알림 (webhook 직접 호출, Nexus 의존 없음) ---
+_discord_alert() {
+    local msg="$1"
+    local monitoring_config="${BOT_HOME}/config/monitoring.json"
+    local webhook_url
+    webhook_url=$(jq -r '.webhooks["jarvis"] // empty' "$monitoring_config" 2>/dev/null || true)
+    if [[ -n "${webhook_url:-}" ]]; then
+        local payload; payload=$(jq -n --arg m "$msg" '{content: $m}')
+        curl -sS -X POST "$webhook_url" \
+            -H "Content-Type: application/json" \
+            -d "$payload" > /dev/null 2>&1 || true
+    fi
+}
+
 # --- tasks.db 상태 전이 ---
 update_queue() {
     local task_id="$1"
@@ -39,7 +55,11 @@ update_queue() {
     local _uq_out
     _uq_out=$(${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" \
         transition "$task_id" "$new_status" "bash" "$extra_json" 2>&1) || {
+        local _err_msg="⚠️ **dev-runner**: \`update_queue\` 실패 (task=\`${task_id}\`, status=\`${new_status}\`)
+오류: ${_uq_out:0:300}
+수동 확인: \`node task-store.mjs get ${task_id}\`"
         _log "ERROR: update_queue 실패 (task=${task_id}, status=${new_status}): ${_uq_out}"
+        _discord_alert "$_err_msg"
         return 1
     }
 }

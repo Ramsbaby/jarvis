@@ -1175,6 +1175,32 @@
       "priority": "weekly",
       "resultRetention": 90,
       "resultMaxChars": 2000
+    },
+    {
+      "id": "stale-task-watcher",
+      "name": "Stale 태스크 감지 및 자동 전이",
+      "schedule": "*/30 * * * *",
+      "script": "~/.jarvis/scripts/stale-task-watcher.sh",
+      "timeout": 60,
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 1
+      }
+    },
+    {
+      "id": "career-extractor",
+      "name": "커리어 인사이트 자동 추출",
+      "schedule": "30 0 * * *",
+      "script": "~/.jarvis/scripts/career-extractor.mjs",
+      "timeout": 120,
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 2
+      }
     }
   ]
 }

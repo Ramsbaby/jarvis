@@ -850,12 +850,14 @@ export async function* createClaudeSession(prompt, {
           iterResult = graceResult;
         } else {
           log('error', 'createClaudeSession: confirmed inactivity timeout (90s)', { threadId });
-          yield {
-            type: 'result',
-            result: '요청 처리 시간이 초과되었습니다 (90초). 잠시 후 다시 시도해주세요.',
-            is_error: true,
-            error: 'Session inactivity timeout (90s)',
-          };
+          if (!signal?.aborted) {
+            yield {
+              type: 'result',
+              result: '요청 처리 시간이 초과되었습니다 (90초). 잠시 후 다시 시도해주세요.',
+              is_error: true,
+              error: 'Session inactivity timeout (90s)',
+            };
+          }
           break;
         }
       }

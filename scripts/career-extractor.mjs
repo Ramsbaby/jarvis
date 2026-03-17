@@ -13,8 +13,8 @@
  *   Vault/05-career/job-tracker.md          ← 누적 지원 현황
  */
 
-import { execSync, spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -40,11 +40,13 @@ const outputFile  = join(CAREER_DIR,  `${targetDate}-career.md`);
 
 // ── 로깅 ────────────────────────────────────────────────────────────────────
 function log(msg) {
-  const line = `[${new Date().toISOString()}] career-extractor: ${msg}`;
-  console.log(line);
+  const line = `[${new Date().toISOString()}] career-extractor: ${msg}\n`;
+  process.stdout.write(line);
   try {
-    execSync(`echo '${line.replace(/'/g, "\\'")}' >> '${LOG_FILE}'`);
-  } catch {}
+    appendFileSync(LOG_FILE, line, 'utf-8');
+  } catch (e) {
+    process.stderr.write(`[log write failed] ${e.message}\n`);
+  }
 }
 
 // ── discord history 파싱: jarvis-blog 섹션만 추출 ───────────────────────────
@@ -106,7 +108,7 @@ ${blogContent}`;
     ],
     {
       env: { ...process.env, ANTHROPIC_API_KEY: '', CLAUDECODE: '' },
-      timeout: 120_000,
+      timeout: 180_000,
       maxBuffer: 4 * 1024 * 1024,
     }
   );
