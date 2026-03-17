@@ -5,8 +5,7 @@
   <a href="https://github.com/Ramsbaby/claude-discord-bridge/stargazers">
     <img src="https://img.shields.io/github/stars/Ramsbaby/claude-discord-bridge?style=flat-square" alt="Stars">
   </a>
-  <img src="https://img.shields.io/badge/cost-$0%2Fmonth_extra-brightgreen?style=flat-square" alt="$0/month">
-  <img src="https://img.shields.io/badge/E2E_tests-60-brightgreen?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/cost-$0%2Fmonth_extra-brightgreen?style=flat-square" alt="$0/month extra">
   <img src="https://img.shields.io/badge/context_compression-98%25-blueviolet?style=flat-square" alt="98% compression">
   <img src="https://img.shields.io/badge/session_length-3%2B_hours-blue?style=flat-square" alt="3+ hours">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
@@ -140,7 +139,6 @@ See [docs/OPERATIONS.md](docs/OPERATIONS.md) for the full cron schedule and moni
 | RAG / memory | **LanceDB hybrid** | ❌ | ❌ | plugin-dependent |
 | Self-healing | **4-layer AI recovery** | ❌ | ❌ | varies |
 | Live uptime data | **99.7% / 2 months** | ❌ | ❌ | ❌ |
-| E2E tests | **60 automated** | ❌ | ✅ vitest | partial |
 | Docker | ✅ | ✅ | ❌ | varies |
 
 **Key differentiator:** Every other Discord+Claude project is a *remote control* for Claude Code. This is a *full AI operations system* — teams with roles, schedules, memory, and self-healing infrastructure.
@@ -226,7 +224,7 @@ Copy from `config/tasks.json.example` to get started with 3 example tasks.
 ├── bin/              # Entry points: ask-claude.sh, bot-cron.sh, etc.
 ├── lib/              # Core: rag-engine, mcp-nexus, llm-gateway
 ├── config/           # tasks.json, monitoring.json, anti-patterns.json
-├── scripts/          # Watchdog, auditor, vault-sync, KPI, E2E tests
+├── scripts/          # Watchdog, auditor, vault-sync, KPI, local E2E suite
 ├── teams/            # 11 team definitions (YAML + system prompts)
 ├── plugins/          # File-convention plugin system
 ├── context/          # Per-task background knowledge
@@ -269,7 +267,7 @@ Copy from `config/tasks.json.example` to get started with 3 example tasks.
 ```bash
 git clone https://github.com/Ramsbaby/claude-discord-bridge
 # make changes
-bash scripts/e2e-test.sh   # → 60 passed, 0 failed
+bash scripts/e2e-test.sh   # local production validation (requires running bot)
 # submit a pull request
 ```
 
