@@ -1,9 +1,14 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/cost-$0%2Fmonth-brightgreen?style=flat-square" alt="$0/month">
-  <img src="https://img.shields.io/badge/E2E_tests-57-brightgreen?style=flat-square" alt="Tests">
+  <a href="https://github.com/Ramsbaby/claude-discord-bridge/actions/workflows/ci.yml">
+    <img src="https://github.com/Ramsbaby/claude-discord-bridge/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+  <a href="https://github.com/Ramsbaby/claude-discord-bridge/stargazers">
+    <img src="https://img.shields.io/github/stars/Ramsbaby/claude-discord-bridge?style=flat-square" alt="Stars">
+  </a>
+  <img src="https://img.shields.io/badge/cost-$0%2Fmonth_extra-brightgreen?style=flat-square" alt="$0/month">
+  <img src="https://img.shields.io/badge/E2E_tests-60-brightgreen?style=flat-square" alt="Tests">
   <img src="https://img.shields.io/badge/context_compression-98%25-blueviolet?style=flat-square" alt="98% compression">
   <img src="https://img.shields.io/badge/session_length-3%2B_hours-blue?style=flat-square" alt="3+ hours">
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey?style=flat-square" alt="Platform">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
 </p>
 
@@ -20,6 +25,25 @@
 <p align="center">
   <img src="docs/demo.gif" alt="Jarvis demo" width="700">
 </p>
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/Ramsbaby/claude-discord-bridge ~/.jarvis
+cd ~/.jarvis
+cp discord/.env.example discord/.env
+# edit discord/.env with your Discord token + Guild ID
+node discord/discord-bot.js
+```
+
+For persistent 24/7 operation on macOS:
+```bash
+launchctl load ~/Library/LaunchAgents/ai.discord-bot.plist
+```
+
+→ See [discord/SETUP.md](discord/SETUP.md) for the full step-by-step guide.
 
 ---
 
@@ -99,54 +123,44 @@ See [docs/OPERATIONS.md](docs/OPERATIONS.md) for the full cron schedule and moni
 
 ---
 
-## vs. the Alternatives
+## vs. Similar Projects
 
-| | **This bot** | **Clawdbot** (60K ⭐) | **Typical API bot** |
-|---|---|---|---|
-| AI cost | **$0 extra** | ~$36+/mo | $5 – $50+/mo |
-| Behavior | **Proactive** (45 cron + 12 teams) | Reactive only | Reactive only |
-| Context mgmt | **Nexus CIG** (98% compression) | None / basic | Basic |
-| RAG / memory | LanceDB (vector + BM25 hybrid) | Rarely | Plugin-dependent |
-| Self-healing | 4-layer watchdog + AI auto-recovery | Manual restart | Varies |
-| E2E tests | **57** automated checks | Rare | Partial |
+|  | **This bot** | [zebbern/ccd](https://github.com/zebbern/claude-code-discord) | [chadingTV/ccd](https://github.com/chadingTV/claudecode-discord) | Typical API bot |
+|---|---|---|---|---|
+| AI cost | **$0 extra** | API key needed | $0 extra | $5–$50+/mo |
+| Proactive automation | **45 crons + 12 teams** | ❌ reactive only | ❌ reactive only | ❌ |
+| Context compression | **Nexus CIG (98%)** | ❌ | ❌ | ❌ |
+| RAG / memory | **LanceDB hybrid** | ❌ | ❌ | plugin-dependent |
+| Self-healing | **4-layer AI recovery** | ❌ | ❌ | varies |
+| Live uptime data | **99.7% / 2 months** | ❌ | ❌ | ❌ |
+| E2E tests | **60 automated** | ❌ | ✅ vitest | partial |
+| Docker | ✅ | ✅ | ❌ | varies |
+
+**Key differentiator:** Every other Discord+Claude project is a *remote control* for Claude Code. This is a *full AI operations system* — teams with roles, schedules, memory, and self-healing infrastructure.
 
 ---
 
-## Quick Start
+## Architecture
 
-### Prerequisites
-
-- **Node.js ≥ 20** — `node -v`
-- **Claude Code CLI** — `npm install -g @anthropic-ai/claude-code`
-- **Claude Max subscription** — required for `claude -p` headless mode
-- **Discord bot token** — [Discord Developer Portal](https://discord.com/developers/applications)
-
-### Option A: Docker
-
-```bash
-git clone https://github.com/YOUR_USERNAME/jarvis ~/.jarvis
-cd ~/.jarvis
-cp discord/.env.example discord/.env
-# → edit discord/.env with your tokens
-docker compose up -d
+```
+Discord msg → discord-bot.js → claude-runner.js (Agent SDK)
+                                       │
+                                 Nexus CIG (MCP)
+                                 98% compression
+                                       │
+                              formatForDiscord()
+                                       │
+                              Discord thread reply
+                                       │
+                              RAG index (LanceDB)
 ```
 
-### Option B: Local (macOS / Linux)
+**Key components:**
+- **Nexus CIG** — MCP server that compresses tool output before context (315 KB → 5.4 KB)
+- **Self-healing** — 4-layer recovery (preflight → launchd → watchdog → guardian)
+- **12 AI teams** — Virtual organization with Board Meeting + Decision Dispatcher
 
-```bash
-git clone https://github.com/YOUR_USERNAME/jarvis ~/.jarvis
-cd ~/.jarvis
-./install.sh --local
-# edit discord/.env  (copy from discord/.env.example)
-node discord/discord-bot.js
-```
-
-For persistent 24/7 operation on macOS:
-```bash
-launchctl load ~/Library/LaunchAgents/ai.discord-bot.plist
-```
-
-See [discord/SETUP.md](discord/SETUP.md) for the full step-by-step setup.
+For detailed diagrams see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
@@ -180,33 +194,6 @@ NTFY_TOPIC=your_ntfy_topic          # optional: push notifications
 ```
 
 Copy from `config/tasks.json.example` to get started with 3 example tasks.
-
----
-
-## Architecture
-
-High-level message flow:
-
-```
-Discord msg → discord-bot.js → claude-runner.js (Agent SDK)
-                                       │
-                                 Nexus CIG (MCP)
-                                 98% compression
-                                       │
-                              formatForDiscord()
-                                       │
-                              Discord thread reply
-                                       │
-                              RAG index (LanceDB)
-```
-
-**Key components:**
-- **Nexus CIG** — MCP server that compresses tool output before context (315 KB → 5.4 KB)
-- **Self-healing** — 4-layer recovery (preflight → launchd → watchdog → guardian)
-- **12 AI teams** — Virtual organization with Board Meeting + Decision Dispatcher
-
-For detailed diagrams see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-For team details see [docs/TEAMS.md](docs/TEAMS.md).
 
 ---
 
@@ -273,13 +260,26 @@ For team details see [docs/TEAMS.md](docs/TEAMS.md).
 ## Contributing
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/jarvis
+git clone https://github.com/Ramsbaby/claude-discord-bridge
 # make changes
-bash scripts/e2e-test.sh   # → 57 passed, 0 failed
+bash scripts/e2e-test.sh   # → 60 passed, 0 failed
 # submit a pull request
 ```
 
 See [ROADMAP.md](ROADMAP.md) for planned features.
+
+---
+
+## OpenClaw Ecosystem
+
+> Tools for running 24/7 autonomous AI systems:
+
+| Repo | Purpose | Stars |
+|------|---------|-------|
+| ⭐ **claude-discord-bridge** ← you are here | Full AI ops system on Discord | |
+| [openclaw-self-healing](https://github.com/Ramsbaby/openclaw-self-healing) | 4-tier autonomous crash recovery | ⭐ 28 |
+| [openclaw-memorybox](https://github.com/Ramsbaby/openclaw-memorybox) | Memory file hygiene CLI | ⭐ 8 |
+| [openclaw-self-evolving](https://github.com/Ramsbaby/openclaw-self-evolving) | Self-improvement loop framework | |
 
 ---
 
@@ -290,5 +290,6 @@ MIT — see [LICENSE](LICENSE)
 ---
 
 <p align="center">
-  <a href="README.ko.md">한국어 README →</a>
+  <a href="README.ko.md">한국어 README →</a><br><br>
+  If this project is useful, please ⭐ — it helps others discover it.
 </p>
