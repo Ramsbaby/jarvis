@@ -326,7 +326,7 @@ tasks (id PK, status, priority, retries, depends JSON, meta JSON, updated_at)
 task_transitions (task_id, from_status, to_status, triggered_by, created_at)
 ```
 
-- `transition()` wraps UPDATE + INSERT in `db.transaction()` — atomicity guaranteed
+- `transition()` wraps UPDATE + INSERT in `BEGIN/COMMIT/ROLLBACK` — atomicity guaranteed (`node:sqlite` has no `.transaction()` helper)
 - `addTask()` uses `INSERT OR IGNORE` — idempotent, safe to call multiple times
 - Full CLI: `node task-store.mjs [list|pick|get|field|transition|count-queued|export]`
 
