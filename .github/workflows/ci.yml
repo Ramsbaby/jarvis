@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    name: Lint & E2E
+    name: Lint & Syntax
 
     steps:
       - uses: actions/checkout@v4
@@ -30,9 +30,27 @@ jobs:
       - name: Check required files
         run: |
           echo "Checking core files..."
-          test -f discord/discord-bot.js && echo "✅ discord-bot.js"
+          test -f discord/discord-bot.js     && echo "✅ discord-bot.js"
           test -f discord/lib/claude-runner.js && echo "✅ claude-runner.js"
+          test -f install.sh                 && echo "✅ install.sh"
+          test -f discord/.env.example       && echo "✅ .env.example"
           echo "Core file check passed"
+
+      - name: JS syntax check
+        run: |
+          echo "Checking JavaScript syntax..."
+          find discord -name "*.js" -not -path "*/node_modules/*" | while read f; do
+            node --check "$f" && echo "✅ $f" || { echo "❌ $f"; exit 1; }
+          done
+          echo "JS syntax check passed"
+
+      - name: Shell script syntax check
+        run: |
+          echo "Checking shell script syntax..."
+          for f in install.sh setup.sh docker-entrypoint.sh; do
+            [ -f "$f" ] && bash -n "$f" && echo "✅ $f"
+          done
+          echo "Shell syntax check passed"
 
       - name: Validate config examples
         run: |
