@@ -37,7 +37,8 @@ jobs:
       - name: Validate config examples
         run: |
           echo "Validating JSON examples..."
-          for f in config/*.json.example config/*.json 2>/dev/null; do
-            [ -f "$f" ] && python3 -m json.tool "$f" > /dev/null && echo "✅ $f" || true
+          shopt -s nullglob
+          for f in config/*.json.example config/*.json; do
+            python3 -m json.tool "$f" > /dev/null && echo "✅ $f" || true
           done
           echo "Config validation passed"
