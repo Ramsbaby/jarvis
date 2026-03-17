@@ -1,12 +1,59 @@
 # 🔍 자비스 정보탐험 미션 — {{DATE}}
 
-> **최종 목표:** 웹에서 최신 정보를 수집하고, Jarvis를 **직접 업그레이드**한다.
+> **최종 목표:** Jarvis를 **직접 업그레이드**한다.
 > 보고서만 남기는 게 아니라 Quick Win은 이번 실행에서 바로 구현하고 결과를 보고한다.
 > 추측 금지. 실제 검색/확인된 내용만. 확인 불가는 "미확인"으로 표기.
 
 ---
 
-## Phase 1: 정찰 (Scout) — 웹 수집
+## Phase 0: 현황 진단 — 검색 전 필수 (Analyst)
+
+> **검색을 시작하기 전에 Jarvis가 지금 무엇에 어려움을 겪고 있는지 파악합니다.**
+> Phase 0 결과가 Phase 1 검색 키워드에 반영됩니다.
+
+### 0-1. 이전 미완료 항목 로드
+`cat {{BOT_HOME}}/state/recon-tracker.md`
+- 미완료 MT/LT 항목이 있으면 → 이번 실행의 **최우선 과제**
+- CEO 피드백(승인/거절)이 있으면 → 승인된 건 이번에 구현, 거절된 건 제거
+- 반복 발견 패턴 → Phase 1 검색에 집중 영역으로 반영
+
+### 0-2. 실제 시스템 문제 진단
+`grep -i "failed\|error\|timeout\|CRITICAL" {{BOT_HOME}}/logs/cron.log | tail -30`
+`tail -5 {{BOT_HOME}}/state/health.json`
+`cat {{BOT_HOME}}/state/results/system-health/$(ls -t {{BOT_HOME}}/results/system-health/ | head -1) 2>/dev/null | head -20`
+
+수집 결과:
+- 현재 실패 중인 크론 태스크
+- 시스템 이상 징후 (메모리, 디스크, 봇 상태)
+- 최근 24시간 에러 패턴
+
+### 0-3. 대표 지정 관심 영역
+`cat {{BOT_HOME}}/state/recon-search-focus.md`
+- "대표 지정 관심 영역" 섹션에 항목이 있으면 → Phase 1에서 해당 영역 **우선 검색**
+
+### 0-4. 검색 전략 수립
+Phase 0 결과를 종합하여:
+- 🔴 **긴급** — 현재 실패 중인 문제 해결책 검색 (Phase 1에서 최우선)
+- 🟡 **중점** — 이전 MT/LT 후속 + 대표 관심 영역
+- 🟢 **일반** — 정기 스캔 (시간이 남으면)
+
+이 전략을 보고서 상단에 "이번 회차 검색 전략" 섹션으로 기록합니다.
+
+---
+
+## Phase 1: 정찰 (Scout) — 적응형 웹 수집
+
+> Phase 0에서 도출한 긴급/중점 영역을 **먼저** 검색합니다.
+> 일반 스캔은 시간과 Rate Limit 여유가 있을 때만.
+
+### 1-🔴 긴급 검색 (Phase 0 문제 기반)
+Phase 0-2에서 발견한 실패/에러와 관련된 해결책을 검색합니다.
+- 에러 메시지 키워드로 직접 검색
+- 관련 라이브러리/도구 업데이트 확인
+- 커뮤니티 해결 사례 검색
+
+### 1-🟡 중점 검색 (이전 미완료 + 대표 관심)
+tracker에서 가져온 미완료 항목 + 대표 지정 영역에 대해 후속 조사.
 
 ### 1-A. Anthropic / Claude 공식 변경사항
 검색 쿼리:
@@ -17,7 +64,7 @@
 
 수집 항목:
 - Claude API 파라미터/가격/한도 변경
-- @anthropic-ai/claude-agent-sdk 최신 버전 vs 현재 Jarvis 버전 (`cat {{BOT_HOME}}/discord/package.json | grep claude-agent-sdk`)
+- @anthropic-ai/claude-agent-sdk 최신 버전 vs 현재 Jarvis 버전 (`grep claude-agent-sdk {{BOT_HOME}}/discord/package.json`)
 - 신규 모델 출시 / deprecation 공지
 - Claude Code 신규 기능 중 Jarvis에 즉시 활용 가능한 것
 
@@ -27,66 +74,39 @@
 2. `cursor AI update {{MONTH}} {{YEAR}} new features`
 3. `windsurf AI IDE features {{YEAR}}`
 4. `cline AI agent github update {{MONTH}} {{YEAR}}`
-5. `AI personal assistant discord bot open source {{YEAR}}`
 
 수집 핵심:
 - **"Jarvis에 적용 가능한 기능"만** — 일반 뉴스 불필요
 - 구체적 구현 방식이 공개된 것 우선
-- 예: "Cursor의 Subagents가 병렬 실행하는 방식은 X" → Jarvis 적용 가능 여부
 
-### 1-C. 오픈소스 벤치마킹 — 핵심 영역
+### 1-C. 오픈소스 벤치마킹
 검색 쿼리:
 1. `github.com anthropic claude agent bot open source stars:>100`
 2. `github trending AI assistant automation {{MONTH}} {{YEAR}}`
-3. `site:github.com jarvis AI discord personal assistant`
-4. `awesome-claude-prompts github {{YEAR}}`
-5. `MCP server awesome list github new {{MONTH}} {{YEAR}}`
+3. `MCP server awesome list github new {{MONTH}} {{YEAR}}`
 
-수집 항목:
-- **GitHub에서 Jarvis와 유사한 오픈소스 프로젝트** — 우리보다 잘 구현된 기능 파악
-- **인기 MCP 서버** 중 Jarvis 미적용 것 (GitHub stars 기준)
-- 우리가 모르는 Claude 활용 패턴
-
-### 1-D. Claude Hub / 커뮤니티 인사이트
+### 1-D. 커뮤니티 인사이트
 검색 쿼리:
 1. `site:reddit.com/r/ClaudeAI best prompts workflow {{MONTH}} {{YEAR}}`
-2. `claude hub popular prompts automation`
-3. `hacker news claude agent workflow tips {{YEAR}}`
-4. `claude system prompt best practices {{YEAR}}`
-
-수집 항목:
-- 사용자들이 발견한 Claude 활용 패턴 (Jarvis 적용 가능한 것)
-- 인기 프롬프트 구조 (우리 system.md/context 파일 개선에 활용)
-- 알려진 Claude 한계 회피 방법
+2. `claude system prompt best practices {{YEAR}}`
 
 ### ⚠️ WebSearch 실패 폴백
 - 429 → 30초 대기 후 1회 재시도 → 재실패 시 "수집 불가" 표기 후 다음 쿼리
-- 검색 불가 시 → `ls {{BOT_HOME}}/rag/teams/reports/recon-*.md | tail -3`으로 최근 보고서 참조 (반드시 "과거 보고서 기반" 명시)
+- 검색 불가 시 → 최근 보고서 참조 (반드시 "과거 보고서 기반" 명시)
 
 ---
 
 ## Phase 2: 분석 (Analyst) — Jarvis 현황 대조
 
-Phase 1 결과를 현재 Jarvis 코드베이스와 대조합니다.
-
 ### 2-1. 버전 갭
-```bash
-cat {{BOT_HOME}}/discord/package.json | grep -E '"@anthropic|"discord|"claude'
-```
+`grep -E '"@anthropic|"discord|"claude' {{BOT_HOME}}/discord/package.json`
 
-### 2-2. 최근 실패/이슈 연계
-```bash
-grep -i "failed\|error\|timeout\|SKIPPED" {{BOT_HOME}}/logs/cron.log | tail -30
-```
-→ 수집된 정보 중 현재 실패를 해결할 수 있는 것 → Quick Win 최우선
+### 2-2. 이전 보고서 대비 변화 (Δ 분석)
+`ls -t {{BOT_HOME}}/rag/teams/reports/recon-*.md | head -1` → 직전 보고서와 비교
+- 새로 발견된 것만 보고 (이미 보고된 항목은 "전회 보고 참조" 한 줄 처리)
+- 상태 변화가 있는 것은 업데이트 ("MT-3 진행률: 미착수→설계 중")
 
-### 2-3. 오픈소스 대비 갭 분석
-Phase 1-C에서 수집한 오픈소스 프로젝트 중:
-- Jarvis에 없는 기능 → Long-term 후보
-- Jarvis에 이미 있는 기능이지만 구현이 더 나은 것 → Medium 후보
-- 즉시 프롬프트/설정 수준에서 복사 가능한 것 → Quick Win 후보
-
-### 2-4. 적용 가능성 분류
+### 2-3. 적용 가능성 분류
 - **🟢 즉시 (QW)** — 코드 20줄 이내, 리스크 없음, 롤백 용이
 - **🟡 1주 (MT)** — 구조 변경, 테스트 필요
 - **🔴 장기 (LT)** — 아키텍처 변경, 사이드이펙트 큼
@@ -103,22 +123,28 @@ Quick Win 구현 전에 전체 보고서를 먼저 작성합니다.
 
 보고서 구조 (마크다운, 아래 순서 준수):
 
-1. **📡 이번 주 AI 업계 핵심 변경사항** — 실제 확인된 것만, URL 포함, 미확인 명시
-   - **[항목]** · [URL] · Jarvis 영향: 높음/중간/낮음 + 내용 2~3줄
+1. **🎯 이번 회차 검색 전략** — Phase 0에서 도출한 긴급/중점/일반 영역 요약 (3줄)
 
-2. **🎯 Quick Win** (이번 실행에서 자동 구현 예정)
-   - QW-N: 제목 / 파일 / 현재→변경 설명 / 효과 / 리스크 / 구현 상태
+2. **📡 AI 업계 핵심 변경사항** — 실제 확인된 것만, URL 포함
+   - 신규 발견만. 이전 보고 항목은 "전회 참조" 처리
+   - **[항목]** · [URL] · Jarvis 영향: 높음/중간/낮음
 
-3. **📋 Medium-term** (1주 이내 — 대표님 지시 후 구현)
+3. **🔄 이전 미완료 항목 현황** — tracker에서 로드한 MT/LT 진행 상태
+   - MT/LT-N: 상태(미착수/진행중/완료/거절) + 이번 회차 업데이트
+
+4. **🎯 Quick Win** (이번 실행에서 자동 구현 예정)
+   - QW-N: 제목 / 파일 / 변경 설명 / 효과 / 리스크 / 구현 상태
+
+5. **📋 Medium-term** (1주 이내 — 대표님 지시 후 구현)
    - MT-N: 제목 / 작업 단계 / 효과 / 리스크
 
-4. **🔮 Long-term** (설계 필요)
+6. **🔮 Long-term** (설계 필요)
    - LT-N: 비전 / 필요 변경
 
-5. **🏆 오픈소스 / 경쟁사 벤치마킹 TOP 3**
+7. **🏆 벤치마킹 TOP 3**
    - 기능명 · URL · 핵심 · Jarvis 적용법 · 난이도
 
-6. **📊 수집 품질** — 성공 쿼리 수, Rate Limit 건수, 미확인 항목
+8. **📊 수집 품질** — 성공 쿼리 수, Rate Limit 건수, 미확인 항목
 
 ---
 
@@ -158,9 +184,30 @@ cp [대상파일] [대상파일].recon-backup-{{DATE}}
 - `rag-engine.mjs`, `mcp-nexus.mjs` (RAG/MCP 핵심)
 - `bot-cron.sh` (크론 엔진)
 - `.env` 파일
-- `state/` 디렉토리
-- `discord/lib/` 하위 전체 (위에 명시된 파일 외에도)
+- `state/` 디렉토리 (`recon-tracker.md`, `recon-search-focus.md` 제외)
+- `discord/lib/` 하위 전체
 - 30줄 초과 변경
+
+---
+
+## Phase 5: Tracker 업데이트 — 반드시 실행
+
+> **이 Phase를 빠뜨리면 다음 실행이 백지 출발합니다.**
+
+### 5-1. recon-tracker.md 업데이트
+`{{BOT_HOME}}/state/recon-tracker.md` 파일을 업데이트합니다:
+
+- **미완료 MT/LT 항목**: 이번 회차에서 새로 제안한 MT/LT 항목 추가
+  - 형식: `- [ ] MT-N: 제목 ({{DATE}} 제안)`
+- **완료된 항목**: QW 구현 완료건 + 이전 MT/LT 중 해결된 건 → "완료된 항목" 섹션으로 이동
+- **반복 발견 패턴**: 이전 보고서에서도 등장한 이슈 → 패턴 기록
+  - 형식: `- [이슈 키워드] — N회 발견 (최초 YYYY-MM-DD)`
+
+### 5-2. recon-search-focus.md 업데이트
+`{{BOT_HOME}}/state/recon-search-focus.md`의 "시스템 기반 우선순위" 섹션을 갱신:
+- Phase 0에서 발견한 시스템 문제
+- 이번 회차에서 해결 못한 긴급 이슈
+- 대표 지정 영역은 건드리지 않음
 
 ---
 

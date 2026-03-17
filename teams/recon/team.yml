@@ -1,8 +1,8 @@
 name: "정보탐험대 (Recon)"
 taskId: recon-weekly
 discord: jarvis-ceo
-model: sonnet
-maxTurns: 45
+model: large
+maxTurns: 200
 tools: [Read, Write, Bash, WebSearch, Glob, Grep, Agent, nexus]
 agents:
   scout:

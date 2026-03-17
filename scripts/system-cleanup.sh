@@ -93,7 +93,14 @@ main() {
         find "${BOT_HOME}/state/decisions" -type f -mtime +90 -delete
     fi
 
-    # 7. inbox/ 정리 — Claude CLI 대화 내보내기 30일 초과 제거 (RAG 인덱싱 완료 후 불필요)
+    # 7. recon 백업 파일 정리 — .recon-backup-* 7일 초과 제거
+    if find "${BOT_HOME}" -maxdepth 2 -name "*.recon-backup-*" -mtime +7 2>/dev/null | grep -q .; then
+        local recon_deleted
+        recon_deleted=$(find "${BOT_HOME}" -maxdepth 2 -name "*.recon-backup-*" -mtime +7 -delete -print 2>/dev/null | wc -l | tr -d ' ')
+        _log "recon 백업 정리: ${recon_deleted}개 삭제 — 7일 retention"
+    fi
+
+    # 8. inbox/ 정리 — Claude CLI 대화 내보내기 30일 초과 제거 (RAG 인덱싱 완료 후 불필요)
     if [[ -d "${BOT_HOME}/inbox" ]]; then
         local inbox_before inbox_deleted
         inbox_before=$(find "${BOT_HOME}/inbox" -type f -name "claude-cli-*" 2>/dev/null | wc -l | tr -d ' ')
@@ -101,7 +108,7 @@ main() {
         _log "inbox/ 정리: ${inbox_deleted}개 삭제 (${inbox_before}개 중) — 30일 retention"
     fi
 
-    # 8. 오래된 debug 로그 정리 (3일 이상 된 파일)
+    # 9. 오래된 debug 로그 정리 (3일 이상 된 파일)
     if [[ -d "$HOME/.claude/debug" ]]; then
         local before_count after_count
         before_count=$(find "$HOME/.claude/debug" -name "*.json" -mtime +3 2>/dev/null | wc -l | tr -d ' ')
@@ -110,7 +117,7 @@ main() {
         _log "Claude debug 정리: ${before_count}개 삭제 → ${after_count}개 남음"
     fi
 
-    # 9. 정리 후 메모리 상태
+    # 10. 정리 후 메모리 상태
     sleep 2
     local mem_after
     mem_after=$(get_mem_free_pct)
