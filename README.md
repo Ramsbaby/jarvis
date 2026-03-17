@@ -14,7 +14,7 @@
 <h1 align="center">Jarvis — AI Company-in-a-Box</h1>
 
 <p align="center">
-  <strong>Your Claude Max subscription is idle 23 hours a day.<br>This turns it into a 24/7 AI operations system — 12 AI teams, 49 cron tasks, knowledge management — at $0 extra cost.</strong>
+  <strong>Your Claude Max subscription is idle 23 hours a day.<br>This turns it into a 24/7 AI operations system — 11 AI teams, 49 cron tasks, knowledge management — at $0 extra cost.</strong>
 </p>
 
 <p align="center">
@@ -27,9 +27,16 @@
 
 ---
 
-## Quick Start
+## Prerequisites
 
-**One-liner install** — clones the repo, installs dependencies, and guides you through `.env` setup:
+> **Required before install:**
+> - **Claude Max subscription** ($100/mo) — the bot calls `claude -p` for every response and cron task. Without it, the bot starts but does nothing.
+> - **Claude Code CLI** — `npm install -g @anthropic-ai/claude-code` then `claude` to authenticate
+> - **Node.js 18+** and **Discord bot token** (from [discord.com/developers](https://discord.com/developers))
+
+---
+
+## Quick Start
 
 ```bash
 git clone https://github.com/Ramsbaby/claude-discord-bridge ~/.jarvis && cd ~/.jarvis && bash install.sh
@@ -40,7 +47,7 @@ Or step by step:
 ```bash
 git clone https://github.com/Ramsbaby/claude-discord-bridge ~/.jarvis
 cd ~/.jarvis
-bash install.sh      # checks Node/Claude deps, copies .env.example, installs packages
+bash install.sh      # checks deps, copies .env.example, installs packages
 node discord/discord-bot.js
 ```
 
@@ -60,7 +67,7 @@ launchctl load ~/Library/LaunchAgents/ai.discord-bot.plist
 | **What** | Self-hosted Discord bot backed by `claude -p` (Claude Code's headless CLI) |
 | **Who** | Claude Max subscribers who want $0 extra AI costs |
 | **How** | Spawns `claude -p` per message, streams output to Discord in real-time |
-| **Why** | 49 cron tasks + 12 AI teams + reactive chat + RAG memory, at zero extra cost |
+| **Why** | 49 cron tasks + 11 AI teams + reactive chat + RAG memory, at zero extra cost |
 
 ```
 You type in Discord  →  claude -p answers  →  streamed reply in your thread
@@ -120,7 +127,7 @@ Without compression, context fills in ~30 min. With Nexus CIG, multi-turn thread
  00:30  zzz   → Log rotation + backup cleanup
  01:00  zzz   → RAG index + Vault sync (hourly)
  ────────────────────────────────────────────────────────────
-              49 cron tasks + 12 AI teams. Zero manual intervention.
+              49 cron tasks + 11 AI teams. Zero manual intervention.
 ```
 
 Every task has **exponential backoff retry**, **rate-limit awareness**, and **failure alerts** pushed to your phone via [ntfy](https://ntfy.sh).
@@ -134,7 +141,7 @@ See [docs/OPERATIONS.md](docs/OPERATIONS.md) for the full cron schedule and moni
 |  | **This bot** | [zebbern/ccd](https://github.com/zebbern/claude-code-discord) | [chadingTV/ccd](https://github.com/chadingTV/claudecode-discord) | Typical API bot |
 |---|---|---|---|---|
 | AI cost | **$0 extra** | API key needed | $0 extra | $5–$50+/mo |
-| Proactive automation | **49 crons + 12 teams** | ❌ reactive only | ❌ reactive only | ❌ |
+| Proactive automation | **49 crons + 11 teams** | ❌ reactive only | ❌ reactive only | ❌ |
 | Context compression | **Nexus CIG (98%)** | ❌ | ❌ | ❌ |
 | RAG / memory | **LanceDB hybrid** | ❌ | ❌ | plugin-dependent |
 | Self-healing | **4-layer AI recovery** | ❌ | ❌ | varies |
@@ -162,7 +169,7 @@ Discord msg → discord-bot.js → claude-runner.js (Agent SDK)
 **Key components:**
 - **Nexus CIG** — MCP server that compresses tool output before context (315 KB → 5.4 KB)
 - **Self-healing** — 4-layer recovery (preflight → launchd → watchdog → guardian)
-- **12 AI teams** — Virtual organization with Board Meeting + Decision Dispatcher
+- **11 AI teams** — Virtual organization with Board Meeting + Decision Dispatcher
 
 For detailed diagrams see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -244,7 +251,7 @@ Copy from `config/tasks.json.example` to get started with 3 example tasks.
 | [docs/INDEX.md](docs/INDEX.md) | Documentation hub |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture, Nexus CIG, Self-Healing |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Cron, monitoring, incident response |
-| [docs/TEAMS.md](docs/TEAMS.md) | 12 AI teams overview |
+| [docs/TEAMS.md](docs/TEAMS.md) | 11 AI teams overview |
 | [adr/ADR-INDEX.md](adr/ADR-INDEX.md) | Architecture Decision Records |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 | [ROADMAP.md](ROADMAP.md) | Planned features |
