@@ -15,3 +15,4 @@
 | ADR-008 | Lite/Company 이중 모드 | accepted | 2026-03-06 |
 | ADR-009 | Nexus MCP Gateway 3분리 (exec/rag/health) | accepted | 2026-03-10 |
 | ADR-010 | MCP Resources — URI 기반 읽기 전용 상태 접근 | accepted | 2026-03-10 |
+| ADR-011 | Task FSM + SQLite 단일 저장소 (dev-queue.json 이전) | accepted | 2026-03-17 |

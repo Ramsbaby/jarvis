@@ -291,3 +291,56 @@ Bi-directional sync between bot data and an Obsidian Vault (`scripts/vault-sync.
 ```
 
 Each team folder retains the 7 most recent reports. Enables browsing AI-generated reports in Obsidian with full graph and backlink support.
+
+---
+
+## Task FSM — Autonomous Development Queue
+
+Self-directed task execution engine for long-running autonomous work. Replaces ad-hoc Python3 JSON manipulation with a typed state machine backed by SQLite.
+
+### State Machine (`lib/task-fsm.mjs`)
+
+Pure functions only — no side effects, no DB dependency. Storage is the caller's responsibility.
+
+```
+pending ──► queued ──► running ──► done
+              │           │
+              ▼           ▼
+           skipped      failed
+              │           │
+              └──► pending └──► queued  (manual recovery / auto-retry)
+```
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `canTransition(from, to)` | `(string, string) → boolean` | Guard: is this transition allowed? |
+| `applyTransition(task, to)` | `(Object, string) → Object` | Returns new task object, throws on invalid transition |
+| `pickNextTask(tasks[])` | `(Object[]) → Object\|null` | Selects highest-priority queued task with satisfied dependencies |
+
+### Storage (`lib/task-store.mjs`)
+
+`node:sqlite` (Node.js 22.5+ built-in, zero external dependencies). WAL mode for concurrent read/write safety.
+
+```sql
+tasks (id PK, status, priority, retries, depends JSON, meta JSON, updated_at)
+task_transitions (task_id, from_status, to_status, triggered_by, created_at)
+```
+
+- `transition()` wraps UPDATE + INSERT in `db.transaction()` — atomicity guaranteed
+- `addTask()` uses `INSERT OR IGNORE` — idempotent, safe to call multiple times
+- Full CLI: `node task-store.mjs [list|pick|get|field|transition|count-queued|export]`
+
+### Integration
+
+```
+knowledge-synthesizer.mjs  ──► addTask()        (new tasks from AI synthesis)
+extras-gateway.mjs          ──► listTasks()      (MCP tool: dev_queue)
+dev-runner.sh               ──► node task-store.mjs [pick|field|transition|count-queued]
+```
+
+### Design Decisions (ADR-011)
+
+- **LangGraph rejected**: LLM branching tool, not a state machine. 수십 MB 의존성 대비 효용 없음
+- **XState rejected**: `@xstate/fsm` deprecated in v5, unnecessary abstraction for 6-state FSM
+- **better-sqlite3 rejected**: native addon requiring node-gyp; breaks on Node version upgrades
+- **node:sqlite chosen**: built-in since v22.5, identical sync API (`.prepare().get()/.run()`)

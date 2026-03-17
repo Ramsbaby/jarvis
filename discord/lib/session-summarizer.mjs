@@ -17,6 +17,23 @@ const SESSION_SUMMARY_DIR = join(BOT_HOME, 'state', 'session-summaries');
 const USERS_DIR = join(BOT_HOME, 'state', 'users');
 const LOGS_DIR = join(BOT_HOME, 'logs');
 const STATE_FILE = join(BOT_HOME, 'state', 'session-summarizer-state.json');
+const USER_PROFILES_FILE = join(BOT_HOME, 'config', 'user_profiles.json');
+
+// ── user_profiles.json 기반 discordId → userId 매핑 로드 ─────────────────
+// 파일명 형식: 채널ID-discordId.md → discordId로 userId 결정 (100% 정확)
+function loadDiscordIdMap() {
+  try {
+    const profiles = JSON.parse(readFileSync(USER_PROFILES_FILE, 'utf-8'));
+    const map = {};
+    for (const [userId, profile] of Object.entries(profiles)) {
+      if (profile.discordId) map[profile.discordId] = userId;
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+const DISCORD_ID_MAP = loadDiscordIdMap();
 
 // ── 로그 헬퍼 ──────────────────────────────────────────────────────────────
 function log(level, msg) {
@@ -191,7 +208,32 @@ async function main() {
 
   for (const fpath of summaryFiles) {
     try {
-      const content = readFileSync(fpath, 'utf-8');
+      const rawContent = readFileSync(fpath, 'utf-8');
+
+      // 파일명: 채널ID-discordId.md → discordId로 userId 결정 (user_profiles.json 매핑)
+      // fallback: contentHead 키워드 매칭 (구형 파일명 또는 매핑 미등록 사용자)
+      const fname = fpath.split('/').pop().replace(/\.md$/, '');
+      const discordId = fname.split('-').pop();
+      let userId_tag = DISCORD_ID_MAP[discordId] || null;
+      if (!userId_tag) {
+        // fallback: 내용 기반 추론
+        const contentHead = rawContent.slice(0, 2000).toLowerCase();
+        const isBoram = (contentHead.includes('보람') && contentHead.includes('수업'))
+          || contentHead.includes('preply 수업')
+          || (contentHead.includes('약 복용') && !contentHead.includes('jarvis-dev'));
+        userId_tag = isBoram ? 'boram' : 'owner';
+      }
+
+      // 파일 맨 위에 userId 메타 라인이 없으면 삽입
+      let content;
+      if (rawContent.startsWith('userId:')) {
+        content = rawContent;
+      } else {
+        content = `userId: ${userId_tag}\n---\n${rawContent}`;
+        writeFileSync(fpath, content);
+        log('info', `  [tag] ${fpath.split('/').pop()} → userId: ${userId_tag}`);
+      }
+
       const candidates = extractFacts(content);
       log('info', `  ${fpath.split('/').pop()} → 후보 ${candidates.length}개`);
 

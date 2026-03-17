@@ -18,7 +18,8 @@ source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 
 _TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
 
-QUEUE_FILE="${BOT_HOME}/state/dev-queue.json"
+DB_FILE="${BOT_HOME}/state/tasks.db"
+NODE_SQLITE="node --experimental-sqlite --no-warnings"
 DEV_LOG="${BOT_HOME}/logs/dev-runner.log"
 COMPLETION_CHECK_TIMEOUT=10
 
@@ -29,35 +30,16 @@ _log() {
     echo "[$(date '+%F %T')] [dev-runner] $1" >> "$DEV_LOG"
 }
 
-# --- dev-queue.json 원자적 업데이트 ---
+# --- tasks.db 상태 전이 ---
 update_queue() {
     local task_id="$1"
     local new_status="$2"
-    local extra="${3:-}"
+    local extra_json="${3:-{}}"
 
-    local _uq_err
-    _uq_err=$(python3 -c "
-import json, os, tempfile, time
-
-queue_path = '${QUEUE_FILE}'
-with open(queue_path) as f:
-    data = json.load(f)
-
-for t in data['tasks']:
-    if t['id'] == '${task_id}':
-        t['status'] = '${new_status}'
-        if '${new_status}' == 'done':
-            t['completedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-        ${extra}
-        break
-
-fd, tmp = tempfile.mkstemp(dir=os.path.dirname(queue_path), suffix='.tmp')
-with os.fdopen(fd, 'w') as tf:
-    json.dump(data, tf, indent=2, ensure_ascii=False)
-    tf.write('\n')
-os.replace(tmp, queue_path)
-" 2>&1) || {
-        _log "ERROR: update_queue 실패 (task=${task_id}, status=${new_status}): ${_uq_err}"
+    local _uq_out
+    _uq_out=$(${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" \
+        transition "$task_id" "$new_status" "bash" "$extra_json" 2>&1) || {
+        _log "ERROR: update_queue 실패 (task=${task_id}, status=${new_status}): ${_uq_out}"
         return 1
     }
 }
@@ -153,59 +135,27 @@ rollback_snapshot() {
 
 # --- P2: priority 기반 태스크 선택 ---
 pick_next_task() {
-    python3 -c "
-import json
-
-with open('${QUEUE_FILE}') as f:
-    data = json.load(f)
-
-status_map = {t['id']: t.get('status', 'queued') for t in data['tasks']}
-
-candidates = []
-for t in data['tasks']:
-    if t.get('status') != 'queued':
-        continue
-    deps = t.get('depends', [])
-    if not all(status_map.get(d) == 'done' for d in deps):
-        continue
-    if t.get('retries', 0) >= t.get('maxRetries', 2):
-        continue
-    candidates.append(t)
-
-# priority 높은 것 먼저 (높은 숫자 = 높은 우선순위, 기본 0)
-candidates.sort(key=lambda t: t.get('priority', 0), reverse=True)
-
-if candidates:
-    print(candidates[0]['id'])
-" 2>&1 || _log "ERROR: pick_next_task python 오류"
+    ${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" pick 2>>"$DEV_LOG"
 }
 
 # --- 태스크 필드 읽기 ---
 get_field() {
     local task_id="$1"
     local field="$2"
-    jq -r --arg id "$task_id" --arg f "$field" \
-        '.tasks[] | select(.id == $id) | .[$f] // empty' "$QUEUE_FILE"
+    ${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" field "$task_id" "$field" 2>>"$DEV_LOG"
 }
 
 # ============================================================
 # 메인 실행
 # ============================================================
 
-if [[ ! -f "$QUEUE_FILE" ]]; then
-    echo "dev-queue 비어있음: 큐 파일 없음"
+if [[ ! -f "$DB_FILE" ]]; then
+    echo "dev-queue 비어있음: tasks.db 없음"
     exit 0
 fi
 
-# 큐 JSON 유효성 검사
-if ! jq '.' "$QUEUE_FILE" >/dev/null 2>&1; then
-    _log "ERROR: dev-queue.json 파싱 실패 — 파일 손상 가능"
-    echo "dev-queue 오류: JSON 파싱 실패. 수동 확인 필요."
-    exit 1
-fi
-
 # 큐에 queued 태스크가 있는지 확인
-QUEUED_COUNT=$(jq '[.tasks[] | select(.status == "queued")] | length' "$QUEUE_FILE")
+QUEUED_COUNT=$(${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" count-queued 2>>"$DEV_LOG")
 if [[ "$QUEUED_COUNT" -eq 0 ]]; then
     _log "큐 비어있음 (all done/failed)"
     echo "dev-queue 비어있음: 대기 중인 개발 작업 없음"
@@ -227,8 +177,8 @@ MAX_BUDGET=$(get_field "$TASK_ID" "maxBudget")
 TIMEOUT=$(get_field "$TASK_ID" "timeout")
 ALLOWED_TOOLS=$(get_field "$TASK_ID" "allowedTools")
 PATCH_ONLY=$(get_field "$TASK_ID" "patchOnly")
-RETRIES=$(jq -r --arg id "$TASK_ID" '.tasks[] | select(.id == $id) | .retries // 0' "$QUEUE_FILE")
-MAX_RETRIES=$(jq -r --arg id "$TASK_ID" '.tasks[] | select(.id == $id) | .maxRetries // 2' "$QUEUE_FILE")
+RETRIES=$(get_field "$TASK_ID" "retries"); RETRIES="${RETRIES:-0}"
+MAX_RETRIES=$(get_field "$TASK_ID" "maxRetries"); MAX_RETRIES="${MAX_RETRIES:-2}"
 
 # 기본값
 TIMEOUT="${TIMEOUT:-300}"
@@ -257,13 +207,12 @@ create_snapshot
 
 # --- Step 3: status를 running으로 변경 + 비정상 종료 시 복구 trap ---
 _RUNNING_TASK_ID="$TASK_ID"
-_RUNNING_RETRIES="$RETRIES"
 _dev_cleanup() {
     local rc=$?
     if [[ -n "${_RUNNING_TASK_ID:-}" && $rc -ne 0 ]]; then
         _log "비정상 종료 (exit: $rc): ${_RUNNING_TASK_ID} → queued로 복구 + rollback"
         rollback_snapshot 2>/dev/null || true
-        update_queue "$_RUNNING_TASK_ID" "queued" "t['retries'] = ${_RUNNING_RETRIES}" 2>/dev/null || true
+        update_queue "$_RUNNING_TASK_ID" "queued" 2>/dev/null || true
     fi
 }
 trap _dev_cleanup EXIT
@@ -298,7 +247,7 @@ if [[ $EXIT_CODE -ne 0 ]]; then
     _log "실패 후 rollback 완료"
 
     # P2: 실패 메타데이터 기록
-    local_extra="t['retries'] = ${NEW_RETRIES}; t['lastError'] = 'exit_code=${EXIT_CODE}'; t['failedAt'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())"
+    local_extra="{\"retries\": ${NEW_RETRIES}, \"lastError\": \"exit_code=${EXIT_CODE}\"}"
 
     if [[ $NEW_RETRIES -ge $MAX_RETRIES ]]; then
         update_queue "$TASK_ID" "failed" "$local_extra"
@@ -340,8 +289,7 @@ else
     rollback_snapshot
     _log "completionCheck 미통과 → rollback 완료"
 
-    local_extra="t['retries'] = ${NEW_RETRIES}; t['lastError'] = 'completionCheck_failed'"
-    update_queue "$TASK_ID" "queued" "$local_extra"
+    update_queue "$TASK_ID" "queued" "{\"lastError\": \"completionCheck_failed\"}"
     RESULT_SUMMARY="실행 성공하였으나 completionCheck 미통과. rollback 후 다음 실행 시 재시도."
 fi
 

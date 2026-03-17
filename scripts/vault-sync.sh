@@ -259,6 +259,19 @@ if [[ -d "$DECISIONS_DIR" ]]; then
 fi
 
 
+# --- 8b. rag/decisions-*.md → Vault/05-decisions/ ---
+RAG_DIR="$BOT_HOME/rag"
+DECISIONS_RAG_VAULT="$VAULT_BASE/05-decisions"
+mkdir -p "$DECISIONS_RAG_VAULT"
+for decisions_file in "$RAG_DIR"/decisions-*.md; do
+    if [[ ! -f "$decisions_file" ]]; then continue; fi
+    filename="$(basename "$decisions_file")"
+    dest="$DECISIONS_RAG_VAULT/$filename"
+    if [[ -f "$dest" ]] && [[ "$dest" -nt "$decisions_file" ]]; then continue; fi
+    cp "$decisions_file" "$dest"
+    synced=$((synced + 1))
+done
+
 # --- 9. CEO 다이제스트 → Vault/00-ceo/weekly/ ---
 CEO_VAULT="$VAULT_BASE/00-ceo/weekly"
 mkdir -p "$CEO_VAULT"
@@ -291,6 +304,78 @@ if [[ -f "$CHANGELOG_SRC" ]]; then
 fi
 
 log "Sync complete: ${synced} files synced, ${pruned} old reports pruned"
+
+# --- 10. Knowledge Synthesis → Vault/05-insights/ ---
+INSIGHTS_SRC="$BOT_HOME/rag/auto-insights"
+INSIGHTS_DEST="$VAULT_BASE/05-insights/daily"
+OWNER_INSIGHTS_SRC="$BOT_HOME/rag/user-insights/owner"
+OWNER_INSIGHTS_DEST="$VAULT_BASE/05-insights/owner"
+
+mkdir -p "$INSIGHTS_DEST" "$OWNER_INSIGHTS_DEST"
+
+# auto-insights → 05-insights/daily/ (frontmatter 이미 있으므로 직접 복사)
+if [[ -d "$INSIGHTS_SRC" ]]; then
+    for insight_file in "$INSIGHTS_SRC"/*.md; do
+        [[ -f "$insight_file" ]] || continue
+        filename="$(basename "$insight_file")"
+        dest="$INSIGHTS_DEST/$filename"
+        # 소스가 더 새로울 때만 복사
+        if [[ ! -f "$dest" ]] || [[ "$insight_file" -nt "$dest" ]]; then
+            cp "$insight_file" "$dest"
+            synced=$((synced + 1))
+            log "  insight → $filename"
+        fi
+    done
+fi
+
+# user-insights/owner/ → 05-insights/owner/ (일별 파일 + profile)
+if [[ -d "$OWNER_INSIGHTS_SRC" ]]; then
+    for owner_file in "$OWNER_INSIGHTS_SRC"/*.md; do
+        [[ -f "$owner_file" ]] || continue
+        filename="$(basename "$owner_file")"
+        # profile.md는 _owner-profile.md 로 저장 (Obsidian에서 상단 노출)
+        [[ "$filename" == "profile.md" ]] && dest_name="_owner-profile.md" || dest_name="$filename"
+        dest="$OWNER_INSIGHTS_DEST/$dest_name"
+        if [[ ! -f "$dest" ]] || [[ "$owner_file" -nt "$dest" ]]; then
+            cp "$owner_file" "$dest"
+            synced=$((synced + 1))
+            log "  owner-insight → $dest_name"
+        fi
+    done
+fi
+
+log "Insights sync: auto-insights + user-insights/owner → Vault/05-insights/"
+
+# 05-insights/_index.md 자동 생성 (Obsidian 네비게이션)
+INDEX_FILE="$VAULT_BASE/05-insights/_index.md"
+{
+    _today="$(date '+%Y-%m-%d')"
+    echo "---"
+    echo 'title: "Knowledge Insights"'
+    echo "tags: [area/jarvis, type/index]"
+    echo "updated: ${_today}"
+    echo "---"
+    echo ""
+    echo "# 📊 Knowledge Insights"
+    echo ""
+    echo "> knowledge-synthesizer 매일 03:30 자동 생성 | Claude Opus 분석"
+    echo ""
+    echo "## Daily Synthesis (최근 2주)"
+    for f in "$INSIGHTS_DEST"/*.md; do
+        [[ -f "$f" ]] || continue
+        _fname="$(basename "$f" .md)"
+        echo "- [[daily/${_fname}|${_fname}]]"
+    done | sort -r | head -14
+    echo ""
+    echo "## Profiles"
+    echo "- [[owner/_owner-profile|👤 Owner 누적 프로파일]]"
+    echo ""
+    echo "## 오늘 요약"
+    _latest="$(ls "$INSIGHTS_DEST"/*.md 2>/dev/null | sort -r | head -1)"
+    if [[ -f "$_latest" ]]; then
+        awk '/^## 요약/{found=1; next} found && /^##/{exit} found{print}' "$_latest" | head -5
+    fi
+} > "$INDEX_FILE" 2>/dev/null && synced=$((synced + 1)) || true
 
 # --- Auto-commit to git (if changes exist) ---
 if cd "$VAULT_BASE" && git diff --quiet && git diff --cached --quiet && [[ -z "$(git ls-files --others --exclude-standard)" ]]; then

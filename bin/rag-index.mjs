@@ -206,10 +206,20 @@ async function main() {
     }
   } catch { /* dir may not exist */ }
 
-  // 2. RAG memory files
-  for (const f of ['memory.md', 'decisions.md', 'handoff.md', 'incidents.md']) {
+  // 2. RAG memory files (decisions는 주간 파일 decisions-YYYY-WXX.md 동적 glob)
+  for (const f of ['memory.md', 'handoff.md', 'incidents.md']) {
     targets.push(join(BOT_HOME, 'rag', f));
   }
+  // decisions 주간 파일: archive/ 제외하고 현재 rag/ 루트의 decisions-*.md만
+  try {
+    const ragDir = join(BOT_HOME, 'rag');
+    const ragEntries = await readdir(ragDir);
+    for (const f of ragEntries) {
+      if (f.startsWith('decisions-') && f.endsWith('.md')) {
+        targets.push(join(ragDir, f));
+      }
+    }
+  } catch { /* rag dir not found */ }
 
   // 3. Config 파일 (company-dna, autonomy-levels)
   for (const f of ['company-dna.md', 'autonomy-levels.md']) {

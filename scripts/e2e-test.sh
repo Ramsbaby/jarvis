@@ -60,6 +60,16 @@ check "LanceDB package installed" test -d "$BOT_HOME/discord/node_modules/@lance
 check "OpenAI package installed" test -d "$BOT_HOME/discord/node_modules/openai"
 check "apache-arrow installed" test -d "$BOT_HOME/discord/node_modules/apache-arrow"
 check "discord-bot.js syntax valid" node --check "$BOT_HOME/discord/discord-bot.js"
+check "handlers.js syntax valid" node --check "$BOT_HOME/discord/lib/handlers.js"
+check "handlers.js no-undef (ESLint)" bash -c "
+  ESLINT=\$(command -v eslint 2>/dev/null || echo '')
+  [ -z \"\$ESLINT\" ] && { echo 'eslint not found'; exit 1; }
+  \"\$ESLINT\" --no-eslintrc \
+    --rule '{\"no-undef\": \"error\"}' \
+    --env es2022,node \
+    --parser-options '{\"sourceType\":\"script\"}' \
+    '$BOT_HOME/discord/lib/handlers.js' 2>&1 | grep -q ' error ' && exit 1 || exit 0
+"
 
 # --- RAG Tests ---
 echo ""
@@ -80,7 +90,7 @@ echo "▶ State Files"
 check "sessions.json valid" jq '.' "$BOT_HOME/state/sessions.json"
 check "rate-tracker.json valid" jq '.' "$BOT_HOME/state/rate-tracker.json"
 check "memory.md exists" test -f "$BOT_HOME/rag/memory.md"
-check "decisions.md exists" test -f "$BOT_HOME/rag/decisions.md"
+check "decisions weekly file exists" bash -c "ls \"$BOT_HOME/rag/decisions-\"*.md 2>/dev/null | grep -q ."
 
 # --- ask-claude.sh RAG Integration ---
 echo ""
@@ -143,6 +153,32 @@ check "market-holiday-guard has hours check" grep -q "UTC_MINS" "$BOT_HOME/scrip
 check "watchdog active_ts validation" grep -q "active_ts.*\^.*0-9" "$BOT_HOME/scripts/watchdog.sh"
 check "tasks.json disk-alert has allowEmptyResult" bash -c "jq -e '.tasks[] | select(.id==\"disk-alert\") | .allowEmptyResult' '$BOT_HOME/config/tasks.json' > /dev/null 2>&1"
 check "streaming GC hint in finalize" grep -q "this\.buffer = ''" "$BOT_HOME/discord/lib/streaming.js"
+check "handleMessage error rate OK (smoke)" bash -c "
+  python3 - <<'PYEOF'
+import json, sys
+from datetime import datetime, timezone, timedelta
+cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+errors = total = 0
+try:
+    with open('$BOT_HOME/logs/discord-bot.jsonl') as f:
+        for line in f:
+            try:
+                d = json.loads(line)
+                ts = d.get('ts', '')
+                if not ts: continue
+                t = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                if t < cutoff: continue
+                msg = d.get('msg', '')
+                if msg == 'handleMessage error': errors += 1
+                elif msg in ('Starting Claude session', 'Session summary pre-injected for resume safety'): total += 1
+            except: pass
+except: sys.exit(0)
+if errors >= 5 and total > 0 and errors / max(total, 1) > 0.5:
+    print(f'handleMessage errors: {errors}/{max(total,1)} ({errors/max(total,1)*100:.0f}%)')
+    sys.exit(1)
+sys.exit(0)
+PYEOF
+"
 
 # Cron-catalog vs actual crontab consistency
 TASKS_COUNT=$(jq '[.tasks[] | select(.schedule != null and .schedule != "")] | length' "$BOT_HOME/config/tasks.json" 2>/dev/null || echo 0)
