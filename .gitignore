@@ -65,3 +65,4 @@ heartbeats/
 .DS_Store
 *.pid
 context/discord-history/
+config/secrets/
