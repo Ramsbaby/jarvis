@@ -173,7 +173,7 @@ grep "CB cooldown expired" ~/.jarvis/logs/stale-task-watcher.log
 # 쿨다운 만료까지 남은 시간 계산 (수동)
 python3 -c "
 import json, time
-with open('/Users/ramsbaby/.jarvis/state/circuit-breaker/<TASK_ID>.json') as f:
+with open('~/.jarvis/state/circuit-breaker/<TASK_ID>.json') as f:
     cb = json.load(f)
 expires = cb['openAt']/1000 + cb.get('cooldown', 3600)
 remaining = expires - time.time()
@@ -189,7 +189,7 @@ print(f'남은 쿨다운: {remaining:.0f}초 ({remaining/60:.1f}분)')
 # WAL 체크포인트 강제 실행
 node -e "
 const {DatabaseSync}=require('node:sqlite');
-const db=new DatabaseSync('/Users/ramsbaby/.jarvis/state/tasks.db');
+const db=new DatabaseSync('~/.jarvis/state/tasks.db');
 db.exec('PRAGMA integrity_check');
 db.exec('PRAGMA wal_checkpoint(FULL)');
 console.log('OK');
@@ -205,7 +205,7 @@ console.log('OK');
 ```bash
 node -e "
 const {DatabaseSync}=require('node:sqlite');
-const db=new DatabaseSync('/Users/ramsbaby/.jarvis/state/tasks.db');
+const db=new DatabaseSync('~/.jarvis/state/tasks.db');
 db.prepare('SELECT * FROM task_transitions WHERE task_id=? ORDER BY created_at DESC LIMIT 20')
   .all('council-insight')
   .forEach(r => console.log(new Date(r.created_at).toISOString().slice(0,19), r.from_status+'→'+r.to_status, r.triggered_by||''));

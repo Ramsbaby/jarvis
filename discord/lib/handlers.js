@@ -1070,7 +1070,7 @@ ${extracted}
     });
     await streamer.updatePhase('🔍 컨텍스트 검색 중...');
     userPrompt = await _preProcessorRegistry.run(userPrompt, preCtx);
-    const LITE_CHANNEL_ID = '1470559565258162312';
+    const LITE_CHANNEL_ID = process.env.LITE_CHANNEL_ID || '';
     const contextBudget = effectiveChannelId === LITE_CHANNEL_ID ? 'small' : 'opusplan';
     const modelLabel = contextBudget === 'small' ? 'claude-haiku' : 'opusplan';
     await streamer.updatePhase(`🧠 ${modelLabel} 호출 중...`);

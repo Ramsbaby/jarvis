@@ -349,7 +349,7 @@ describe('formatForDiscord (integration)', () => {
   });
 
   it('respects CHANNEL_OVERRIDES: jarvis-market channel skips tableToList', () => {
-    const marketChannelId = '1469190686145384513';
+    const marketChannelId = process.env.MARKET_CHANNEL_ID || '0000000000000000001';
     const input = SIMPLE_TABLE;
 
     const result = formatForDiscord(input, { channelId: marketChannelId });

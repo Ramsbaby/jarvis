@@ -36,7 +36,7 @@ export class ProcessorContext {
 }
 
 // ---------------------------------------------------------------------------
-// Owner alert — boram 채널 unmatchedStudents → 정우님 채널 에스컬레이션
+// Owner alert — family 채널 unmatchedStudents → owner 채널 에스컬레이션
 // 하루 한 번만 알림 (state 파일로 debounce)
 // ---------------------------------------------------------------------------
 // 진행 중인 알림 추적 — race condition 방지 (동일 학생 동시 이중 전송 차단)
@@ -242,7 +242,7 @@ export class PreplyIncomeProcessor extends BasePreProcessor {
     log('info', 'Preply income data pre-injected', { threadId: ctx.threadId, dateArg, count: json.scheduledCount });
 
     // unmatchedStudents 있으면 오너 채널로 에스컬레이션 (비동기, 응답 blocking 안 함)
-    // 조건: 보람 채널 + 오늘 날짜 조회일 때만 (과거 날짜 조회는 이미 해결된 케이스일 수 있으므로 제외)
+    // 조건: family 채널 + 오늘 날짜 조회일 때만 (과거 날짜 조회는 이미 해결된 케이스일 수 있으므로 제외)
     const kstToday = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
     const isToday = !dateArg || dateArg === kstToday;
     if (json.unmatchedStudents?.length && ctx.client && BORAM_CHANNEL_IDS.includes(ctx.channelId) && isToday) {

@@ -27,10 +27,10 @@ function maskTechDetails(text) {
     let masked = line
       // PID 숫자 (예: "PID 1234", "pid=5678")
       .replace(/\b(PID|pid)[=\s]+\d{2,6}\b/g, '(내부 프로세스)')
-      // 절대 홈 경로 (예: /Users/ramsbaby/.jarvis/..., ~/.jarvis/...)
+      // 절대 홈 경로 (예: /Users/username/.jarvis/..., ~/.jarvis/...)
       .replace(/\/Users\/[^/\s]+\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)')
       .replace(/~\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)')
-      // 절대 홈 경로 일반 (예: /Users/ramsbaby/...)
+      // 절대 홈 경로 일반 (예: /Users/username/...)
       .replace(/\/Users\/[^/\s]+\/(?!\.jarvis)[^\s,)'"]{8,}/g, '(내부 경로)');
     result.push(masked);
   }
@@ -206,7 +206,7 @@ export class StreamingMessage {
     this._flushing = false;
     this._flushDone = null;   // Promise | null — 진행 중인 flush 완료 신호
     this._finalizeComplete = false; // 진정한 멱등성: 두 번째 finalize() 호출 방지
-    // 보람 채널 등 quiet 채널: tool 상태 표시 생략
+    // family 채널 등 quiet 채널: tool 상태 표시 생략
     const quietIds = (process.env.QUIET_CHANNEL_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
     this._isQuiet = channelId ? quietIds.includes(channelId) : false;
   }

@@ -26,10 +26,10 @@ function withCodeFenceGuard(fn) {
 // Channel overrides
 // ---------------------------------------------------------------------------
 
-const CHANNEL_OVERRIDES = {
-  // jarvis-market: personas.json specifies "테이블 적극 활용"
-  '1469190686145384513': { skip: ['tableToList'] },
-};
+const _MARKET_ID = process.env.MARKET_CHANNEL_ID || '';
+const CHANNEL_OVERRIDES = Object.fromEntries(
+  [_MARKET_ID && [_MARKET_ID, { skip: ['tableToList'] }]].filter(Boolean)
+);  // jarvis-market: set MARKET_CHANNEL_ID env var to enable tableToList skip
 
 // ---------------------------------------------------------------------------
 // Transforms
