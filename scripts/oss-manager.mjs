@@ -67,7 +67,19 @@ function askClaude(prompt, { timeout = 90_000 } = {}) {
     env: { ...process.env }
   });
   if (r.error) throw r.error;
+  if (r.status !== 0) throw new Error(`claude -p 실패 (exit ${r.status}): ${(r.stderr || '').trim().slice(0, 200)}`);
   return (r.stdout ?? '').trim();
+}
+
+/** 스크립트 시작 전 gh 인증 확인 — 미인증 시 Discord 알림 후 즉시 종료 */
+function preflight() {
+  const r = spawnSync('gh', ['auth', 'status'], { encoding: 'utf8', timeout: 10_000 });
+  if (r.status !== 0) {
+    const msg = '🚨 **oss-manager** gh CLI 미인증 — 실행 중단. `gh auth login` 필요.';
+    discordSend(msg, 'jarvis-system');
+    log('error', 'gh auth 실패 — 중단');
+    process.exit(1);
+  }
 }
 
 function discordSend(content, channelKey = CONFIG.settings.discordChannel ?? 'jarvis-blog') {
@@ -191,7 +203,7 @@ ${currentReadme}
   const summary = results
     .map(r => `**${r.repo}** ★${r.stars}\n${r.analysis.slice(0, 350)}`)
     .join('\n\n---\n\n');
-  discordSend(`🔍 **OSS Recon — ${TODAY}**\n\n${summary.slice(0, 1900)}`);
+  discordSend(`🔍 **OSS Recon — ${TODAY}**\n\n${summary.slice(0, 1900)}`, 'jarvis-market');
 
   return results;
 }
@@ -218,6 +230,7 @@ async function runMaintenance() {
 
     const unlabeledIssues = issues.filter(i => (i.labels ?? []).length === 0);
     let labeledCount = 0;
+    const labeledDetail = []; // 감사 로그: [{number, label}]
 
     for (const issue of unlabeledIssues.slice(0, 5)) {
       const prompt = `다음 GitHub 이슈를 분류하라.
@@ -239,6 +252,7 @@ bug / enhancement / question / documentation / help wanted / invalid / wontfix`;
               '--repo', `${repo.owner}/${repo.name}`,
               '--add-label', label);
             labeledCount++;
+            labeledDetail.push({ number: issue.number, label });
             log('info', `이슈 #${issue.number} → 라벨: ${label}`);
           } catch (e) {
             // 라벨 미존재 시 생성 후 재시도
@@ -250,6 +264,8 @@ bug / enhancement / question / documentation / help wanted / invalid / wontfix`;
                 '--repo', `${repo.owner}/${repo.name}`,
                 '--add-label', label);
               labeledCount++;
+              labeledDetail.push({ number: issue.number, label });
+              log('info', `이슈 #${issue.number} → 라벨: ${label} (신규 라벨 생성)`);
             } catch (e2) {
               log('warn', `라벨 생성 실패 #${issue.number}: ${e2.message}`);
             }
@@ -278,20 +294,24 @@ bug / enhancement / question / documentation / help wanted / invalid / wontfix`;
       repo: `${repo.owner}/${repo.name}`,
       openIssues: issues.length,
       labeled: labeledCount,
+      labeledDetail,
       stalePRs: stalePRs.length,
       staleList: stalePRs.map(p => `#${p.number} ${p.title}`)
     });
   }
 
-  // Discord 리포트
+  // Discord 리포트 (채널: jarvis-system — 유지보수 알림)
   if (summary.length > 0) {
     const lines = summary.map(s => {
       let line = `**${s.repo}**: 이슈 ${s.openIssues}개`;
-      if (s.labeled > 0) line += ` (라벨 ${s.labeled}개 자동 분류)`;
+      if (s.labeled > 0) {
+        const detail = s.labeledDetail.map(d => `#${d.number}→${d.label}`).join(', ');
+        line += ` (자동 라벨: ${detail})`;
+      }
       if (s.stalePRs > 0) line += ` | ⚠️ Stale PR ${s.stalePRs}개`;
       return line;
     }).join('\n');
-    discordSend(`🔧 **OSS 유지보수 — ${TODAY}**\n\n${lines}`);
+    discordSend(`🔧 **OSS 유지보수 — ${TODAY}**\n\n${lines}`, 'jarvis-system');
   }
 
   return summary;
@@ -364,19 +384,49 @@ ${currentReadme.slice(0, 3500)}
     // GitHub Issue로 등록 (직접 수정 대신 — 안전한 방식)
     try {
       const issueTitle = `docs: README 자동 갱신 제안 (${TODAY})`;
-      const issueBody = `> 자동 생성 — oss-manager.mjs docs 모드\n\n## 최근 커밋\n${
+
+      // 중복 이슈 방지: 이번 주 이내에 같은 제목 이슈가 열려있으면 코멘트 추가
+      let existingIssueNum = null;
+      try {
+        const openDocs = ghJSON('issue', 'list',
+          '--repo', `${repo.owner}/${repo.name}`,
+          '--state', 'open',
+          '--label', 'documentation',
+          '--limit', '10',
+          '--json', 'number,title,createdAt');
+        const existing = openDocs.find(i =>
+          i.title.startsWith('docs: README 자동 갱신 제안'));
+        if (existing) existingIssueNum = existing.number;
+      } catch {}
+
+      const issueBody = `> 자동 생성 — oss-manager.mjs docs 모드 (${TODAY})\n\n## 최근 커밋\n${
         commits.slice(0, 8).map(c => `- \`${c.sha}\` ${c.message}`).join('\n')
       }\n\n## 개선 제안\n${suggestion}`;
 
-      gh('issue', 'create',
-        '--repo', `${repo.owner}/${repo.name}`,
-        '--title', issueTitle,
-        '--body', issueBody,
-        '--label', 'documentation');
-      log('info', `${repo.name}: docs 이슈 생성 완료`);
-      discordSend(`📝 **README 갱신 이슈 생성** — ${repo.owner}/${repo.name}\n${suggestion.slice(0, 400)}`);
+      if (existingIssueNum) {
+        // 기존 이슈에 코멘트 추가
+        gh('issue', 'comment', String(existingIssueNum),
+          '--repo', `${repo.owner}/${repo.name}`,
+          '--body', issueBody);
+        log('info', `${repo.name}: 기존 이슈 #${existingIssueNum}에 코멘트 추가`);
+        discordSend(`📝 **README 갱신 업데이트** — ${repo.owner}/${repo.name} #${existingIssueNum}\n${suggestion.slice(0, 350)}`);
+      } else {
+        // documentation 라벨 사전 보장
+        try {
+          gh('label', 'create', 'documentation',
+            '--repo', `${repo.owner}/${repo.name}`,
+            '--color', '0075ca', '--force');
+        } catch {}
+        gh('issue', 'create',
+          '--repo', `${repo.owner}/${repo.name}`,
+          '--title', issueTitle,
+          '--body', issueBody,
+          '--label', 'documentation');
+        log('info', `${repo.name}: docs 이슈 생성 완료`);
+        discordSend(`📝 **README 갱신 이슈 생성** — ${repo.owner}/${repo.name}\n${suggestion.slice(0, 350)}`);
+      }
     } catch (e) {
-      log('error', `이슈 생성 실패 ${repo.name}: ${e.message}`);
+      log('error', `이슈 처리 실패 ${repo.name}: ${e.message}`);
     }
   }
 }
@@ -399,9 +449,9 @@ async function runPromo() {
       log('warn', `커밋 조회 실패: ${e.message}`); continue;
     }
 
-    // 주요 변경 없으면 홍보 스킵 (feat/fix 커밋 기준)
+    // 주요 변경 없으면 홍보 스킵 — Conventional Commits 표준만 (add/update/improve 제외: 오탐 과다)
     const meaningful = commits.filter(m =>
-      /^(feat|fix|refactor|perf|add|update|improve)/i.test(m));
+      /^(feat|fix|refactor|perf)(\(.+?\))?[!:]?\s/i.test(m));
     if (meaningful.length < 2) {
       log('info', `${repo.name}: 주요 변경 부족 (${meaningful.length}건) — 홍보 스킵`);
       continue;
@@ -450,6 +500,7 @@ ${meaningful.slice(0, 10).map((m, i) => `${i + 1}. ${m}`).join('\n')}
 
 // ── 메인 ──────────────────────────────────────────────────────────────────────
 log('info', `=== oss-manager 시작 (mode: ${MODE}, date: ${TODAY}) ===`);
+preflight(); // gh 인증 확인 — 실패 시 Discord 알림 후 즉시 종료
 
 try {
   if (MODE === 'recon'       || MODE === 'full') await runRecon();

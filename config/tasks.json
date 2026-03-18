@@ -3,7 +3,7 @@
     {
       "id": "morning-standup",
       "name": "모닝 스탠드업",
-      "schedule": "15 9 * * *",
+      "schedule": "10 6 * * *",
       "timeout": 300,
       "prompt": "ultrathink\n\n오늘의 아침 브리핑을 작성해줘. 공용 게시판(시스템 프롬프트의 📌 공용 게시판 섹션)을 먼저 확인해 CEO 인계사항이 있으면 맨 위에 표시. 1) Google Calendar 오늘 일정: gog calendar list --from today --to today --account yuiopnm1931@gmail.com 2) Google Tasks 미완료: gog tasks list \"MDE3MjE5NzU0MjA3NTAxOTg4ODc6MDow\" 3) 시스템 상태: df -h / && uptime (이상 없으면 '정상' 한 줄) 4) TQQQ/SOXL/NVDA 시세 (WebSearch, 개장일만, 손절선 $47 접근 시 강조). 한국어로 간결하게.",
       "allowedTools": "Read,Bash,WebSearch",
@@ -220,7 +220,7 @@
     {
       "id": "news-briefing",
       "name": "뉴스 브리핑",
-      "schedule": "50 7 * * *",
+      "schedule": "0 6 * * *",
       "timeout": 120,
       "prompt": "오늘 AI/Tech 주요 뉴스 3가지를 한 줄씩 요약해줘. 투자 관련 뉴스 있으면 포함. 간결하게.",
       "allowedTools": "WebSearch",
@@ -696,7 +696,7 @@
       "id": "doc-supervisor",
       "name": "문서화 시스템 감독 (Doc Supervisor)",
       "schedule": "0 5 * * *",
-      "timeout": 180,
+      "timeout": 300,
       "prompt": "문서화 시스템 감독관으로서 일일 점검을 수행해. 컨텍스트 파일의 점검 항목을 순서대로 실행하고, 결과를 테이블 형식으로 정리해. 이상 발견 시 상세 설명 포함. 보고서를 ~/.jarvis/rag/teams/reports/doc-supervisor-$(date +%F).md 에 저장해.",
       "allowedTools": "Bash,Read,Write",
       "output": [
@@ -721,10 +721,10 @@
     },
     {
       "id": "doc-sync-auditor",
-      "name": "문서-코드 정합성 감사",
-      "schedule": "0 23 * * *",
-      "timeout": 120,
-      "prompt": "오늘 변경된 코드/스크립트/설정 파일과 문서 파일을 비교해 정합성을 감사해라.\n\n1. 오늘 변경된 코드 파일 목록:\n   find ~/.jarvis/lib ~/.jarvis/bin ~/.jarvis/scripts ~/.jarvis/discord ~/.jarvis/config -not -path '*/node_modules/*' -not -path '*/logs/*' \\( -name '*.mjs' -o -name '*.js' -o -name '*.sh' -o -name '*.json' \\) -daystart -mtime -1 2>/dev/null\n\n2. 오늘 변경된 문서 파일 목록:\n   find ~/.jarvis/docs ~/.jarvis/context ~/.jarvis/adr -name '*.md' -daystart -mtime -1 2>/dev/null\n\n3. 코드 변경 파일 > 0 이고 docs 변경 파일 = 0이면 '⚠️ 문서 미업데이트 가능성' 경고.\n4. 변경 파일명 기반으로 연관 문서가 있는지 추론 (예: bot-cron.sh 수정 → fsm-guide.md 확인).\n5. 문제 없으면 Discord 전송 생략 (output 파일만). 문제 있으면 Discord 전송.\n6. 결과 보고서: ~/.jarvis/rag/teams/reports/doc-sync-$(date +%F).md 저장.",
+      "name": "문서-코드 정합성 감사 + 자동 적용",
+      "schedule": "20 23 * * *",
+      "timeout": 300,
+      "prompt": "문서-코드 정합성 감사 및 자동 적용을 수행해라.\n\n## STEP 1: pending-doc-updates.json 확인\n```\ncat ~/.jarvis/state/pending-doc-updates.json 2>/dev/null || echo 'NO_PENDING'\n```\n파일이 없거나 비어있으면 STEP 2로 바로 이동.\n\n## STEP 2: 오늘 변경된 파일 직접 확인 (fallback)\npending 파일이 없으면:\n- 오늘 변경된 코드: find ~/.jarvis/lib ~/.jarvis/bin ~/.jarvis/scripts ~/.jarvis/discord ~/.jarvis/config -not -path '*/node_modules/*' -not -path '*/logs/*' \\( -name '*.mjs' -o -name '*.js' -o -name '*.sh' -o -name '*.json' \\) -daystart -mtime -1 2>/dev/null\n- 오늘 변경된 문서: find ~/.jarvis/docs ~/.jarvis/context -name '*.md' -daystart -mtime -1 2>/dev/null\n- config/doc-map.json 기반으로 누락 문서 계산 (patterns[].match_glob → patterns[].docs 매핑)\n\n## STEP 3: 누락 문서별 직접 수정\n\n각 누락 문서에 대해:\n1. 현재 문서 내용 Read\n2. doc-map.json에서 해당 문서를 참조하는 patterns 찾기 → reason 필드로 어떤 변경이 필요한지 파악\n3. 변경을 트리거한 코드 파일 Read (match_glob 기준)\n4. 변경이 필요한 섹션을 분석 후 해당 섹션만 수정, 나머지 보존\n5. 수정 전 원본을 백업: cp {doc} ~/.jarvis/state/doc-backups/$(date +%Y%m%d)-{doc_basename}.bak\n   (mkdir -p ~/.jarvis/state/doc-backups/ 먼저)\n6. 원본 문서에 직접 Write\n\n수정 결과를 ~/.jarvis/state/doc-sync-results-$(date +%F).json 에 기록:\n```json\n{\"doc\": \"docs/xxx.md\", \"status\": \"ok|failed\", \"reason\": \"...\"}\n```\n성공/실패 여부와 무관하게 모든 문서 기록 후 계속 진행.\n\n## STEP 4: commitments.jsonl 점검\n```\ncat ~/.jarvis/state/commitments.jsonl 2>/dev/null | grep '\"status\":\"open\"' | head -10\n```\n24시간 이상 open인 항목이 있으면 목록 포함.\n\n## STEP 5: pending-doc-updates.json 정리\nSTEP 3 results JSON 확인 후:\n- 전부 성공: rm -f ~/.jarvis/state/pending-doc-updates.json\n- 일부 실패: 실패한 항목만 pending 파일에 남기고 나머지 제거\n\n## STEP 6: 결과 보고\n- 보고서: ~/.jarvis/rag/teams/reports/doc-sync-$(date +%F).md 저장\n- 형식: | 문서 | 상태 | 변경 섹션 | 트리거 코드 |\n- 수정된 문서가 1개 이상인 경우만 Discord 전송 (이상 없으면 생략)",
       "allowedTools": "Bash,Read,Write",
       "output": [
         "discord",
@@ -735,16 +735,16 @@
         "max": 1,
         "backoff": "fixed"
       },
-      "maxBudget": "0.30",
+      "maxBudget": "0.80",
       "priority": "daily",
       "resultRetention": 14,
-      "resultMaxChars": 1000,
-      "model": "claude-haiku-4-5-20251001"
+      "resultMaxChars": 1500,
+      "model": "claude-sonnet-4-5-20251001"
     },
     {
       "id": "board-meeting-am",
       "name": "Board Meeting (아침)",
-      "schedule": "10 8 * * *",
+      "schedule": "5 6 * * *",
       "timeout": 660,
       "script": "~/.jarvis/bin/parallel-board-meeting.sh",
       "prompt": "",
@@ -1291,6 +1291,27 @@
       "timeout": 600,
       "discordChannel": "jarvis-blog",
       "script": "/Users/ramsbaby/.jarvis/scripts/oss-promo.sh"
+    },
+    {
+      "id": "gen-system-overview",
+      "schedule": "5 4 * * *",
+      "enabled": true,
+      "timeout": 60,
+      "output": [
+        "file"
+      ],
+      "description": "시스템 개요 문서 자동 재생성 (SYSTEM-OVERVIEW.md)",
+      "script": "~/.jarvis/scripts/gen-system-overview.sh",
+      "name": "시스템 개요 자동 재생성"
+    },
+    {
+      "id": "oss-docs",
+      "name": "OSS README 갱신 제안",
+      "schedule": "0 11 * * 3",
+      "enabled": true,
+      "timeout": 600,
+      "discordChannel": "jarvis-blog",
+      "script": "/Users/ramsbaby/.jarvis/scripts/oss-docs.sh"
     }
   ]
 }

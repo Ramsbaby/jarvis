@@ -337,6 +337,21 @@ async function main() {
     }
   }
 
+  // 6b. OSS reports (rag/oss-reports/, 최근 30일)
+  try {
+    const ossReportDir = join(BOT_HOME, 'rag', 'oss-reports');
+    const entries = await readdir(ossReportDir);
+    for (const f of entries) {
+      if (extname(f) !== '.md') continue;
+      const fPath = join(ossReportDir, f);
+      const mtime = await getMtime(fPath);
+      if (mtime) {
+        const ageDays = (Date.now() - mtime) / (1000 * 60 * 60 * 24);
+        if (ageDays <= 30) targets.push(fPath);
+      }
+    }
+  } catch { /* dir may not exist yet */ }
+
   // 6. Results (latest per task, max 7 days)
   try {
     const resultsDir = join(BOT_HOME, 'results');
