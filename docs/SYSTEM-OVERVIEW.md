@@ -1,7 +1,7 @@
 # Jarvis 시스템 개요
 
 > 🤖 **자동 생성 문서** — 직접 편집 금지
-> Generated: 2026-03-18 15:10:28 | Commit: `bcf7b7b` (`main`)
+> Generated: 2026-03-18 15:36:54 | Commit: `c6b121a` (`main`)
 > 업데이트: `scripts/gen-system-overview.sh` (매일 04:05 + git commit 시)
 
 ---
@@ -12,7 +12,7 @@
 
 | 항목 | 내용 |
 |------|------|
-| 오너 | 이정우 (정우님) |
+| 오너 | ${JARVIS_OWNER_NAME:-Your Name} |
 | 인프라 | Mac Mini (macOS, 24/7 무중단) |
 | 비용 | 월 ~$20 (Claude Max 구독) — API 직접 대비 90% 절약 |
 | 자율화율 | 일상 루틴 100% 자동, 장애 복구 95% 자동 |
@@ -129,7 +129,7 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `memory-sync` | `30 4 * * 1` | jarvis-system | 메모리 자동 동기화 |
 | `cron-auditor` | `30 5 * * *` | jarvis-infra | 크론 전체 점검 |
 | `vault-auto-link` | `30 6 * * *` | jarvis | Vault 자동 링크 생성 |
-| `boram-daily-schedule` | `30 7 * * *` | jarvis-boram | 매일 07:30 KST 보람님 Preply 수업 일정을 #jarvis-boram 채널로 자동  |
+| `boram-daily-schedule` | `30 7 * * *` | ${FAMILY_CHANNEL:-jarvis-family} | 매일 07:30 KST ${FAMILY_MEMBER_NAME:-가족}님 Preply 수업 일정 |
 | `weekly-kpi` | `30 8 * * 1` | jarvis-ceo | 주간 KPI 리포트 |
 | `code-auditor` | `45 4 * * *` | jarvis-system | 코드 품질 감사 |
 | `connections-weekly-insight` | `45 9 * * 1` | jarvis-ceo | Connections 주간 인사이트 |
@@ -420,7 +420,7 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | ai.jarvis.orchestrator | 🟢 실행중 | 28860 |
 | ai.openclaw.glances | 🟢 실행중 | 764 |
 | ai.jarvis.webhook-listener | 🟢 실행중 | 7140 |
-| ai.jarvis.discord-bot | 🟢 실행중 | 1721 |
+| ai.jarvis.discord-bot | 🟢 실행중 | 23404 |
 | ai.jarvis.boram-briefing | 🔴 중지 | - |
 | ai.jarvis.session-summarizer | 🔴 중지 | - |
 | ai.jarvis.daily-restart | 🔴 중지 | - |
@@ -428,12 +428,13 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | ai.jarvis.event-watcher | 🟢 실행중 | 89744 |
 | ai.jarvis.boot-auth-check | 🔴 중지 | - |
 
-> 마지막 확인: 2026-03-18 15:10:28
+> 마지막 확인: 2026-03-18 15:36:54
 
 ---
 
 ## 11. 최근 변경
 
+- `c6b121a` chore: OSS 공개 준비 — 개인정보 제거 + 코드 강화 (Round 1~3)
 - `bcf7b7b` chore: 크론 정리 64→56개 + bot-quality-analyzer CEO 에스컬레이션 추가
 - `7227d9f` fix: oss-manager 검증 결과 반영 — FAIL 2건 + WARN 8건 수정
 - `50807aa` feat: OSS 자동 관리 에이전트 구현 (oss-manager)
@@ -443,7 +444,6 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 - `3fd64c6` chore: sync local changes to jarvis-home migration
 - `52dfe55` rename: knowledge-synthesizer → insight-extractor + rag-engine compact fix
 - `e0d4cc4` feat: P1~P3 개선사항 구현 — 신뢰성·확장성·이식성 강화
-- `ea2a60c` fix(readme-ko): 30개→49개 크론 schedule footer, 8팀→11팀 company-agent 주석, 중복 구분선 제거
 
 ---
 
