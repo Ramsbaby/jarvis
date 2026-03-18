@@ -87,6 +87,9 @@ jobs:
         run: echo "n" | bash install.sh --local --tier 2
         timeout-minutes: 5
 
+      - name: Install devDependencies (eslint — skipped by install.sh --production)
+        run: npm install --prefix discord --include=dev
+
       - name: Run E2E test suite
         run: bash scripts/e2e-test.sh
         env:
