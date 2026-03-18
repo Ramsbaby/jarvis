@@ -3,9 +3,9 @@
     {
       "id": "morning-standup",
       "name": "모닝 스탠드업",
-      "schedule": "10 6 * * *",
+      "schedule": "15 6 * * *",
       "timeout": 300,
-      "prompt": "ultrathink\n\n오늘의 아침 브리핑을 작성해줘. 공용 게시판(시스템 프롬프트의 📌 공용 게시판 섹션)을 먼저 확인해 CEO 인계사항이 있으면 맨 위에 표시. 1) Google Calendar 오늘 일정: gog calendar list --from today --to today --account yuiopnm1931@gmail.com 2) Google Tasks 미완료: gog tasks list \"MDE3MjE5NzU0MjA3NTAxOTg4ODc6MDow\" 3) 시스템 상태: df -h / && uptime (이상 없으면 '정상' 한 줄) 4) TQQQ/SOXL/NVDA 시세 (WebSearch, 개장일만, 손절선 $47 접근 시 강조). 한국어로 간결하게.",
+      "prompt": "ultrathink\n\n오늘의 아침 브리핑을 작성해줘. 공용 게시판(시스템 프롬프트의 📌 공용 게시판 섹션)을 먼저 확인해 CEO 인계사항이 있으면 맨 위에 표시. 1) Google Calendar 오늘 일정: gog calendar list --from today --to today --account ${GOOGLE_ACCOUNT} 2) Google Tasks 미완료: gog tasks list \"${GOOGLE_TASKS_LIST_ID}\" 3) 시스템 상태: df -h / && uptime (이상 없으면 '정상' 한 줄) 4) TQQQ/SOXL/NVDA 시세 (WebSearch, 개장일만, 손절선 $47 접근 시 강조). 한국어로 간결하게.",
       "allowedTools": "Read,Bash,WebSearch",
       "output": [
         "discord",
@@ -115,7 +115,7 @@
       "id": "system-health",
       "model": "claude-haiku-4-5-20251001",
       "name": "시스템 헬스체크",
-      "schedule": "0 * * * *",
+      "schedule": "*/30 * * * *",
       "timeout": 120,
       "prompt": "시스템 상태를 체크하고 결과를 마크다운 표로 보여줘.\n\n확인 항목:\n1) 디스크 사용량 (df -h | grep '/$')\n2) 메모리 (memory_pressure 2>/dev/null | grep 'System-wide memory free percentage' | awk '{print $NF}' 으로 실제 여유율 확인. 20% 미만 MEDIUM, 10% 미만 HIGH)\n3) CPU 로드 (uptime)\n4) 핵심 프로세스 생존 확인: discord-bot, orchestrator (pgrep -f)\n5) 크론 실패 감지: grep -cE 'ABORTED|FAILED' ~/.jarvis/logs/cron.log 로 전체 카운트, tail -200 ~/.jarvis/logs/cron.log | grep -E 'ABORTED|FAILED' 로 최근 실패 목록\n\n판단 기준:\n- 최근 1시간 내 ABORTED/FAILED가 3건 이상이면 ⚠️ 크론 장애 경고\n- discord-bot 또는 orchestrator 프로세스 없으면 🔴 경고\n- 디스크 90% 이상이면 🔴 경고\n- 모두 정상이면 ✅ OK 한 줄로 마무리\n\n필수: 끝에 bash ~/.jarvis/scripts/health-check.sh 를 실행하여 health.json 갱신",
       "allowedTools": "Bash",
@@ -564,7 +564,7 @@
       "name": "학습팀 주간 보고 (Academy)",
       "schedule": "0 20 * * 0",
       "timeout": 300,
-      "prompt": "자비스 컴퍼니 학습팀 주간 보고를 작성해.\n1) ls ~/.jarvis/rag/teams/shared-inbox/ 으로 academy팀 수신 메시지 확인\n2) ~/.jarvis/results/career-weekly/ 최근 결과 읽어 이직 준비 진행 상황 요약\n3) Google Tasks에서 학습 관련 미완료 항목 확인 (gog tasks list MDE3MjE5NzU0MjA3NTAxOTg4ODc6MDow)\n4) 보람님 관련 이번 주 특이 사항 (있으면 기록, 없으면 생략)\n5) 다음 주 커리어/학습 목표 3가지 제안\n보고서를 ~/.jarvis/rag/teams/reports/academy-$(date +%F).md 에 저장. Discord #jarvis-ceo 채널에 요약 전송.",
+      "prompt": "자비스 컴퍼니 학습팀 주간 보고를 작성해.\n1) ls ~/.jarvis/rag/teams/shared-inbox/ 으로 academy팀 수신 메시지 확인\n2) ~/.jarvis/results/career-weekly/ 최근 결과 읽어 이직 준비 진행 상황 요약\n3) Google Tasks에서 학습 관련 미완료 항목 확인 (gog tasks list ${GOOGLE_TASKS_LIST_ID})\n4) 보람님 관련 이번 주 특이 사항 (있으면 기록, 없으면 생략)\n5) 다음 주 커리어/학습 목표 3가지 제안\n보고서를 ~/.jarvis/rag/teams/reports/academy-$(date +%F).md 에 저장. Discord #jarvis-ceo 채널에 요약 전송.",
       "allowedTools": "Bash,Read,Write",
       "output": [
         "discord",
@@ -615,7 +615,7 @@
       "name": "브랜드팀 주간 보고 (Brand)",
       "schedule": "0 8 * * 2",
       "timeout": 300,
-      "prompt": "ultrathink\n\n자비스 컴퍼니 브랜드팀 주간 보고를 작성해.\n1) ls ~/.jarvis/rag/teams/shared-inbox/ 으로 brand팀 수신 메시지 확인\n2) gh api user/repos --jq '.[] | select(.name==\"openclaw\" or .name==\"jarvis\") | {name,stargazers_count,forks_count,open_issues_count}' 2>/dev/null 으로 GitHub 저장소 현황\n3) WebSearch로 'ramsbaby.netlify.app blog' 검색해 블로그 최근 포스팅 확인\n4) 이번 주 오픈소스 성장 액션 아이템 2~3개 제안 (블로그 글 주제, README 개선 등)\n5) 다음 주 브랜드 활동 계획 1가지\n보고서를 ~/.jarvis/rag/teams/reports/brand-$(date +%Y-W%V).md 에 저장. Discord #jarvis-ceo 채널에 요약 전송.",
+      "prompt": "ultrathink\n\n자비스 컴퍼니 브랜드팀 주간 보고를 작성해.\n1) ls ~/.jarvis/rag/teams/shared-inbox/ 으로 brand팀 수신 메시지 확인\n2) gh api user/repos --jq '.[] | select(.name==\"openclaw\" or .name==\"jarvis\") | {name,stargazers_count,forks_count,open_issues_count}' 2>/dev/null 으로 GitHub 저장소 현황\n3) WebSearch로 '${PERSONAL_SITE_URL} blog' 검색해 블로그 최근 포스팅 확인\n4) 이번 주 오픈소스 성장 액션 아이템 2~3개 제안 (블로그 글 주제, README 개선 등)\n5) 다음 주 브랜드 활동 계획 1가지\n보고서를 ~/.jarvis/rag/teams/reports/brand-$(date +%Y-W%V).md 에 저장. Discord #jarvis-ceo 채널에 요약 전송.",
       "allowedTools": "Bash,WebSearch,Write",
       "output": [
         "discord",
@@ -693,38 +693,11 @@
       "resultMaxChars": 2000
     },
     {
-      "id": "doc-supervisor",
-      "name": "문서화 시스템 감독 (Doc Supervisor)",
-      "schedule": "0 5 * * *",
-      "timeout": 300,
-      "prompt": "문서화 시스템 감독관으로서 일일 점검을 수행해. 컨텍스트 파일의 점검 항목을 순서대로 실행하고, 결과를 테이블 형식으로 정리해. 이상 발견 시 상세 설명 포함. 보고서를 ~/.jarvis/rag/teams/reports/doc-supervisor-$(date +%F).md 에 저장해.",
-      "allowedTools": "Bash,Read,Write",
-      "output": [
-        "discord",
-        "file"
-      ],
-      "discordChannel": "jarvis-system",
-      "retry": {
-        "max": 2,
-        "backoff": "exponential"
-      },
-      "maxBudget": "1.00",
-      "priority": "daily",
-      "contextFile": "doc-supervisor.md",
-      "depends": [
-        "record-daily",
-        "council-insight"
-      ],
-      "resultRetention": 30,
-      "resultMaxChars": 1500,
-      "model": "claude-haiku-4-5-20251001"
-    },
-    {
       "id": "doc-sync-auditor",
       "name": "문서-코드 정합성 감사 + 자동 적용",
-      "schedule": "20 23 * * *",
+      "schedule": "20 23 * * 1,4",
       "timeout": 300,
-      "prompt": "문서-코드 정합성 감사 및 자동 적용을 수행해라.\n\n## STEP 1: pending-doc-updates.json 확인\n```\ncat ~/.jarvis/state/pending-doc-updates.json 2>/dev/null || echo 'NO_PENDING'\n```\n파일이 없거나 비어있으면 STEP 2로 바로 이동.\n\n## STEP 2: 오늘 변경된 파일 직접 확인 (fallback)\npending 파일이 없으면:\n- 오늘 변경된 코드: find ~/.jarvis/lib ~/.jarvis/bin ~/.jarvis/scripts ~/.jarvis/discord ~/.jarvis/config -not -path '*/node_modules/*' -not -path '*/logs/*' \\( -name '*.mjs' -o -name '*.js' -o -name '*.sh' -o -name '*.json' \\) -daystart -mtime -1 2>/dev/null\n- 오늘 변경된 문서: find ~/.jarvis/docs ~/.jarvis/context -name '*.md' -daystart -mtime -1 2>/dev/null\n- config/doc-map.json 기반으로 누락 문서 계산 (patterns[].match_glob → patterns[].docs 매핑)\n\n## STEP 3: 누락 문서별 직접 수정\n\n각 누락 문서에 대해:\n1. 현재 문서 내용 Read\n2. doc-map.json에서 해당 문서를 참조하는 patterns 찾기 → reason 필드로 어떤 변경이 필요한지 파악\n3. 변경을 트리거한 코드 파일 Read (match_glob 기준)\n4. 변경이 필요한 섹션을 분석 후 해당 섹션만 수정, 나머지 보존\n5. 수정 전 원본을 백업: cp {doc} ~/.jarvis/state/doc-backups/$(date +%Y%m%d)-{doc_basename}.bak\n   (mkdir -p ~/.jarvis/state/doc-backups/ 먼저)\n6. 원본 문서에 직접 Write\n\n수정 결과를 ~/.jarvis/state/doc-sync-results-$(date +%F).json 에 기록:\n```json\n{\"doc\": \"docs/xxx.md\", \"status\": \"ok|failed\", \"reason\": \"...\"}\n```\n성공/실패 여부와 무관하게 모든 문서 기록 후 계속 진행.\n\n## STEP 4: commitments.jsonl 점검\n```\ncat ~/.jarvis/state/commitments.jsonl 2>/dev/null | grep '\"status\":\"open\"' | head -10\n```\n24시간 이상 open인 항목이 있으면 목록 포함.\n\n## STEP 5: pending-doc-updates.json 정리\nSTEP 3 results JSON 확인 후:\n- 전부 성공: rm -f ~/.jarvis/state/pending-doc-updates.json\n- 일부 실패: 실패한 항목만 pending 파일에 남기고 나머지 제거\n\n## STEP 6: 결과 보고\n- 보고서: ~/.jarvis/rag/teams/reports/doc-sync-$(date +%F).md 저장\n- 형식: | 문서 | 상태 | 변경 섹션 | 트리거 코드 |\n- 수정된 문서가 1개 이상인 경우만 Discord 전송 (이상 없으면 생략)",
+      "prompt": "문서-코드 정합성 감사 및 자동 적용을 수행해라.\n\n## STEP 1: pending-doc-updates.json 확인\n```\ncat ~/.jarvis/state/pending-doc-updates.json 2>/dev/null || echo 'NO_PENDING'\n```\n파일이 없거나 'NO_PENDING'이면 STEP 2로 이동.\n있으면 updates_needed 배열에서 status가 'pending'인 항목만 추출. 이 목록이 처리 대상.\n\n## STEP 2: 오늘 변경된 파일 직접 확인 (fallback — STEP 1에서 pending 없을 때만)\n- 오늘 변경 코드: find ~/.jarvis/lib ~/.jarvis/bin ~/.jarvis/scripts ~/.jarvis/discord ~/.jarvis/config -not -path '*/node_modules/*' -not -path '*/logs/*' \\( -name '*.mjs' -o -name '*.js' -o -name '*.sh' -o -name '*.json' \\) -daystart -mtime -1 2>/dev/null\n- 오늘 변경 문서: find ~/.jarvis/docs ~/.jarvis/context -name '*.md' -daystart -mtime -1 2>/dev/null\n- doc-map.json (config/doc-map.json) patterns 배열 순회: match_glob이 변경된 코드 파일과 매칭되면 docs 배열의 문서가 업데이트 대상\n\n## STEP 3: 처리 대상 문서별 수정 (각 문서 독립적으로 처리)\n\n각 문서에 대해 순서대로:\n1. 문서 Read: cat {full_doc_path}\n2. doc-map.json에서 이 문서를 포함하는 patterns 찾기 → reason 필드로 어떤 내용 변경인지 파악\n3. 해당 코드 파일(match_glob 기준) Read\n4. 어떤 섹션을 어떻게 바꿔야 하는지 분석\n5. 백업 먼저: mkdir -p ~/.jarvis/state/doc-backups/ && cp {full_doc_path} ~/.jarvis/state/doc-backups/$(date +%Y%m%d)-$(basename {doc_path}).bak\n6. 원본 문서의 해당 섹션만 수정 Write\n\n각 문서 처리 후 결과를 JSONL로 기록:\n```\necho '{\"doc\":\"{doc_path}\",\"status\":\"ok\",\"changed_section\":\"...\"}' >> ~/.jarvis/state/doc-sync-results-$(date +%F).jsonl\n```\n실패 시: echo '{\"doc\":\"{doc_path}\",\"status\":\"failed\",\"reason\":\"...\"}' >> ~/.jarvis/state/doc-sync-results-$(date +%F).jsonl\n**오류가 나도 다음 문서 계속 처리.**\n\n## STEP 4: commitments.jsonl 점검\n```\ncat ~/.jarvis/state/commitments.jsonl 2>/dev/null | grep '\"status\":\"open\"' | head -10\n```\n24시간 이상 open인 항목이 있으면 목록에 포함.\n\n## STEP 5: pending-doc-updates.json 정리\nresults JSONL 파일에서 실패(status=failed) 항목 확인:\n```\ngrep '\"status\":\"failed\"' ~/.jarvis/state/doc-sync-results-$(date +%F).jsonl 2>/dev/null\n```\n- **실패 0건**: rm -f ~/.jarvis/state/pending-doc-updates.json\n- **실패 있음**: pending-doc-updates.json의 updates_needed 배열에서 성공한 항목 제거 후 재저장\n  (python3 -c로 JSON 파싱: 성공한 doc_path 목록과 대조해 status=failed인 것만 남김)\n\n## STEP 6: 결과 보고\n- 보고서: ~/.jarvis/rag/teams/reports/doc-sync-$(date +%F).md 저장\n- 형식 예시:\n  | 문서 | 상태 | 변경 내용 | 트리거 코드 |\n  |------|------|----------|------------|\n  | docs/fsm-guide.md | ✅ 적용 | FSM 전이 섹션 갱신 | lib/task-fsm.mjs |\n- 수정 1건 이상이면 Discord 전송. 이상 없으면 파일만 저장.",
       "allowedTools": "Bash,Read,Write",
       "output": [
         "discord",
@@ -739,12 +712,12 @@
       "priority": "daily",
       "resultRetention": 14,
       "resultMaxChars": 1500,
-      "model": "claude-sonnet-4-5-20251001"
+      "model": "claude-sonnet-4-6"
     },
     {
       "id": "board-meeting-am",
       "name": "Board Meeting (아침)",
-      "schedule": "5 6 * * *",
+      "schedule": "10 8 * * *",
       "timeout": 660,
       "script": "~/.jarvis/bin/parallel-board-meeting.sh",
       "prompt": "",
@@ -768,33 +741,9 @@
       "scriptArgs": "am"
     },
     {
-      "id": "board-meeting-pm",
-      "name": "Board Meeting (저녁)",
-      "schedule": "55 21 * * *",
-      "timeout": 660,
-      "script": "~/.jarvis/bin/parallel-board-meeting.sh",
-      "prompt": "",
-      "allowedTools": "Read,Bash,Write",
-      "output": [
-        "file"
-      ],
-      "discordChannel": "jarvis-ceo",
-      "retry": {
-        "max": 1,
-        "backoff": "fixed"
-      },
-      "maxBudget": "1.20",
-      "priority": "critical",
-      "depends": [],
-      "contextFile": null,
-      "resultRetention": 30,
-      "resultMaxChars": 2000,
-      "scriptArgs": "pm"
-    },
-    {
       "id": "agent-batch-commit",
       "name": "에이전트 산출물 일괄 커밋",
-      "schedule": "20 8,22 * * *",
+      "schedule": "20 8 * * *",
       "timeout": 60,
       "script": "~/.jarvis/scripts/agent-batch-commit.sh",
       "prompt": "",
@@ -861,7 +810,7 @@
         "dev-run-async"
       ],
       "name": "자율 개발 큐 러너",
-      "schedule": "50 22 * * *",
+      "schedule": "55 22 * * *",
       "script": "~/.jarvis/bin/dev-runner.sh",
       "timeout": 600,
       "output": [
@@ -1118,39 +1067,6 @@
       "model": "claude-haiku-4-5-20251001"
     },
     {
-      "id": "bot-self-critique",
-      "name": "봇 자가 품질 점검",
-      "schedule": "45 2 * * *",
-      "timeout": 180,
-      "model": "claude-haiku-4-5-20251001",
-      "prompt": "오늘 자비스 봇의 응답 품질을 자가 점검한다.\n\n1. 최근 24시간 품질 분석 결과 확인:\nbash ~/.jarvis/scripts/bot-quality-analyzer.sh\n\n2. 최근 대화 로그 샘플 확인 (최근 10건):\njq -s 'sort_by(.ts) | reverse | .[:10]' ~/.jarvis/logs/discord-bot.jsonl 2>/dev/null | head -50\n\n분석 기준:\n- 응답 시간이 30초 이상인 건 몇 %인가?\n- 에러 응답 비율은?\n- 툴 호출 3회 이상인 단순 질문이 있는가? (불필요한 복잡도)\n- 불필요한 사과/아첨 패턴이 있는가? ('죄송해요', '도와드리겠습니다' 등)\n\n3. 개선이 필요한 문제가 발견된 경우, GitHub에 이슈를 등록한다:\n- mcp__github__create_issue 도구 사용\n- owner: Ramsbaby, repo: claude-discord-bridge\n- title 형식: '[bot-critique] {문제 요약} (날짜)'\n- body: 발견된 문제, 예상 원인, 개선 제안 포함\n- labels: ['bot-quality', 'auto-detected']\n- 문제가 없으면 이슈를 만들지 않는다.\n\n4. 자동 수정 가능한 단순 문제(설정값 오타, 단순 문자열 수정 등)는 PR을 생성한다:\n- mcp__github__create_branch로 브랜치 생성: 'bot-critique/YYYYMMDD-{issue-number}'\n- mcp__github__get_file_contents로 수정 대상 파일 현재 내용 확인\n- mcp__github__create_or_update_file로 수정 반영\n- mcp__github__create_pull_request로 PR 생성\n  - title: '[bot-critique] {수정 내용 요약}'\n  - body: 발견된 문제, 적용한 수정, 관련 이슈 번호 포함\n- 로직 변경·코드 구조 변경·삭제 작업은 PR 대신 이슈만 등록한다.\n\n출력 형식 (코드블록 없이):\n🤖 봇 자가 점검 — M/D\n\n품질 지표:\n- 총 응답: N건 · 에러: N건(N%)\n- 평균 응답시간: Ns\n- 30초 초과: N건\n\n개선 필요:\n- [발견된 문제점들 + GitHub 이슈/PR 번호]\n\n이상 없으면: 모든 지표 정상입니다. ✅",
-      "allowedTools": [
-        "Bash",
-        "mcp__github__create_issue",
-        "mcp__github__list_issues",
-        "mcp__github__get_issue",
-        "mcp__github__create_pull_request",
-        "mcp__github__create_branch",
-        "mcp__github__create_or_update_file",
-        "mcp__github__get_file_contents"
-      ],
-      "output": [
-        "discord"
-      ],
-      "discordChannel": "jarvis-system",
-      "depends": [
-        "bot-quality-check"
-      ],
-      "retry": {
-        "max": 1,
-        "backoff": "exponential"
-      },
-      "maxBudget": "0.15",
-      "priority": "normal",
-      "resultRetention": 7,
-      "resultMaxChars": 800
-    },
-    {
       "id": "memory-expire",
       "name": "기억 만료 아카이브",
       "schedule": "0 3 * * 1",
@@ -1189,26 +1105,15 @@
       "script": "~/.jarvis/scripts/jira-sync.sh",
       "timeout": 180,
       "enabled": true,
-      "channel": "jarvis-ceo"
-    },
-    {
-      "id": "dev-event-bus",
-      "disabled": true,
-      "schedule": "50 22 * * *",
-      "prompt": "disabled — crontab 잔재"
-    },
-    {
-      "id": "dev-event-watcher",
-      "disabled": true,
-      "schedule": "0 23 * * *",
-      "prompt": "disabled — crontab 잔재"
+      "channel": "jarvis-ceo",
+      "discordChannel": "jarvis-dev"
     },
     {
       "id": "skill-eval",
       "name": "스킬 자동 평가",
       "schedule": "30 4 * * 0",
       "timeout": 600,
-      "script": "scripts/skill-eval.sh",
+      "script": "~/.jarvis/scripts/skill-eval.sh",
       "output": [
         "discord",
         "file"
@@ -1221,19 +1126,6 @@
       "priority": "weekly",
       "resultRetention": 90,
       "resultMaxChars": 2000
-    },
-    {
-      "id": "stale-task-watcher",
-      "name": "Stale 태스크 감지 및 자동 전이",
-      "schedule": "*/30 * * * *",
-      "script": "~/.jarvis/scripts/stale-task-watcher.sh",
-      "timeout": 60,
-      "output": [
-        "file"
-      ],
-      "retry": {
-        "max": 1
-      }
     },
     {
       "id": "career-extractor",
@@ -1257,15 +1149,6 @@
       "prompt": "cron-auditor.md 지침에 따라 모든 Jarvis 크론 동작 상태를 점검하고 리포트를 Discord에 전송하라."
     },
     {
-      "id": "system-doctor",
-      "schedule": "0 6 * * *",
-      "enabled": true,
-      "timeout": 300,
-      "discordChannel": "jarvis-system",
-      "description": "Jarvis 자동 시스템 점검 (LaunchAgent, Discord봇, RAG, 크론, E2E, Glances, 디스크)",
-      "script": "/Users/ramsbaby/.jarvis/scripts/system-doctor.sh"
-    },
-    {
       "id": "oss-recon",
       "name": "OSS 경쟁자 주간 분석",
       "schedule": "30 10 * * 1",
@@ -1277,7 +1160,7 @@
     {
       "id": "oss-maintenance",
       "name": "OSS 이슈/PR 일간 트리아지",
-      "schedule": "15 9 * * *",
+      "schedule": "0 9 * * 1",
       "enabled": true,
       "timeout": 300,
       "discordChannel": "jarvis-blog",
@@ -1291,18 +1174,6 @@
       "timeout": 600,
       "discordChannel": "jarvis-blog",
       "script": "/Users/ramsbaby/.jarvis/scripts/oss-promo.sh"
-    },
-    {
-      "id": "gen-system-overview",
-      "schedule": "5 4 * * *",
-      "enabled": true,
-      "timeout": 60,
-      "output": [
-        "file"
-      ],
-      "description": "시스템 개요 문서 자동 재생성 (SYSTEM-OVERVIEW.md)",
-      "script": "~/.jarvis/scripts/gen-system-overview.sh",
-      "name": "시스템 개요 자동 재생성"
     },
     {
       "id": "oss-docs",

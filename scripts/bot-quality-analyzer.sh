@@ -15,8 +15,10 @@ MONITORING="$BOT_HOME/config/monitoring.json"
 mkdir -p "$RESULTS_DIR"
 
 WEBHOOK_URL=""
+CEO_WEBHOOK_URL=""
 if [[ -f "$MONITORING" ]]; then
     WEBHOOK_URL=$(python3 -c "import json; d=json.load(open('$MONITORING')); print(d.get('webhooks',{}).get('jarvis-system',''))" 2>/dev/null || true)
+    CEO_WEBHOOK_URL=$(python3 -c "import json; d=json.load(open('$MONITORING')); print(d.get('webhooks',{}).get('jarvis-ceo',''))" 2>/dev/null || true)
 fi
 
 if [[ ! -f "$LOG_FILE" ]]; then echo "[quality] 로그 파일 없음: $LOG_FILE"; exit 0; fi
@@ -141,7 +143,26 @@ if [[ -n "$WEBHOOK_URL" ]]; then
     curl -sf -X POST "$WEBHOOK_URL" \
         -H "Content-Type: application/json" \
         -d "{\"content\":\"${MSG}\"}" > /dev/null 2>&1 || true
-    echo "[quality] 이상 ${#ISSUES[@]}건 → Discord 전송"
+    echo "[quality] 이상 ${#ISSUES[@]}건 → #jarvis-system 전송"
 else
     echo "[quality] WEBHOOK 없음 — 로컬 기록만"
+fi
+
+# ── CEO 에스컬레이션 (심각 이슈만) ───────────────────────────────────
+# 에러율 ≥20% 또는 금지어 ≥1 → #jarvis-ceo 별도 알림
+CEO_ESCALATE=0
+CEO_REASONS=()
+if [[ "$ERROR_PCT" -ge 20 ]]; then CEO_ESCALATE=1; CEO_REASONS+=("에러율 **${ERROR_PCT}%** (임계 20% 초과)"); fi
+if [[ "$FORBIDDEN" -ge 1  ]]; then CEO_ESCALATE=1; CEO_REASONS+=("금지어 노출 **${FORBIDDEN}건** — 즉시 프롬프트 점검 필요"); fi
+
+if [[ "$CEO_ESCALATE" -eq 1 && -n "$CEO_WEBHOOK_URL" ]]; then
+    CEO_MSG="🚨 **[봇 품질 심각 이슈]** $(date +%F)\\n\\n"
+    for reason in "${CEO_REASONS[@]}"; do
+        CEO_MSG+="• ${reason}\\n"
+    done
+    CEO_MSG+="\\n전체 응답: ${TOTAL}건 | 에러율: ${ERROR_PCT}% | 리포트: \`results/quality/$(date +%F).json\`"
+    curl -sf -X POST "$CEO_WEBHOOK_URL" \
+        -H "Content-Type: application/json" \
+        -d "{\"content\":\"${CEO_MSG}\"}" > /dev/null 2>&1 || true
+    echo "[quality] 심각 이슈 → #jarvis-ceo 에스컬레이션"
 fi
