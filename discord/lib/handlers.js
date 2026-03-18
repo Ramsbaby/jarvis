@@ -66,6 +66,7 @@ import { pendingQueue, enqueue, processQueue } from './queue-processor.js';
 import { MessageDebouncer } from './message-debouncer.js';
 import { ProcessorContext, createPreProcessorRegistry } from './pre-processor.js';
 import { isPreplyQuery } from './prompt-sections.js';
+import { detectAndRecord as _trackCommitment } from './commitment-tracker.js';
 
 // ---------------------------------------------------------------------------
 // Message debouncer — 연속 메시지를 1.5s 대기 후 배치로 묶어 단일 Claude 호출
@@ -1014,6 +1015,9 @@ ${extracted}
             }
             // 비동기 메모리 추출 — 메인 응답에 영향 없는 fire-and-forget
             autoExtractMemory(message.author.id, originalPrompt, lastAssistantText).catch((e) => log('debug', 'autoExtractMemory outer catch', { error: e?.message }));
+            // 비동기 약속 감지 — Jarvis가 "하겠습니다" 발화 시 commitments.jsonl 기록
+            _trackCommitment(lastAssistantText, { channelId: effectiveChannelId, userId: message.author.id })
+              .catch((e) => log('debug', 'commitment-tracker outer catch', { error: e?.message }));
           }
         }
       }

@@ -64,10 +64,11 @@ if [[ -n "$WEBHOOK_URL" ]]; then
   # Discord Webhook 전송
   PAYLOAD=$(jq -n --arg content "$(printf '%b' "$BODY")" '{"content": $content}')
   curl -sS -X POST -H "Content-Type: application/json" \
-    -d "$PAYLOAD" "$WEBHOOK_URL" >/dev/null
+    -d "$PAYLOAD" "$WEBHOOK_URL" >/dev/null || echo "Webhook 전송 실패 (curl 오류)" >&2
   echo "Commitment alert sent via webhook: ${COUNT} overdue items"
 else
-  # Webhook 없으면 로그만
+  # Webhook 없으면 로그만 (디렉토리 보장)
+  mkdir -p "$BOT_HOME/logs"
   echo "COMMITMENT OVERDUE (${COUNT}): ${OVERDUE_ITEMS[*]}" >> "$BOT_HOME/logs/commitment-check.log"
   echo "No webhook configured — logged to commitment-check.log"
 fi

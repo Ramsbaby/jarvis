@@ -5,8 +5,8 @@
  *   deps = { sessions, activeProcesses, rateTracker, client, BOT_HOME, BOT_NAME, HOME }
  */
 
-import { readFileSync, existsSync, appendFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, existsSync, appendFileSync, writeFileSync, mkdirSync, readdirSync, renameSync } from 'node:fs';
+import { join, dirname, resolve } from 'node:path';
 import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { log, sendNtfy } from './claude-runner.js';
 import { userMemory } from './user-memory.js';
@@ -78,7 +78,7 @@ export async function handleInteraction(interaction, deps) {
 
   // Owner-only guard for sensitive commands
   const OWNER_ID = process.env.OWNER_DISCORD_ID;
-  const SENSITIVE = ['run', 'schedule', 'remember', 'alert', 'stop', 'clear', 'doctor'];
+  const SENSITIVE = ['run', 'schedule', 'remember', 'alert', 'stop', 'clear', 'doctor', 'approve', 'commitments'];
   if (OWNER_ID && SENSITIVE.includes(interaction.commandName) && interaction.user.id !== OWNER_ID) {
     await interaction.reply({ content: t('error.ownerOnly'), flags: MessageFlags.Ephemeral });
     return;
@@ -640,19 +640,16 @@ export async function handleInteraction(interaction, deps) {
 
   // -------------------------------------------------------------------------
   } else if (commandName === 'approve') {
-    // 오너 전용: doc-draft 승인 → 대상 문서에 적용
+    // 오너 전용: doc-draft 승인 → 대상 문서에 적용 (SENSITIVE 가드로 이미 검증됨)
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const draftArg = interaction.options.getString('draft');
-      const draftsDir = join(BOT_HOME, 'rag', 'teams', 'reports');
+      const draftsDir = resolve(join(BOT_HOME, 'rag', 'teams', 'reports'));
 
-      const { readdirSync } = await import('node:fs');
-      let draftFiles;
+      let draftFiles = [];
       try {
         draftFiles = readdirSync(draftsDir).filter(f => f.startsWith('doc-draft-') && f.endsWith('.md'));
-      } catch {
-        draftFiles = [];
-      }
+      } catch { /* 디렉토리 없으면 빈 배열 */ }
 
       // 목록 표시 모드
       if (!draftArg) {
@@ -670,19 +667,23 @@ export async function handleInteraction(interaction, deps) {
         return;
       }
 
-      // 특정 draft 적용 모드
-      const draftName = draftArg.endsWith('.md') ? draftArg : `${draftArg}.md`;
-      const draftPath = join(draftsDir, draftName);
+      // 번호 선택 → 파일명으로 해소
+      let resolvedName = draftArg;
+      const numIdx = parseInt(draftArg, 10) - 1;
+      if (!isNaN(numIdx) && draftFiles[numIdx]) {
+        resolvedName = draftFiles[numIdx];
+      }
+
+      const draftName = resolvedName.endsWith('.md') ? resolvedName : `${resolvedName}.md`;
+
+      // 경로 트래버설 방지: draftsDir 밖이면 거부
+      const draftPath = resolve(join(draftsDir, draftName));
+      if (!draftPath.startsWith(draftsDir + '/') && draftPath !== draftsDir) {
+        await interaction.editReply('❌ 잘못된 경로입니다.');
+        return;
+      }
 
       if (!existsSync(draftPath)) {
-        // 번호로 선택한 경우
-        const idx = parseInt(draftArg, 10) - 1;
-        if (!isNaN(idx) && draftFiles[idx]) {
-          const selectedPath = join(draftsDir, draftFiles[idx]);
-          // 재귀 방지: 파일명으로 다시 처리하도록 안내
-          await interaction.editReply(`📎 \`/approve draft:${draftFiles[idx]}\` 로 다시 시도해 주세요.`);
-          return;
-        }
         await interaction.editReply(`❌ 파일 없음: \`${draftName}\``);
         return;
       }
@@ -692,7 +693,7 @@ export async function handleInteraction(interaction, deps) {
       // 프론트매터에서 target: 경로 추출
       const targetMatch = draftContent.match(/^---[\s\S]*?target:\s*(.+?)[\s\S]*?---/m);
       if (!targetMatch) {
-        await interaction.editReply(`❌ \`${draftName}\` 에 \`target:\` 프론트매터가 없습니다. 적용 경로를 알 수 없습니다.`);
+        await interaction.editReply(`❌ \`${draftName}\` 에 \`target:\` 프론트매터가 없습니다.`);
         return;
       }
 
@@ -702,16 +703,11 @@ export async function handleInteraction(interaction, deps) {
       // 프론트매터 제거 후 본문만 추출
       const bodyContent = draftContent.replace(/^---[\s\S]*?---\n?/, '').trim();
 
-      // 대상 파일 쓰기
-      const { mkdirSync: mkdirSyncInner } = await import('node:fs');
-      const { dirname } = await import('node:path');
-      mkdirSyncInner(dirname(targetPath), { recursive: true });
+      mkdirSync(dirname(targetPath), { recursive: true });
       writeFileSync(targetPath, bodyContent + '\n', 'utf-8');
 
-      // draft 파일은 .applied 확장으로 보존
-      const appliedPath = draftPath.replace(/\.md$/, '.applied.md');
-      const { renameSync } = await import('node:fs');
-      renameSync(draftPath, appliedPath);
+      // draft 파일은 .applied.md 확장으로 보존
+      renameSync(draftPath, draftPath.replace(/\.md$/, '.applied.md'));
 
       log('info', '/approve applied doc-draft', { draft: draftName, target: targetPath, user: interaction.user.tag });
 

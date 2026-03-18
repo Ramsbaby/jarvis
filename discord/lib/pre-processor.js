@@ -325,7 +325,8 @@ export class SocialApiProcessor extends BasePreProcessor {
 // 이직/커리어/목표 관련 질문 → config/goals.json 자동 주입
 // 매번 "이직 준비 중이에요" 컨텍스트 재설명 없이 LLM이 즉시 맥락 파악.
 // ---------------------------------------------------------------------------
-const GOALS_PATTERN = /이직|커리어|career|목표|로드맵|이력서|resume|취업|연봉|job|okr|kpi|분기\s*목표|goals/i;
+// job 제거 — "cron job", "Spring Batch job" 등 개발 용어에서 goals.json 오주입 방지
+const GOALS_PATTERN = /이직|커리어|career|목표|로드맵|이력서|resume|취업|연봉|okr|kpi|분기\s*목표|goals/i;
 
 export class GoalsProcessor extends BasePreProcessor {
   get name() { return 'GoalsProcessor'; }
@@ -377,7 +378,8 @@ export class GoalsProcessor extends BasePreProcessor {
 // SystemApiProcessor
 // sudo/시스템 자격 증명 필요 작업 감지 → secrets/system.json 자동 주입
 // ---------------------------------------------------------------------------
-const SYSTEM_API_PATTERN = /sudo|패스워드|비밀번호.*시스템|시스템.*비밀번호|mac.*password|system.*secret/i;
+// sudo 단독 제거 — "sudo 설명해줘" 같은 일반 질문에서 시스템 크리덴셜 오주입 방지
+const SYSTEM_API_PATTERN = /맥\s*비밀번호|맥\s*패스워드|mac\s*(?:login\s*)?password|admin\s*(?:pw|password)|system[._]secret|시스템\s*(?:비밀번호|패스워드)/i;
 
 export class SystemApiProcessor extends BasePreProcessor {
   get name() { return 'SystemApiProcessor'; }
