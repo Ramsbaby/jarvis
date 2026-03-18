@@ -1,6 +1,32 @@
 {
   "infra": {
     "merit": 1,
+    "penalty": 1,
+    "status": "NORMAL",
+    "note": "AM 결정(tqqq-monitor 확인) 미이행 벌점 +1. 시스템 GREEN 유지 공적 1. 내일 tqqq-monitor 미정상화 시 WARNING(3벌점) 진입 예고."
+  },
+  "council": {
+    "merit": 0,
+    "penalty": 0,
+    "status": "NORMAL"
+  },
+  "record": {
+    "merit": 0,
+    "penalty": 0,
+    "status": "NORMAL"
+  },
+  "career": {
+    "merit": 0,
+    "penalty": 0,
+    "status": "NORMAL"
+  },
+  "brand": {
+    "merit": 0,
+    "penalty": 0,
+    "status": "NORMAL"
+  },
+  "academy": {
+    "merit": 0,
     "penalty": 0,
     "status": "NORMAL"
   }

@@ -44,7 +44,16 @@ clean_message() {
     # 마크다운 링크 [text](url) → text만 보존, 나머지 URL은 제거
     msg=$(echo "$msg" | sed -E 's|\[([^]]*)\]\(https?://[^ )>]*\)|\1|g; s|https?://[^ )>]+||g')
     # If everything got filtered, keep original (safety)
-    if [[ -z "$msg" ]]; then msg="$1"; fi
+    # 단, 원본이 순수 노이즈(sent id=, SELECT, debug 패턴)만 있으면 복원 금지
+    if [[ -z "$msg" ]]; then
+        local orig_clean
+        orig_clean=$(echo "$1" | grep -vE \
+            '^\[insight\] Saved to |^sent id=|^SELECT .last_insert|^\[debug\]|^\[trace\]|^Fallback:|^NODE_PATH=|^cd /tmp/' \
+            | sed '/./!d' || true)
+        if [[ -n "$orig_clean" ]]; then
+            msg="$1"
+        fi
+    fi
     echo "$msg"
 }
 

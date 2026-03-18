@@ -1195,7 +1195,8 @@
       ],
       "retry": {
         "max": 1
-      }
+      },
+      "enabled": true
     },
     {
       "id": "doc-supervisor",

@@ -1,7 +1,7 @@
 # Jarvis 시스템 개요
 
 > 🤖 **자동 생성 문서** — 직접 편집 금지
-> Generated: 2026-03-18 21:37:42 | Commit: `90eff88` (`main`)
+> Generated: 2026-03-18 21:50:56 | Commit: `731757b` (`main`)
 > 업데이트: `scripts/gen-system-overview.sh` (매일 04:05 + git commit 시)
 
 ---
@@ -426,7 +426,7 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | ai.jarvis.orchestrator | 🟢 실행중 | 28860 |
 | ai.openclaw.glances | 🟢 실행중 | 764 |
 | ai.jarvis.webhook-listener | 🟢 실행중 | 7140 |
-| ai.jarvis.discord-bot | 🟢 실행중 | 98493 |
+| ai.jarvis.discord-bot | 🟢 실행중 | 51182 |
 | ai.jarvis.boram-briefing | 🔴 중지 | - |
 | ai.jarvis.session-summarizer | 🔴 중지 | - |
 | ai.jarvis.commitment-check | 🔴 중지 | - |
@@ -435,12 +435,14 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | ai.jarvis.event-watcher | 🟢 실행중 | 89744 |
 | ai.jarvis.boot-auth-check | 🔴 중지 | - |
 
-> 마지막 확인: 2026-03-18 21:37:42
+> 마지막 확인: 2026-03-18 21:50:56
 
 ---
 
 ## 11. 최근 변경
 
+- `731757b` fix: 검토 지적 7건 전부 수정
+- `269b501` chore: tasks/docs 세션 상태 업데이트
 - `90eff88` feat(phase3): /approve, /commitments slash commands + commitment-check.sh
 - `fc71003` fix: eslint sourceType script→module + --no-ignore (handlers.js is ESM)
 - `bc4d067` ci: install devDeps (eslint) separately — install.sh uses --production
@@ -449,8 +451,6 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 - `7b7cc7b` ci: mock claude CLI for install-test job (binary check only)
 - `99c895e` feat: ci_check + 4x pre-processors (Goals/System/Task/Social pattern fix)
 - `e9776af` ci: add install-test job — real install.sh + e2e-test.sh in CI
-- `c93a866` fix: e2e-test warn_check 도입 — 첫 설치 시 정상적인 context 파일 미생성 항목 FAIL→WARN 전환
-- `7a1920e` fix: e2e-test Discord bot check — pgrep 범위 확장 (orchestrator.mjs 포함)
 
 ---
 

@@ -86,7 +86,7 @@ alert_and_exit() {
     # Publish to orchestrator event bus (discord_sent=true → orchestrator skips re-send)
     /bin/bash "$BOT_HOME/scripts/mq-cli.sh" send rag-quality-check system \
         "{\"status\":\"degraded\",\"discord_sent\":true,\"reason\":$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" <<< "$message")}" \
-        urgent 2>/dev/null || true
+        urgent >/dev/null 2>/dev/null || true
     set_cooldown
 }
 

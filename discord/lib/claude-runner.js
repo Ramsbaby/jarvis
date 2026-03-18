@@ -23,6 +23,7 @@ import {
   buildIdentitySection, buildLanguageSection, buildPersonaSection,
   buildPrinciplesSection, buildFormatSection, buildToolsSection,
   buildSafetySection, buildUserContextSection, isPreplyQuery, buildPreplySection,
+  buildOwnerPreferencesSection,
 } from './prompt-sections.js';
 
 // ---------------------------------------------------------------------------
@@ -551,6 +552,18 @@ export async function* createClaudeSession(prompt, {
     createClaudeSession._cacheTime = nowMs;
   }
 
+  // 3a. Load owner preferences (5-minute cache) — injected into Stable prompt
+  //     context/owner/preferences.md: tool/service constraints (Kakao Calendar, Google Tasks 등)
+  if (!createClaudeSession._ownerPrefsCache || nowMs - (createClaudeSession._ownerPrefsCacheTime || 0) > 300_000) {
+    try {
+      const BOT_HOME_EARLY = process.env.BOT_HOME || `${homedir()}/.jarvis`;
+      createClaudeSession._ownerPrefsCache = buildOwnerPreferencesSection({ botHome: BOT_HOME_EARLY });
+    } catch {
+      createClaudeSession._ownerPrefsCache = '';
+    }
+    createClaudeSession._ownerPrefsCacheTime = nowMs;
+  }
+
   const ownerName = process.env.OWNER_NAME || 'Owner';
   const ownerTitle = process.env.OWNER_TITLE || 'Owner';
   const githubUsername = process.env.GITHUB_USERNAME || 'user';
@@ -597,6 +610,12 @@ export async function* createClaudeSession(prompt, {
   // Channel-specific persona
   const channelPersona = channelId ? CHANNEL_PERSONAS[channelId] : null;
   if (channelPersona) systemParts.push('', channelPersona);
+
+  // Owner system preferences (Stable) — survives session resets & bot restarts
+  // Only injected for owner to avoid bloating non-owner sessions
+  if (isOwner && createClaudeSession._ownerPrefsCache) {
+    systemParts.push('', createClaudeSession._ownerPrefsCache);
+  }
 
   // Session version check: compute hash from STABLE systemParts (persona + user context only).
   // memSnippet and usageSummary are intentionally excluded:

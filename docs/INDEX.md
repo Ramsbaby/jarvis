@@ -35,6 +35,14 @@
 | [CHANGELOG.md](../CHANGELOG.md) | Release history and notable changes |
 | [ROADMAP.md](../ROADMAP.md) | Planned features and milestones |
 
+## Developer Reference
+
+| Document | Description |
+|----------|-------------|
+| [API.md](API.md) | Core module public APIs (task-store, rag-engine, scripts) |
+| [EXAMPLES.md](EXAMPLES.md) | Real-world usage examples (calendar, dev-runner, plugins, RAG) |
+| [FAQ.md](FAQ.md) | Frequently asked questions (install, debug, Kakao, open-source) |
+
 ## Contributing
 
 | Document | Description |

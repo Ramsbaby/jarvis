@@ -24,7 +24,7 @@ print(json.dumps({
 " "$task_id" "$success" "$duration_ms" "$cost" 2>/dev/null) || return 0
 
     /bin/bash "${BOT_HOME}/scripts/mq-cli.sh" send "cron:${task_id}" kpi \
-        "$payload" normal 2>/dev/null || true
+        "$payload" normal >/dev/null 2>/dev/null || true
 }
 
 # --- Auto-insights: save learnings from task output to Jarvis-Vault ---

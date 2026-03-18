@@ -10,6 +10,9 @@
  *   Dynamic — added AFTER hash (Preply etc.) — don't affect session continuity
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 // ── Stable sections (always included, contribute to session hash) ──────────────
 
 export function buildIdentitySection({ botName, ownerName }) {
@@ -95,6 +98,22 @@ const PREPLY_PATTERN = /수입|매출|레슨\s*금액|얼마|정산|취소\s*보
  */
 export function isPreplyQuery(prompt) {
   return PREPLY_PATTERN.test(prompt ?? '');
+}
+
+/**
+ * Builds the owner system preferences section (Stable).
+ * Reads context/owner/preferences.md — tool/service constraints that must
+ * survive session resets (e.g. "Kakao Calendar ONLY, Google forbidden").
+ * Called per-session; caller handles 5-minute caching via _ownerPrefsCache.
+ */
+export function buildOwnerPreferencesSection({ botHome }) {
+  try {
+    const content = readFileSync(join(botHome, 'context', 'owner', 'preferences.md'), 'utf-8');
+    if (!content.trim()) return '';
+    return `--- Owner System Preferences (항상 준수) ---\n${content.trim()}`;
+  } catch {
+    return '';
+  }
 }
 
 /**

@@ -32,6 +32,10 @@ discord-bot.js ──► lib/handlers.js ──► lib/claude-runner.js
                          ▼
               saveConversationTurn()
                          │
+                         ├──► commitment-tracker.js (fire-and-forget)
+                         │         detectAndRecord() — 약속 감지 패턴 매칭
+                         │         → state/commitments.jsonl 기록
+                         │
                          ▼
               context/discord-history/YYYY-MM-DD.md
                          │
@@ -68,6 +72,44 @@ Built as a local MCP server (`lib/mcp-nexus.mjs`). Sits between Claude and every
 JSON → key extraction · Logs → dedup + tail · Process tables → column filter
 
 **Circuit Breaker** (`exec` + `scan`): 2 timeouts within 5 min → 10 min block, avoids cascading timeout waste. Partial stdout returned on timeout (up to 2000B).
+
+---
+
+## Commitment Tracking — 약속 감지 및 이행 관리
+
+Claude 응답에서 자동으로 약속을 감지하여 `state/commitments.jsonl`에 기록하고, 이행 여부를 추적한다.
+
+**파일**: `discord/lib/commitment-tracker.js`
+
+```
+handlers.js (Claude 응답 수신 후)
+  └─ detectAndRecord(replyText, {source, channelId, userId})  [fire-and-forget]
+       │
+       ├─ COMMITMENT_PATTERN 매칭
+       │   (하겠습니다/진행하겠습니다/처리하겠습니다 등 약속 동사)
+       │   (부정문 "하지 않겠습니다" 제외 — negative lookahead)
+       │
+       ├─ _extractCommitmentSentence() → 약속 포함 문장 최대 120자 추출
+       │
+       └─ state/commitments.jsonl에 JSONL append
+            { id, status:"open", text, created_at, source, channelId, userId }
+```
+
+| 함수 | 역할 |
+|------|------|
+| `detectAndRecord(text, ctx)` | 응답에서 약속 감지 → JSONL 기록 (중복 방지: 메시지당 1건) |
+| `resolveCommitment(id)` | id 기반 done 마킹 (status: "open" → "done", resolved_at 추가) |
+| `pruneResolved()` | 30일+ 경과 done 항목 정리 |
+
+**Slash Commands** (`discord/lib/commands.js`):
+- `/commitments` — 현재 open 약속 목록 출력 (SENSITIVE 권한 필요)
+- `/approve <번호 또는 파일명>` — doc-draft 승인 → 자동 적용 (경로 트래버설 방지: `resolve() + startsWith(draftsDir)` 검증, SENSITIVE 권한 필요)
+
+**commitments.jsonl 구조**:
+```jsonl
+{"id":"uuid","status":"open","text":"...하겠습니다","created_at":"ISO8601","source":"discord"}
+{"id":"uuid","status":"done","resolved_at":"ISO8601"}
+```
 
 ---
 

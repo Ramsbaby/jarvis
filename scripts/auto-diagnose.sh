@@ -35,9 +35,10 @@ fi
 echo "⚠️ 크론 태스크 실패 감지"
 echo ""
 echo "$FAILURES" | while IFS= read -r line; do
-  # 태스크 ID 추출
-  task=$(echo "$line" | grep -oE 'FAILED.*$|ABORTED.*$' | head -1)
-  echo "- $task"
+  # 태스크명: [task-id] 패턴 추출
+  task_id=$(echo "$line" | grep -oE '\[[a-zA-Z0-9_-]+\]' | tail -1 | tr -d '[]')
+  reason=$(echo "$line" | grep -oE 'FAILED[^]]*|ABORTED[^]]*' | head -1)
+  echo "- \`${task_id}\` — ${reason}"
 done
 
 _fsm_done=true

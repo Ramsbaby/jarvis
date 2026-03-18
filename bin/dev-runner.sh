@@ -210,7 +210,15 @@ _log "태스크 선택: ${TASK_ID} (${TASK_NAME}), 시도 $((RETRIES+1))/${MAX_R
 # --- Step 1: completionCheck 사전 판별 ---
 if run_completion_check "$COMPLETION_CHECK"; then
     _log "completionCheck 통과: ${TASK_ID} → 이미 완료됨 (LLM 호출 없이 done)"
-    update_queue "$TASK_ID" "done"
+    # FSM: queued → running → done (직접 queued→done 전이는 허용되지 않음)
+    # running 전이 실패 허용: 이미 done/running 상태면 그냥 done으로 이동
+    update_queue "$TASK_ID" "running" || _log "WARN: running 전이 실패 (이미 완료 상태일 수 있음, 계속 진행)"
+    # done 전이: running 실패 시 DB 상태가 queued일 수 있어 force-done 방식으로 처리
+    if ! update_queue "$TASK_ID" "done"; then
+        # force: task-store.mjs에서 직접 상태 덮어쓰기
+        ${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" force-done "${TASK_ID}" 2>/dev/null ||             _log "WARN: force-done 실패, DB 상태 불일치 가능성 (task=${TASK_ID})"
+        _log "WARN: done 전이 실패 → force-done 시도 (task=${TASK_ID})"
+    fi
     cat <<DONE_MSG
 ## dev-runner 결과
 

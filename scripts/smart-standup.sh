@@ -78,7 +78,7 @@ jq -n --argjson r "$NEW_RETRIES" --arg t "$(date '+%F %T')" \
 # mq-cli로 재시도 이벤트 전송 (orchestrator가 처리, DB 없으면 무시)
 /bin/bash "$BOT_HOME/scripts/mq-cli.sh" send standup system \
     "{\"status\":\"delayed\",\"reason\":\"owner_offline\",\"retry_at\":\"${RETRY_AT}\",\"retries\":${NEW_RETRIES}}" \
-    normal 2>/dev/null || true
+    normal >/dev/null 2>/dev/null || true
 
 # at 커맨드로 30분 후 재시도 (macOS launchd at은 비활성화돼 있을 수 있으므로 fallback: 직접 sleep 후 실행)
 # 크론탭에서 매 30분마다 체크하도록 설계 (crontab에 5,35 8,9 * * * 패턴 사용)
