@@ -283,10 +283,178 @@ export class RagContextProcessor extends BasePreProcessor {
 }
 
 // ---------------------------------------------------------------------------
+// SocialApiProcessor
+// 소셜 미디어 / 외부 서비스 API 작업 감지 → secrets/social.json 자동 주입
+// LLM에게 "키 어딨어?" 묻는 대신 코드가 먼저 로드해서 넘긴다.
+// NOTE: \bhn\b 제거 — 너무 넓음. hacker news|show hn 으로 명시 한정.
+// ---------------------------------------------------------------------------
+const SOCIAL_API_PATTERN = /dev\.to|devto|포스팅|posting|reddit|twitter|hacker\s*news|show\s*hn|소셜|social\s*api/i;
+
+export class SocialApiProcessor extends BasePreProcessor {
+  get name() { return 'SocialApiProcessor'; }
+
+  matches(ctx) {
+    return SOCIAL_API_PATTERN.test(ctx.originalPrompt);
+  }
+
+  async enrich(prompt, ctx) {
+    const botHome = ctx.botHome || `${homedir()}/.jarvis`;
+    const socialPath = join(botHome, 'config/secrets/social.json');
+
+    let secrets;
+    try {
+      secrets = JSON.parse(readFileSync(socialPath, 'utf-8'));
+    } catch {
+      return null;
+    }
+
+    // 비밀번호 등 민감 필드는 그대로 전달 (오너 전용 봇 — 신뢰 컨텍스트)
+    const enriched =
+      `[소셜 크리덴셜 — 이미 로드됨]\n` +
+      `아래 데이터가 secrets/social.json 실제 내용이다. 도구 호출 없이 이 데이터를 직접 사용해라.\n\n` +
+      `${JSON.stringify(secrets, null, 2)}\n\n` +
+      prompt;
+
+    log('info', '[SocialApiProcessor] social.json 자동 주입', { threadId: ctx.threadId });
+    return enriched;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GoalsProcessor
+// 이직/커리어/목표 관련 질문 → config/goals.json 자동 주입
+// 매번 "이직 준비 중이에요" 컨텍스트 재설명 없이 LLM이 즉시 맥락 파악.
+// ---------------------------------------------------------------------------
+const GOALS_PATTERN = /이직|커리어|career|목표|로드맵|이력서|resume|취업|연봉|job|okr|kpi|분기\s*목표|goals/i;
+
+export class GoalsProcessor extends BasePreProcessor {
+  get name() { return 'GoalsProcessor'; }
+
+  matches(ctx) {
+    return GOALS_PATTERN.test(ctx.originalPrompt);
+  }
+
+  async enrich(prompt, ctx) {
+    const botHome = ctx.botHome || `${homedir()}/.jarvis`;
+    const goalsPath = join(botHome, 'config/goals.json');
+
+    let goals;
+    try {
+      goals = JSON.parse(readFileSync(goalsPath, 'utf-8'));
+    } catch {
+      return null;
+    }
+
+    // 전체 주입 시 토큰 낭비 — mission + objectives 요약만
+    const summary = {
+      mission: goals.mission,
+      quarter: goals.quarter,
+      objectives: (goals.objectives || []).map(o => ({
+        id: o.id,
+        name: o.name,
+        weight: o.weight,
+        keyResults: (o.keyResults || []).map(kr => ({
+          id: kr.id,
+          metric: kr.metric,
+          target: kr.target,
+          current: kr.current,
+        })),
+      })),
+    };
+
+    const enriched =
+      `[오너 목표/OKR — 이미 로드됨]\n` +
+      `아래 데이터가 config/goals.json 실제 내용이다. 커리어·이직·목표 질문에 이 데이터를 맥락으로 사용해라.\n\n` +
+      `${JSON.stringify(summary, null, 2)}\n\n` +
+      prompt;
+
+    log('info', '[GoalsProcessor] goals.json 자동 주입', { threadId: ctx.threadId });
+    return enriched;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SystemApiProcessor
+// sudo/시스템 자격 증명 필요 작업 감지 → secrets/system.json 자동 주입
+// ---------------------------------------------------------------------------
+const SYSTEM_API_PATTERN = /sudo|패스워드|비밀번호.*시스템|시스템.*비밀번호|mac.*password|system.*secret/i;
+
+export class SystemApiProcessor extends BasePreProcessor {
+  get name() { return 'SystemApiProcessor'; }
+
+  matches(ctx) {
+    return SYSTEM_API_PATTERN.test(ctx.originalPrompt);
+  }
+
+  async enrich(prompt, ctx) {
+    const botHome = ctx.botHome || `${homedir()}/.jarvis`;
+    const systemPath = join(botHome, 'config/secrets/system.json');
+
+    let secrets;
+    try {
+      secrets = JSON.parse(readFileSync(systemPath, 'utf-8'));
+    } catch {
+      return null;
+    }
+
+    const enriched =
+      `[시스템 크리덴셜 — 이미 로드됨]\n` +
+      `아래 데이터가 secrets/system.json 실제 내용이다. 도구 호출 없이 이 데이터를 직접 사용해라.\n\n` +
+      `${JSON.stringify(secrets, null, 2)}\n\n` +
+      prompt;
+
+    log('info', '[SystemApiProcessor] system.json 자동 주입', { threadId: ctx.threadId });
+    return enriched;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TaskContextProcessor
+// "할일/태스크/투두" 질문 → gog tasks 실행 후 결과 주입
+// tasks.json은 크론 설정이므로 gog CLI로 실제 개인 할일 조회.
+// ---------------------------------------------------------------------------
+const TASK_CONTEXT_PATTERN = /할\s*일|투\s*두|태스크|todo|task\s*list|gog\s*task|할일\s*목록|남은\s*일|오늘\s*할/i;
+
+export class TaskContextProcessor extends BasePreProcessor {
+  get name() { return 'TaskContextProcessor'; }
+
+  matches(ctx) {
+    return TASK_CONTEXT_PATTERN.test(ctx.originalPrompt);
+  }
+
+  async enrich(prompt, ctx) {
+    const { execSync } = await import('node:child_process');
+
+    let output;
+    try {
+      output = execSync('gog tasks', { timeout: 8000, encoding: 'utf-8' }).trim();
+    } catch (e) {
+      log('warn', '[TaskContextProcessor] gog tasks 실패', { error: e.message });
+      return null;
+    }
+
+    if (!output) return null;
+
+    const enriched =
+      `[개인 할일 목록 — 이미 로드됨]\n` +
+      `아래 데이터가 gog tasks 실제 출력이다. 도구 호출 없이 이 데이터를 직접 사용해라.\n\n` +
+      `${output}\n\n` +
+      prompt;
+
+    log('info', '[TaskContextProcessor] gog tasks 자동 주입', { threadId: ctx.threadId });
+    return enriched;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 export function createPreProcessorRegistry(searchFn = _defaultSearch) {
   return new PreProcessorRegistry()
+    .register(new SocialApiProcessor())
+    .register(new GoalsProcessor())
+    .register(new SystemApiProcessor())
+    .register(new TaskContextProcessor())
     .register(new PreplyScheduleProcessor())
     .register(new PreplyIncomeProcessor())
     .register(new RagContextProcessor(searchFn));

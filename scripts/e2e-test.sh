@@ -11,6 +11,7 @@ FAIL=0
 SKIP=0
 WARN=0
 SEND_NTFY="${1:-}"
+CI_MODE="${GITHUB_ACTIONS:-false}"
 
 green() { printf '\033[32m%s\033[0m\n' "$1"; }
 red()   { printf '\033[31m%s\033[0m\n' "$1"; }
@@ -46,6 +47,24 @@ warn_check() {
   fi
 }
 
+# ci_check: runtime-only checks (bot running, crontab, state files)
+# In CI (GITHUB_ACTIONS=true): treated as WARN (expected not to exist)
+# Locally: treated as hard FAIL
+ci_check() {
+  if [[ "$CI_MODE" == "true" ]]; then
+    local name="$1"; shift
+    if "$@" >/dev/null 2>&1; then
+      green "✅ PASS: $name"
+      ((PASS++))
+    else
+      yellow "⚠️  WARN(CI): $name — expected in CI environment"
+      ((WARN++))
+    fi
+  else
+    check "$@"
+  fi
+}
+
 echo "═══════════════════════════════════════════"
 echo "  Jarvis E2E Test Suite"
 echo "  $(date '+%Y-%m-%d %H:%M:%S')"
@@ -54,7 +73,7 @@ echo ""
 
 # --- Process Tests ---
 echo "▶ Process Health"
-check "Discord bot running" bash -c 'pgrep -f "discord-bot.js|orchestrator.mjs" > /dev/null 2>&1'
+ci_check "Discord bot running" bash -c 'pgrep -f "discord-bot.js|orchestrator.mjs" > /dev/null 2>&1'
 
 # --- File Structure Tests ---
 echo ""
@@ -101,10 +120,10 @@ check "RAG query returns data" bash -c "NODE_PATH=$BOT_HOME/discord/node_modules
 # --- State Files ---
 echo ""
 echo "▶ State Files"
-check "sessions.json valid" jq '.' "$BOT_HOME/state/sessions.json"
-check "rate-tracker.json valid" jq '.' "$BOT_HOME/state/rate-tracker.json"
-check "memory.md exists" test -f "$BOT_HOME/rag/memory.md"
-check "decisions weekly file exists" bash -c "ls \"$BOT_HOME/rag/decisions-\"*.md 2>/dev/null | grep -q ."
+ci_check "sessions.json valid" jq '.' "$BOT_HOME/state/sessions.json"
+ci_check "rate-tracker.json valid" jq '.' "$BOT_HOME/state/rate-tracker.json"
+ci_check "memory.md exists" test -f "$BOT_HOME/rag/memory.md"
+ci_check "decisions weekly file exists" bash -c "ls \"$BOT_HOME/rag/decisions-\"*.md 2>/dev/null | grep -q ."
 
 # --- ask-claude.sh RAG Integration ---
 echo ""
@@ -124,12 +143,12 @@ check "/alert command" grep -q "'alert'" "$BOT_HOME/discord/discord-bot.js"
 # --- Cron Tests ---
 echo ""
 echo "▶ Cron Jobs"
-check "RAG indexer cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-index'"
-check "morning-standup cron exists" bash -c "crontab -l 2>/dev/null | grep -qE 'morning-standup|smart-standup'"
-check "e2e-cron.sh registered" bash -c "crontab -l 2>/dev/null | grep -q 'e2e-cron'"
-check "weekly-kpi cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'weekly-kpi'"
-check "security-scan cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'security-scan'"
-check "rag-health cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-health'"
+ci_check "RAG indexer cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-index'"
+ci_check "morning-standup cron exists" bash -c "crontab -l 2>/dev/null | grep -qE 'morning-standup|smart-standup'"
+ci_check "e2e-cron.sh registered" bash -c "crontab -l 2>/dev/null | grep -q 'e2e-cron'"
+ci_check "weekly-kpi cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'weekly-kpi'"
+ci_check "security-scan cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'security-scan'"
+ci_check "rag-health cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-health'"
 
 # --- Phase 3~5 Tasks ---
 echo ""
@@ -157,7 +176,7 @@ check "tasks.json has depends field" bash -c "jq -e '.tasks[0].depends' '$BOT_HO
 check "ask-claude.sh has cross-team context" grep -q "Cross-team Context" "$BOT_HOME/lib/context-loader.sh"
 check "ask-claude.sh has insight filter" grep -q "system-health|rate-limit-check" "$BOT_HOME/lib/insight-recorder.sh"
 check "gen-inventory.sh exists" test -x "$BOT_HOME/scripts/gen-inventory.sh"
-check "cron-catalog.md exists" test -f "$HOME/Jarvis-Vault/01-system/cron-catalog.md"
+ci_check "cron-catalog.md exists" test -f "$HOME/Jarvis-Vault/01-system/cron-catalog.md"
 warn_check "council reads shared-inbox" grep -q "shared-inbox" "$BOT_HOME/context/council-insight.md"
 check "pending-tasks atomic write (renameSync)" grep -q "renameSync" "$BOT_HOME/discord/lib/handlers.js"
 check "apology cooldown implemented" grep -q "apologyCooldownFile" "$BOT_HOME/discord/discord-bot.js"
@@ -198,9 +217,9 @@ PYEOF
 TASKS_COUNT=$(jq '[.tasks[] | select(.schedule != null and .schedule != "")] | length' "$BOT_HOME/config/tasks.json" 2>/dev/null || echo 0)
 CATALOG_COUNT=$(grep -c "^|" "$HOME/Jarvis-Vault/01-system/cron-catalog.md" 2>/dev/null || echo 0)
 if [[ "$CATALOG_COUNT" -ge "$TASKS_COUNT" ]]; then
-  check "cron-catalog matches tasks.json count" true
+  ci_check "cron-catalog matches tasks.json count" true
 else
-  check "cron-catalog matches tasks.json count" false
+  ci_check "cron-catalog matches tasks.json count" false
 fi
 
 # --- ntfy Test (optional) ---
