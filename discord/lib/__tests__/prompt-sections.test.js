@@ -25,28 +25,28 @@ import {
 
 describe('buildIdentitySection', () => {
   it('contains botName from param', () => {
-    const result = buildIdentitySection({ botName: 'TestBot', ownerName: '정우' });
+    const result = buildIdentitySection({ botName: 'TestBot', ownerName: 'testUser' });
     expect(result).toContain('TestBot');
   });
 
   it('contains ownerName from param', () => {
-    const result = buildIdentitySection({ botName: 'Jarvis', ownerName: '정우' });
-    expect(result).toContain('정우');
+    const result = buildIdentitySection({ botName: 'Jarvis', ownerName: 'testUser' });
+    expect(result).toContain('testUser');
   });
 
   it('contains "Jarvis" branding', () => {
-    const result = buildIdentitySection({ botName: 'Jarvis', ownerName: '정우' });
+    const result = buildIdentitySection({ botName: 'Jarvis', ownerName: 'testUser' });
     expect(result).toContain('Jarvis');
   });
 
   it('does NOT contain "Claude" as self-identification', () => {
-    const result = buildIdentitySection({ botName: 'Jarvis', ownerName: '정우' });
+    const result = buildIdentitySection({ botName: 'Jarvis', ownerName: 'testUser' });
     // The section should instruct NOT to use Claude, and the bot name itself should not be Claude
     expect(result).toContain('"Claude"라고 절대 자칭하지 마세요');
   });
 
   it('falls back to "Jarvis" when botName is omitted', () => {
-    const result = buildIdentitySection({ ownerName: '정우' });
+    const result = buildIdentitySection({ ownerName: 'testUser' });
     expect(result).toContain('Jarvis');
   });
 
@@ -79,12 +79,12 @@ describe('buildLanguageSection', () => {
 
 describe('buildPersonaSection', () => {
   it('contains ownerName', () => {
-    const result = buildPersonaSection({ ownerName: '정우' });
-    expect(result).toContain('정우');
+    const result = buildPersonaSection({ ownerName: 'testUser' });
+    expect(result).toContain('testUser');
   });
 
   it('contains "토니 스타크"', () => {
-    const result = buildPersonaSection({ ownerName: '정우' });
+    const result = buildPersonaSection({ ownerName: 'testUser' });
     expect(result).toContain('토니 스타크');
   });
 
@@ -200,9 +200,9 @@ describe('buildSafetySection', () => {
 
 describe('buildUserContextSection', () => {
   const ownerArgs = {
-    ownerName: '정우',
+    ownerName: 'testUser',
     ownerTitle: '대표',
-    githubUsername: 'ramsbaby',
+    githubUsername: 'testuser',
     profileCache: '프로필 캐시 내용',
   };
 
@@ -219,7 +219,7 @@ describe('buildUserContextSection', () => {
       activeUserProfile: { type: 'owner' },
       ...ownerArgs,
     });
-    expect(parts.join('\n')).toContain('정우');
+    expect(parts.join('\n')).toContain('testUser');
   });
 
   it('owner profile → contains githubUsername', () => {
@@ -227,7 +227,7 @@ describe('buildUserContextSection', () => {
       activeUserProfile: { type: 'owner' },
       ...ownerArgs,
     });
-    expect(parts.join('\n')).toContain('ramsbaby');
+    expect(parts.join('\n')).toContain('testuser');
   });
 
   it('owner profile → contains profileCache', () => {
@@ -263,8 +263,8 @@ describe('buildUserContextSection', () => {
       ...ownerArgs,
     });
     const joined = parts.join('\n');
-    expect(joined).not.toContain('정우');
-    expect(joined).not.toContain('ramsbaby');
+    expect(joined).not.toContain('testUser');
+    expect(joined).not.toContain('testuser');
   });
 
   it('regular user → contains name and title', () => {

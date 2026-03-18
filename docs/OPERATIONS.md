@@ -10,7 +10,7 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 
 | Task | Schedule | Description |
 |------|----------|-------------|
-| `morning-standup` | 09:15 daily | Smart standup (waits for owner online) |
+| `morning-standup` | 06:15 daily | Smart standup (waits for owner online) |
 | `board-meeting-am` | 08:10 daily | CEO board meeting (morning) |
 | `board-meeting-pm` | 21:55 daily | CEO board meeting (evening) |
 | `tqqq-monitor` | */15 22-23 Mon-Fri | TQQQ/SOXL/NVDA price tracking |
@@ -26,6 +26,12 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 | `record-daily` | 22:30 | Daily archive + logging |
 | `council-insight` | 23:05 | Cross-team oversight |
 | `finance-monitor` | 08:00 Mon-Fri | Financial monitoring |
+| `ceo-daily-digest` | 22:00 daily | CEO daily digest summary |
+| `boram-daily-schedule` | 07:30 daily | Preply/일정 브리핑 |
+| `bot-self-critique` | 02:45 daily | Bot response self-evaluation |
+| `system-doctor` | 06:00 daily | System diagnostics |
+| `career-extractor` | 00:30 daily | Career data extraction |
+| `oss-maintenance` | 09:15 daily | OSS repo maintenance |
 | `boram-daily-schedule` | 07:30 | Preply lesson briefing |
 
 ### Weekly / Monthly
@@ -43,6 +49,7 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 | `recon-weekly` | Mon 09:00 | Intelligence exploration |
 | `weekly-code-review` | Sun 05:00 | Automated code review |
 | `memory-sync` | Mon 04:30 | Memory auto-sync |
+| `memory-expire` | Mon 03:00 | Memory TTL expiration + stale entry purge |
 | `monthly-review` | 1st of month 09:00 | Monthly ops retrospective |
 
 ### Maintenance
@@ -55,11 +62,20 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 | `bot-quality-check` | 02:30 daily | Bot response quality analysis |
 | `rag-health` | 03:00 daily | RAG index integrity check |
 | `code-auditor` | 04:45 daily | ShellCheck + syntax validation |
+| `gen-system-overview` | 04:05 daily | Auto-regenerate SYSTEM-OVERVIEW.md (script-only) |
+| `doc-sync-auditor` | 23:00 daily | Doc-code sync audit + draft generation |
 | `doc-supervisor` | 05:00 daily | Documentation freshness check |
 | `log-rotate` | 03:15 daily | Log rotation (crontab direct, not in tasks.json) |
-| `agent-batch-commit` | 08:20, 22:20 daily | Auto-commit agent outputs |
-| `dev-runner` | 22:50 daily | Autonomous dev queue runner |
+| `agent-batch-commit` | 08:30, 22:20 daily | Auto-commit agent outputs (08:30 — board-meeting-am 완료 후 여유 확보) |
+| `dev-runner` | 22:55 daily | Autonomous dev queue runner |
 | `cost-monitor` | Sun 09:00 | API cost tracking |
+| `skill-eval` | Sun 04:30 | Auto-evaluate Claude Code skill quality |
+| `schedule-coherence` | Mon 04:00 | Crontab ↔ tasks.json 정합성 검증 |
+| `connections-weekly-insight` | Mon 09:45 | Cross-team connection pattern analysis |
+| `recon-weekly` | Mon 09:00 | Intelligence reconnaissance |
+| `oss-recon` | Mon 10:30 | OSS landscape monitoring |
+| `oss-docs` | Wed 11:00 | OSS documentation update |
+| `oss-promo` | Fri 17:00 | OSS promotion activity |
 
 ### Background (high-frequency)
 
@@ -69,9 +85,11 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 | `update-usage-cache` | */30 | /usage command cache |
 | `calendar-alert` | */5 | Google Calendar pre-alerts |
 | `session-sync` | */15 | Context bus sync |
+| `stale-task-watcher` | */30 | Stale FSM task detection + cleanup |
+| `cron-auditor` | 05:30 daily | Crontab vs tasks.json 실행 감사 |
 | `disk-alert` | hourly :10 | Disk threshold check |
 | `github-monitor` | hourly | GitHub notification check |
-| `system-health` | hourly | Disk/CPU/memory/process check |
+| `system-health` | */30 | Disk/CPU/memory/process check |
 
 ### Event-triggered (no cron schedule)
 
@@ -100,19 +118,24 @@ Plist files: `~/Library/LaunchAgents/ai.jarvis.*.plist`
 
 ## Monitoring Stack
 
+### Nexus MCP Tools — Performance Notes
+
+- **`nexus_stats`**: reads only the last 200 KB of `logs/nexus-telemetry.jsonl`. File size has no impact on response time.
+- **`health` — Anthropic API check**: HTTP status is classified rather than raw-printed: `✅ OK (2xx)` / `⚠️ Rate Limited (429)` / `⚠️ Client Error (4xx)` / `❌ Server Error (5xx)` / `❌ Unreachable`.
+
 ### Glances Web Dashboard
 - URL: `http://localhost:61208`
 - API: `http://localhost:61208/api/4/cpu`
 - Mobile: accessible via LAN IP on Galaxy browser
 
 ### Uptime Kuma
-- URL: `http://192.168.219.111:3001`
+- URL: `http://YOUR_LAN_IP:3001`
 - Docker container (restart=always)
 - Monitors: Gateway, Glances, n8n
 - Alerts: Discord webhook
 
 ### ntfy Push Notifications
-- Topic: `openclaw-f101e56cb98a`
+- Topic: `YOUR_NTFY_TOPIC`
 - Script: `scripts/alert.sh` (Discord + ntfy dual delivery)
 - Config: `config/monitoring.json`
 
@@ -143,6 +166,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed flow diagrams.
 | RAG indexer | `logs/rag-index.log` | 7 days |
 | LaunchAgent guardian | `logs/launchd-guardian.log` | 7 days |
 | E2E tests | `logs/e2e-cron.log` | 30 days |
+| System overview gen | `logs/gen-system-overview.log` | 7 days |
+| Doc sync audit drafts | `rag/teams/reports/doc-draft-*.md` | 14 days |
 
 ---
 

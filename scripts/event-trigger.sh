@@ -6,6 +6,7 @@ set -euo pipefail
 # Triggers: TQQQ 가격, 디스크 용량, Claude 동시 실행 과부하
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
+NODE="${NODE:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
 BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
@@ -184,7 +185,7 @@ check_disk() {
         COMPANY_AGENT="$BOT_HOME/discord/lib/company-agent.mjs"
         if [[ -f "$COMPANY_AGENT" ]]; then
             log "Event dispatch: disk-critical → company-agent"
-            /opt/homebrew/bin/node "$COMPANY_AGENT" --event disk-critical \
+            "${NODE}" "$COMPANY_AGENT" --event disk-critical \
                 --data "{\"usage\":${usage}}" \
                 >> "$BOT_HOME/logs/company-agent.log" 2>&1 &
         fi

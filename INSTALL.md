@@ -77,7 +77,7 @@ PowerShell을 **관리자 권한**으로 열고:
 # 1회만 필요: 스크립트 실행 허용
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
-git clone https://github.com/Ramsbaby/claude-discord-bridge $env:USERPROFILE\.jarvis
+git clone https://github.com/Ramsbaby/jarvis $env:USERPROFILE\.jarvis
 cd $env:USERPROFILE\.jarvis
 .\setup.ps1
 ```
@@ -98,7 +98,7 @@ https://www.docker.com/products/docker-desktop/ 에서 다운로드 및 설치.
 PowerShell 또는 Git Bash:
 
 ```powershell
-git clone https://github.com/Ramsbaby/claude-discord-bridge $env:USERPROFILE\.jarvis
+git clone https://github.com/Ramsbaby/jarvis $env:USERPROFILE\.jarvis
 cd $env:USERPROFILE\.jarvis
 ```
 
@@ -154,11 +154,14 @@ docker compose down
 - macOS 12+
 - Node.js 22+
 - Homebrew
+- **Claude Max 구독** — `claude -p` 기반 동작. 구독 없이는 아무것도 동작하지 않음.
+- **Claude Code CLI 인증** — `npm install -g @anthropic-ai/claude-code` 후 `claude` 실행 → 브라우저 인증 완료. `claude --version` 으로 확인.
+- **`OPENAI_API_KEY`** — RAG 벡터 임베딩 사용 시 필요 (Tier 1 이상). RAG 없이 기본 설치만 할 경우 불필요.
 
 ### 설치
 
 ```bash
-git clone https://github.com/Ramsbaby/claude-discord-bridge ~/.jarvis
+git clone https://github.com/Ramsbaby/jarvis ~/.jarvis
 cd ~/.jarvis
 cp .env.example .env
 nano .env  # 토큰 입력
@@ -167,7 +170,7 @@ nano .env  # 토큰 입력
 ### 원클릭 설치 (setup.sh 권장)
 
 ```bash
-git clone https://github.com/Ramsbaby/claude-discord-bridge ~/.jarvis
+git clone https://github.com/Ramsbaby/jarvis ~/.jarvis
 cd ~/.jarvis
 chmod +x setup.sh
 ./setup.sh
@@ -216,7 +219,7 @@ pm2 startup && pm2 save
 ### 설치
 
 ```bash
-git clone https://github.com/Ramsbaby/claude-discord-bridge ~/.jarvis
+git clone https://github.com/Ramsbaby/jarvis ~/.jarvis
 cd ~/.jarvis
 cp .env.example .env
 nano .env  # 토큰 입력
@@ -225,7 +228,7 @@ nano .env  # 토큰 입력
 ### 원클릭 설치 (setup.sh 권장)
 
 ```bash
-git clone https://github.com/Ramsbaby/claude-discord-bridge ~/.jarvis
+git clone https://github.com/Ramsbaby/jarvis ~/.jarvis
 cd ~/.jarvis
 chmod +x setup.sh
 ./setup.sh

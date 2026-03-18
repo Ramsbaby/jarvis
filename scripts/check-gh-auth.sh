@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # check-gh-auth.sh — gh auth 토큰 만료 임박 감지
 # 호출: bot-cron.sh에서 github-monitor 태스크 전에 호출 가능
 # 출력: 정상 시 exit 0, 경고 시 exit 0 (Discord 알림만), 만료 시 exit 1

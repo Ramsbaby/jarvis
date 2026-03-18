@@ -17,6 +17,30 @@ unset ANTHROPIC_API_KEY 2>/dev/null || true
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
 BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+NODE_SQLITE="node --experimental-sqlite --no-warnings"
+FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
+
+# --- FSM 헬퍼 ---
+_fsm_ensure() {
+    # cron 태스크를 FSM DB에 등록/리셋 (failed/done → queued 재시작)
+    ${NODE_SQLITE} "${FSM_STORE}" ensure "$1" "$1" "bot-cron" 2>/dev/null || true
+}
+_fsm_transition() {
+    local task_id="$1" to_status="$2" extra="${3:-{}}"
+    ${NODE_SQLITE} "${FSM_STORE}" transition "$task_id" "$to_status" "bot-cron" "$extra" 2>/dev/null || true
+}
+_fsm_discord_alert() {
+    # 태스크 실패 시 Discord jarvis 채널에 직접 알림 (webhook)
+    local msg="$1"
+    local webhook_url
+    webhook_url=$(jq -r '.webhooks["jarvis"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
+    if [[ -n "${webhook_url:-}" ]]; then
+        local payload; payload=$(jq -n --arg m "$msg" '{content: $m}')
+        curl -sS -X POST "$webhook_url" \
+            -H "Content-Type: application/json" \
+            -d "$payload" > /dev/null 2>&1 || true
+    fi
+}
 # ADR-007: Plugin system — regenerate effective-tasks.json, then use it
 if [[ -x "${BOT_HOME}/bin/plugin-loader.sh" ]]; then
     "${BOT_HOME}/bin/plugin-loader.sh" 2>/dev/null || true
@@ -39,11 +63,17 @@ log() {
 # --- Completion trap: 비정상 종료 시에도 반드시 로그 기록 ---
 _TASK_DONE=false
 _SENTINEL_FILE=""
+_FSM_RUNNING=false   # FSM running 전이 성공 여부 추적
 _cleanup() {
     local rc=$?
     [[ -n "$_SENTINEL_FILE" ]] && rmdir "$_SENTINEL_FILE" 2>/dev/null || true
     if [[ "$_TASK_DONE" == "false" ]]; then
         log "ABORTED (unexpected exit: $rc — signal or set -e trigger)"
+        # FSM: 비정상 종료 시 running → failed 전이 (FSM이 running 상태였을 때만)
+        if [[ "$_FSM_RUNNING" == "true" ]]; then
+            _fsm_transition "$TASK_ID" "failed" \
+                "{\"lastError\":\"aborted: exit ${rc}\"}" 2>/dev/null || true
+        fi
     fi
 }
 trap _cleanup EXIT
@@ -112,6 +142,8 @@ fi
 ALLOWED_TOOLS=$(echo "$TASK_CONFIG" | jq -r '.allowedTools // "Read"')
 TIMEOUT=$(echo "$TASK_CONFIG" | jq -r '.timeout // 180')
 MAX_BUDGET=$(echo "$TASK_CONFIG" | jq -r '.maxBudget // empty')
+# tasks.json retry.max → retry-wrapper.sh MAX_RETRIES (없으면 3 기본값)
+TASK_MAX_RETRIES=$(echo "$TASK_CONFIG" | jq -r '.retry.max // .maxRetries // 3')
 RESULT_RETENTION=$(echo "$TASK_CONFIG" | jq -r '.resultRetention // 7')
 RESULT_MAX_CHARS=$(echo "$TASK_CONFIG" | jq -r '.resultMaxChars // 2000')
 MODEL=$(echo "$TASK_CONFIG" | jq -r '.model // empty')
@@ -169,11 +201,40 @@ _cb_now=$(date +%s)
 _CB_COOLDOWN=$(echo "$TASK_CONFIG" | jq -r '.circuitBreakerCooldown // 3600')  # 태스크별 설정 가능, 기본 60분
 if [[ "$_cb_fail" -ge 3 ]] && (( _cb_now - _cb_last_fail < _CB_COOLDOWN )); then
     _cb_remaining=$(( _CB_COOLDOWN - (_cb_now - _cb_last_fail) ))
-    log "SKIPPED — circuit breaker OPEN (연속 ${_cb_fail}회 실패, 쿨다운 ${_cb_remaining}s 남음)"
+    log "SKIPPED [CB_OPEN] ${TASK_ID} — Circuit Breaker 격리 중 (연속 ${_cb_fail}회 실패, 쿨다운 ${_cb_remaining}s 남음)"
+    # FSM: ensure → queued 상태 확보 후 skipped 전이 (CB 차단을 FSM에 기록)
+    _fsm_ensure "$TASK_ID"
+    _fsm_transition "$TASK_ID" "skipped" \
+        "{\"reason\":\"cb_open\",\"consecutiveFails\":${_cb_fail},\"cooldownRemaining\":${_cb_remaining}}"
     _TASK_DONE=true
     exit 0
 fi
 unset _cb_now _CB_COOLDOWN
+
+# --- FSM: cron 태스크를 DB에 ensure (없으면 queued로 등록, failed/done이면 재시작) ---
+TASK_NAME_FSM=$(echo "$TASK_CONFIG" | jq -r '.name // .id // empty')
+_fsm_ensure "$TASK_ID"
+
+# --- depends 체크: schedule 태스크만 적용 (event_trigger 태스크 제외) ---
+_TASK_TRIGGER=$(echo "$TASK_CONFIG" | jq -r '.event_trigger // empty')
+if [[ -z "$_TASK_TRIGGER" ]]; then
+    if _DEPS_RESULT=$(${NODE_SQLITE} "${FSM_STORE}" check-deps "$TASK_ID" 2>/dev/null); then
+        if echo "$_DEPS_RESULT" | grep -q '"ok":false'; then
+            _MISSING=$(echo "$_DEPS_RESULT" | \
+                node --no-warnings -e \
+                "const c=[];process.stdin.on('data',d=>c.push(d));process.stdin.on('end',()=>{try{const r=JSON.parse(c.join(''));console.log((r.missing||[]).join(','));}catch{console.log('unknown');}});" \
+                2>/dev/null || true)
+            log "DEFERRED $TASK_ID — deps 미충족: ${_MISSING:-unknown} (queued 유지)"
+            _TASK_DONE=true
+            exit 0
+        fi
+    fi
+fi
+unset _TASK_TRIGGER _DEPS_RESULT _MISSING
+
+# --- FSM: queued → running 전이 ---
+_fsm_transition "$TASK_ID" "running" "{\"name\":\"${TASK_NAME_FSM}\"}"
+_FSM_RUNNING=true
 
 log "START"
 
@@ -193,7 +254,7 @@ if [[ -n "$SCRIPT" ]]; then
     fi
     RESULT=$("$SCRIPT_PATH" "$SCRIPT_ARGS" 2>>"${BOT_HOME}/logs/cron.log") || EXIT_CODE=$?
 else
-    RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL") || EXIT_CODE=$?
+    RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
 fi
 
 if [[ $EXIT_CODE -ne 0 ]]; then
@@ -210,6 +271,22 @@ if [[ $EXIT_CODE -ne 0 ]]; then
     _cb_new=$(( _cb_fail + 1 ))
     printf '{"consecutive_fails":%d,"last_fail_ts":%d,"task_id":"%s"}\n' \
         "$_cb_new" "$(date +%s)" "$TASK_ID" > "$_CB_FILE" 2>/dev/null || true
+    # FSM: running → failed 전이
+    _fsm_transition "$TASK_ID" "failed" \
+        "{\"lastError\":\"exit_code=${EXIT_CODE}\",\"consecutiveFails\":${_cb_new}}"
+    _FSM_RUNNING=false
+    # P4: FSM failed 이벤트 버스 발행 → auto-diagnose.sh 자동 트리거
+    if [[ -f "${BOT_HOME}/lib/event-bus.sh" ]]; then
+        source "${BOT_HOME}/lib/event-bus.sh"
+        emit_event "task.failed" \
+            "{\"task_id\":\"${TASK_ID}\",\"exit_code\":${EXIT_CODE},\"retries\":${_cb_new}}" \
+            "bot-cron"
+        log "EVENT: task.failed 발행 (task_id=${TASK_ID}, retries=${_cb_new})"
+    fi
+    # FSM: 연속 3회 실패 시 Discord 경고 알림
+    if [[ "$_cb_new" -ge 3 ]]; then
+        _fsm_discord_alert "⚠️ **bot-cron Circuit Breaker**: \`${TASK_ID}\` 연속 ${_cb_new}회 실패 — 쿨다운 진입. 수동 확인 권장."
+    fi
     unset _cb_new
     _TASK_DONE=true
     exit "$EXIT_CODE"
@@ -219,6 +296,9 @@ fi
 log "SUCCESS"
 # circuit breaker: 성공 시 초기화
 [[ -f "$_CB_FILE" ]] && rm -f "$_CB_FILE" 2>/dev/null || true
+# FSM: running → done 전이
+_fsm_transition "$TASK_ID" "done"
+_FSM_RUNNING=false
 
 # --- Truncate result to maxChars before routing ---
 if [[ ${#RESULT} -gt $RESULT_MAX_CHARS ]]; then
@@ -247,6 +327,25 @@ for mode in $OUTPUT_MODES; do
             ;;
     esac
 done
+
+# --- FSM 상태 요약: daily-summary / council-insight 완료 시 Discord에 FSM 현황 추가 ---
+case "$TASK_ID" in
+    daily-summary|council-insight)
+        _fsm_summary=$(${NODE_SQLITE} "${FSM_STORE}" fsm-summary 2>/dev/null || true)
+        if [[ -n "$_fsm_summary" ]]; then
+            _webhook=$(jq -r '.webhooks["jarvis"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
+            if [[ -n "${_webhook:-}" ]]; then
+                _payload=$(jq -n --arg m "$_fsm_summary" '{content: $m}')
+                curl -sS -X POST "$_webhook" \
+                    -H "Content-Type: application/json" \
+                    -d "$_payload" > /dev/null 2>&1 || true
+                log "FSM 상태 요약 Discord 전송 완료"
+            fi
+            unset _webhook _payload
+        fi
+        unset _fsm_summary
+        ;;
+esac
 
 _TASK_DONE=true
 log "DONE"

@@ -1,6 +1,6 @@
 FROM node:22-alpine
 
-LABEL maintainer="ramsbaby" \
+LABEL maintainer="${GITHUB_ACTOR:-your-github-username}" \
       description="Jarvis AI 집사 — Discord bot + automation"
 
 # bash, curl, git, jq, dcron (crontab 지원)

@@ -15,7 +15,7 @@
 
 **3. 일정** (Bash로 확인)
 - gog calendar list --from today --to today --account \${GOOGLE_ACCOUNT:-your@gmail.com} 2>&1
-- gog tasks list "MDE3MjE5NzU0MjA3NTAxOTg4ODc6MDow" 2>&1
+- gog tasks list "${GOOGLE_TASKS_LIST_ID:-YOUR_LIST_ID}" 2>&1
 - 인증 만료 시 "Google 인증 만료 — 재인증 필요" 한 줄로 경고
 
 **4. 시장** (WebSearch)

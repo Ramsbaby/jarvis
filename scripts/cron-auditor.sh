@@ -50,6 +50,8 @@ judge() {
   local last_ts="$1" interval_min="$2" last_result="$3"
   local age_min=$(( (NOW - last_ts) / 60 ))
   if [[ "$last_ts" -eq 0 ]]; then echo "DEAD"; return; fi
+  # 시계 오류/타임존 불일치로 age_min이 음수가 될 수 있음 → 0으로 클램핑
+  if [[ "$age_min" -lt 0 ]]; then age_min=0; fi
   if echo "$last_result" | grep -qE 'FAILED|ERROR'; then echo "FAIL"; return; fi
   if [[ "$age_min" -gt $((interval_min * 3)) ]]; then echo "STALE"; return; fi
   echo "OK"

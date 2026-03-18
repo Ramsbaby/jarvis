@@ -1,0 +1,96 @@
+{
+  "version": "1.0",
+  "description": "코드 파일 변경 시 함께 업데이트해야 할 문서 맵. stop-doc-sync-audit.sh + pre-tool-openclaw.sh에서 참조.",
+  "patterns": [
+    {
+      "match_glob": "bin/bot-cron.sh",
+      "docs": ["docs/fsm-guide.md", "docs/OPERATIONS.md"],
+      "reason": "크론 태스크 실행 로직, FSM 전이, depends 강제, CB 처리"
+    },
+    {
+      "match_glob": "lib/task-store.mjs",
+      "docs": ["docs/fsm-guide.md"],
+      "reason": "FSM 상태 저장소 — checkDeps, ensureCronTask, transition"
+    },
+    {
+      "match_glob": "lib/task-fsm.mjs",
+      "docs": ["docs/fsm-guide.md"],
+      "reason": "FSM 허용 전이 규칙 정의"
+    },
+    {
+      "match_glob": "scripts/stale-task-watcher.sh",
+      "docs": ["docs/fsm-guide.md"],
+      "reason": "stale 태스크 감지 + CB 쿨다운 자동 복구"
+    },
+    {
+      "match_glob": "scripts/auto-diagnose.sh",
+      "docs": ["docs/fsm-guide.md", "docs/OPERATIONS.md"],
+      "reason": "event_trigger FSM 기록 로직"
+    },
+    {
+      "match_glob": "bin/retry-wrapper.sh",
+      "docs": ["docs/fsm-guide.md", "docs/OPERATIONS.md"],
+      "reason": "retry.max 전달 로직, 재시도 정책"
+    },
+    {
+      "match_glob": "scripts/health-check.sh",
+      "docs": ["docs/OPERATIONS.md"],
+      "reason": "헬스체크 — health.json FSM 통계 갱신"
+    },
+    {
+      "match_glob": "config/tasks.json",
+      "docs": ["docs/fsm-guide.md", "docs/OPERATIONS.md"],
+      "reason": "태스크 정의 변경 — timeout/retry/depends 권장값 표 업데이트 필요"
+    },
+    {
+      "match_glob": "discord/discord-bot.js",
+      "docs": ["docs/ARCHITECTURE.md", "docs/SYSTEM-OVERVIEW.md"],
+      "reason": "Discord 봇 핵심 진입점 변경"
+    },
+    {
+      "match_glob": "discord/lib/claude-runner.js",
+      "docs": ["docs/ARCHITECTURE.md"],
+      "reason": "Claude API 호출 레이어"
+    },
+    {
+      "match_glob": "discord/lib/session-summary.js",
+      "docs": ["docs/ARCHITECTURE.md"],
+      "reason": "세션 요약 처리 로직"
+    },
+    {
+      "match_glob": "lib/nexus",
+      "docs": ["docs/ARCHITECTURE.md"],
+      "reason": "Nexus MCP 레이어 변경"
+    },
+    {
+      "match_glob": "lib/mcp-nexus",
+      "docs": ["docs/ARCHITECTURE.md"],
+      "reason": "Nexus MCP 도구 변경"
+    },
+    {
+      "match_glob": "bin/ask-claude.sh",
+      "docs": ["docs/OPERATIONS.md"],
+      "reason": "Claude 호출 핵심 진입점 — 모든 크론 태스크가 의존"
+    },
+    {
+      "match_glob": "scripts/event-watcher.sh",
+      "docs": ["docs/ARCHITECTURE.md", "docs/OPERATIONS.md"],
+      "reason": "이벤트 버스 핵심 로직"
+    },
+    {
+      "match_glob": "scripts/emit-event.sh",
+      "docs": ["docs/ARCHITECTURE.md"],
+      "reason": "이벤트 발행 로직"
+    },
+    {
+      "match_glob": ".claude/hooks",
+      "docs": ["docs/ARCHITECTURE.md"],
+      "reason": "Claude Code 훅 변경 — 아키텍처 문서 반영 필요"
+    },
+    {
+      "match_glob": "lib/nexus/health-gateway.mjs",
+      "docs": ["docs/OPERATIONS.md"],
+      "reason": "health MCP 응답 구조 변경"
+    }
+  ]
+}

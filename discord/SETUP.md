@@ -39,13 +39,13 @@ cd ~/.jarvis/discord && node discord-bot.js
 
 ```bash
 # Discord 봇 등록
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.discord-bot.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.jarvis.discord-bot.plist
 
 # Watchdog 등록
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.discord-watchdog.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.jarvis.watchdog.plist
 
 # 확인
-launchctl list | grep ai.discord
+launchctl list | grep ai.jarvis
 ```
 
 ## 5. 트러블슈팅
@@ -57,8 +57,8 @@ tail -f ~/.jarvis/logs/discord-bot.err.log
 tail -f ~/.jarvis/logs/watchdog.log
 
 # 수동 재시작
-launchctl kickstart -k gui/$(id -u)/ai.discord-bot
+launchctl kickstart -k gui/$(id -u)/ai.jarvis.discord-bot
 
 # 서비스 해제
-launchctl bootout gui/$(id -u)/ai.discord-bot
+launchctl bootout gui/$(id -u)/ai.jarvis.discord-bot
 ```

@@ -16,8 +16,8 @@ TIMEOUT="${4:-180}"
 MAX_BUDGET="${5:-}"
 RESULT_RETENTION="${6:-7}"
 MODEL="${7:-}"
-
-MAX_RETRIES=3
+# 8번째 인수: tasks.json retry.max → bot-cron.sh가 전달 (없으면 3 기본값)
+MAX_RETRIES="${8:-3}"
 BACKOFF_DELAYS=(5 10 20 40)
 
 mkdir -p "$(dirname "$RETRY_LOG")"

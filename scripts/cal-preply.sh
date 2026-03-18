@@ -54,7 +54,7 @@ if [[ -z "$ACCESS_TOKEN" ]]; then
 
     # gog refresh_token export (calendar scope)
     gog auth tokens export "$GOG_EMAIL" --out "$GOG_TOK_FILE" --overwrite 2>/dev/null || {
-        echo '{"error":"gog token export failed. Run: gog auth add yuiopnm1931@gmail.com --services calendar"}'
+        echo "{\"error\":\"gog token export failed. Run: gog auth add ${GOG_EMAIL} --services calendar\"}"
         exit 1
     }
 

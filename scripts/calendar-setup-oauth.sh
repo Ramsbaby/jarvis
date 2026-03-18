@@ -59,7 +59,7 @@ cat > "$TOKEN_FILE" << TOKEOF
   "client_id": "$CLIENT_ID",
   "client_secret": "$CLIENT_SECRET",
   "refresh_token": "$REFRESH_TOKEN",
-  "account": "yuiopnm1931@gmail.com"
+  "account": "${GOOGLE_ACCOUNT}"
 }
 TOKEOF
 chmod 600 "$TOKEN_FILE"

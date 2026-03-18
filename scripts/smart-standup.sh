@@ -16,7 +16,7 @@ BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 STATE_FILE="$BOT_HOME/state/smart-standup.json"
-NODE="/opt/homebrew/bin/node"
+NODE="${NODE:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
 AGENT="$BOT_HOME/discord/lib/company-agent.mjs"
 
 log() {

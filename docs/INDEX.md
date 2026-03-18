@@ -16,6 +16,7 @@
 
 | Document | Description |
 |----------|-------------|
+| [SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md) | **🤖 자동 생성** — 5층 구조, 7팀, 특장점, 한계, 로드맵, 현재 상태 (매일 04:05 갱신) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, message flow, Nexus CIG, self-healing |
 | [ADR Index](../adr/ADR-INDEX.md) | Architecture Decision Records (ADR-001 ~ ADR-010) |
 | [DEPENDENCY-ANALYSIS.md](DEPENDENCY-ANALYSIS.md) | Module dependency analysis |

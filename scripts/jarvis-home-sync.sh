@@ -20,6 +20,16 @@ alert() {
 
 cd "$BOT_HOME"
 
+# git 저장소 + upstream remote 사전 검증
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  alert "jarvis-home-sync: $BOT_HOME 은 git 저장소가 아님"
+  exit 1
+fi
+if ! git remote get-url upstream >/dev/null 2>&1; then
+  alert "jarvis-home-sync: upstream remote 미설정 — git remote add upstream <url> 필요"
+  exit 1
+fi
+
 # upstream 최신 상태 fetch
 log "upstream fetch 시작"
 if ! git fetch upstream main --quiet 2>>"$LOG"; then
@@ -49,7 +59,9 @@ if ! git merge upstream/main --no-edit --quiet >>"$LOG" 2>&1; then
   log "merge 충돌 발생 — 중단"
   git merge --abort 2>/dev/null || true
   if [[ "$STASHED" -eq 1 ]]; then
-    git stash pop >>"$LOG" 2>&1 || true
+    if ! git stash pop >>"$LOG" 2>&1; then
+      alert "⚠️ jarvis-home-sync: merge 충돌 후 stash pop도 실패. stash 잔류 가능 — \`git stash list\` 확인 필요"
+    fi
   fi
   alert "⚠️ jarvis-home-sync: upstream merge 충돌. 수동 처리 필요 (\`cd ~/.jarvis && git merge upstream/main\`)"
   exit 1

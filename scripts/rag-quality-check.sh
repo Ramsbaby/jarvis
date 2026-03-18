@@ -168,7 +168,7 @@ fi
 # 4) LanceDB 실제 쿼리 검증 — 행 수 0이면 FAIL
 DB_PATH="$BOT_HOME/rag/lancedb"
 if [[ -d "$DB_PATH" ]]; then
-    row_count=$(cd "$BOT_HOME/lib" && LANCEDB_DIR="$DB_PATH" /opt/homebrew/bin/node -e "
+    row_count=$(cd "$BOT_HOME/lib" && LANCEDB_DIR="$DB_PATH" "${NODE}" -e "
       const lancedb = require('@lancedb/lancedb');
       (async () => {
         try {

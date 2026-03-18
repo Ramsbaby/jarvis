@@ -247,6 +247,25 @@ _write_health_json() {
         _stale_killed=$(python3 -c "import json,sys; d=json.load(open('$BOT_HOME/state/health.json')); print(d.get('stale_claude_killed',0))" 2>/dev/null || echo "0")
     fi
 
+    # P3: FSM 상태 요약 (task-store.mjs list 기반 집계)
+    local _fsm_total=0 _fsm_done=0 _fsm_failed=0 _fsm_running=0 _fsm_queued=0 _fsm_skipped=0 _fsm_cb_open=0
+    local _fsm_list
+    _fsm_list=$(node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" list 2>/dev/null || echo "[]")
+    if [[ "$_fsm_list" != "[]" && -n "$_fsm_list" ]]; then
+        _fsm_total=$(echo "$_fsm_list" | python3 -c "import json,sys; t=json.load(sys.stdin); print(len(t))" 2>/dev/null || echo "0")
+        _fsm_done=$(echo "$_fsm_list" | python3 -c "import json,sys; t=json.load(sys.stdin); print(sum(1 for x in t if x.get('status')=='done'))" 2>/dev/null || echo "0")
+        _fsm_failed=$(echo "$_fsm_list" | python3 -c "import json,sys; t=json.load(sys.stdin); print(sum(1 for x in t if x.get('status')=='failed'))" 2>/dev/null || echo "0")
+        _fsm_running=$(echo "$_fsm_list" | python3 -c "import json,sys; t=json.load(sys.stdin); print(sum(1 for x in t if x.get('status')=='running'))" 2>/dev/null || echo "0")
+        _fsm_queued=$(echo "$_fsm_list" | python3 -c "import json,sys; t=json.load(sys.stdin); print(sum(1 for x in t if x.get('status')=='queued'))" 2>/dev/null || echo "0")
+        _fsm_skipped=$(echo "$_fsm_list" | python3 -c "import json,sys; t=json.load(sys.stdin); print(sum(1 for x in t if x.get('status')=='skipped'))" 2>/dev/null || echo "0")
+        # CB open: skipped 중 reason=cb_open인 태스크 (meta.reason 필드 확인)
+        _fsm_cb_open=$(echo "$_fsm_list" | python3 -c "
+import json,sys
+t=json.load(sys.stdin)
+print(sum(1 for x in t if x.get('status')=='skipped' and x.get('meta',{}).get('reason')=='cb_open'))
+" 2>/dev/null || echo "0")
+    fi
+
     # --- atomic write ---
     local _tmp="$BOT_HOME/state/health.json.tmp"
     cat > "$_tmp" <<JSONEOF
@@ -258,6 +277,16 @@ _write_health_json() {
   "memory_mb": ${_rss_mb},
   "stale_claude_killed": ${_stale_killed},
   "crash_count": ${_crash_h},
+  "fsm": {
+    "total": ${_fsm_total},
+    "done": ${_fsm_done},
+    "failed": ${_fsm_failed},
+    "running": ${_fsm_running},
+    "queued": ${_fsm_queued},
+    "skipped": ${_fsm_skipped},
+    "cb_open": ${_fsm_cb_open},
+    "updated": "${_now_iso}"
+  },
   "system": {
     "disk_root": { "used_pct": ${_disk_used_pct}, "free_gb": ${_disk_free_gb}, "inode_used_pct": ${_inode_used_pct} },
     "memory": { "free_pct": ${_mem_free_pct}, "severity": "${_mem_severity}", "rss_mb": ${_rss_mb} }

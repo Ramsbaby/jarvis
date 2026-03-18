@@ -10,7 +10,7 @@ export HOME="${HOME:-/Users/$(id -un)}"
 
 JARVIS_HOME="${JARVIS_HOME:-$HOME/.jarvis}"
 LOG="$JARVIS_HOME/logs/oss-manager.log"
-NODE="/opt/homebrew/bin/node"
+NODE="${NODE:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
 
 log() {
     echo "[$(date '+%F %T')] [oss-promo] $1" | tee -a "$LOG"

@@ -8,6 +8,9 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// ── Set FAMILY_CHANNEL_IDS env before module load (BORAM_CHANNEL_IDS is read at import time)
+process.env.FAMILY_CHANNEL_IDS = '0000000000000000001,0000000000000000002';
+
 // ── Module-level mocks (hoisted before imports) ─────────────────────────────
 
 vi.mock('node:child_process', () => ({
@@ -37,9 +40,9 @@ import {
 
 import { execSync } from 'node:child_process';
 
-// Channel IDs copied from implementation
-const BORAM_CHANNEL = '1472965899790061680';
-const OTHER_BORAM   = '1470011814803935274';
+// Channel IDs — dummy values for testing (real IDs come from FAMILY_CHANNEL_IDS env var)
+const BORAM_CHANNEL = '0000000000000000001';
+const OTHER_BORAM   = '0000000000000000002';
 const WRONG_CHANNEL = '9999999999999999999';
 
 // ---------------------------------------------------------------------------
@@ -91,47 +94,47 @@ describe('BasePreProcessor', () => {
 describe('PreplyScheduleProcessor', () => {
   const proc = new PreplyScheduleProcessor();
 
-  // Helper to make a context for the Boram channel
-  const boramCtx = (prompt, channelId = BORAM_CHANNEL) =>
+  // Helper to make a context for the family channel
+  const familyCtx = (prompt, channelId = BORAM_CHANNEL) =>
     new ProcessorContext({ originalPrompt: prompt, channelId, threadId: 't', botHome: '/bot' });
 
   // ── matches() ────────────────────────────────────────────────────────────
 
   describe('matches()', () => {
     it('true for "오늘 수업" with correct channelId', () => {
-      expect(proc.matches(boramCtx('오늘 수업 몇 개야?'))).toBe(true);
+      expect(proc.matches(familyCtx('오늘 수업 몇 개야?'))).toBe(true);
     });
 
     it('true for "내일 수업" with correct channelId', () => {
-      expect(proc.matches(boramCtx('내일 수업 알려줘'))).toBe(true);
+      expect(proc.matches(familyCtx('내일 수업 알려줘'))).toBe(true);
     });
 
     it('true for "이번 주 수업" with correct channelId', () => {
-      expect(proc.matches(boramCtx('이번 주 수업 일정'))).toBe(true);
+      expect(proc.matches(familyCtx('이번 주 수업 일정'))).toBe(true);
     });
 
     it('true for "preply 일정" with correct channelId', () => {
-      expect(proc.matches(boramCtx('preply 일정 알려줘'))).toBe(true);
+      expect(proc.matches(familyCtx('preply 일정 알려줘'))).toBe(true);
     });
 
     it('true for "레슨 몇 개야" with correct channelId', () => {
-      expect(proc.matches(boramCtx('레슨 몇 개야?'))).toBe(true);
+      expect(proc.matches(familyCtx('레슨 몇 개야?'))).toBe(true);
     });
 
-    it('true for second Boram channel id', () => {
-      expect(proc.matches(boramCtx('오늘 수업', OTHER_BORAM))).toBe(true);
+    it('true for second family channel id', () => {
+      expect(proc.matches(familyCtx('오늘 수업', OTHER_BORAM))).toBe(true);
     });
 
     it('false for "오늘 수업" with WRONG channelId', () => {
-      expect(proc.matches(boramCtx('오늘 수업 몇 개야?', WRONG_CHANNEL))).toBe(false);
+      expect(proc.matches(familyCtx('오늘 수업 몇 개야?', WRONG_CHANNEL))).toBe(false);
     });
 
     it('false for "내일 수업" with WRONG channelId', () => {
-      expect(proc.matches(boramCtx('내일 수업 알려줘', WRONG_CHANNEL))).toBe(false);
+      expect(proc.matches(familyCtx('내일 수업 알려줘', WRONG_CHANNEL))).toBe(false);
     });
 
     it('false for unrelated prompt "날씨 어때" with correct channelId', () => {
-      expect(proc.matches(boramCtx('날씨 어때?'))).toBe(false);
+      expect(proc.matches(familyCtx('날씨 어때?'))).toBe(false);
     });
   });
 
@@ -145,7 +148,7 @@ describe('PreplyScheduleProcessor', () => {
     const successPayload = (items = []) =>
       JSON.stringify({ items });
 
-    const ctx = (prompt) => boramCtx(prompt);
+    const ctx = (prompt) => familyCtx(prompt);
 
     it('returns enriched prompt with "[Google Calendar Preply 수업 일정 — 이미 로드됨]" prefix on success', async () => {
       execSync.mockReturnValue(Buffer.from(successPayload([
@@ -567,7 +570,7 @@ describe('createPreProcessorRegistry', () => {
     const mockSearch = vi.fn().mockResolvedValue(null);
     const registry = createPreProcessorRegistry(mockSearch);
 
-    // Test 1: Schedule processor matches Boram channel schedule query
+    // Test 1: Schedule processor matches family channel schedule query
     const schedCtx = new ProcessorContext({
       originalPrompt: '오늘 수업 몇 개야?',
       channelId: BORAM_CHANNEL,

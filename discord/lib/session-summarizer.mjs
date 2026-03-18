@@ -4,7 +4,7 @@
  * ANTHROPIC_API_KEY 없는 Claude Max 환경에서 패턴 매칭으로
  * 오늘 세션 요약 파일을 분석해 facts를 추출, userMemory에 저장.
  *
- * 실행: /opt/homebrew/bin/node /Users/ramsbaby/.jarvis/discord/lib/session-summarizer.mjs
+ * 실행: /opt/homebrew/bin/node ~/.jarvis/discord/lib/session-summarizer.mjs
  * 크론: 0 3 * * * (매일 새벽 3시)
  */
 
@@ -115,7 +115,7 @@ const PATTERNS = [
   // 요일
   { re: /(?:월요일|화요일|수요일|목요일|금요일|토요일|일요일)/g, label: '일정' },
   // 이름 (님 호칭)
-  { re: /(?:대표님|보람님|[가-힣]{2,3}님)/g, label: '이름' },
+  { re: /(?:대표님|[가-힣]{2,3}님)/g, label: '이름' },
   // 수업 일정 패턴
   { re: /\d{2}:\d{2}\s+\w+\s+\$[\d.]+/g, label: '수업' },
   // 총 수입/지출
@@ -218,10 +218,11 @@ async function main() {
       if (!userId_tag) {
         // fallback: 내용 기반 추론
         const contentHead = rawContent.slice(0, 2000).toLowerCase();
-        const isBoram = (contentHead.includes('보람') && contentHead.includes('수업'))
+        const FAMILY_NAME = (process.env.FAMILY_MEMBER_NAME || '').toLowerCase();
+        const isFamilyMember = FAMILY_NAME && (contentHead.includes(FAMILY_NAME) && contentHead.includes('수업'))
           || contentHead.includes('preply 수업')
           || (contentHead.includes('약 복용') && !contentHead.includes('jarvis-dev'));
-        userId_tag = isBoram ? 'boram' : 'owner';
+        userId_tag = isFamilyMember ? 'family' : 'owner';
       }
 
       // 파일 맨 위에 userId 메타 라인이 없으면 삽입

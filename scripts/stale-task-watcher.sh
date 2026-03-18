@@ -19,8 +19,9 @@ BOT_HOME="${BOT_HOME:-$JARVIS_HOME}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 LOG="${JARVIS_HOME}/logs/stale-task-watcher.log"
 MONITORING_CONFIG="${JARVIS_HOME}/config/monitoring.json"
-STALE_MINUTES="${STALE_TASK_MINUTES:-30}"
-STALE_MS=$(( STALE_MINUTES * 60 * 1000 ))
+TASKS_CONFIG="${JARVIS_HOME}/config/tasks.json"
+# 전역 기본값: tasks.json에 timeout 없는 태스크에 적용 (단위: 분)
+STALE_MINUTES_DEFAULT="${STALE_TASK_MINUTES:-30}"
 
 mkdir -p "$(dirname "$LOG")"
 
@@ -56,34 +57,107 @@ while IFS= read -r task_json; do
     if [[ "$STATUS" != "running" ]]; then continue; fi
     if [[ -z "$TASK_ID" ]]; then continue; fi
 
+    # P2: tasks.json에서 태스크별 timeout 읽기 → stale 임계 = timeout × 2 (여유 버퍼)
+    # effective-tasks.json 우선 사용 (plugin-loader 결과), 없으면 tasks.json 폴백
+    if [[ -f "${JARVIS_HOME}/config/effective-tasks.json" ]]; then
+        _TASK_TIMEOUT=$(jq -r --arg id "$TASK_ID" \
+            '.tasks[] | select(.id==$id) | .timeout // 300' \
+            "${JARVIS_HOME}/config/effective-tasks.json" 2>/dev/null || echo "300")
+    else
+        _TASK_TIMEOUT=$(jq -r --arg id "$TASK_ID" \
+            '.tasks[] | select(.id==$id) | .timeout // 300' \
+            "${TASKS_CONFIG}" 2>/dev/null || echo "300")
+    fi
+    # 숫자 검증: 파싱 실패 시 기본값 적용
+    [[ "$_TASK_TIMEOUT" =~ ^[0-9]+$ ]] || _TASK_TIMEOUT=300
+    # stale 임계 = timeout × 2 (단위: ms), 최소 60초 보장
+    _STALE_MS=$(( _TASK_TIMEOUT * 2 * 1000 ))
+    (( _STALE_MS < 60000 )) && _STALE_MS=60000
+
     AGE_MS=$(( NOW_MS - UPDATED ))
-    if (( AGE_MS <= STALE_MS )); then continue; fi
+    if (( AGE_MS <= _STALE_MS )); then continue; fi
 
     AGE_MIN=$(( AGE_MS / 60000 ))
-    log "STALE 감지: ${TASK_ID} (${TASK_NAME}) — ${AGE_MIN}분 경과"
+    _THRESHOLD_MIN=$(( _STALE_MS / 60000 ))
+    log "STALE 감지: ${TASK_ID} (${TASK_NAME}) — ${AGE_MIN}분 경과 (임계: timeout=${_TASK_TIMEOUT}s × 2 = ${_THRESHOLD_MIN}분)"
 
     # running → failed 전이
-    EXTRA="{\"lastError\":\"stale: running ${AGE_MIN}min without completion\",\"staleSince\":\"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\"}"
+    EXTRA="{\"lastError\":\"stale: running ${AGE_MIN}min without completion\",\"staleSince\":\"$(date -u '+%Y-%m-%dT%H:%M:%SZ')\",\"threshold_s\":$((_STALE_MS/1000))}"
     if ${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" \
         transition "$TASK_ID" "failed" "stale-watcher" "$EXTRA" 2>>"$LOG"; then
         log "전이 완료: ${TASK_ID} → failed"
         STALE_COUNT=$(( STALE_COUNT + 1 ))
-        FAILED_IDS="${FAILED_IDS} \`${TASK_ID}\`"
+        FAILED_IDS="${FAILED_IDS} \`${TASK_ID}\`(임계${_THRESHOLD_MIN}분)"
     else
         log "ERROR: 전이 실패 — ${TASK_ID} (task-store 오류, 로그 확인)"
     fi
+    unset _TASK_TIMEOUT _STALE_MS _THRESHOLD_MIN
 
 done < <(echo "$TASKS_JSON" | jq -c '.[]' 2>/dev/null || true)
+
+# ── CB 쿨다운 만료된 skipped 태스크 자동 복구 ────────────────────────────────
+log "CB 쿨다운 만료 체크 시작"
+node --experimental-sqlite --no-warnings -e "
+const {DatabaseSync} = require('node:sqlite');
+const fs = require('fs');
+const path = require('path');
+const BOT_HOME = process.env.BOT_HOME || process.env.JARVIS_HOME || require('os').homedir() + '/.jarvis';
+const DB_PATH = BOT_HOME + '/state/tasks.db';
+if (!fs.existsSync(DB_PATH)) { process.exit(0); }
+const db = new DatabaseSync(DB_PATH);
+const now = Date.now();
+
+// skipped + cb_open 태스크 조회
+const tasks = db.prepare(\"SELECT id, meta FROM tasks WHERE status='skipped'\").all();
+tasks.forEach(t => {
+  let meta = {};
+  try { meta = JSON.parse(t.meta || '{}'); } catch {}
+  if (meta.reason !== 'cb_open') return;
+
+  const cbFile = BOT_HOME + '/state/circuit-breaker/' + t.id + '.json';
+  if (!fs.existsSync(cbFile)) {
+    // CB 파일 없으면 그냥 queued로 복구
+    db.prepare(\"UPDATE tasks SET status='queued', updated_at=? WHERE id=?\").run(now, t.id);
+    db.prepare(
+      \"INSERT INTO task_transitions (task_id, from_status, to_status, triggered_by, created_at) VALUES (?,?,?,?,?)\"
+    ).run(t.id, 'skipped', 'queued', 'stale-watcher/cb-recovery', now);
+    console.log('[cb-recovery] ' + t.id + ': skipped → queued (cb file missing)');
+    return;
+  }
+
+  let cbData = {};
+  try { cbData = JSON.parse(fs.readFileSync(cbFile, 'utf-8')); } catch {}
+  const cooldownUntil = cbData.cooldownUntil || 0;
+  // cooldownUntil 없는 구형 CB 파일: last_fail_ts + 3600s 계산
+  const lastFailTs = cbData.last_fail_ts || 0;
+  const effectiveCooldownUntil = cooldownUntil || ((lastFailTs + 3600) * 1000);
+
+  if (now > effectiveCooldownUntil) {
+    // 쿨다운 만료 → queued 복구 + CB 파일 삭제
+    const newMeta = Object.assign({}, meta, { reason: null, cooldownExpiredAt: new Date(now).toISOString() });
+    db.prepare(\"UPDATE tasks SET status='queued', meta=?, updated_at=? WHERE id=?\")
+      .run(JSON.stringify(newMeta), now, t.id);
+    db.prepare(
+      \"INSERT INTO task_transitions (task_id, from_status, to_status, triggered_by, created_at) VALUES (?,?,?,?,?)\"
+    ).run(t.id, 'skipped', 'queued', 'stale-watcher/cb-recovery', now);
+    try { fs.unlinkSync(cbFile); } catch {}
+    console.log('[cb-recovery] ' + t.id + ': skipped → queued (cooldown expired)');
+  } else {
+    const remainMs = effectiveCooldownUntil - now;
+    console.log('[cb-recovery] ' + t.id + ': 쿨다운 진행 중 (' + Math.ceil(remainMs/60000) + '분 남음)');
+  }
+});
+" 2>/dev/null | while IFS= read -r line; do log "$line"; done || true
 
 # ── 결과 Discord 보고 ─────────────────────────────────────────────────────────
 if (( STALE_COUNT > 0 )); then
     MSG="🕒 **stale-task-watcher**: ${STALE_COUNT}개 태스크 stale 감지 → \`failed\` 전이 완료
 태스크:${FAILED_IDS}
-기준: running ${STALE_MINUTES}분 초과 → 자동 실패 처리. \`dev-runner\` 재큐 여부 확인 권장."
+기준: tasks.json timeout × 2 (태스크별 동적 임계). \`dev-runner\` 재큐 여부 확인 권장."
     discord_alert "$MSG"
     log "Discord 알림 전송 완료 (${STALE_COUNT}건)"
 else
-    log "정상: ${STALE_MINUTES}분 초과 running 태스크 없음"
+    log "정상: 태스크별 동적 stale 임계 초과 running 태스크 없음 (기본값 timeout×2)"
 fi
 
 exit 0

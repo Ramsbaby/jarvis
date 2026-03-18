@@ -25,11 +25,13 @@ send_ntfy() {
 # Discord 웹훅 알림
 send_discord() {
     local msg="$1"
-    local webhook
+    local webhook payload
     webhook=$(jq -r '.webhooks["jarvis-system"] // empty' "$MONITORING_CONFIG" 2>/dev/null || echo "")
     if [[ -z "$webhook" ]]; then return; fi
+    # jq로 직렬화 — msg에 ", \, 개행 포함돼도 안전
+    payload=$(jq -cn --arg content "$msg" '{"content":$content}' 2>/dev/null) || return
     curl -s --max-time 10 -H "Content-Type: application/json" \
-        -d "{\"content\": \"$msg\"}" "$webhook" >/dev/null 2>&1 || true
+        -d "$payload" "$webhook" >/dev/null 2>&1 || true
 }
 
 # 현재 로그인 계정 tier 확인

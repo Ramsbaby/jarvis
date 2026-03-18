@@ -5,7 +5,7 @@ Thanks for your interest in contributing!
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/jarvis ~/.jarvis
+git clone https://github.com/YOUR_USERNAME/jarvis ~/.jarvis   # YOUR_USERNAME = your GitHub username after forking Ramsbaby/jarvis
 cd ~/.jarvis
 ./bin/jarvis-init.sh   # Interactive setup wizard
 ```

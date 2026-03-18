@@ -14,7 +14,7 @@ const USERS_DIR = join(BOT_HOME, 'state', 'users');
 const CATEGORY_RULES = [
   { cat: 'trading',  re: /tqqq|주식|트레이딩|레버리지|etf|매수|매도|포트폴리오|s&p|nasdaq|코스피|cpi|fomc|금리|배당|수익률/i },
   { cat: 'work',     re: /sk\s*d&d|sk디앤디|백엔드|spring|kafka|grpc|redis|aws|이직|면접|연봉|프로젝트|업무|회사|사수|팀장|개발/i },
-  { cat: 'family',   re: /보람님|아내|와이프|preply|수업|레슨|학생|강의|한국어\s*강사|수강생/i },
+  { cat: 'family',   re: /아내|와이프|preply|수업|레슨|학생|강의|한국어\s*강사|수강생/i },
   { cat: 'travel',   re: /여행|치앙마이|삿포로|해외|항공|숙소|노보리베쓰|휴가|출장/i },
   { cat: 'health',   re: /건강|운동|병원|의사|약|몸무게|다이어트|수면|피로|두통/i },
 ];

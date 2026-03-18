@@ -18,7 +18,9 @@ import { isPreplyQuery } from './prompt-sections.js';
 const PREPLY_INCOME_PATTERN = /수입|매출|레슨\s*금액|얼마|정산|취소\s*보상|오늘\s*얼마/i;
 const PREPLY_SCHEDULE_PATTERN = /프레플리|preply|오늘\s*수업|내일\s*수업|이번\s*주\s*수업|수업\s*일정|수업\s*몇|레슨|오늘\s*일정|내일\s*일정|이번\s*주\s*일정/i;
 
-const BORAM_CHANNEL_IDS = ['1472965899790061680', '1470011814803935274'];
+const BORAM_CHANNEL_IDS = process.env.FAMILY_CHANNEL_IDS
+  ? process.env.FAMILY_CHANNEL_IDS.split(',')
+  : [];
 
 // ---------------------------------------------------------------------------
 // ProcessorContext — immutable snapshot passed to every processor
@@ -75,7 +77,7 @@ async function _notifyOwnerUnmatched(unmatchedStudents, botHome, client) {
     }
 
     const studentList = newStudents.map(s => `• **${s}**`).join('\n');
-    const msg = `📌 **보람님 Preply 단가 미확인 학생**\n${studentList}\n\n단가가 등록되지 않아 수입 계산에서 제외됩니다.\nPreply 예약 메일이 오면 자동 반영되니, 수업이 확정된 경우 메일 수신 여부를 확인해 주세요.`;
+    const msg = `📌 **${process.env.FAMILY_MEMBER_NAME || '가족'} Preply 단가 미확인 학생**\n${studentList}\n\n단가가 등록되지 않아 수입 계산에서 제외됩니다.\nPreply 예약 메일이 오면 자동 반영되니, 수업이 확정된 경우 메일 수신 여부를 확인해 주세요.`;
 
     // 전송 성공 시에만 state 업데이트
     await ch.send(msg);

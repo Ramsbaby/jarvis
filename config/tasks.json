@@ -564,7 +564,7 @@
       "name": "학습팀 주간 보고 (Academy)",
       "schedule": "0 20 * * 0",
       "timeout": 300,
-      "prompt": "자비스 컴퍼니 학습팀 주간 보고를 작성해.\n1) ls ~/.jarvis/rag/teams/shared-inbox/ 으로 academy팀 수신 메시지 확인\n2) ~/.jarvis/results/career-weekly/ 최근 결과 읽어 이직 준비 진행 상황 요약\n3) Google Tasks에서 학습 관련 미완료 항목 확인 (gog tasks list ${GOOGLE_TASKS_LIST_ID})\n4) 보람님 관련 이번 주 특이 사항 (있으면 기록, 없으면 생략)\n5) 다음 주 커리어/학습 목표 3가지 제안\n보고서를 ~/.jarvis/rag/teams/reports/academy-$(date +%F).md 에 저장. Discord #jarvis-ceo 채널에 요약 전송.",
+      "prompt": "자비스 컴퍼니 학습팀 주간 보고를 작성해.\n1) ls ~/.jarvis/rag/teams/shared-inbox/ 으로 academy팀 수신 메시지 확인\n2) ~/.jarvis/results/career-weekly/ 최근 결과 읽어 이직 준비 진행 상황 요약\n3) Google Tasks에서 학습 관련 미완료 항목 확인 (gog tasks list ${GOOGLE_TASKS_LIST_ID})\n4) ${FAMILY_MEMBER_NAME:-가족}님 관련 이번 주 특이 사항 (있으면 기록, 없으면 생략)\n5) 다음 주 커리어/학습 목표 3가지 제안\n보고서를 ~/.jarvis/rag/teams/reports/academy-$(date +%F).md 에 저장. Discord #jarvis-ceo 채널에 요약 전송.",
       "allowedTools": "Bash,Read,Write",
       "output": [
         "discord",
@@ -1045,15 +1045,15 @@
     },
     {
       "id": "boram-daily-schedule",
-      "name": "보람 수업 일정 브리핑",
+      "name": "가족 수업 일정 브리핑",
       "schedule": "30 7 * * *",
       "timeout": 60,
-      "prompt": "오늘 보람님의 Preply 수업 일정과 수입을 조회해서 전송해줘.\n\n실행 방법:\nbash ~/.jarvis/scripts/preply-today.sh $(date +%F)\n\n응답은 JSON이다. scheduledLessons 배열에서 startAt(시간), student(학생명), amount(금액)을 추출하고, totalsByCurrency.USD로 총수입을 표시한다.\n\n출력 형식 (코드블록 없이 일반 텍스트로):\n오늘(M/D 요일) 수업 브리핑 📅✨\n총 N개 수업 · 총 수입 $XXX.XX USD 💰\n\n- 🕐 HH:MM · 학생이름 · $XX.XX\n- 🕐 HH:MM · 학생이름 · $XX.XX\n...\n\nscheduledCount가 0이면: 오늘은 수업이 없어요! 😊\ncancelledCount가 0보다 크면 취소 건수도 표시.",
+      "prompt": "오늘 ${FAMILY_MEMBER_NAME:-가족}님의 Preply 수업 일정과 수입을 조회해서 전송해줘.\n\n실행 방법:\nbash ~/.jarvis/scripts/preply-today.sh $(date +%F)\n\n응답은 JSON이다. scheduledLessons 배열에서 startAt(시간), student(학생명), amount(금액)을 추출하고, totalsByCurrency.USD로 총수입을 표시한다.\n\n출력 형식 (코드블록 없이 일반 텍스트로):\n오늘(M/D 요일) 수업 브리핑 📅✨\n총 N개 수업 · 총 수입 $XXX.XX USD 💰\n\n- 🕐 HH:MM · 학생이름 · $XX.XX\n- 🕐 HH:MM · 학생이름 · $XX.XX\n...\n\nscheduledCount가 0이면: 오늘은 수업이 없어요! 😊\ncancelledCount가 0보다 크면 취소 건수도 표시.",
       "allowedTools": "Bash",
       "output": [
         "discord"
       ],
-      "discordChannel": "jarvis-boram",
+      "discordChannel": "${FAMILY_CHANNEL:-jarvis-family}",
       "retry": {
         "max": 2,
         "backoff": "exponential"
@@ -1063,7 +1063,7 @@
       "depends": [],
       "resultRetention": 7,
       "resultMaxChars": 1000,
-      "description": "매일 07:30 KST 보람님 Preply 수업 일정을 #jarvis-boram 채널로 자동 전송.",
+      "description": "매일 07:30 KST ${FAMILY_MEMBER_NAME:-가족}님 Preply 수업 일정을 #${FAMILY_CHANNEL:-jarvis-family} 채널로 자동 전송.",
       "model": "claude-haiku-4-5-20251001"
     },
     {
@@ -1155,7 +1155,7 @@
       "enabled": true,
       "timeout": 600,
       "discordChannel": "jarvis-blog",
-      "script": "/Users/ramsbaby/.jarvis/scripts/oss-recon.sh"
+      "script": "~/.jarvis/scripts/oss-recon.sh"
     },
     {
       "id": "oss-maintenance",
@@ -1164,7 +1164,7 @@
       "enabled": true,
       "timeout": 300,
       "discordChannel": "jarvis-blog",
-      "script": "/Users/ramsbaby/.jarvis/scripts/oss-maintenance.sh"
+      "script": "~/.jarvis/scripts/oss-maintenance.sh"
     },
     {
       "id": "oss-promo",
@@ -1173,7 +1173,7 @@
       "enabled": true,
       "timeout": 600,
       "discordChannel": "jarvis-blog",
-      "script": "/Users/ramsbaby/.jarvis/scripts/oss-promo.sh"
+      "script": "~/.jarvis/scripts/oss-promo.sh"
     },
     {
       "id": "oss-docs",
@@ -1182,7 +1182,7 @@
       "enabled": true,
       "timeout": 600,
       "discordChannel": "jarvis-blog",
-      "script": "/Users/ramsbaby/.jarvis/scripts/oss-docs.sh"
+      "script": "~/.jarvis/scripts/oss-docs.sh"
     }
   ]
 }

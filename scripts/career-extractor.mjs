@@ -6,7 +6,7 @@
  * Jarvis-Vault/05-career/에 구조화 파일로 저장.
  *
  * 실행: node career-extractor.mjs [YYYY-MM-DD]  (기본: 어제)
- * 크론: launchd com.ramsbaby.career-extractor (매일 00:30)
+ * 크론: launchd com.jarvis.career-extractor (매일 00:30)
  *
  * 출력:
  *   Vault/05-career/YYYY-MM-DD-career.md   ← 일별 추출본

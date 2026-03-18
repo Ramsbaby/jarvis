@@ -599,7 +599,7 @@ export async function handleInteraction(interaction, deps) {
       if (requestChannel) agentArgs.push('--channel', requestChannel);
 
       await execFileAsync(
-        '/opt/homebrew/bin/node', [agentPath, ...agentArgs],
+        process.execPath, [agentPath, ...agentArgs],
         { timeout: 300_000, env: { ...process.env, HOME }, cwd: BOT_HOME },
       );
 

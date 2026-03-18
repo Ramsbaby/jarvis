@@ -9,14 +9,11 @@ config/*-token.json
 
 # 대화 로그 (API 키 포함 가능)
 inbox/
-config/tasks.json
 config/company-dna.md
 config/discord-mcp.json
 discord/personas.json
-context/user-profile.md
-context/career-weekly.md
-context/tqqq-monitor.md
-context/market-alert.md
+# Personal context files (runtime AI memory — not for public repo)
+context/
 scripts/tqqq-alert.sh
 
 # 런타임
@@ -73,3 +70,19 @@ config/secrets/
 *-backup-*
 *.recon-backup-*
 data/
+
+# Personal automation scripts (not for public use)
+scripts/boram-*.sh
+scripts/relay-to-owner.sh
+scripts/_boram_briefing_fmt.py
+scripts/personal/
+
+# Personal audit/onboarding docs
+adr/PERSONALIZATION-AUDIT.md
+
+# 세션 기록 (자동 생성, 개인 대화 포함)
+docs/compact-summaries.md
+
+# 백업 아티팩트 추가 패턴
+*.backup-*
+*.bak-*

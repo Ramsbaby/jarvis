@@ -10,7 +10,7 @@ export HOME="${HOME:-/Users/$(id -un)}"
 
 BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
-NODE="/opt/homebrew/bin/node"
+NODE="${NODE:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
 AGENT="$BOT_HOME/discord/lib/company-agent.mjs"
 LOG="$BOT_HOME/logs/company-agent.log"
 

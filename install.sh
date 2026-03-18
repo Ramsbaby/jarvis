@@ -79,6 +79,14 @@ check_command() {
 check_common_deps() {
     local ok=true
     check_command node "https://nodejs.org/ or nvm" || ok=false
+    # Node.js version check (22+ required for --experimental-sqlite)
+    if command -v node >/dev/null 2>&1; then
+        NODE_MAJOR=$(node --version 2>/dev/null | tr -d 'v' | cut -d'.' -f1)
+        if [[ -n "$NODE_MAJOR" ]] && [[ "$NODE_MAJOR" -lt 22 ]]; then
+            error "Node.js 22+ required (found $(node --version)). Update at https://nodejs.org/"
+            ok=false
+        fi
+    fi
     check_command jq "brew install jq / apt install jq" || ok=false
     if [ "$ok" = false ]; then
         error "Missing dependencies. Install them and re-run."
@@ -385,9 +393,12 @@ install_local() {
         echo ""
     fi
     echo -e "  ${CYAN}Next steps:${NC}"
-    echo "  1. Run the setup wizard: ${BOT_HOME}/bin/jarvis-init.sh"
-    echo "  2. Edit discord/.env with your tokens"
-    echo "  3. Start the bot: cd ${BOT_HOME}/discord && node discord-bot.js"
+    echo "  1. Edit discord/.env with your tokens (required first)"
+    echo "     → DISCORD_TOKEN, CLAUDE_HOME, and optionally OPENAI_API_KEY"
+    echo "  2. Authenticate Claude: run 'claude' and complete browser login"
+    echo "  3. Run the setup wizard: ${BOT_HOME}/bin/jarvis-init.sh"
+    echo "  4. Start the bot: cd ${BOT_HOME}/discord && node discord-bot.js"
+    echo "  5. Verify install: bash ${BOT_HOME}/scripts/e2e-test.sh"
     echo ""
 }
 

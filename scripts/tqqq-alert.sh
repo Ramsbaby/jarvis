@@ -14,6 +14,7 @@
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
+NODE="${NODE:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
 export HOME="${HOME:-/Users/$(id -un)}"  # macOS default; Linux: /home/$(id -un)
 
 JARVIS_HOME="$HOME/.jarvis"
@@ -124,7 +125,7 @@ if curl -sS -X POST "$WEBHOOK_URL" \
         EVENT_DATA=$(jq -n --arg price "$PRICE" --arg change "${PCT}%" --arg level "$ALERT_LEVEL" \
             '{price: $price, change: $change, level: $level}')
         log "Event dispatch: tqqq-critical → company-agent"
-        /opt/homebrew/bin/node "$COMPANY_AGENT" --event tqqq-critical --data "$EVENT_DATA" \
+        "${NODE}" "$COMPANY_AGENT" --event tqqq-critical --data "$EVENT_DATA" \
             >> "$JARVIS_HOME/logs/company-agent.log" 2>&1 &
     fi
 else
