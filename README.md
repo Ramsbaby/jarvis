@@ -14,7 +14,7 @@
 <img src="https://img.shields.io/badge/context_compression-98%25-blueviolet?style=flat-square" alt="98% compression">
 <img src="https://img.shields.io/badge/session_length-3%2B_hours-blue?style=flat-square" alt="3+ hours">
 <img src="https://img.shields.io/badge/AI_teams-12-orange?style=flat-square" alt="12 AI teams">
-<img src="https://img.shields.io/badge/cron_tasks-49-orange?style=flat-square" alt="49 cron tasks">
+<img src="https://img.shields.io/badge/cron_tasks-56-orange?style=flat-square" alt="56 cron tasks">
 
 <h1>Jarvis</h1>
 
@@ -24,7 +24,8 @@
   <strong>
     You pay $20–$100/month for Claude Max. It sits idle 23 hours a day.<br>
     Jarvis wires it to Discord, cron jobs, and a local memory engine —<br>
-    so Claude works, monitors, and learns around the clock, at $0 extra.
+    so Claude works, monitors, and learns around the clock, at $0 extra.<br>
+    <sub>12 AI teams · 56 cron tasks · self-healing · local RAG memory</sub>
   </strong>
 </p>
 
@@ -44,7 +45,7 @@
 
 ## What Is Jarvis?
 
-Jarvis is a harness around `claude -p` — Claude Code's headless print mode. It wires Claude to **Discord**, **scheduled cron jobs**, and a **local RAG memory system**, turning your existing subscription into a personal AI operations team.
+Jarvis is an automation layer around `claude -p` — Claude Code's headless print mode. It wires Claude to **Discord**, **scheduled cron jobs**, and a **local RAG memory system** (RAG = Retrieval-Augmented Generation: past conversations, notes, and reports are indexed and fed as context so Claude's answers get smarter over time), turning your existing subscription into a personal AI operations team.
 
 ```
 You type in Discord   →  Claude answers in real time  →  saved to memory
@@ -67,10 +68,10 @@ Most Discord bots call the Anthropic API — every message is a paid API call. J
 | How it calls Claude | `claude -p` (CLI, your subscription) | `POST /v1/messages` (metered) | API node (metered) |
 | 500 msgs/month cost | **$0 extra** | ~$7–$37 extra | API cost + n8n fee |
 | Model quality | Opus / Sonnet (your tier) | Depends on key | Depends on key |
-| Proactive automation | 49 scheduled tasks | Reactive only | Needs visual setup |
+| Proactive automation | 56 scheduled tasks | Reactive only | Needs visual setup |
 | Self-healing | 4-layer auto-recovery | ❌ | ❌ |
 | Long-term memory | LanceDB hybrid (local) | Rare | Optional plugin |
-| Context compression | 98% (Nexus CIG layer) | ❌ | ❌ |
+| Context compression | 98% (Nexus CIG — see below) | ❌ | ❌ |
 | Privacy | 100% local | Varies | Varies |
 
 > You already pay for the gym. Jarvis is the personal trainer who makes sure you actually use it — all day, every day, even while you sleep.
@@ -94,7 +95,7 @@ Most Discord bots call the Anthropic API — every message is a paid API call. J
   18:00               ← You stop for the day
   20:00    😴         → Record team: daily archive  (internal)
   ─────────────────────────────────────────────────────────────────
-                       49 cron tasks · 12 AI teams · 0 manual steps
+                       56 cron tasks · 12 AI teams · 0 manual steps
 ```
 
 Every task has **exponential backoff retry**, **rate-limit awareness**, and **failure alerts** pushed to your phone via [ntfy](https://ntfy.sh).
@@ -110,7 +111,7 @@ Every task has **exponential backoff retry**, **rate-limit awareness**, and **fa
 ### $0 / month
 *extra cost*
 
-Every Discord reply, every cron task, every AI team report calls `claude -p` — included in your Claude Max subscription. No API keys, no metered billing.
+Every Discord reply, every cron task, every AI team report calls `claude -p` — included in your Claude Max or Pro subscription. No API keys, no metered billing.
 
 </td>
 <td align="center" width="33%">
@@ -118,7 +119,7 @@ Every Discord reply, every cron task, every AI team report calls `claude -p` —
 ### 98%
 *context compression*
 
-The Nexus CIG layer intercepts every tool output before it enters Claude's context window. Measured case: **315 KB → 5.4 KB**. Multi-turn threads that would exhaust tokens in 30 minutes now run for hours.
+**Nexus CIG** (Context Intelligence Gateway) — an MCP server that intercepts every tool output before it reaches Claude's context window. Measured: **315 KB → 5.4 KB**. Multi-turn threads that would exhaust tokens in 30 minutes now run for hours.
 
 </td>
 <td align="center" width="33%">
@@ -169,9 +170,9 @@ Without compression, context fills in ~30 min. With Nexus CIG, threads sustain f
 | Layer | Trigger | What It Does |
 |-------|---------|-------------|
 | **0 · Preflight** | Every cold start | `bot-preflight.sh` validates config; if broken, Claude reads the error log and **fixes the file itself** |
-| **1 · OS-level** | Any crash | `launchd KeepAlive = true` — macOS restarts the bot at the OS level |
-| **2 · Watchdog** | Every 5 min | `watchdog.sh` checks log freshness; kills and restarts stale processes |
-| **3 · Guardian** | Every 3 min | `launchd-guardian.sh` re-registers any unloaded LaunchAgents automatically |
+| **1 · OS-level** | Any crash | `launchd KeepAlive = true` (macOS) / Docker `restart: always` (Linux) — OS-level restart |
+| **2 · Watchdog** | Every 3 min | `watchdog.sh` checks log freshness; kills and restarts stale processes |
+| **3 · Guardian** | Every 3 min | `launchd-guardian.sh` re-registers unloaded LaunchAgents (macOS) |
 
 ---
 
@@ -211,12 +212,12 @@ This is Jarvis running on a real developer's machine. All numbers are measured.
 **During your workday:**
 - Ask anything in Discord — full Claude Opus / Sonnet quality, zero per-message cost
 - `/search <query>` searches your entire knowledge base (Obsidian vault + cron results) semantically
-- `/run <task>` manually triggers any of the 49 cron tasks on demand
+- `/run <task>` manually triggers any of the 56 cron tasks on demand
 - Rate limit tracker keeps you safely under the daily ceiling (typical usage: ~17%)
 
 **While you sleep:**
-- RAG index updated hourly as you edit notes in Obsidian
-- Obsidian Vault synced: team reports, ADRs, and daily decisions in structured Markdown
+- RAG index updated hourly as you edit notes *(Obsidian integration is optional — any Markdown folder works)*
+- Team reports, ADRs, and daily decisions synced to structured Markdown
 - Every significant decision logged to `decisions/*.jsonl` — a permanent audit trail
 - System health checked every 30 min; anomalies go to Discord before you notice them
 
@@ -227,9 +228,11 @@ This is Jarvis running on a real developer's machine. All numbers are measured.
 ## Quick Start
 
 > **Prerequisites:**
-> - **Claude Max subscription** ($20–$100/mo) — every task calls `claude -p`
-> - **Claude Code CLI** — `npm install -g @anthropic-ai/claude-code` then `claude` to authenticate
-> - **Node.js 22+**, **jq**, and a **Discord bot token** from [discord.com/developers](https://discord.com/developers)
+> - **Claude Max or Pro subscription** — every task calls `claude -p` (Claude Pro works for lighter use; Max recommended for 24/7 operation)
+> - **Claude Code CLI** — `npm install -g @anthropic-ai/claude-code` then run `claude` once to authenticate in your browser
+> - **Node.js 22+** and **jq** — `node --version` and `jq --version` to verify
+> - **Discord bot token** — create a bot at [discord.com/developers](https://discord.com/developers/applications); see [discord/SETUP.md](discord/SETUP.md) for screenshots
+> - **Platform:** macOS or Linux. Windows users: use WSL2.
 
 **Option A — Docker (simplest):**
 
@@ -238,26 +241,32 @@ git clone https://github.com/Ramsbaby/jarvis ~/.jarvis
 cd ~/.jarvis
 cp discord/.env.example discord/.env
 # Edit discord/.env — add DISCORD_TOKEN, GUILD_ID, CHANNEL_IDS
+# (See discord/SETUP.md → "Finding your IDs" if unsure where to get these)
 docker compose up -d
 ```
+
+To verify it's running: `docker compose logs -f` — you should see `Discord connected — Jarvis#XXXX`.
 
 **Option B — Native macOS / Linux:**
 
 ```bash
 git clone https://github.com/Ramsbaby/jarvis ~/.jarvis
 cd ~/.jarvis
-./install.sh              # deps + LaunchAgents + crontab
-# Edit discord/.env, then:
+./install.sh              # installs deps, sets up LaunchAgents and crontab
+# Edit discord/.env with your tokens, then:
 node discord/discord-bot.js
 ```
 
-**For 24/7 auto-restart on macOS:**
+To verify: type anything in one of your configured Discord channels — Jarvis should respond within a few seconds.
+
+**For 24/7 auto-restart on macOS** (survives crashes and reboots):
 
 ```bash
 launchctl load ~/Library/LaunchAgents/ai.jarvis.discord-bot.plist
+launchctl list | grep jarvis   # should show the service as running
 ```
 
-See [discord/SETUP.md](discord/SETUP.md) for the complete step-by-step guide.
+> **First time?** [discord/SETUP.md](discord/SETUP.md) walks through Discord bot creation, finding your server/channel IDs, and verifying the first response — with screenshots.
 
 ### Dependency Tiers
 
@@ -302,6 +311,45 @@ NTFY_TOPIC=                       # optional: mobile push via ntfy.sh
 ```
 
 The `depends` array automatically injects cross-team context: if `tqqq-monitor` ran this morning, its output is prepended to the standup prompt. No extra code needed.
+
+---
+
+## FAQ
+
+<details>
+<summary><strong>Do I need Obsidian?</strong></summary>
+
+No. Obsidian is optional. Jarvis uses any Markdown folder as its knowledge base. The vault-sync feature integrates with Obsidian if you have it, but the bot runs fine without it.
+
+</details>
+
+<details>
+<summary><strong>Does this work on Windows?</strong></summary>
+
+Not natively — Jarvis uses bash scripts and (on macOS) `launchd` for process management. Windows users should use **WSL2** (Windows Subsystem for Linux) or run Jarvis in Docker.
+
+</details>
+
+<details>
+<summary><strong>Will this burn through my Claude rate limits?</strong></summary>
+
+Unlikely. With the default 56 tasks, typical daily usage is around **17% of the Claude Max rate limit** — measured on a real installation. The built-in rate-limit tracker pauses tasks if you're getting close to the ceiling, and resumes automatically.
+
+</details>
+
+<details>
+<summary><strong>I only have Claude Pro, not Max. Will it work?</strong></summary>
+
+Yes, with lighter use. Claude Pro works well for the Discord bot and a handful of cron tasks. For the full 56-task schedule running 24/7, Claude Max is recommended to avoid hitting Pro-tier rate limits.
+
+</details>
+
+<details>
+<summary><strong>What if a cron task fails?</strong></summary>
+
+Each task has configurable retry logic (exponential backoff, up to 3 attempts by default). If it still fails, an alert is sent to Discord and optionally to your phone via ntfy. The bot keeps running — one failed task doesn't affect the others.
+
+</details>
 
 ---
 
