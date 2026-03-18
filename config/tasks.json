@@ -63,7 +63,7 @@
     {
       "id": "schedule-coherence",
       "name": "일정 정합성 점검",
-      "schedule": "0 4 * * 1",
+      "schedule": "0 4 * * *",
       "timeout": 180,
       "prompt": "ultrathink\n\n## 일정 정합성 자율 점검\n\n다음 절차로 Owner의 일정 설정이 실제 생활 패턴과 맞는지 점검하라. 중복/충돌 발견 시 즉시 자율 수정하고 Discord 경보를 단독으로 전송한다.\n\n**1단계: 기준 로드**\n- `cat $BOT_HOME/config/user-schedule.json` 으로 출근/기상/귀가 시간 확인\n- 특히 `departure_time`(출근 시간)과 `briefing_deadline`(브리핑 수신 마감) 확인\n\n**2단계: 현재 설정 스캔**\n- `launchctl list | grep com.jarvis` 로 활성 LaunchAgent 목록 확인\n- `ls ~/Library/LaunchAgents/ | grep jarvis` 로 등록된 plist 파일 목록 확인\n- `cat $BOT_HOME/config/tasks.json` 의 schedule 필드로 bot-cron 스케줄 확인\n- 각 태스크 ID별로 LaunchAgent plist 와 tasks.json 스케줄이 동시에 존재하는지 대조\n\n**3단계: 중복/충돌 판단 — 최우선 처리**\n아래 항목 중 하나라도 해당하면 '중복/충돌'로 분류하고 즉시 자율 수정한다:\n- 같은 태스크 ID가 LaunchAgent plist AND tasks.json 양쪽에 스케줄 등록된 경우 → LaunchAgent를 즉시 비활성화: `launchctl unload ~/Library/LaunchAgents/<plist파일>` 후 파일명에 .disabled 추가\n- 같은 기능을 수행하는 태스크가 5분 이내 간격으로 중복 실행되는 경우 → 늦은 시간 쪽 비활성화\n\n**중복/충돌 감지 시 Discord 즉시 단독 경보 전송 (다른 보고와 절대 묶지 말 것):**\n```\n🚨 [스케줄 중복 감지 — 자동 수정 완료]\n태스크: <태스크명>\n문제: LaunchAgent(<시간>) + tasks.json(<시간>) 이중 실행 중\n조치: LaunchAgent 비활성화 완료\n영향: 오늘부터 단일 실행으로 정상화\n```\n\n**4단계: 생활패턴 정합성 판단 (중복/충돌 없을 때)**\n브리핑 수신 마감(briefing_deadline) 이후에 실행되는 아침 태스크가 있으면 → 제안으로 분류\n또한 다음도 체크:\n- 불필요하게 이른 시간(wake_time 1시간 이전)에 실행되는 사용자 대면 태스크\n- 귀가 시간(return_time) 이후에 설정된 긴급/중요 알람\n\n**5단계: 결과 보고**\n- 중복/충돌 없고 패턴 이상도 없으면: '✅ 일정 정합성 점검 완료 — 이상 없음' 한 줄만 Discord 전송\n- 생활패턴 불일치만 있으면: '🕐 일정 조율 제안' 형식으로 제안 메시지 전송 (Owner 승인 후 수정)\n- 중복/충돌이 있었으면: 3단계 경보 이미 전송 완료 → 별도 요약 불필요\n\n**핵심 원칙**: 중복 스케줄은 Owner 확인 없이 즉시 자율 수정. 생활패턴 불일치는 제안만.",
       "allowedTools": "Read,Bash",
