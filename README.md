@@ -1,59 +1,103 @@
-<p align="center">
-  <a href="https://github.com/Ramsbaby/jarvis/actions/workflows/ci.yml">
-    <img src="https://github.com/Ramsbaby/jarvis/actions/workflows/ci.yml/badge.svg" alt="CI">
-  </a>
-  <a href="https://github.com/Ramsbaby/jarvis/stargazers">
-    <img src="https://img.shields.io/github/stars/Ramsbaby/jarvis?style=flat-square" alt="Stars">
-  </a>
-  <img src="https://img.shields.io/badge/extra_cost-$0%2Fmonth-brightgreen?style=flat-square" alt="$0/month extra">
-  <img src="https://img.shields.io/badge/context_compression-98%25-blueviolet?style=flat-square" alt="98% compression">
-  <img src="https://img.shields.io/badge/session_length-3%2B_hours-blue?style=flat-square" alt="3+ hours">
-  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
+<div align="center">
+
+<!-- Row 1: health & meta -->
+<a href="https://github.com/Ramsbaby/jarvis/actions/workflows/ci.yml"><img src="https://github.com/Ramsbaby/jarvis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://github.com/Ramsbaby/jarvis/stargazers"><img src="https://img.shields.io/github/stars/Ramsbaby/jarvis?style=flat-square&color=yellow" alt="Stars"></a>
+<a href="https://github.com/Ramsbaby/jarvis/network/members"><img src="https://img.shields.io/github/forks/Ramsbaby/jarvis?style=flat-square" alt="Forks"></a>
+<img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
+<img src="https://img.shields.io/badge/node-22+-green?style=flat-square&logo=node.js&logoColor=white" alt="Node 22+">
+<img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgray?style=flat-square" alt="Platform">
+
+<!-- Row 2: key differentiators -->
+<br>
+<img src="https://img.shields.io/badge/extra_cost-$0%2Fmonth-brightgreen?style=flat-square" alt="$0/month extra">
+<img src="https://img.shields.io/badge/context_compression-98%25-blueviolet?style=flat-square" alt="98% compression">
+<img src="https://img.shields.io/badge/session_length-3%2B_hours-blue?style=flat-square" alt="3+ hours">
+<img src="https://img.shields.io/badge/AI_teams-12-orange?style=flat-square" alt="12 AI teams">
+<img src="https://img.shields.io/badge/cron_tasks-49-orange?style=flat-square" alt="49 cron tasks">
+
+<h1>Jarvis</h1>
+
+<h3>Turn your idle Claude Max subscription into a 24/7 AI operations system</h3>
+
+<p>
+  <strong>
+    You pay $20–$100/month for Claude Max. It sits idle 23 hours a day.<br>
+    Jarvis wires it to Discord, cron jobs, and a local memory engine —<br>
+    so Claude works, monitors, and learns around the clock, at $0 extra.
+  </strong>
 </p>
 
-<h1 align="center">Jarvis — AI Company-in-a-Box</h1>
-
-<p align="center">
-  <strong>Your Claude Max subscription sits idle 23 hours a day.<br>Jarvis turns it into a 24/7 AI operations system — 12 AI teams, 49 cron tasks, persistent memory — at $0 extra cost.</strong>
+<p>
+  <a href="README.ko.md">한국어</a> ·
+  <a href="discord/SETUP.md">Setup Guide</a> ·
+  <a href="docs/INDEX.md">Docs</a> ·
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-<p align="center">
-  <a href="README.ko.md">한국어</a> · <a href="ROADMAP.md">Roadmap</a> · <a href="discord/SETUP.md">Setup Guide</a> · <a href="docs/INDEX.md">Documentation</a>
-</p>
+<img src="docs/demo.gif" alt="Jarvis — bot startup, cron execution, Discord chat, /status command" width="820">
 
-<p align="center">
-  <img src="docs/demo.gif" alt="Jarvis demo — bot startup, cron execution, Discord chat, /status" width="820">
-</p>
+</div>
 
 ---
 
-## Why $0? — The Core Differentiator
+## What Is Jarvis?
 
-Most Discord bots and AI automation tools call the Anthropic API directly. Every message costs money:
+Jarvis is a harness around `claude -p` — Claude Code's headless print mode. It wires Claude to **Discord**, **scheduled cron jobs**, and a **local RAG memory system**, turning your existing subscription into a personal AI operations team.
 
-- Claude Opus via API: ~$0.015–$0.075 per message
-- A busy bot sending 500 messages/month: **$7–$37 extra, every month**
+```
+You type in Discord   →  Claude answers in real time  →  saved to memory
+Cron fires at 8 AM    →  Claude writes your standup   →  posted to #bot-daily
+You wake up at 9 AM   →  briefing, alerts, priorities are already there
+```
 
-**Jarvis works differently.** It uses `claude -p` — the headless (non-interactive) mode of Claude Code CLI. Claude Code is Anthropic's official developer tool, included in your Claude Max or Pro subscription at no extra charge. Jarvis is simply a harness that wires that tool to Discord, cron jobs, and a memory system.
+**No Anthropic API key. No metered billing. No cloud.** Just `claude -p`.
 
-> Think of it like this: you already pay for a gym membership. Jarvis is the personal trainer who makes sure you actually use it — all day, every day, even while you sleep.
+---
 
-### Side-by-Side Comparison
+## The Core Insight: `claude -p` Is Free
 
-| | **Jarvis** | **API-based bots** | **OpenClaw / Clawdbot** |
+Most Discord bots call the Anthropic API — every message is a paid API call. Jarvis does something different.
+
+`claude -p` is Claude Code's **headless mode** — documented by Anthropic as the recommended way to use Claude in automation pipelines. It runs entirely under your existing Claude Max subscription, with no per-call charge.
+
+| | Jarvis | API-based bot | n8n + Claude |
 |---|---|---|---|
-| Monthly extra cost | **$0** | $5–$50+ | API key required |
-| How it calls Claude | `claude -p` (included in subscription) | Anthropic API (token billing) | Anthropic API (token billing) |
-| Automation style | 49 cron tasks + 12 AI teams (proactive) | Reactive only | Reactive only |
-| Self-healing | 4-layer auto-recovery | None | None |
-| Memory (RAG) | LanceDB hybrid vector + BM25 | Rare | None |
-| Session continuity | 3+ hours (98% compression) | Per-message | Basic |
+| How it calls Claude | `claude -p` (CLI, your subscription) | `POST /v1/messages` (metered) | API node (metered) |
+| 500 msgs/month cost | **$0 extra** | ~$7–$37 extra | API cost + n8n fee |
+| Model quality | Opus / Sonnet (your tier) | Depends on key | Depends on key |
+| Proactive automation | 49 scheduled tasks | Reactive only | Needs visual setup |
+| Self-healing | 4-layer auto-recovery | ❌ | ❌ |
+| Long-term memory | LanceDB hybrid (local) | Rare | Optional plugin |
+| Context compression | 98% (Nexus CIG layer) | ❌ | ❌ |
+| Privacy | 100% local | Varies | Varies |
 
-### What is `claude -p`?
+> You already pay for the gym. Jarvis is the personal trainer who makes sure you actually use it — all day, every day, even while you sleep.
 
-`claude -p` is Claude Code's "print mode" — it takes a prompt, runs Claude, prints the answer, and exits. Anthropic documents it as the recommended way to use Claude Code in automation pipelines. Because it runs under your existing subscription, there is no per-call fee.
+---
 
-Jarvis calls `claude -p` for every Discord message, every cron task, every AI team report. The same Claude Opus or Sonnet model you use interactively, now working for you 24/7 at no extra cost.
+## What Happens While You Sleep
+
+```
+  TIME     YOU        JARVIS
+  ─────────────────────────────────────────────────────────────────
+  00:30    😴         → Log rotation + cleanup
+  01:00    😴         → RAG index updated (hourly, incremental)
+  03:00    😴         → Server maintenance scan  →  #bot-system
+  04:45    😴         → Code Auditor reviews all scripts  (internal)
+  07:50    😴         → Trend team: morning briefing  →  #bot-daily
+  08:00    😴         → Board Meeting: CEO reviews OKRs  →  #bot-ceo
+  08:05    😴         → Smart Standup prepared and posted
+  09:00    ☕          ← You wake up: briefing, alerts, priorities — ready
+  10:00               ↔ Real-time Discord chat (you ask, Claude answers)
+  18:00               ← You stop for the day
+  20:00    😴         → Record team: daily archive  (internal)
+  ─────────────────────────────────────────────────────────────────
+                       49 cron tasks · 12 AI teams · 0 manual steps
+```
+
+Every task has **exponential backoff retry**, **rate-limit awareness**, and **failure alerts** pushed to your phone via [ntfy](https://ntfy.sh).
 
 ---
 
@@ -66,15 +110,15 @@ Jarvis calls `claude -p` for every Discord message, every cron task, every AI te
 ### $0 / month
 *extra cost*
 
-Claude Max subscription you already pay for. `claude -p` is included — no API keys, no metered billing.
+Every Discord reply, every cron task, every AI team report calls `claude -p` — included in your Claude Max subscription. No API keys, no metered billing.
 
 </td>
 <td align="center" width="33%">
 
-### Up to 98% compression
-*context reduction*
+### 98%
+*context compression*
 
-Nexus CIG intercepts every tool call output before it reaches Claude's context window. Heavy-output cases measured at 315 KB → 5.4 KB (98%).
+The Nexus CIG layer intercepts every tool output before it enters Claude's context window. Measured case: **315 KB → 5.4 KB**. Multi-turn threads that would exhaust tokens in 30 minutes now run for hours.
 
 </td>
 <td align="center" width="33%">
@@ -82,7 +126,7 @@ Nexus CIG intercepts every tool call output before it reaches Claude's context w
 ### 3+ hours
 *session length*
 
-Without compression, context fills in ~30 min. With Nexus CIG, multi-turn threads sustain for several hours before auto-compact triggers.
+Without compression, context fills in ~30 min. With Nexus CIG, threads sustain for several hours before auto-compact triggers — critical for long cron chains.
 
 </td>
 </tr>
@@ -90,83 +134,101 @@ Without compression, context fills in ~30 min. With Nexus CIG, multi-turn thread
 
 ---
 
-## What Jarvis Does While You Sleep
-
-Normal bots wait for you to type. Jarvis works on its own schedule:
+## How It Works
 
 ```
- YOU          JARVIS
- ────────────────────────────────────────────────────────────
- 03:00  zzz   → Server maintenance scan        #bot-system
- 04:45  zzz   → Code Auditor scans all scripts  internal
- 07:50  zzz   → Trend team: morning briefing    #bot-daily
- 08:00  zzz   → Board Meeting: CEO reviews all  #bot-ceo
- 08:05  zzz   → Smart Standup (waits for you)   #bot-daily
- 09:00  ☕    ← You wake up: standup is ready
- 10:00        ↔ Real-time Discord chat (you type, it answers)
- 18:00        ← You stop chatting
- 20:00  zzz   → Record team: daily archive      internal
- 00:30  zzz   → Log rotation + backup cleanup
- 01:00  zzz   → RAG index + Vault sync (hourly)
- ────────────────────────────────────────────────────────────
-              49 cron tasks + 12 AI teams. Zero manual intervention.
+  Discord message
+        │
+        ▼
+  discord-bot.js  ──►  handlers.js  ──►  claude-runner.js
+                                               │
+                                         claude -p
+                                     (your subscription)
+                                               │
+                                       Nexus CIG (MCP)
+                                       98% compression
+                                               │
+                                   Discord reply  +  RAG index
+                                               │
+                                     stored for future context
+
+  ─────────────────────────────────────────────────────────────
+
+  Cron scheduler  ──►  jarvis-cron.sh  ──►  tasks.json
+                                               │
+                                   cross-team context injected
+                                   (from depends[] tasks)
+                                               │
+                                         claude -p
+                                               │
+                                   Discord  +  Obsidian Vault  +  RAG
 ```
 
-Every task has **exponential backoff retry**, **rate-limit awareness**, and **failure alerts** pushed to your phone via [ntfy](https://ntfy.sh).
+### Self-Healing — 4 Layers (No Human Needed)
+
+| Layer | Trigger | What It Does |
+|-------|---------|-------------|
+| **0 · Preflight** | Every cold start | `bot-preflight.sh` validates config; if broken, Claude reads the error log and **fixes the file itself** |
+| **1 · OS-level** | Any crash | `launchd KeepAlive = true` — macOS restarts the bot at the OS level |
+| **2 · Watchdog** | Every 5 min | `watchdog.sh` checks log freshness; kills and restarts stale processes |
+| **3 · Guardian** | Every 3 min | `launchd-guardian.sh` re-registers any unloaded LaunchAgents automatically |
 
 ---
 
-## Core Features
+## 12 AI Teams
 
-### 1. Zero Extra Cost
-`claude -p` runs under your Claude Max subscription. You pay $100/month for Claude Max regardless — Jarvis makes that subscription work 24/7 instead of just when you're at the keyboard.
+Each team has a defined role, its own system prompt, and runs on its own cron schedule. They share context through a `context-bus.md` that the Council writes and every other team reads.
 
-### 2. AI Team Organization
-Twelve virtual teams each have a defined role and run on their own schedule. You don't need to ask them anything:
+| Team | Schedule | What it does |
+|------|----------|-------------|
+| **Council** | Daily 23:00 | Cross-team synthesis; writes priorities to `context-bus.md` for all teams |
+| **CEO Digest** | Daily 08:00 | Board-level summary: OKR progress, key decisions, overnight events |
+| **Standup** | Daily 08:05 | Morning briefing — calendar, tasks, alerts, market overview |
+| **Infra** | Every 30 min | Server health, process monitoring, cost alerts |
+| **Finance** | Weekdays | Market monitoring, portfolio tracking, TQQQ / ETF signals |
+| **Trend** | Daily 07:50 | News digest and emerging technology signals |
+| **Recon** | Weekly | Competitive intelligence, OSS landscape scan |
+| **Security Scan** | Weekly | Dependency audit, credential leak detection |
+| **Career** | Weekly | Growth reflection, job market trend tracking |
+| **Academy** | Weekly | Research digest, knowledge base management |
+| **Record** | Daily 20:00 | Activity archiving, decision audit log (`decisions/*.jsonl`) |
+| **Brand** | Weekly | Content positioning tracking |
 
-| Team | What it does |
-|------|-------------|
-| **Council** (strategy) | Cross-team synthesis, daily priorities |
-| **CEO Digest** | Board-level summary: OKR progress, key decisions |
-| **Infra** | Server health, cost monitoring, self-healing alerts |
-| **Career** | Weekly growth reflection, job market tracking |
-| **Record** | Daily activity archiving, decision audit log |
-| **Brand** | Content and positioning tracking |
-| **Academy** | Research and knowledge management |
-| **Finance** | Market monitoring, portfolio tracking |
-| **Recon** | Competitive intelligence, OSS landscape scan |
-| **Security Scan** | Dependency audit, credential leak detection |
-| **Standup** | Morning briefing — calendar, tasks, market overview |
-| **Trend** | News digest and emerging signals |
+**Cross-team context flow:** A Council insight written at 23:00 is automatically injected into the Standup prompt at 08:05 the next morning via the `depends[]` field in `tasks.json`. No manual wiring.
 
-### 3. Self-Healing Infrastructure (4 Layers)
-The bot recovers from crashes without waking you up:
+---
 
-```
-Layer 0: bot-preflight.sh  — validates config on every cold start
-          if broken → Claude AI reads the log and fixes the file itself
-Layer 1: launchd KeepAlive — OS-level restart on any exit (macOS)
-Layer 2: cron */5min → watchdog.sh — checks log freshness, kills stale processes
-Layer 3: cron */3min → launchd-guardian.sh — re-registers unloaded LaunchAgents
-```
+## What You Actually Get
 
-### 4. Persistent Memory (RAG)
-Every conversation, cron result, and document is indexed in a local LanceDB database. Ask "what did you say about TQQQ last week?" and it will find it. No cloud, no extra cost.
+This is Jarvis running on a real developer's machine. All numbers are measured.
 
-- **Vector search** — semantic similarity (OpenAI `text-embedding-3-small`)
-- **Full-text search** — BM25 keyword matching
-- **Reranking** — RRF (Reciprocal Rank Fusion) combines both signals
+**Every morning, before you open your laptop:**
+- Standup is posted in Discord: calendar summary, top 3 priorities, overnight Jarvis activity
+- If TQQQ or any monitored position crosses a threshold, a push notification is on your phone (ntfy)
+- GitHub activity was checked; PRs needing review are surfaced
+- CEO Digest summarizes OKR progress so you start the day with strategic clarity
 
-### 5. 98% Context Compression
-The Nexus CIG (Context Intelligence Gateway) MCP server sits between Claude and every system command. It classifies output types and compresses them before they enter the context window. A 315 KB JSON blob becomes 5.4 KB. Multi-turn threads that would exhaust tokens in 30 minutes now run for 3+ hours.
+**During your workday:**
+- Ask anything in Discord — full Claude Opus / Sonnet quality, zero per-message cost
+- `/search <query>` searches your entire knowledge base (Obsidian vault + cron results) semantically
+- `/run <task>` manually triggers any of the 49 cron tasks on demand
+- Rate limit tracker keeps you safely under the daily ceiling (typical usage: ~17%)
+
+**While you sleep:**
+- RAG index updated hourly as you edit notes in Obsidian
+- Obsidian Vault synced: team reports, ADRs, and daily decisions in structured Markdown
+- Every significant decision logged to `decisions/*.jsonl` — a permanent audit trail
+- System health checked every 30 min; anomalies go to Discord before you notice them
+
+**The net result:** Claude works ~18–20 hours/day on your behalf. You spend 10 minutes reviewing what it did instead of doing it yourself.
 
 ---
 
 ## Quick Start
 
-> **Prerequisites**
-> - **Claude Max subscription** ($20–$100/mo depending on tier) — every response and cron task calls `claude -p`. Without it, the bot starts but does nothing useful.
-> - **Claude Code CLI** — `npm install -g @anthropic-ai/claude-code` then run `claude` to authenticate
+> **Prerequisites:**
+> - **Claude Max subscription** ($20–$100/mo) — every task calls `claude -p`
+> - **Claude Code CLI** — `npm install -g @anthropic-ai/claude-code` then `claude` to authenticate
 > - **Node.js 22+**, **jq**, and a **Discord bot token** from [discord.com/developers](https://discord.com/developers)
 
 **Option A — Docker (simplest):**
@@ -175,92 +237,71 @@ The Nexus CIG (Context Intelligence Gateway) MCP server sits between Claude and 
 git clone https://github.com/Ramsbaby/jarvis ~/.jarvis
 cd ~/.jarvis
 cp discord/.env.example discord/.env
-# edit discord/.env — add your tokens
+# Edit discord/.env — add DISCORD_TOKEN, GUILD_ID, CHANNEL_IDS
 docker compose up -d
 ```
 
-**Option B — Direct install (macOS / Linux):**
+**Option B — Native macOS / Linux:**
 
 ```bash
 git clone https://github.com/Ramsbaby/jarvis ~/.jarvis
 cd ~/.jarvis
-./install.sh --local
-# edit discord/.env
+./install.sh              # deps + LaunchAgents + crontab
+# Edit discord/.env, then:
 node discord/discord-bot.js
 ```
 
-For 24/7 operation on macOS:
+**For 24/7 auto-restart on macOS:**
+
 ```bash
 launchctl load ~/Library/LaunchAgents/ai.jarvis.discord-bot.plist
 ```
 
-See [discord/SETUP.md](discord/SETUP.md) for the full step-by-step guide.
+See [discord/SETUP.md](discord/SETUP.md) for the complete step-by-step guide.
 
----
+### Dependency Tiers
 
-## Architecture
+Choose how much to install:
 
-```
-Discord message
-      │
-      ▼
-discord-bot.js ──► handlers.js ──► claude-runner.js
-                                         │
-                                   claude -p (your subscription)
-                                         │
-                                   Nexus CIG (MCP server)
-                                   98% compression
-                                         │
-                                   formatForDiscord()
-                                         │
-                                   Discord thread reply
-                                         │
-                                   RAG index (LanceDB)
-                                   stored for future context
-```
-
-**Cron path:**
-```
-jarvis-cron.sh → bot-cron.sh → ask-claude.sh → claude -p
-                                     │
-                               cross-team context injected
-                               from depends[] tasks
-                                     │
-                               result → Discord + Vault + RAG
-```
+| Tier | Command | Size | Features |
+|------|---------|------|---------|
+| **0 — Core** | `./install.sh --tier 0` | ~150 MB | Discord bot only, no RAG |
+| **1 — Standard** | `./install.sh --tier 1` | ~350 MB | + SQLite history + BM25 search |
+| **2 — Full** | `./install.sh` (default) | ~700 MB | + LanceDB vector search + OpenAI embeddings |
 
 ---
 
 ## Configuration
 
-### `discord/.env` (required)
+**`discord/.env`** — copy from `.env.example`
 
 ```env
-BOT_NAME=MyBot
-BOT_LOCALE=en                        # 'en' or 'ko'
-DISCORD_TOKEN=your_bot_token
-GUILD_ID=your_server_id
-CHANNEL_IDS=channel_id_1,channel_id_2
+BOT_NAME=Jarvis
+BOT_LOCALE=en                     # en or ko
+DISCORD_TOKEN=                    # from discord.com/developers
+GUILD_ID=                         # your Discord server ID
+CHANNEL_IDS=                      # comma-separated channel IDs to watch
 OWNER_NAME=YourName
-OPENAI_API_KEY=your_key              # optional: RAG vector embeddings only
-NTFY_TOPIC=your_ntfy_topic          # optional: mobile push notifications
+OPENAI_API_KEY=                   # optional: vector RAG embeddings
+NTFY_TOPIC=                       # optional: mobile push via ntfy.sh
 ```
 
-### `config/tasks.json` (cron automation)
+**`config/tasks.json`** — define your own cron tasks:
 
 ```json
 {
   "id": "morning-standup",
   "name": "Morning Standup",
   "schedule": "5 8 * * *",
-  "prompt": "Summarize today's top priorities...",
+  "prompt": "Summarize today's top priorities based on calendar and recent context.",
   "output": ["discord"],
   "discordChannel": "bot-daily",
+  "depends": ["council-insight", "tqqq-monitor"],
   "retry": { "max": 3, "backoff": "exponential" }
 }
 ```
 
-Copy from `config/tasks.json.example` to get started with 3 example tasks.
+The `depends` array automatically injects cross-team context: if `tqqq-monitor` ran this morning, its output is prepended to the standup prompt. No extra code needed.
 
 ---
 
@@ -268,16 +309,30 @@ Copy from `config/tasks.json.example` to get started with 3 example tasks.
 
 | Command | What it does |
 |---------|-------------|
-| `/search <query>` | Semantic search across RAG knowledge base |
-| `/status` | System health + rate limit overview |
-| `/tasks` | List configured cron tasks |
-| `/run <task_id>` | Manually trigger a cron task |
+| `/search <query>` | Semantic search across the full RAG knowledge base |
+| `/status` | System health: uptime, rate limit, cron task overview |
+| `/tasks` | List all configured cron tasks and their schedules |
+| `/run <task_id>` | Manually trigger any cron task on demand |
 | `/threads` | List recent conversation threads |
-| `/alert <message>` | Send alert → Discord + ntfy push |
-| `/usage` | Token usage + rate limit stats |
-| `/remember <text>` | Save a permanent memory entry |
-| `/clear` | Reset session context |
+| `/alert <message>` | Send alert → Discord + ntfy mobile push |
+| `/usage` | Token usage stats + rate limit breakdown |
+| `/remember <text>` | Save a permanent memory entry to RAG |
+| `/clear` | Reset the current session context |
 | `/stop` | Interrupt a running `claude -p` process |
+
+---
+
+## Roadmap
+
+| Phase | Status | What Was Delivered |
+|-------|--------|--------------------|
+| **Phase 0** | ✅ Done | Bug fixes, structured logging, 4-layer self-healing |
+| **Phase 1** | ✅ Done | LLM Gateway (multi-provider), Bash/Node module split |
+| **Phase 2** | ✅ Done | Plugin system, Lite/Company mode, Team YAML, `jarvis init` |
+| **Phase 3** | ✅ Done | Open-source release (checklist 12/12), Nexus CIG v3 |
+| **Phase 4** | 🔜 Planned | Web dashboard, Slack adapter, multi-language support |
+
+See [ROADMAP.md](ROADMAP.md) for details and contribution opportunities.
 
 ---
 
@@ -285,59 +340,45 @@ Copy from `config/tasks.json.example` to get started with 3 example tasks.
 
 ```
 ~/.jarvis/
-├── discord/          # Discord client, handlers, formatting
-├── bin/              # Entry points: ask-claude.sh, bot-cron.sh, etc.
-├── lib/              # Core: rag-engine, mcp-nexus, llm-gateway
+├── discord/          # Discord client, handlers, formatters, slash commands
+├── bin/              # Entry points: ask-claude.sh, bot-cron.sh, jarvis-init.sh
+├── lib/              # Core: rag-engine.mjs, mcp-nexus.mjs, llm-gateway.sh
 ├── config/           # tasks.json, monitoring.json, anti-patterns.json
-├── scripts/          # Watchdog, auditor, vault-sync, KPI, local E2E suite
+├── scripts/          # watchdog, auditor, vault-sync, KPI, E2E test suite
 ├── teams/            # 12 team definitions (YAML + system prompts)
-├── plugins/          # File-convention plugin system
-├── context/          # Per-task background knowledge
+├── plugins/          # File-convention plugin system (drop a .yml, it's registered)
+├── context/          # Per-task background knowledge (injected at runtime)
 ├── results/          # Cron task output history
-├── rag/              # LanceDB + team reports
-├── agents/           # CEO, Infra Chief, etc. profiles
-├── adr/              # Architecture Decision Records
-├── docs/             # Architecture, Operations, Teams docs
-└── state/            # Sessions, rate tracker, decisions, triggers
+├── rag/              # LanceDB database + team reports
+├── agents/           # CEO, Infra Chief, Strategy Advisor agent profiles
+├── adr/              # Architecture Decision Records (ADR-001 to ADR-010)
+└── docs/             # Architecture, Operations, Teams documentation
 ```
-
----
-
-## Roadmap
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| Phase 0 | Done | Bug fixes, structured logging, self-healing |
-| Phase 1 | Done | LLM Gateway, Bash/Node module split |
-| Phase 2 | Done | Plugin system, Lite/Company mode, Team YAML, jarvis init |
-| Phase 3 | Done | Open-source checklist 12/12 |
-| Phase 4 | Planned | Multi-language support, web dashboard, Slack adapter |
-
-See [ROADMAP.md](ROADMAP.md) for details.
-
----
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [docs/INDEX.md](docs/INDEX.md) | Documentation hub |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture, Nexus CIG, Self-Healing |
-| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Cron, monitoring, incident response |
-| [docs/TEAMS.md](docs/TEAMS.md) | 12 AI teams overview |
-| [adr/ADR-INDEX.md](adr/ADR-INDEX.md) | Architecture Decision Records |
-| [CHANGELOG.md](CHANGELOG.md) | Release history |
-| [ROADMAP.md](ROADMAP.md) | Planned features |
 
 ---
 
 ## Platform Notes
 
-| Feature | macOS (native) | Linux (Docker) |
-|---------|---------------|----------------|
-| Process supervision | `launchd` KeepAlive | Docker `restart: always` |
-| Watchdog / Guardian | cron + bash | Same (runs in container) |
-| Apple integrations | Notes, Reminders (optional) | Not available |
+| Feature | macOS (native) | Linux / Docker |
+|---------|----------------|----------------|
+| Process supervision | `launchd` KeepAlive — restarts on crash, starts at login | Docker `restart: always` |
+| Watchdog / Guardian | cron + bash (included) | Same — runs inside container |
+| Apple integrations | Notes.app, Reminders (optional) | Not available |
+| Storage | Local filesystem | Docker volume |
+
+---
+
+## Documentation
+
+| | |
+|--|--|
+| [discord/SETUP.md](discord/SETUP.md) | Complete setup guide: bot creation, channel config, first run |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture deep dive: Nexus CIG, self-healing, RAG |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Cron operations, monitoring, incident response |
+| [docs/TEAMS.md](docs/TEAMS.md) | 12 AI teams: roles, schedules, context flow |
+| [adr/ADR-INDEX.md](adr/ADR-INDEX.md) | Architecture Decision Records (10 decisions documented) |
+| [CHANGELOG.md](CHANGELOG.md) | Full release history |
+| [ROADMAP.md](ROADMAP.md) | Planned features and contribution areas |
 
 ---
 
@@ -345,12 +386,12 @@ See [ROADMAP.md](ROADMAP.md) for details.
 
 ```bash
 git clone https://github.com/Ramsbaby/jarvis
-# make changes
-bash scripts/e2e-test.sh   # local production validation (requires running bot)
-# submit a pull request
+# make your changes
+bash scripts/e2e-test.sh   # 50-item local validation suite
+# open a pull request
 ```
 
-See [ROADMAP.md](ROADMAP.md) for planned features.
+Contributions welcome — especially for Phase 4 items (web dashboard, Slack adapter). See [ROADMAP.md](ROADMAP.md) for open areas.
 
 ---
 
@@ -361,6 +402,7 @@ MIT — see [LICENSE](LICENSE)
 ---
 
 <p align="center">
-  <a href="README.ko.md">한국어 README →</a><br><br>
-  If this project is useful, a star helps others discover it.
+  <a href="README.ko.md">한국어 README →</a>
+  <br><br>
+  If Jarvis saves you time or money, a ⭐ helps others find it.
 </p>
