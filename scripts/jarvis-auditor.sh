@@ -234,6 +234,47 @@ EOJSON
     ((TIER2_ESCALATED++))
 }
 
+# Enqueue an issue to tasks.db via task-store.mjs enqueue CLI
+# dev-runner.sh는 tasks.db를 소비하므로 dev-queue.json 방식은 사용하지 않음
+enqueue_to_devqueue() {
+    local title="$1"
+    local priority="${2:-medium}"
+    local context="${3:-}"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log "DRY-RUN enqueue: $title (priority=$priority)"
+        return 0
+    fi
+
+    # ID: title을 slug화 (중복 방지용)
+    local slug
+    slug="code-fix-$(echo "$title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | cut -c1-40 | sed 's/-*$//')-$(date +%s)"
+
+    local prompt_text="다음 Jarvis 코드 이슈를 분석하고 수정하라.
+
+문제: ${title}
+상세: ${context}
+
+수정 시 기존 동작 파괴 금지. 수정 후 Discord #jarvis-system에 결과 보고."
+
+    local result
+    result=$(node "${BOT_HOME}/lib/task-store.mjs" enqueue \
+        --id "$slug" \
+        --title "$title" \
+        --prompt "$prompt_text" \
+        --priority "$priority" \
+        --source "jarvis-auditor" \
+        --type "code-fix" 2>/dev/null) || { log "WARN: dev-queue 적재 실패 (non-fatal)"; return 0; }
+
+    local action
+    action=$(echo "$result" | node -e "const d=require('fs').readFileSync(0,'utf8'); try{console.log(JSON.parse(d).action)}catch{console.log('?')}" 2>/dev/null || echo "?")
+    if [[ "$action" == "skip" ]]; then
+        log "SKIP enqueue (already pending): $title"
+    else
+        log "ENQUEUED to tasks.db: $title (priority=$priority, id=$slug)"
+    fi
+}
+
 # ============================================================================
 # Audit Functions
 # ============================================================================
@@ -300,6 +341,7 @@ run_node_syntax_audit() {
 
             create_l3_request "node-syntax" "Node.js syntax error in $rel_path" "manual" \
                 "\"file\": \"$rel_path\""
+            enqueue_to_devqueue "코드 이상: $rel_path — Node.js 문법 오류" "high" "node --check 실패: $rel_path"
         fi
     done < <(find "$BOT_HOME/discord" "$BOT_HOME/lib" "$BOT_HOME/bin" \
         -not -path '*/node_modules/*' \
@@ -479,6 +521,7 @@ run_launchagent_audit() {
             found=$(( found + 1 ))
             ((TOTAL_ISSUES++))
             ((WARN_ISSUES++))
+            enqueue_to_devqueue "LaunchAgent 미로드: $svc" "high" "launchctl print gui/${uid}/${svc} 실패 — 서비스 미등록 또는 크래시"
         else
             local pid
             pid=$(launchctl list "$svc" 2>/dev/null | awk 'NR==2{print $1}' || echo "-")
@@ -487,6 +530,7 @@ run_launchagent_audit() {
                 found=$(( found + 1 ))
                 ((TOTAL_ISSUES++))
                 ((WARN_ISSUES++))
+                enqueue_to_devqueue "LaunchAgent PID 없음: $svc" "medium" "launchctl list 결과 PID 없음 — 서비스 중단 가능성"
             fi
         fi
     done
@@ -538,6 +582,7 @@ run_health_freshness_audit() {
             report "- WARN: health.json stale ($(( age / 60 ))m old, threshold $(( stale_threshold / 60 ))m)"
             ((TOTAL_ISSUES++))
             ((WARN_ISSUES++))
+            enqueue_to_devqueue "헬스체크 STALE: health.json $(( age / 60 ))분 미갱신" "medium" "system-health 크론 미실행 또는 실패 의심 — stale threshold $(( stale_threshold / 60 ))m 초과"
         else
             report "- OK: health.json fresh ($(( age / 60 ))m ago)"
         fi
@@ -585,6 +630,7 @@ run_e2e_audit() {
         done <<< "$fails"
         ((TOTAL_ISSUES += fail_count))
         ((WARN_ISSUES += fail_count))
+        enqueue_to_devqueue "E2E 테스트 실패: $fail_count건 ($result_date)" "high" "e2e-health 결과 파일에서 FAIL 항목 $fail_count건 감지"
     else
         report "- OK: No e2e failures detected"
     fi
