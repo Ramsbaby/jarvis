@@ -26,7 +26,6 @@ TEMP_BRANCH="private-deploy-$(date +%s)"
 
 # 민감 파일 목록
 PRIVATE_FILES=(
-  "discord/personas.json"
   "config/secrets"
   "config/user-schedule.json"
   "config/user_profiles.json"

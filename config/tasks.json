@@ -1048,7 +1048,7 @@
       "name": "가족 수업 일정 브리핑",
       "schedule": "30 7 * * *",
       "timeout": 60,
-      "prompt": "오늘 ${FAMILY_MEMBER_NAME:-가족}님의 Preply 수업 일정과 수입을 조회해서 전송해줘.\n\n실행 방법:\nbash ~/.jarvis/scripts/preply-today.sh $(date +%F)\n\n응답은 JSON이다. scheduledLessons 배열에서 startAt(시간), student(학생명), amount(금액)을 추출하고, totalsByCurrency.USD로 총수입을 표시한다.\n\n출력 형식 (코드블록 없이 일반 텍스트로):\n오늘(M/D 요일) 수업 브리핑 📅✨\n총 N개 수업 · 총 수입 $XXX.XX USD 💰\n\n- 🕐 HH:MM · 학생이름 · $XX.XX\n- 🕐 HH:MM · 학생이름 · $XX.XX\n...\n\nscheduledCount가 0이면: 오늘은 수업이 없어요! 😊\ncancelledCount가 0보다 크면 취소 건수도 표시.",
+      "prompt": "오늘 ${FAMILY_MEMBER_NAME:-가족}님의 Preply 수업 일정과 수입을 조회해서 전송해줘.\n\n실행 방법:\nbash ~/.jarvis/scripts/preply-today.sh $(date +%F)\n\n응답은 JSON이다. scheduledLessons 배열에서 startAt(시간), student(학생명), amount(금액)을 추출하고, totalsByCurrency.USD로 총수입을 표시한다.\n\n【환율 변환 필수】\n달러 금액은 반드시 원화로 함께 표시한다. 환율은 bash ~/.jarvis/scripts/get-exchange-rate.sh 실행 결과를 사용한다. 스크립트 실패 시 1,480원 기본값 사용.\n원화 계산: USD × 환율 = KRW (소수점 없이 원 단위)\n\n출력 형식 (코드블록 없이 일반 텍스트로):\n오늘(M/D 요일) 수업 브리핑 📅✨\n총 N개 수업 · 총 수입 $XXX.XX USD (약 XXX,XXX원) 💰\n\n- 🕐 HH:MM · 학생이름 · $XX.XX (약 XX,XXX원)\n- 🕐 HH:MM · 학생이름 · $XX.XX (약 XX,XXX원)\n...\n\nscheduledCount가 0이면: 오늘은 수업이 없어요! 😊\ncancelledCount가 0보다 크면 취소 건수도 표시.",
       "allowedTools": "Bash",
       "output": [
         "discord"
@@ -1302,6 +1302,18 @@
       "discordChannel": "jarvis-system",
       "description": "Jarvis 자동 시스템 점검 (LaunchAgent, Discord봇, RAG, 크론, E2E, Glances, 디스크)",
       "script": "/Users/ramsbaby/.jarvis/scripts/system-doctor.sh"
+    },
+    {
+      "id": "public-export",
+      "name": "공개 레포 자동 export",
+      "schedule": "0 4 * * 1",
+      "timeout": 120,
+      "prompt": "bash ~/.jarvis/scripts/export-public.sh 실행 후 결과 보고",
+      "allowedTools": "Bash",
+      "output": [],
+      "maxBudget": "0.05",
+      "priority": "low",
+      "description": "매주 월 04:00 공개 레포(origin)에 민감정보 제거 버전 자동 export"
     }
   ]
 }

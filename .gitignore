@@ -11,7 +11,6 @@ config/*-token.json
 inbox/
 config/company-dna.md
 config/discord-mcp.json
-discord/personas.json
 # Personal context files (runtime AI memory — not for public repo)
 context/
 scripts/tqqq-alert.sh
