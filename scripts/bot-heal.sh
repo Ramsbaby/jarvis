@@ -72,7 +72,21 @@ if echo "$ERROR_REASON" | grep -q "ActionRowBuilder"; then
             if [[ -n "$DISCORD_IMPORT_LINE" ]]; then
                 # 현재 import 라인의 변수들 추출 후 default import로 재작성
                 IMPORTED_VARS=$(grep "from 'discord.js'" "$STREAMING" | head -1 | sed "s/import {//; s/} from 'discord.js';//" | tr -d ' ')
-                sed -i.bak "s|^import {.*} from 'discord.js';|// discord.js is CJS — use default import to avoid ESM named-export errors\nimport discordPkg from 'discord.js';\nconst { ${IMPORTED_VARS} } = discordPkg;|" "$STREAMING"
+                # macOS sed는 \n을 리터럴로 처리 → python3으로 안전하게 멀티라인 교체
+                python3 - <<PYEOF
+import re
+with open('${STREAMING}', 'r') as f:
+    content = f.read()
+fixed = re.sub(
+    r"^import \{[^}]*\} from 'discord\.js';",
+    "// discord.js is CJS — use default import to avoid ESM named-export errors\nimport discordPkg from 'discord.js';\nconst { ${IMPORTED_VARS} } = discordPkg;",
+    content,
+    flags=re.MULTILINE | re.DOTALL
+)
+with open('${STREAMING}', 'w') as f:
+    f.write(fixed)
+print("ok")
+PYEOF
                 log "[hardcode] ✅ streaming.js CJS fix 적용"
                 HARDCODED_FIXED=true
             fi
