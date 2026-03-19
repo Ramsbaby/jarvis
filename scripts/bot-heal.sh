@@ -47,6 +47,57 @@ log "원인: $ERROR_REASON"
 
 send_ntfy "Jarvis 자동복구 시작" "$ERROR_REASON\n\n모니터링: ssh 후 tmux attach -t jarvis-heal" "high"
 
+# ── 하드코딩 사전 패치 (Claude 없이 즉시 처리 가능한 알려진 패턴) ──────────────
+HARDCODED_FIXED=false
+
+# 패턴 1: .env 소멸 → 백업에서 즉시 복원
+ENV_FILE="$BOT_HOME/discord/.env"
+ENV_BACKUP="$BOT_HOME/state/config-backups/.env.backup"
+if [[ ! -f "$ENV_FILE" && -f "$ENV_BACKUP" ]]; then
+    log "[hardcode] .env 없음 → 백업 자동 복원: $ENV_BACKUP"
+    cp "$ENV_BACKUP" "$ENV_FILE"
+    log "[hardcode] ✅ .env 복원 완료 ($(wc -l < "$ENV_FILE")줄)"
+    HARDCODED_FIXED=true
+fi
+
+# 패턴 2: ActionRowBuilder CJS/ESM 충돌 → streaming.js 상태 검증 및 수정
+if echo "$ERROR_REASON" | grep -q "ActionRowBuilder"; then
+    STREAMING="$BOT_HOME/discord/lib/streaming.js"
+    if [[ -f "$STREAMING" ]]; then
+        if grep -q "^import { ActionRowBuilder" "$STREAMING" 2>/dev/null; then
+            # 잘못된 named import → default import 방식으로 교체
+            log "[hardcode] ActionRowBuilder named import 감지 → CJS 우회 방식으로 수정"
+            # 기존 잘못된 import 라인 교체
+            DISCORD_IMPORT_LINE=$(grep -n "from 'discord.js'" "$STREAMING" | head -1 | cut -d: -f1)
+            if [[ -n "$DISCORD_IMPORT_LINE" ]]; then
+                # 현재 import 라인의 변수들 추출 후 default import로 재작성
+                IMPORTED_VARS=$(grep "from 'discord.js'" "$STREAMING" | head -1 | sed "s/import {//; s/} from 'discord.js';//" | tr -d ' ')
+                sed -i.bak "s|^import {.*} from 'discord.js';|// discord.js is CJS — use default import to avoid ESM named-export errors\nimport discordPkg from 'discord.js';\nconst { ${IMPORTED_VARS} } = discordPkg;|" "$STREAMING"
+                log "[hardcode] ✅ streaming.js CJS fix 적용"
+                HARDCODED_FIXED=true
+            fi
+        else
+            log "[hardcode] streaming.js CJS fix 이미 적용됨 — 다른 파일 문제일 수 있음"
+            # 다른 파일에서 ActionRowBuilder named import 확인
+            BAD_FILE=$(grep -rl "import {.*ActionRowBuilder.*} from 'discord.js'" "$BOT_HOME/discord/" --include="*.js" 2>/dev/null | head -1 || true)
+            if [[ -n "$BAD_FILE" ]]; then
+                log "[hardcode] 문제 파일 발견: $BAD_FILE — 수동 확인 필요"
+            fi
+        fi
+    fi
+fi
+
+if $HARDCODED_FIXED; then
+    log "=== 하드코딩 패치 적용 완료 — launchd가 봇을 재시작합니다 ==="
+    {
+        echo ""
+        echo "## $(date '+%Y-%m-%d %H:%M') — 하드코딩 자동복구 성공"
+        echo "- 원인: $ERROR_REASON"
+        echo "- 해결: hardcoded patch 적용"
+    } >> "$RECOVERY_LEARNINGS_FILE" 2>/dev/null || true
+    exit 0
+fi
+
 # ── 에러 컨텍스트 수집 ─────────────────────────────────────────────────────────
 PREFLIGHT_LOG=$(tail -30 "$BOT_HOME/logs/preflight.log" 2>/dev/null || echo "없음")
 BOT_ERR=$(tail -50 "$BOT_HOME/logs/discord-bot.err.log" 2>/dev/null | tail -20 || echo "없음")

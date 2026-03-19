@@ -50,7 +50,7 @@ log_jsonl() {
 cleanup() {
     rm -rf "$WORK_DIR"
     rm -f "$PID_FILE"
-    ${CAFFEINATE_PID:+kill "$CAFFEINATE_PID" 2>/dev/null || true}
+    [[ -z "${CAFFEINATE_PID:-}" ]] || kill "${CAFFEINATE_PID}" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -136,7 +136,7 @@ run_with_retry llm_call \
 exec 9>&-  # tee에 EOF 전송
 # caffeinate 먼저 종료 (교착 방지: caffeinate -w $$ 는 스크립트 종료까지 대기하므로
 # wait 호출 시 caffeinate ↔ wait 무한 교착 발생)
-${CAFFEINATE_PID:+kill "$CAFFEINATE_PID" 2>/dev/null || true}
+[[ -z "${CAFFEINATE_PID:-}" ]] || kill "${CAFFEINATE_PID}" 2>/dev/null || true
 CAFFEINATE_PID=""
 wait       # tee 완전 종료 대기 → stderr 유실 없음
 

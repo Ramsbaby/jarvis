@@ -125,9 +125,16 @@ if [[ ! -f "$BOT_SCRIPT" ]]; then
     fail_and_heal "discord-bot.js 없음: $BOT_SCRIPT"
 fi
 
-# ── .env 파일 확인 ────────────────────────────────────────────────────────────
+# ── .env 파일 확인 (없으면 백업에서 자동 복원 시도) ────────────────────────────
 if [[ ! -f "$ENV_FILE" ]]; then
-    fail_and_heal ".env 없음 — DISCORD_TOKEN 등 설정 필요: $ENV_FILE"
+    ENV_BACKUP="$BACKUP_DIR/.env.backup"
+    if [[ -f "$ENV_BACKUP" ]]; then
+        log "WARN: .env 없음 — 백업에서 자동 복원: $ENV_BACKUP"
+        cp "$ENV_BACKUP" "$ENV_FILE"
+        log "✅ .env 백업 복원 완료 ($(wc -l < "$ENV_FILE")줄)"
+    else
+        fail_and_heal ".env 없음 — 백업도 없음. 수동 복구 필요: $ENV_FILE"
+    fi
 fi
 
 # ── .env 필수키 확인 ──────────────────────────────────────────────────────────
