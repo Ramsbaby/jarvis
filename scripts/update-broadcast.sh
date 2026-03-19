@@ -78,14 +78,28 @@ auto_deploy() {
         log "Auto-deploy: 봇 재시작 필요 변경 감지 — git pull + smoke test 시작"
 
         # git fetch + merge (diverged 브랜치도 처리 — --ff-only는 diverge 시 crash)
+        # staged 변경 있으면 merge 거부됨 → 임시 stash 후 복원
+        local _stashed=0
+        if ! git -C "$BOT_HOME" diff --cached --quiet 2>/dev/null; then
+            log "Auto-deploy: staged 변경 감지 — 임시 stash 후 merge"
+            if git -C "$BOT_HOME" stash push --include-untracked -m "auto-deploy-pre-merge-$(date +%s)" >> "$LOG" 2>&1; then
+                _stashed=1
+            fi
+        fi
         git -C "$BOT_HOME" fetch origin >> "$LOG" 2>&1 || true
         if git -C "$BOT_HOME" merge origin/main --no-edit >> "$LOG" 2>&1; then
             log "Auto-deploy: git merge 성공"
         else
             log "Auto-deploy: git merge 실패 (충돌?), 배포 중단"
             git -C "$BOT_HOME" merge --abort >> "$LOG" 2>&1 || true
+            if [[ "$_stashed" == 1 ]]; then
+                git -C "$BOT_HOME" stash pop >> "$LOG" 2>&1 || true
+            fi
             send_embed "🚨 Auto-deploy 실패" "git merge 실패 — 충돌 수동 확인 필요" 15158332 || true
             return 1
+        fi
+        if [[ "$_stashed" == 1 ]]; then
+            git -C "$BOT_HOME" stash pop >> "$LOG" 2>&1 || log "Auto-deploy: stash pop 실패 (수동 확인 필요)"
         fi
 
         # smoke test + 재시작
@@ -103,12 +117,21 @@ auto_deploy() {
         fi
     else
         # 봇 재시작 불필요한 변경 (scripts/, bin/ 등) → fetch + merge
+        local _stashed2=0
+        if ! git -C "$BOT_HOME" diff --cached --quiet 2>/dev/null; then
+            if git -C "$BOT_HOME" stash push --include-untracked -m "auto-deploy-pre-merge-$(date +%s)" >> "$LOG" 2>&1; then
+                _stashed2=1
+            fi
+        fi
         git -C "$BOT_HOME" fetch origin >> "$LOG" 2>&1 || true
         if git -C "$BOT_HOME" merge origin/main --no-edit >> "$LOG" 2>&1; then
             log "Auto-deploy: git merge 완료 (재시작 불필요)"
         else
             git -C "$BOT_HOME" merge --abort >> "$LOG" 2>&1 || true
             log "Auto-deploy: git merge 실패 — 충돌 수동 확인 필요"
+        fi
+        if [[ "$_stashed2" == 1 ]]; then
+            git -C "$BOT_HOME" stash pop >> "$LOG" 2>&1 || log "Auto-deploy: stash pop 실패 (수동 확인 필요)"
         fi
     fi
 }
