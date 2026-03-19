@@ -1,7 +1,7 @@
 # Jarvis 시스템 개요
 
 > 🤖 **자동 생성 문서** — 직접 편집 금지
-> Generated: 2026-03-18 21:50:56 | Commit: `731757b` (`main`)
+> Generated: 2026-03-19 09:32:53 | Commit: `e915f70` (`public-export-1773880372`)
 > 업데이트: `scripts/gen-system-overview.sh` (매일 04:05 + git commit 시)
 
 ---
@@ -81,7 +81,7 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 
 **현재 등록된 태스크:**
 
-> ✅ 활성 **62개** / 비활성 0개
+> ✅ 활성 **63개** / 비활성 0개
 
 | 태스크 ID | 스케줄 | 채널 | 설명 |
 |-----------|--------|------|------|
@@ -104,7 +104,8 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `ceo-daily-digest` | `0 22 * * *` | jarvis-ceo | 일일 CEO 다이제스트 |
 | `rag-health` | `0 3 * * *` | jarvis-system | RAG 건강 체크 |
 | `memory-expire` | `0 3 * * 1` | - | 기억 만료 아카이브 |
-| `schedule-coherence` | `0 4 * * 1` | jarvis | 일정 정합성 점검 |
+| `schedule-coherence` | `0 4 * * *` | jarvis | 일정 정합성 점검 |
+| `public-export` | `0 4 * * 1` | - | 매주 월 04:00 공개 레포(origin)에 민감정보 제거 버전 자동 export |
 | `doc-supervisor` | `0 5 * * *` | jarvis-system | 문서화 시스템 감독 (Doc Supervisor) |
 | `weekly-code-review` | `0 5 * * 0` | jarvis-system | 주간 LLM 코드 리뷰 |
 | `news-briefing` | `0 6 * * *` | jarvis | 뉴스 브리핑 |
@@ -132,7 +133,7 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `memory-sync` | `30 4 * * 1` | jarvis-system | 메모리 자동 동기화 |
 | `cron-auditor` | `30 5 * * *` | jarvis-infra | 크론 전체 점검 |
 | `vault-auto-link` | `30 6 * * *` | jarvis | Vault 자동 링크 생성 |
-| `boram-daily-schedule` | `30 7 * * *` | ${FAMILY_CHANNEL:-jarvis-family} | 매일 07:30 KST ${FAMILY_MEMBER_NAME:-가족}님 Preply 수업 일정 |
+| `boram-daily-schedule` | `30 7 * * *` | jarvis-boram | 매일 07:30 KST ${FAMILY_MEMBER_NAME:-가족}님 Preply 수업 일정 |
 | `weekly-kpi` | `30 8 * * 1` | jarvis-ceo | 주간 KPI 리포트 |
 | `bot-self-critique` | `45 2 * * *` | jarvis-system | 봇 자가 품질 점검 |
 | `code-auditor` | `45 4 * * *` | jarvis-system | 코드 품질 감사 |
@@ -392,7 +393,7 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | `lib/rag-engine.mjs` | 694 | RAG 하이브리드 검색 엔진 |
 | `bin/ask-claude.sh` | 244 | claude -p 래퍼 (크론 진입점) |
 | `bin/jarvis-cron.sh` | 351 | 크론 실행 엔진 |
-| `config/tasks.json` | 1305 | 크론 태스크 설정 |
+| `config/tasks.json` | 1318 | 크론 태스크 설정 |
 | `discord/personas.json` | 12 | 채널 페르소나 설정 |
 | `scripts/system-doctor.sh` | 285 | 자동 시스템 점검 (매일 06:00) |
 | `scripts/gen-system-overview.sh` | 495 | 이 문서 생성 스크립트 |
@@ -426,31 +427,30 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | ai.jarvis.orchestrator | 🟢 실행중 | 28860 |
 | ai.openclaw.glances | 🟢 실행중 | 764 |
 | ai.jarvis.webhook-listener | 🟢 실행중 | 7140 |
-| ai.jarvis.discord-bot | 🟢 실행중 | 51182 |
-| ai.jarvis.boram-briefing | 🔴 중지 | - |
+| ai.jarvis.discord-bot | 🟢 실행중 | 37641 |
 | ai.jarvis.session-summarizer | 🔴 중지 | - |
 | ai.jarvis.commitment-check | 🔴 중지 | - |
 | ai.jarvis.daily-restart | 🔴 중지 | - |
-| ai.jarvis.rag-watcher | 🟢 실행중 | 92781 |
+| ai.jarvis.rag-watcher | 🟢 실행중 | 68521 |
 | ai.jarvis.event-watcher | 🟢 실행중 | 89744 |
 | ai.jarvis.boot-auth-check | 🔴 중지 | - |
 
-> 마지막 확인: 2026-03-18 21:50:56
+> 마지막 확인: 2026-03-19 09:32:53
 
 ---
 
 ## 11. 최근 변경
 
+- `e915f70` chore(public): export public template — sensitive data removed [2026-03-19]
+- `21a1d47` feat(repo): private 운영레포 구조 확립 + public export 자동화
+- `9d339d6` fix(resilience): 자동복구 시스템 3중 강화 — ask-claude 버그/preflight 백업복원/bot-heal 하드코딩패치/deploy-private 파일삭제버그
+- `339d641` fix(schedule-coherence): 주간 → 매일 04:00 실행으로 변경
+- `abd523e` fix(schedule-coherence): 중복 스케줄 즉시 자율 수정 + 단독 경보 전송
+- `4271c22` feat: 오픈소스 공개 준비 + Kakao Calendar 연동 + dev-runner FSM 버그 수정
 - `731757b` fix: 검토 지적 7건 전부 수정
 - `269b501` chore: tasks/docs 세션 상태 업데이트
 - `90eff88` feat(phase3): /approve, /commitments slash commands + commitment-check.sh
 - `fc71003` fix: eslint sourceType script→module + --no-ignore (handlers.js is ESM)
-- `bc4d067` ci: install devDeps (eslint) separately — install.sh uses --production
-- `48f1d25` fix: eslint ^9 → ^8 (v9 broke --no-eslintrc/--env/--parser-options CLI flags)
-- `9a63c2b` fix: CI e2e failures — eslint local path, gitignored files to ci_check
-- `7b7cc7b` ci: mock claude CLI for install-test job (binary check only)
-- `99c895e` feat: ci_check + 4x pre-processors (Goals/System/Task/Social pattern fix)
-- `e9776af` ci: add install-test job — real install.sh + e2e-test.sh in CI
 
 ---
 

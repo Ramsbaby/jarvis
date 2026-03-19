@@ -26,7 +26,9 @@ git checkout -b "$TEMP_BRANCH"
 # EXIT trap: 어떤 경우에도 원래 브랜치 복귀 + 임시 브랜치 정리
 trap '
   echo "▶ 원래 브랜치로 복귀: '"$CURRENT_BRANCH"'"
+  git stash 2>/dev/null || true
   git checkout "'"$CURRENT_BRANCH"'" 2>/dev/null || true
+  git stash drop 2>/dev/null || true
   git branch -D "'"$TEMP_BRANCH"'" 2>/dev/null || true
 ' EXIT
 
