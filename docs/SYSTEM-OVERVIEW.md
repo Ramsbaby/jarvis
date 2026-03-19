@@ -1,7 +1,7 @@
 # Jarvis 시스템 개요
 
 > 🤖 **자동 생성 문서** — 직접 편집 금지
-> Generated: 2026-03-19 09:32:53 | Commit: `e915f70` (`public-export-1773880372`)
+> Generated: 2026-03-19 09:32:38 | Commit: `21a1d47` (`main`)
 > 업데이트: `scripts/gen-system-overview.sh` (매일 04:05 + git commit 시)
 
 ---
@@ -435,13 +435,12 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | ai.jarvis.event-watcher | 🟢 실행중 | 89744 |
 | ai.jarvis.boot-auth-check | 🔴 중지 | - |
 
-> 마지막 확인: 2026-03-19 09:32:53
+> 마지막 확인: 2026-03-19 09:32:38
 
 ---
 
 ## 11. 최근 변경
 
-- `e915f70` chore(public): export public template — sensitive data removed [2026-03-19]
 - `21a1d47` feat(repo): private 운영레포 구조 확립 + public export 자동화
 - `9d339d6` fix(resilience): 자동복구 시스템 3중 강화 — ask-claude 버그/preflight 백업복원/bot-heal 하드코딩패치/deploy-private 파일삭제버그
 - `339d641` fix(schedule-coherence): 주간 → 매일 04:00 실행으로 변경
@@ -451,6 +450,7 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 - `269b501` chore: tasks/docs 세션 상태 업데이트
 - `90eff88` feat(phase3): /approve, /commitments slash commands + commitment-check.sh
 - `fc71003` fix: eslint sourceType script→module + --no-ignore (handlers.js is ESM)
+- `bc4d067` ci: install devDeps (eslint) separately — install.sh uses --production
 
 ---
 

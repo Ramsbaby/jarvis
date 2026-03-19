@@ -152,20 +152,58 @@ export async function sendNtfy(title, message, priority = 'default') {
 }
 
 // ---------------------------------------------------------------------------
-// Load CHANNEL_PERSONAS from personas.json (gitignored, fallback to {})
+// Load CHANNEL_PERSONAS from personas.json — self-healing on startup
+// 1) Missing → auto-restore from backup + ntfy alert
+// 2) Loaded OK → refresh backup to keep it current
 // ---------------------------------------------------------------------------
 
+const PERSONAS_PATH = join(import.meta.dirname, '..', 'personas.json');
+const PERSONAS_BACKUP = join(BOT_HOME, 'state', 'config-backups', 'personas.json.backup');
+
 let CHANNEL_PERSONAS = {};
-try {
-  const personasPath = join(import.meta.dirname, '..', 'personas.json');
-  CHANNEL_PERSONAS = JSON.parse(readFileSync(personasPath, 'utf-8'));
-  log('info', 'Channel personas loaded', {
-    count: Object.keys(CHANNEL_PERSONAS).length,
-    channels: Object.keys(CHANNEL_PERSONAS).join(', '),
-  });
-} catch (personasErr) {
-  log('error', 'personas.json load failed — channel personas disabled', { error: personasErr.message });
-}
+(function loadPersonasWithSelfHeal() {
+  // Step 1: auto-restore if file missing
+  if (!existsSync(PERSONAS_PATH)) {
+    log('error', '[INTEGRITY] personas.json missing — attempting auto-restore from backup');
+    if (existsSync(PERSONAS_BACKUP)) {
+      try {
+        copyFileSync(PERSONAS_BACKUP, PERSONAS_PATH);
+        log('info', '[INTEGRITY] personas.json restored from backup successfully');
+        sendNtfy(
+          '⚠️ personas.json 자동 복구',
+          '봇 시작 시 personas.json 누락 감지 → 백업에서 복구 완료. 원인 점검 권고.',
+          'high'
+        ).catch(() => {});
+      } catch (restoreErr) {
+        log('error', '[INTEGRITY] personas.json restore failed', { error: restoreErr.message });
+        sendNtfy('🚨 personas.json 복구 실패', '백업 복구 실패. 채널 페르소나 비활성화됨. 즉시 수동 조치 필요.', 'urgent').catch(() => {});
+        return;
+      }
+    } else {
+      log('error', '[INTEGRITY] personas.json AND backup both missing — channel personas DISABLED');
+      sendNtfy('🚨 personas.json + 백업 모두 없음', '채널 페르소나 비활성화됨. 즉시 수동 복구 필요.', 'urgent').catch(() => {});
+      return;
+    }
+  }
+
+  // Step 2: load
+  try {
+    CHANNEL_PERSONAS = JSON.parse(readFileSync(PERSONAS_PATH, 'utf-8'));
+    log('info', 'Channel personas loaded', {
+      count: Object.keys(CHANNEL_PERSONAS).length,
+      channels: Object.keys(CHANNEL_PERSONAS).join(', '),
+    });
+    // Step 3: refresh backup with current state so backup never goes stale
+    try {
+      mkdirSync(join(BOT_HOME, 'state', 'config-backups'), { recursive: true });
+      copyFileSync(PERSONAS_PATH, PERSONAS_BACKUP);
+    } catch (backupErr) {
+      log('warn', '[INTEGRITY] personas.json backup refresh failed', { error: backupErr.message });
+    }
+  } catch (personasErr) {
+    log('error', 'personas.json load/parse failed — channel personas disabled', { error: personasErr.message });
+  }
+})();
 
 // ---------------------------------------------------------------------------
 // Load USER_PROFILES from config/user_profiles.json
