@@ -47,17 +47,20 @@ for f in "${PRIVATE_FILES[@]}"; do
 done
 
 # trap: 어떤 경우에도 민감 파일 복원 + 임시 백업 제거
+# set +e 필수: cleanup 내부 에러가 set -e로 조기 종료하면 파일 미복원 위험
 cleanup_deploy() {
+  set +e
   echo "▶ 민감 파일 복원 중..."
   for f in "${PRIVATE_FILES[@]}"; do
     if [[ -e "$SAFE_BACKUP_DIR/$f" && ! -e "$BOT_HOME/$f" ]]; then
-      mkdir -p "$(dirname "$BOT_HOME/$f")"
-      cp -r "$SAFE_BACKUP_DIR/$f" "$BOT_HOME/$f" && echo "  ♻️  복원: $f"
+      mkdir -p "$(dirname "$BOT_HOME/$f")" 2>/dev/null
+      cp -r "$SAFE_BACKUP_DIR/$f" "$BOT_HOME/$f" && echo "  ♻️  복원: $f" || echo "  ❌ 복원 실패: $f"
     fi
   done
-  rm -rf "$SAFE_BACKUP_DIR"
+  rm -rf "$SAFE_BACKUP_DIR" 2>/dev/null
   # 임시 브랜치 정리 (이미 삭제됐을 수 있음)
   git branch -D "$TEMP_BRANCH" 2>/dev/null || true
+  set -e
 }
 trap cleanup_deploy EXIT
 

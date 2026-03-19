@@ -64,35 +64,49 @@ fi
 if echo "$ERROR_REASON" | grep -q "ActionRowBuilder"; then
     STREAMING="$BOT_HOME/discord/lib/streaming.js"
     if [[ -f "$STREAMING" ]]; then
-        if grep -q "^import { ActionRowBuilder" "$STREAMING" 2>/dev/null; then
-            # 잘못된 named import → default import 방식으로 교체
+        # named import 감지: 단일행("import { ... } from") 또는 멀티라인("import {\n  ...\n} from") 모두 처리
+        if python3 -c "
+import re, sys
+content = open('${STREAMING}').read()
+# 멀티라인 포함 named import 패턴
+bad = re.search(r\"^import \{[\s\S]*?\} from 'discord\.js';\", content, re.MULTILINE)
+sys.exit(0 if bad else 1)
+" 2>/dev/null; then
             log "[hardcode] ActionRowBuilder named import 감지 → CJS 우회 방식으로 수정"
-            # 기존 잘못된 import 라인 교체
-            DISCORD_IMPORT_LINE=$(grep -n "from 'discord.js'" "$STREAMING" | head -1 | cut -d: -f1)
-            if [[ -n "$DISCORD_IMPORT_LINE" ]]; then
-                # 현재 import 라인의 변수들 추출 후 default import로 재작성
-                IMPORTED_VARS=$(grep "from 'discord.js'" "$STREAMING" | head -1 | sed "s/import {//; s/} from 'discord.js';//" | tr -d ' ')
-                # macOS sed는 \n을 리터럴로 처리 → python3으로 안전하게 멀티라인 교체
-                python3 - <<PYEOF
-import re
-with open('${STREAMING}', 'r') as f:
+            # 파일 수정 전 백업
+            cp "$STREAMING" "${STREAMING}.bak-$(date +%s)"
+            # python3으로 안전하게 수정: 멀티라인 import → default import
+            export HEAL_STREAMING_PATH="$STREAMING"
+            python3 - <<'PYEOF' && log "[hardcode] ✅ streaming.js CJS fix 적용" && HARDCODED_FIXED=true || log "[hardcode] ❌ streaming.js 수정 실패 — 백업 유지"
+import re, sys
+streaming = sys.argv[1] if len(sys.argv) > 1 else ""
+# 파일 경로는 환경변수로 전달 (heredoc 내부에서 bash 변수 불가)
+import os
+path = os.environ.get("HEAL_STREAMING_PATH", "")
+if not path:
+    sys.exit(1)
+with open(path, 'r') as f:
     content = f.read()
+# 멀티라인 포함 named import → default import 교체
+# 기존 import에서 변수명 추출
+m = re.search(r"^import \{([\s\S]*?)\} from 'discord\.js';", content, re.MULTILINE)
+if not m:
+    sys.exit(1)
+vars_str = re.sub(r'\s+', '', m.group(1))  # 공백/개행 제거
 fixed = re.sub(
-    r"^import \{[^}]*\} from 'discord\.js';",
-    "// discord.js is CJS — use default import to avoid ESM named-export errors\nimport discordPkg from 'discord.js';\nconst { ${IMPORTED_VARS} } = discordPkg;",
+    r"^import \{[\s\S]*?\} from 'discord\.js';",
+    f"// discord.js is CJS — use default import to avoid ESM named-export errors\nimport discordPkg from 'discord.js';\nconst {{ {vars_str} }} = discordPkg;",
     content,
-    flags=re.MULTILINE | re.DOTALL
+    flags=re.MULTILINE
 )
-with open('${STREAMING}', 'w') as f:
+if fixed == content:
+    sys.exit(1)  # 치환 없으면 실패
+with open(path, 'w') as f:
     f.write(fixed)
 print("ok")
 PYEOF
-                log "[hardcode] ✅ streaming.js CJS fix 적용"
-                HARDCODED_FIXED=true
-            fi
         else
             log "[hardcode] streaming.js CJS fix 이미 적용됨 — 다른 파일 문제일 수 있음"
-            # 다른 파일에서 ActionRowBuilder named import 확인
             BAD_FILE=$(grep -rl "import {.*ActionRowBuilder.*} from 'discord.js'" "$BOT_HOME/discord/" --include="*.js" 2>/dev/null | head -1 || true)
             if [[ -n "$BAD_FILE" ]]; then
                 log "[hardcode] 문제 파일 발견: $BAD_FILE — 수동 확인 필요"
