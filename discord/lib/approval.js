@@ -7,7 +7,9 @@
  *   pollL3Requests(client)                  — pick up bash-originated .json requests
  */
 
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } from 'discord.js';
+// discord.js is CJS — use default import to avoid ESM named-export errors
+import discordPkg from 'discord.js';
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = discordPkg;
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
