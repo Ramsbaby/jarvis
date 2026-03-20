@@ -180,6 +180,12 @@ rm -f "$HEAL_ATTEMPTS_FILE"
 
 log "검증 통과 → 봇 시작 (모니터링 모드)"
 
+# cron-sync: tasks.json ↔ launchd 동기화 (누락된 plist 자동 생성)
+if [[ -x "$BOT_HOME/scripts/cron-sync.sh" ]]; then
+    bash "$BOT_HOME/scripts/cron-sync.sh" >> "$BOT_HOME/logs/cron-sync.log" 2>&1 || true
+    log "cron-sync 완료"
+fi
+
 # exec 대신 직접 실행: 종료 후 빠른 크래시 여부 판단 가능
 # (launchd는 bash PID를 추적 → node 종료 후 bash도 종료 → launchd가 재시작)
 _start_ts=$(date +%s)

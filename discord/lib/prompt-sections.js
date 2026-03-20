@@ -107,6 +107,22 @@ export function isPreplyQuery(prompt) {
 }
 
 /**
+ * Builds the owner persona / communication-style section (Stable).
+ * Reads context/owner/persona.md — response style, anti-bias, clarification,
+ * self-learning, and root-cause principles.
+ * Injected alongside preferences so all behavioural rules survive session resets.
+ */
+export function buildOwnerPersonaSection({ botHome }) {
+  try {
+    const content = readFileSync(join(botHome, 'context', 'owner', 'persona.md'), 'utf-8');
+    if (!content.trim()) return '';
+    return `--- Owner Persona & Behaviour Rules (항상 준수) ---\n${content.trim()}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Builds the owner system preferences section (Stable).
  * Reads context/owner/preferences.md — tool/service constraints that must
  * survive session resets (e.g. "Kakao Calendar ONLY, Google forbidden").
@@ -128,4 +144,35 @@ export function buildOwnerPreferencesSection({ botHome }) {
  */
 export function buildPreplySection({ botHome }) {
   return `Preply 수업 일정("오늘 수업", "내일 수업", "이번 주 수업") → bash ${botHome}/scripts/cal-preply.sh [YYYY-MM-DD] 실행 후 결과 포맷. 수입/금액("수입", "얼마") → bash ${botHome}/scripts/preply-today.sh [YYYY-MM-DD]. MCP 설정·Claude Code 재시작 언급 절대 금지.`;
+}
+
+/**
+ * Builds boram channel briefing context (Dynamic — AFTER hash).
+ * Reads state/boram-last-briefing.json and injects today's briefing data
+ * so the bot never hallucinates lesson counts or amounts after webhook delivery.
+ * Returns empty string if no briefing exists or if it's not from today.
+ */
+export function buildBoramBriefingContext({ botHome }) {
+  try {
+    const cachePath = join(botHome, 'state', 'boram-last-briefing.json');
+    const raw = readFileSync(cachePath, 'utf-8');
+    const cache = JSON.parse(raw);
+
+    // KST 오늘 날짜
+    const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+    if (cache.date !== today) return '';
+
+    const lessonLines = (cache.lessons || [])
+      .map(l => `  - ${l.time} ${l.student} $${l.amount}`)
+      .join('\n');
+
+    return [
+      `--- 오늘 아침 브리핑 (이미 로드됨) ---`,
+      `오늘(${cache.date}) 수업: ${cache.lessonCount}건 / 총 $${cache.totalUsd}`,
+      lessonLines,
+      `⚠️ 수업 건수·금액 언급 시 반드시 위 데이터 기준으로 답할 것. 추측 금지.`,
+    ].filter(Boolean).join('\n');
+  } catch {
+    return '';
+  }
 }

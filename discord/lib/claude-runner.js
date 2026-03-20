@@ -23,12 +23,28 @@ import {
   buildIdentitySection, buildLanguageSection, buildPersonaSection,
   buildPrinciplesSection, buildFormatSection, buildToolsSection,
   buildSafetySection, buildUserContextSection, isPreplyQuery, buildPreplySection,
-  buildOwnerPreferencesSection,
+  buildOwnerPreferencesSection, buildOwnerPersonaSection, buildBoramBriefingContext,
 } from './prompt-sections.js';
 
 // ---------------------------------------------------------------------------
 // Feedback detection — recognize user signals for learning loop
 // ---------------------------------------------------------------------------
+
+/** Lone surrogate 제거 — JSON 직렬화 시 invalid high/low surrogate 방지. handlers.js와 동일 구현. */
+export function sanitizeUnicode(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[\uD800-\uDFFF]/g, (match, offset, string) => {
+    const code = match.charCodeAt(0);
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const next = string.charCodeAt(offset + 1);
+      if (next >= 0xDC00 && next <= 0xDFFF) return match;
+      return '';
+    }
+    const prev = offset > 0 ? string.charCodeAt(offset - 1) : NaN;
+    if (prev >= 0xD800 && prev <= 0xDBFF) return match;
+    return '';
+  });
+}
 
 /**
  * Detect user feedback signals from message text.
@@ -82,7 +98,7 @@ export function processFeedback(userId, text) {
     // corrections는 string(레거시) 또는 {text, addedAt} 혼용 허용 (하위 호환)
     const normalizeCorr = (c) => (typeof c === 'string' ? c : c?.text ?? '');
     if (!data.corrections.some(c => normalizeCorr(c) === fb.fact)) {
-      data.corrections.push({ text: fb.fact, addedAt: new Date().toISOString() });
+      data.corrections.push({ text: sanitizeUnicode(fb.fact), addedAt: new Date().toISOString() });
       data.updatedAt = new Date().toISOString();
       const usersDir = join(process.env.BOT_HOME || join(homedir(), '.jarvis'), 'state', 'users');
       mkdirSync(usersDir, { recursive: true });
@@ -676,12 +692,36 @@ export async function* createClaudeSession(prompt, {
 
   // Channel-specific persona
   const channelPersona = channelId ? CHANNEL_PERSONAS[channelId] : null;
-  if (channelPersona) systemParts.push('', channelPersona);
+  if (channelPersona) {
+    // Owner가 보람 채널에 접근한 경우: 보람님 페르소나 대신 Owner 컨텍스트 우선
+    // (Owner userId 기반 정확한 감지 — 3인칭 패턴 의존 제거)
+    const BORAM_CHANNEL_ID = process.env.BORAM_CHANNEL_ID || '1472965899790061680';
+    if (channelId === BORAM_CHANNEL_ID && isOwner) {
+      systemParts.push(
+        '',
+        `--- Owner가 jarvis-boram 채널에서 대화 중 ---`,
+        `지금 메시지는 보람님이 아닌 Owner(${ownerName}님)가 보낸 것입니다.`,
+        `보람님 페르소나(반말 금지·💕 이모지 등)로 응답하지 말 것.`,
+        `이 채널은 보람님이 보는 채널이므로 보람님에 대한 제3자 언급은 신중히.`,
+        `Owner 대상 일반 대화 원칙으로 응답.`,
+        `참고 — 보람님 채널 페르소나:\n${channelPersona}`,
+      );
+    } else {
+      systemParts.push('', channelPersona);
+    }
+  }
 
   // Owner system preferences (Stable) — survives session resets & bot restarts
   // Only injected for owner to avoid bloating non-owner sessions
-  if (isOwner && createClaudeSession._ownerPrefsCache) {
-    systemParts.push('', createClaudeSession._ownerPrefsCache);
+  if (isOwner) {
+    // Persona & behaviour rules (anti-bias, root-cause, clarification, self-learning)
+    const personaSection = buildOwnerPersonaSection({ botHome: BOT_HOME });
+    if (personaSection) systemParts.push('', personaSection);
+
+    // Operational preferences (tool constraints, scheduling rules, etc.)
+    if (createClaudeSession._ownerPrefsCache) {
+      systemParts.push('', createClaudeSession._ownerPrefsCache);
+    }
   }
 
   // Session version check: compute hash from STABLE systemParts (persona + user context only).
@@ -695,6 +735,16 @@ export async function* createClaudeSession(prompt, {
   // Preply tool guidance — only when query is Preply-related (saves ~50 tokens on unrelated queries)
   if (isPreplyQuery(prompt)) {
     systemParts.push(buildPreplySection({ botHome: BOT_HOME }));
+  }
+
+  // boram 채널 브리핑 컨텍스트 — 오늘 브리핑이 발송된 경우 수업 데이터 주입
+  // webhook 발송 메시지는 대화 히스토리에 없으므로 LLM이 수치를 지어내는 것을 방지
+  if (channelId) {
+    const BORAM_CHANNEL_ID = process.env.BORAM_CHANNEL_ID || '1472965899790061680';
+    if (channelId === BORAM_CHANNEL_ID) {
+      const briefingCtx = buildBoramBriefingContext({ botHome: BOT_HOME });
+      if (briefingCtx) systemParts.push('', briefingCtx);
+    }
   }
 
   // Per-user long-term memory (added AFTER hash — memory updates don't force session reset)
