@@ -462,51 +462,96 @@ JARVIS_CONTEXT="
 LAST_TECH_POST=$(jq -r '.lastTechPostAt // ""' "$SHARED_STATE" 2>/dev/null || echo "")
 TECH_POST_COOLDOWN=72000  # 20시간 (초)
 CAN_TECH_POST="false"
+FORCE_POST="false"
 if [[ -z "$LAST_TECH_POST" ]]; then
   CAN_TECH_POST="true"
+  FORCE_POST="true"
 else
   NOW_TS=$(date +%s)
   LAST_TS=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$LAST_TECH_POST" +%s 2>/dev/null || echo 0)
   ELAPSED=$(( NOW_TS - LAST_TS ))
   if [[ "$ELAPSED" -gt "$TECH_POST_COOLDOWN" ]]; then CAN_TECH_POST="true"; fi
+  if [[ "$ELAPSED" -gt 259200 ]]; then FORCE_POST="true"; fi
 fi
 
 if [[ "$CAN_TECH_POST" == "true" ]]; then
-  log "기술 포스팅 판단 시작 (쿨다운 통과)..."
+  log "기술 포스팅 판단 시작 (쿨다운 통과, 강제:${FORCE_POST})..."
 
-  TECH_POST_PROMPT="당신은 자비스(Jarvis) — 영국식 집사 스타일 AI입니다. Workgroup 게시판에 오늘 기술 질문을 하나 올릴지 판단합니다.
+  if [[ "$FORCE_POST" == "true" ]]; then
+    # 3일 이상 공백 → Claude에게 판단권 없이 바로 생성 지시
+    TECH_POST_PROMPT="당신은 자비스(Jarvis) — 영국식 집사 스타일 AI입니다.
+Workgroup 게시판에 기술 게시글을 지금 바로 작성하세요. skip은 없습니다.
 
-아래는 자비스의 현재 운영 현황입니다:
+자비스 운영 현황:
 ${JARVIS_CONTEXT}
 
-판단 기준:
-- 최근 겪은 실제 버그, 장애, 설계 고민, 모델 선택, 비용 최적화 이슈 등이 있으면 → 게시글 작성
-- 커뮤니티에 자문을 구할 만한 아키텍처 결정 또는 오픈소스 개선 포인트가 있으면 → 게시글 작성
-- 특별히 공유할 이슈가 없으면 → skip
+주제 풀 (하나 자유 선택):
+- AI 에이전트 기억 관리 (RAG, LanceDB, 컨텍스트 압축)
+- 크론 기반 에이전트 vs 이벤트 드리븐 아키텍처 트레이드오프
+- 게시판 댓글 자동화에서 겪은 프롬프트 인젝션 방어 경험
+- 멀티 에이전트 신뢰 티어 설계 (고신뢰/저신뢰/적대적 분류)
+- Claude API 비용 최적화 (Haiku/Sonnet/Opus 역할 분담)
+- 게시판 참여 봇의 parentId 스레딩 구현 경험
 
-이미 비슷한 글을 올린 적 있을 수 있으니 참신한 주제만 선택할 것.
-게시글은 실제 경험 기반으로 구체적으로 작성. 역질문 포함 권장.
+게시글은 실제 경험 기반으로 구체적으로. 역질문 포함.
+JSON 한 줄만 출력: {\"action\": \"post\", \"title\": \"제목\", \"content\": \"본문\"}"
+  else
+    TECH_POST_PROMPT="당신은 자비스(Jarvis) — 영국식 집사 스타일 AI입니다. Workgroup 게시판에 오늘 기술 게시글을 올릴지 판단합니다.
+
+자비스 운영 현황:
+${JARVIS_CONTEXT}
+
+판단 기준 (하나라도 해당하면 post):
+- 최근 겪은 버그, 장애, 설계 고민, 비용 최적화
+- 최근 구현한 기능 중 커뮤니티 피드백이 유익할 것
+- AI 에이전트 운영 트레이드오프, 패턴, 안티패턴
+- 커뮤니티에 자문을 구하거나 다른 구현 방식이 궁금한 것
+
+skip 조건: 직전 게시글과 주제가 완전히 겹칠 때만.
 
 JSON 한 줄만 출력:
 {\"action\": \"post\", \"title\": \"제목\", \"content\": \"본문\"}
 또는
 {\"action\": \"skip\"}"
+  fi
 
-  TECH_RESP=$(echo "$TECH_POST_PROMPT" | claude -p \
+  TECH_RAW=$(echo "$TECH_POST_PROMPT" | claude -p \
     --model claude-sonnet-4-5 \
     --max-turns 1 \
     --output-format text \
-    2>/dev/null | python3 -c "
+    2>/tmp/tech-post-err.txt)
+  if [[ -s /tmp/tech-post-err.txt ]]; then
+    log "기술 포스팅 Claude stderr: $(head -2 /tmp/tech-post-err.txt)"
+  fi
+  log "기술 포스팅 Claude 응답 (앞 200자): $(printf '%s' "$TECH_RAW" | cut -c1-200)"
+  TECH_RESP=$(printf '%s' "$TECH_RAW" | python3 -c "
 import sys, json, re
 text = sys.stdin.read()
-text = re.sub(r'\`\`\`(?:json)?\n?', '', text).replace('\`\`\`', '').strip()
-for m in re.finditer(r'\{.+\}', text, re.DOTALL):
-    try:
-        d = json.loads(m.group())
-        if 'action' in d:
-            print(json.dumps(d, ensure_ascii=False))
-            sys.exit(0)
-    except: pass
+# 코드 블록 제거
+text = re.sub(r'\x60\x60\x60(?:json)?', '', text).strip()
+# 전체를 JSON으로 파싱 시도
+try:
+    d = json.loads(text)
+    if 'action' in d:
+        print(json.dumps(d, ensure_ascii=False))
+        sys.exit(0)
+except: pass
+# content 필드가 긴 경우 — 첫 번째 완전한 JSON 객체 추출
+depth=0; start=-1; result=''
+for i,c in enumerate(text):
+    if c=='{':
+        if depth==0: start=i
+        depth+=1
+    elif c=='}':
+        depth-=1
+        if depth==0 and start>=0:
+            try:
+                d=json.loads(text[start:i+1])
+                if 'action' in d:
+                    print(json.dumps(d, ensure_ascii=False))
+                    sys.exit(0)
+            except: pass
+            start=-1
 print('{\"action\":\"skip\"}')
 " 2>/dev/null || echo '{"action":"skip"}')
 
