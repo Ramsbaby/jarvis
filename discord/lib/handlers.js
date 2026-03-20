@@ -53,7 +53,10 @@ import {
   saveConversationTurn,
   processFeedback,
   autoExtractMemory,
+  reloadUserProfiles,
+  getUserProfile,
 } from './claude-runner.js';
+import { generateCode, verifyCode } from './pairing.js';
 import { userMemory } from './user-memory.js';
 import { t } from './i18n.js';
 import { recordError } from './error-tracker.js';
@@ -372,6 +375,87 @@ export async function handleMessage(message, state) {
   if (!message.content && !hasImages && !hasVoice && !hasDocAtt) { processingMsgIds.delete(message.id); return; }
   if (message.content.length > INPUT_MAX_CHARS) {
     await message.reply(t('msg.tooLong', { length: message.content.length, max: INPUT_MAX_CHARS }));
+    processingMsgIds.delete(message.id);
+    return;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pairing — 미등록 사용자 접근 제어 + Owner !pair <code> 승인
+  // ---------------------------------------------------------------------------
+  const senderProfile = getUserProfile(message.author.id);
+  const senderIsOwner = senderProfile?.type === 'owner' || senderProfile?.role === 'owner';
+
+  // !pair <code> — Owner 전용 커맨드 (debounce 우회, 즉시 처리)
+  const pairMatch = message.content.match(/^!pair\s+([A-Z2-9]{6})\s*$/i);
+  if (pairMatch) {
+    if (!senderIsOwner) {
+      await message.reply('❌ Owner 전용 커맨드입니다.');
+      processingMsgIds.delete(message.id);
+      return;
+    }
+    const code = pairMatch[1].toUpperCase();
+    const entry = verifyCode(code);
+    if (!entry) {
+      await message.reply(`❌ 코드 \`${code}\` — 유효하지 않거나 만료됐습니다. (TTL 10분)`);
+      processingMsgIds.delete(message.id);
+      return;
+    }
+    // user_profiles.json에 동적 등록
+    try {
+      const profilesPath = join(_BOT_HOME, 'config', 'user_profiles.json');
+      const profiles = JSON.parse(readFileSync(profilesPath, 'utf-8'));
+      // key: discord_{id} 형식으로 저장
+      const profileKey = `discord_${entry.discordId}`;
+      profiles[profileKey] = {
+        name: entry.username,
+        title: '게스트',
+        type: 'guest',
+        role: 'guest',
+        discordId: entry.discordId,
+        pairedAt: new Date().toISOString(),
+        pairedBy: message.author.id,
+      };
+      writeFileSync(profilesPath, JSON.stringify(profiles, null, 2));
+      reloadUserProfiles();
+      await message.reply(`✅ **${entry.username}** (${entry.discordId}) 등록 완료.\n- 프로필 키: \`${profileKey}\`\n- role: guest (변경하려면 user_profiles.json 직접 수정)`);
+      log('info', '[pairing] 신규 사용자 등록', { profileKey, discordId: entry.discordId, username: entry.username });
+    } catch (err) {
+      await message.reply(`❌ user_profiles.json 업데이트 실패: ${err.message}`);
+      log('error', '[pairing] 등록 실패', { error: err.message });
+    }
+    processingMsgIds.delete(message.id);
+    return;
+  }
+
+  // 미등록 사용자(guest) 차단 — 페어링 코드 발급
+  if (!senderProfile) {
+    const code = generateCode(message.author.id, message.author.displayName || message.author.username);
+    await message.reply(
+      `🔒 **미등록 사용자입니다.**\n\n` +
+      `접근을 요청하려면 Owner에게 아래 코드를 전달하세요.\n\n` +
+      `**페어링 코드: \`${code}\`**\n\n` +
+      `_(유효시간 10분. Owner가 \`!pair ${code}\` 를 입력하면 등록됩니다.)_`,
+    );
+    // Owner 채널로도 알림 (OWNER_ALERT_CHANNEL_ID 있으면)
+    const alertChannelId = process.env.OWNER_ALERT_CHANNEL_ID;
+    if (alertChannelId) {
+      try {
+        const alertCh = state.client.channels.cache.get(alertChannelId)
+          || await state.client.channels.fetch(alertChannelId).catch(() => null);
+        if (alertCh) {
+          await alertCh.send(
+            `🔔 **[페어링 요청]** 미등록 사용자가 접근을 시도했습니다.\n` +
+            `- 사용자: **${message.author.displayName || message.author.username}** (\`${message.author.id}\`)\n` +
+            `- 채널: <#${message.channel.id}>\n` +
+            `- 코드: \`${code}\`\n\n` +
+            `승인하려면: \`!pair ${code}\``,
+          );
+        }
+      } catch (alertErr) {
+        log('warn', '[pairing] owner alert 전송 실패', { error: alertErr.message });
+      }
+    }
+    log('info', '[pairing] 미등록 사용자 차단 + 코드 발급', { userId: message.author.id, username: message.author.username, code });
     processingMsgIds.delete(message.id);
     return;
   }

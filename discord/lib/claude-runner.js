@@ -229,11 +229,34 @@ try {
  * Returns the profile for a Discord user ID, or null if not found.
  * Returns null (→ owner fallback) if discordId is empty/unset.
  */
-function getUserProfile(discordUserId) {
+export function getUserProfile(discordUserId) {
   if (!discordUserId) return null;
   return Object.values(USER_PROFILES).find(
     (p) => p.discordId && p.discordId === discordUserId,
   ) || null;
+}
+
+/**
+ * user_profiles.json을 디스크에서 다시 읽어 USER_PROFILES를 갱신한다.
+ * pair 승인 후 봇 재시작 없이 신규 사용자를 즉시 인식하기 위해 호출.
+ */
+export function reloadUserProfiles() {
+  try {
+    const userProfilesPath = join(BOT_HOME, 'config', 'user_profiles.json');
+    const fresh = JSON.parse(readFileSync(userProfilesPath, 'utf-8'));
+    if (process.env.OWNER_DISCORD_ID && fresh.owner) {
+      fresh.owner.discordId = process.env.OWNER_DISCORD_ID;
+    }
+    if (process.env.BORAM_DISCORD_ID && fresh.boram) {
+      fresh.boram.discordId = process.env.BORAM_DISCORD_ID;
+    }
+    // USER_PROFILES 내용을 새 데이터로 교체 (참조 유지)
+    for (const k of Object.keys(USER_PROFILES)) delete USER_PROFILES[k];
+    Object.assign(USER_PROFILES, fresh);
+    log('info', '[pairing] user_profiles.json 핫 리로드 완료', { count: Object.keys(USER_PROFILES).length });
+  } catch (err) {
+    log('warn', '[pairing] user_profiles.json 핫 리로드 실패', { error: err.message });
+  }
 }
 
 // ---------------------------------------------------------------------------
