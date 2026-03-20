@@ -1,7 +1,7 @@
 # Jarvis 시스템 개요
 
 > 🤖 **자동 생성 문서** — 직접 편집 금지
-> Generated: 2026-03-20 13:59:41 | Commit: `f04fb32` (`main`)
+> Generated: 2026-03-20 14:00:00 | Commit: `6728f00` (`main`)
 > 업데이트: `scripts/gen-system-overview.sh` (매일 04:05 + git commit 시)
 
 ---
@@ -437,7 +437,7 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | ai.jarvis.board-agent | 🔴 중지 | - |
 | ai.jarvis.webhook-listener | 🟢 실행중 | 7140 |
 | ai.jarvis.discord-bot | 🟢 실행중 | 13425 |
-| ai.jarvis.board-monitor | 🟢 실행중 | 48047 |
+| ai.jarvis.board-monitor | 🔴 중지 | - |
 | ai.jarvis.boram-briefing | 🔴 중지 | - |
 | ai.jarvis.session-summarizer | 🔴 중지 | - |
 | ai.jarvis.commitment-check | 🔴 중지 | - |
@@ -447,12 +447,13 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | ai.jarvis.event-watcher | 🟢 실행중 | 89744 |
 | ai.jarvis.boot-auth-check | 🔴 중지 | - |
 
-> 마지막 확인: 2026-03-20 13:59:41
+> 마지막 확인: 2026-03-20 14:00:00
 
 ---
 
 ## 11. 최근 변경
 
+- `6728f00` chore: 에이전트 산출물 및 문서 자동 업데이트 (2026-03-20)
 - `f04fb32` feat(boram): webhook hallucination 방지 + Owner 채널 감지
 - `27333d7` fix: 잔존 set-e-and-cmd 안티패턴 3건 수정
 - `c6344f7` fix: set-e-and-cmd 안티패턴 2건 수정
@@ -462,7 +463,6 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 - `22a6a91` feat(security): 페어링 코드 기반 사용자 접근 제어
 - `79894b5` fix: rag-quality-check/health/anti-pattern 3종 수정
 - `21830b7` fix(anti-pattern): 전 코드베이스 [[ ]] && cmd → if/fi 일괄 교체
-- `871b72c` fix(board-monitor): set-e 안티패턴 제거 — cleanup 함수 [[]] && → if/fi
 
 ---
 
