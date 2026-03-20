@@ -494,7 +494,7 @@ run_antipattern_audit() {
                 local script_path="$BOT_HOME/$auto_fix_script"
                 if [[ -x "$script_path" ]]; then
                     while IFS= read -r mline; do
-                        [[ -z "$mline" ]] && continue
+                        if [[ -z "$mline" ]]; then continue; fi
                         local mfile="${mline%%:*}"
                         local mnum="${mline#*:}"; mnum="${mnum%%:*}"
                         if ! [[ "$mnum" =~ ^[0-9]+$ ]]; then continue; fi
