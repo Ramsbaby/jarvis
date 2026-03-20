@@ -17,9 +17,10 @@
       "description": "[[ cond ]] && cmd in set -e script — false condition exits script",
       "grep_pattern": "\\[\\[.*\\]\\]\\s*&&\\s*[^|]",
       "file_glob": "*.sh",
-      "tier": 2,
+      "tier": 1,
       "severity": "high",
       "fix_hint": "Replace with: if [[ cond ]]; then cmd; fi",
+      "auto_fix_script": "scripts/l3-actions/auditor-fix-set-e-and.sh",
       "context_check": "^set -[a-zA-Z]*e",
       "exclude_files": [],
       "exclude_lines": ["#", "set -uo pipefail", "set -u", "if ", "elif ", "echo ", "printf "]

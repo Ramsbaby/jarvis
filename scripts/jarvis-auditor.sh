@@ -378,9 +378,9 @@ run_antipattern_audit() {
 
         # Parse all scalar fields in 1 jq call using SOH delimiter
         local fields
-        fields=$(echo "$pjson" | jq -r '[.id, (.tier|tostring), .severity, .grep_pattern, .file_glob, (.sed_fix // ""), (.description // ""), (.fix_hint // ""), (.context_check // "")] | join("\u0001")')
-        local id tier severity grep_pattern file_glob sed_fix description fix_hint context_check
-        IFS=$'\x01' read -r id tier severity grep_pattern file_glob sed_fix description fix_hint context_check <<< "$fields"
+        fields=$(echo "$pjson" | jq -r '[.id, (.tier|tostring), .severity, .grep_pattern, .file_glob, (.sed_fix // ""), (.description // ""), (.fix_hint // ""), (.context_check // ""), (.auto_fix_script // "")] | join("\u0001")')
+        local id tier severity grep_pattern file_glob sed_fix description fix_hint context_check auto_fix_script
+        IFS=$'\x01' read -r id tier severity grep_pattern file_glob sed_fix description fix_hint context_check auto_fix_script <<< "$fields"
 
         # Parse exclude_lines (1 more jq call per pattern)
         local -a exclude_arr=()
@@ -487,6 +487,35 @@ run_antipattern_audit() {
                 for f in "${fix_files[@]+"${fix_files[@]}"}"; do
                     try_tier1_fix "$f" "sed" "$sed_fix" || true
                 done
+            fi
+
+            # Tier 1: try per-line fix via auto_fix_script (e.g. set-e-and-cmd)
+            if [[ "$tier" == "1" && -n "$auto_fix_script" && "$DRY_RUN" == false ]]; then
+                local script_path="$BOT_HOME/$auto_fix_script"
+                if [[ -x "$script_path" ]]; then
+                    while IFS= read -r mline; do
+                        [[ -z "$mline" ]] && continue
+                        local mfile="${mline%%:*}"
+                        local mnum="${mline#*:}"; mnum="${mnum%%:*}"
+                        if ! [[ "$mnum" =~ ^[0-9]+$ ]]; then continue; fi
+                        if is_protected "$mfile"; then continue; fi
+                        if is_in_cooldown "$mfile"; then continue; fi
+                        if [[ $AUTO_FIX_COUNT -ge $MAX_AUTO_FIXES ]]; then break; fi
+                        local mrel="${mfile#"$BOT_HOME"/}"
+                        if BOT_HOME="$BOT_HOME" IS_MACOS="$IS_MACOS" \
+                           bash "$script_path" "$mfile" "$mnum" >>"$LOG_FILE" 2>&1; then
+                            ((AUTO_FIX_COUNT++)) || true
+                            ((TIER1_FIXED++)) || true
+                            FIXED_FILES_JSON="${FIXED_FILES_JSON},\"${mrel}\":$(date +%s)"
+                            report "  - **AUTO-FIXED**: \`${mrel}\` L${mnum}"
+                            log "auto_fix_script fixed: $mrel L$mnum"
+                        else
+                            log "WARN: auto_fix_script failed: $mrel L$mnum"
+                        fi
+                    done <<< "$matches"
+                else
+                    log "WARN: auto_fix_script not executable: $script_path"
+                fi
             fi
 
             # Tier 2: escalate
@@ -699,6 +728,16 @@ cat > "$LAST_RUN_FILE" <<EOJSON
   "fixed_files": {${FIXED_FILES_JSON#,}}
 }
 EOJSON
+
+# Tier 1 수정분 자동 커밋
+if [[ $TIER1_FIXED -gt 0 && "$DRY_RUN" == false ]]; then
+    if ! git -C "$BOT_HOME" diff --cached --quiet 2>/dev/null || \
+       ! git -C "$BOT_HOME" diff --quiet 2>/dev/null; then
+        git -C "$BOT_HOME" add -A 2>/dev/null || true
+        git -C "$BOT_HOME" commit -m "fix(auditor): auto-fix ${TIER1_FIXED} anti-pattern(s) [T1]" \
+            >>"$LOG_FILE" 2>&1 || log "WARN: git commit failed (non-fatal)"
+    fi
+fi
 
 # Discord notification
 if [[ "$DRY_RUN" == false ]]; then
