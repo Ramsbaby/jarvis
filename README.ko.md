@@ -18,6 +18,8 @@
 
 <h1>Jarvis</h1>
 
+<img src="docs/assets/hero.ko.svg" alt="Jarvis — 24/7 AI Ops" width="800">
+
 <h3>놀고 있는 Claude Max 구독을 24/7 AI 운영 시스템으로</h3>
 
 <p>
@@ -160,6 +162,8 @@ Nexus CIG 레이어가 모든 툴 출력을 Claude의 컨텍스트 창에 들어
                                                │
                                    Discord  +  Obsidian Vault  +  RAG
 ```
+
+<img src="docs/assets/architecture.ko.svg" alt="Jarvis 아키텍처" width="800">
 
 ### 자가복구 — 4계층 (사람 없이 자동)
 
