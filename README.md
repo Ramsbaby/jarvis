@@ -1,9 +1,9 @@
 <div align="center">
 
 <!-- Row 1: health & meta -->
-<a href="https://github.com/Ramsbaby/jarvis/actions/workflows/ci.yml"><img src="https://github.com/Ramsbaby/jarvis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-<a href="https://github.com/Ramsbaby/jarvis/stargazers"><img src="https://img.shields.io/github/stars/Ramsbaby/jarvis?style=flat-square&color=yellow" alt="Stars"></a>
-<a href="https://github.com/Ramsbaby/jarvis/network/members"><img src="https://img.shields.io/github/forks/Ramsbaby/jarvis?style=flat-square" alt="Forks"></a>
+<a href="https://github.com/Ramsbaby/claude-discord-bridge/actions/workflows/ci.yml"><img src="https://github.com/Ramsbaby/claude-discord-bridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://github.com/Ramsbaby/claude-discord-bridge/stargazers"><img src="https://img.shields.io/github/stars/Ramsbaby/claude-discord-bridge?style=flat-square&color=yellow" alt="Stars"></a>
+<a href="https://github.com/Ramsbaby/claude-discord-bridge/network/members"><img src="https://img.shields.io/github/forks/Ramsbaby/claude-discord-bridge?style=flat-square" alt="Forks"></a>
 <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
 <img src="https://img.shields.io/badge/node-22+-green?style=flat-square&logo=node.js&logoColor=white" alt="Node 22+">
 <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgray?style=flat-square" alt="Platform">
@@ -14,7 +14,7 @@
 <img src="https://img.shields.io/badge/context_compression-98%25-blueviolet?style=flat-square" alt="98% compression">
 <img src="https://img.shields.io/badge/session_length-3%2B_hours-blue?style=flat-square" alt="3+ hours">
 <img src="https://img.shields.io/badge/AI_teams-12-orange?style=flat-square" alt="12 AI teams">
-<img src="https://img.shields.io/badge/cron_tasks-63-orange?style=flat-square" alt="63 cron tasks">
+<img src="https://img.shields.io/badge/cron_tasks-76-orange?style=flat-square" alt="76 cron tasks">
 
 <h1>Jarvis</h1>
 
@@ -25,7 +25,7 @@
     You pay $20–$100/month for Claude Max. It sits idle 23 hours a day.<br>
     Jarvis wires it to Discord, cron jobs, and a local memory engine —<br>
     so Claude works, monitors, and learns around the clock, at $0 extra.<br>
-    <sub>12 AI teams · 63 cron tasks · self-healing · local RAG memory</sub>
+    <sub>12 AI teams · 76 cron tasks · self-healing · local RAG memory</sub>
   </strong>
 </p>
 
@@ -68,7 +68,7 @@ Most Discord bots call the Anthropic API — every message is a paid API call. J
 | How it calls Claude | `claude -p` (CLI, your subscription) | `POST /v1/messages` (metered) | API node (metered) |
 | 500 msgs/month cost | **$0 extra** | ~$7–$37 extra | API cost + n8n fee |
 | Model quality | Opus / Sonnet (your tier) | Depends on key | Depends on key |
-| Proactive automation | 63 scheduled tasks | Reactive only | Needs visual setup |
+| Proactive automation | 76 scheduled tasks | Reactive only | Needs visual setup |
 | Self-healing | 4-layer auto-recovery | ❌ | ❌ |
 | Long-term memory | LanceDB hybrid (local) | Rare | Optional plugin |
 | Context compression | 98% (Nexus CIG — see below) | ❌ | ❌ |
@@ -95,7 +95,7 @@ Most Discord bots call the Anthropic API — every message is a paid API call. J
   18:00               ← You stop for the day
   20:00    😴         → Record team: daily archive  (internal)
   ─────────────────────────────────────────────────────────────────
-                       63 cron tasks · 12 AI teams · 0 manual steps
+                       76 cron tasks · 12 AI teams · 0 manual steps
 ```
 
 Every task has **exponential backoff retry**, **rate-limit awareness**, and **failure alerts** pushed to your phone via [ntfy](https://ntfy.sh).
@@ -176,6 +176,13 @@ Without compression, context fills in ~30 min. With Nexus CIG, threads sustain f
 
 ---
 
+
+### Pairing Code — Access Control (No Open Invites)
+
+Jarvis uses a **pairing-code system** to restrict who can interact with the bot.
+New users must enter a one-time pairing code (`/pair <code>`) before any commands work.
+Approved users are stored locally — no Discord role hacking, no public invite links.
+
 ## 12 AI Teams
 
 Each team has a defined role, its own system prompt, and runs on its own cron schedule. They share context through a `context-bus.md` that the Council writes and every other team reads.
@@ -212,7 +219,7 @@ This is Jarvis running on a real developer's machine. All numbers are measured.
 **During your workday:**
 - Ask anything in Discord — full Claude Opus / Sonnet quality, zero per-message cost
 - `/search <query>` searches your entire knowledge base (Obsidian vault + cron results) semantically
-- `/run <task>` manually triggers any of the 63 cron tasks on demand
+- `/run <task>` manually triggers any of the 76 cron tasks on demand
 - Rate limit tracker keeps you safely under the daily ceiling (typical usage: ~17%)
 
 **While you sleep:**
@@ -333,7 +340,7 @@ Not natively — Jarvis uses bash scripts and (on macOS) `launchd` for process m
 <details>
 <summary><strong>Will this burn through my Claude rate limits?</strong></summary>
 
-Unlikely. With the default 63 tasks, typical daily usage is around **17% of the Claude Max rate limit** — measured on a real installation. The built-in rate-limit tracker pauses tasks if you're getting close to the ceiling, and resumes automatically.
+Unlikely. With the default 76 tasks, typical daily usage is around **17% of the Claude Max rate limit** — measured on a real installation. The built-in rate-limit tracker pauses tasks if you're getting close to the ceiling, and resumes automatically.
 
 </details>
 
