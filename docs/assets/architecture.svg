@@ -1,202 +1,177 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="520" viewBox="0 0 800 520">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 540" width="820" height="540" style="background:#0d1117;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+
+  <!-- Background grid -->
   <defs>
-    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L8,3 z" fill="#58a6ff"/>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#161b22" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/>
     </marker>
-    <marker id="arrow-gray" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L8,3 z" fill="#30363d"/>
+    <marker id="arrow-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#3fb950"/>
     </marker>
+    <marker id="arrow-orange" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#f0883e"/>
+    </marker>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
+  <rect width="820" height="540" fill="#0d1117"/>
+  <rect width="820" height="540" fill="url(#grid)"/>
 
-  <!-- Background -->
-  <rect width="800" height="520" fill="#0d1117" rx="12"/>
+  <!-- Title -->
+  <text x="410" y="30" text-anchor="middle" fill="#e6edf3" font-size="16" font-weight="700" letter-spacing="0.5">Jarvis Architecture</text>
+  <text x="410" y="48" text-anchor="middle" fill="#8b949e" font-size="11">24/7 AI Operations · claude -p · Zero API Cost</text>
 
-  <!-- ============================================================ -->
-  <!-- TITLE -->
-  <!-- ============================================================ -->
-  <text x="400" y="28" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="14" font-weight="600" fill="#8b949e" text-anchor="middle"
-        letter-spacing="2">JARVIS SYSTEM ARCHITECTURE</text>
-  <line x1="40" y1="38" x2="760" y2="38" stroke="#21262d" stroke-width="1"/>
+  <!-- ══════════════ INPUT LAYER ══════════════ -->
+  <!-- Discord Input -->
+  <rect x="30" y="80" width="140" height="52" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="100" y="100" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="600">💬 Discord</text>
+  <text x="100" y="118" text-anchor="middle" fill="#8b949e" font-size="10">User messages</text>
+  <text x="100" y="130" text-anchor="middle" fill="#8b949e" font-size="10">slash commands</text>
 
-  <!-- ============================================================ -->
-  <!-- SECTION A: Discord Message Flow (left column) -->
-  <!-- ============================================================ -->
-  <text x="55" y="62" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" fill="#58a6ff" font-weight="600" letter-spacing="1">DISCORD MESSAGE FLOW</text>
+  <!-- Cron Input -->
+  <rect x="30" y="160" width="140" height="52" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="100" y="180" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="600">⏰ Cron (76 tasks)</text>
+  <text x="100" y="198" text-anchor="middle" fill="#8b949e" font-size="10">jarvis-cron.sh</text>
+  <text x="100" y="210" text-anchor="middle" fill="#8b949e" font-size="10">tasks.json schedule</text>
 
-  <!-- You -->
-  <rect x="40" y="72" width="80" height="34" fill="#1f6feb" rx="6"/>
-  <text x="80" y="94" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="12" font-weight="600" fill="#ffffff" text-anchor="middle">You</text>
+  <!-- CLI Input -->
+  <rect x="30" y="240" width="140" height="52" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="100" y="260" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="600">🖥️ CLI / Webhooks</text>
+  <text x="100" y="278" text-anchor="middle" fill="#8b949e" font-size="10">ask-claude.sh</text>
+  <text x="100" y="290" text-anchor="middle" fill="#8b949e" font-size="10">external triggers</text>
 
-  <!-- Arrow: You → discord-bot.js -->
-  <line x1="120" y1="89" x2="158" y2="89" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <text x="139" y="84" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="9" fill="#8b949e" text-anchor="middle">msg</text>
+  <!-- ══════════════ CORE ENGINE ══════════════ -->
+  <!-- Core box -->
+  <rect x="230" y="70" width="180" height="240" rx="12" fill="#161b22" stroke="#388bfd" stroke-width="2" filter="url(#glow)"/>
+  <text x="320" y="95" text-anchor="middle" fill="#388bfd" font-size="13" font-weight="700">⚙️ Core Engine</text>
 
-  <!-- discord-bot.js -->
-  <rect x="160" y="72" width="110" height="34" fill="#1f6feb" rx="6"/>
-  <text x="215" y="94" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="600" fill="#ffffff" text-anchor="middle">discord-bot.js</text>
+  <!-- Discord Bot -->
+  <rect x="245" y="108" width="150" height="38" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="320" y="124" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">discord-bot.js</text>
+  <text x="320" y="138" text-anchor="middle" fill="#8b949e" font-size="10">handlers · personas</text>
 
-  <!-- Arrow: discord-bot.js → handlers.js -->
-  <line x1="270" y1="89" x2="308" y2="89" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Claude Runner -->
+  <rect x="245" y="155" width="150" height="38" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="320" y="171" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">claude-runner.js</text>
+  <text x="320" y="185" text-anchor="middle" fill="#8b949e" font-size="10">spawn · timeout · retry</text>
 
-  <!-- handlers.js -->
-  <rect x="310" y="72" width="100" height="34" fill="#1f6feb" rx="6"/>
-  <text x="360" y="94" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="600" fill="#ffffff" text-anchor="middle">handlers.js</text>
-
-  <!-- Arrow: handlers.js → claude-runner.js -->
-  <line x1="410" y1="89" x2="448" y2="89" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
-
-  <!-- claude-runner.js -->
-  <rect x="450" y="72" width="120" height="34" fill="#1f6feb" rx="6"/>
-  <text x="510" y="94" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="600" fill="#ffffff" text-anchor="middle">claude-runner.js</text>
-
-  <!-- Arrow: claude-runner.js → claude -p -->
-  <line x1="510" y1="106" x2="510" y2="132" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Context Builder -->
+  <rect x="245" y="202" width="150" height="38" rx="6" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="320" y="218" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">Context Builder</text>
+  <text x="320" y="232" text-anchor="middle" fill="#8b949e" font-size="10">RAG inject · CIG compress</text>
 
   <!-- claude -p -->
-  <rect x="450" y="134" width="120" height="34" fill="#238636" rx="6"/>
-  <text x="510" y="156" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">claude -p</text>
+  <rect x="245" y="249" width="150" height="38" rx="6" fill="#1a2332" stroke="#388bfd" stroke-width="1.5"/>
+  <text x="320" y="266" text-anchor="middle" fill="#79c0ff" font-size="12" font-weight="700">claude -p</text>
+  <text x="320" y="280" text-anchor="middle" fill="#58a6ff" font-size="10">Claude Max · $0 extra</text>
 
-  <!-- Arrow: claude -p → Nexus CIG -->
-  <line x1="510" y1="168" x2="510" y2="194" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- ══════════════ MEMORY LAYER ══════════════ -->
+  <!-- RAG Engine -->
+  <rect x="480" y="80" width="150" height="70" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="555" y="102" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="600">🧠 RAG Engine</text>
+  <text x="555" y="118" text-anchor="middle" fill="#8b949e" font-size="10">LanceDB · hybrid search</text>
+  <text x="555" y="132" text-anchor="middle" fill="#8b949e" font-size="10">rag-engine.mjs</text>
+  <text x="555" y="144" text-anchor="middle" fill="#56d364" font-size="10">98% context compression</text>
 
-  <!-- Nexus CIG -->
-  <rect x="440" y="196" width="140" height="44" fill="#6e40c9" rx="6"/>
-  <text x="510" y="215" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">Nexus CIG (MCP)</text>
-  <text x="510" y="232" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#c8b9f7" text-anchor="middle">98% compression</text>
+  <!-- State / Health -->
+  <rect x="480" y="165" width="150" height="60" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="555" y="185" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">📊 State</text>
+  <text x="555" y="201" text-anchor="middle" fill="#8b949e" font-size="10">health.json · metrics</text>
+  <text x="555" y="215" text-anchor="middle" fill="#8b949e" font-size="10">circuit-breaker · FSM</text>
 
-  <!-- Arrow: Nexus CIG → Discord reply -->
-  <line x1="440" y1="218" x2="372" y2="218" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Obsidian Vault -->
+  <rect x="480" y="240" width="150" height="60" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="555" y="260" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">📓 Obsidian Vault</text>
+  <text x="555" y="276" text-anchor="middle" fill="#8b949e" font-size="10">local knowledge base</text>
+  <text x="555" y="290" text-anchor="middle" fill="#8b949e" font-size="10">auto-indexed by RAG</text>
 
-  <!-- Discord reply -->
-  <rect x="260" y="204" width="108" height="28" fill="#1f6feb" rx="6"/>
-  <text x="314" y="222" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" font-weight="600" fill="#ffffff" text-anchor="middle">Discord reply</text>
+  <!-- ══════════════ SELF-HEALING LAYER ══════════════ -->
+  <rect x="650" y="80" width="145" height="220" rx="12" fill="#161b22" stroke="#f0883e" stroke-width="1.5"/>
+  <text x="722" y="104" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="700">🛡️ Self-Healing</text>
+  <text x="722" y="118" text-anchor="middle" fill="#8b949e" font-size="10">4 independent layers</text>
 
-  <!-- Arrow: Nexus CIG → RAG index -->
-  <line x1="580" y1="218" x2="614" y2="218" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="661" y="128" width="123" height="30" rx="5" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="722" y="145" text-anchor="middle" fill="#e6edf3" font-size="10">Layer 0 · Preflight</text>
+  <text x="722" y="157" text-anchor="middle" fill="#8b949e" font-size="9">bot-preflight.sh</text>
 
-  <!-- RAG index -->
-  <rect x="616" y="204" width="90" height="28" fill="#1f6feb" rx="6"/>
-  <text x="661" y="222" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" font-weight="600" fill="#ffffff" text-anchor="middle">RAG index</text>
+  <rect x="661" y="164" width="123" height="30" rx="5" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="722" y="181" text-anchor="middle" fill="#e6edf3" font-size="10">Layer 1 · launchd</text>
+  <text x="722" y="193" text-anchor="middle" fill="#8b949e" font-size="9">KeepAlive=true</text>
 
-  <!-- ============================================================ -->
-  <!-- SECTION B: Cron Flow (top band) -->
-  <!-- ============================================================ -->
-  <line x1="40" y1="264" x2="760" y2="264" stroke="#21262d" stroke-width="1" stroke-dasharray="4,4"/>
-  <text x="55" y="284" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" fill="#58a6ff" font-weight="600" letter-spacing="1">CRON SCHEDULER FLOW</text>
+  <rect x="661" y="200" width="123" height="30" rx="5" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="722" y="217" text-anchor="middle" fill="#e6edf3" font-size="10">Layer 2 · Watchdog</text>
+  <text x="722" y="229" text-anchor="middle" fill="#8b949e" font-size="9">watchdog.sh 180s</text>
 
-  <!-- Cron scheduler -->
-  <rect x="40" y="294" width="110" height="34" fill="#1f6feb" rx="6"/>
-  <text x="95" y="316" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="600" fill="#ffffff" text-anchor="middle">Cron scheduler</text>
+  <rect x="661" y="236" width="123" height="30" rx="5" fill="#0d1117" stroke="#30363d" stroke-width="1"/>
+  <text x="722" y="253" text-anchor="middle" fill="#e6edf3" font-size="10">Layer 3 · Guardian</text>
+  <text x="722" y="265" text-anchor="middle" fill="#8b949e" font-size="9">launchd-guardian.sh</text>
 
-  <!-- Arrow -->
-  <line x1="150" y1="311" x2="188" y2="311" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- ══════════════ OUTPUT LAYER ══════════════ -->
+  <rect x="30" y="340" width="140" height="52" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="100" y="360" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="600">💬 Discord Reply</text>
+  <text x="100" y="378" text-anchor="middle" fill="#8b949e" font-size="10">real-time responses</text>
+  <text x="100" y="390" text-anchor="middle" fill="#8b949e" font-size="10">channel routing</text>
 
-  <!-- jarvis-cron.sh -->
-  <rect x="190" y="294" width="110" height="34" fill="#1f6feb" rx="6"/>
-  <text x="245" y="316" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="600" fill="#ffffff" text-anchor="middle">jarvis-cron.sh</text>
+  <rect x="230" y="340" width="140" height="52" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="300" y="360" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="600">📋 Reports</text>
+  <text x="300" y="378" text-anchor="middle" fill="#8b949e" font-size="10">standup · briefing</text>
+  <text x="300" y="390" text-anchor="middle" fill="#8b949e" font-size="10">system-health</text>
 
-  <!-- Arrow -->
-  <line x1="300" y1="311" x2="338" y2="311" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <rect x="430" y="340" width="140" height="52" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="500" y="360" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="600">📱 Alerts</text>
+  <text x="500" y="378" text-anchor="middle" fill="#8b949e" font-size="10">Discord + ntfy</text>
+  <text x="500" y="390" text-anchor="middle" fill="#8b949e" font-size="10">Galaxy push · macOS</text>
 
-  <!-- tasks.json -->
-  <rect x="340" y="294" width="90" height="34" fill="#1f6feb" rx="6"/>
-  <text x="385" y="316" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="600" fill="#ffffff" text-anchor="middle">tasks.json</text>
+  <rect x="630" y="340" width="145" height="52" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+  <text x="702" y="360" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">🗄️ Memory Update</text>
+  <text x="702" y="378" text-anchor="middle" fill="#8b949e" font-size="10">RAG index refresh</text>
+  <text x="702" y="390" text-anchor="middle" fill="#8b949e" font-size="10">Obsidian auto-save</text>
 
-  <!-- Arrow -->
-  <line x1="430" y1="311" x2="468" y2="311" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- ══════════════ ARROWS ══════════════ -->
+  <!-- Inputs → Core -->
+  <line x1="170" y1="106" x2="228" y2="150" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.8"/>
+  <line x1="170" y1="186" x2="228" y2="190" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.8"/>
+  <line x1="170" y1="266" x2="228" y2="230" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.8"/>
 
-  <!-- claude -p (cron) -->
-  <rect x="470" y="294" width="90" height="34" fill="#238636" rx="6"/>
-  <text x="515" y="316" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="12" font-weight="700" fill="#ffffff" text-anchor="middle">claude -p</text>
+  <!-- Core ↔ Memory -->
+  <line x1="410" y1="115" x2="478" y2="115" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arrow-green)" opacity="0.8"/>
+  <line x1="478" y1="125" x2="410" y2="215" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arrow-green)" stroke-dasharray="4 3" opacity="0.7"/>
+  <line x1="410" y1="195" x2="478" y2="195" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.6"/>
 
-  <!-- Arrow cron → Discord -->
-  <line x1="560" y1="311" x2="588" y2="311" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Core → Outputs -->
+  <line x1="320" y1="310" x2="100" y2="338" stroke="#388bfd" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.8"/>
+  <line x1="320" y1="310" x2="300" y2="338" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arrow-green)" opacity="0.8"/>
+  <line x1="320" y1="310" x2="500" y2="338" stroke="#f0883e" stroke-width="1.5" marker-end="url(#arrow-orange)" opacity="0.8"/>
+  <line x1="555" y1="300" x2="702" y2="338" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.7"/>
 
-  <!-- Outputs box -->
-  <rect x="590" y="286" width="150" height="50" fill="#161b22" rx="6" stroke="#30363d" stroke-width="1"/>
-  <text x="665" y="305" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">Discord  ·  Obsidian</text>
-  <text x="665" y="323" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">RAG index  ·  decisions/</text>
+  <!-- Self-healing watches Core -->
+  <line x1="648" y1="190" x2="412" y2="190" stroke="#f0883e" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arrow-orange)" opacity="0.7"/>
 
-  <!-- ============================================================ -->
-  <!-- SECTION C: Self-Healing Layers (bottom band) -->
-  <!-- ============================================================ -->
-  <line x1="40" y1="360" x2="760" y2="360" stroke="#21262d" stroke-width="1" stroke-dasharray="4,4"/>
-  <text x="55" y="380" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" fill="#58a6ff" font-weight="600" letter-spacing="1">SELF-HEALING — 4 LAYERS</text>
+  <!-- ══════════════ LEGEND ══════════════ -->
+  <rect x="30" y="430" width="760" height="92" rx="8" fill="#161b22" stroke="#21262d" stroke-width="1"/>
+  <text x="50" y="450" fill="#8b949e" font-size="11" font-weight="600">Legend</text>
+  <line x1="50" y1="466" x2="80" y2="466" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="85" y="470" fill="#8b949e" font-size="10">Request flow</text>
+  <line x1="160" y1="466" x2="190" y2="466" stroke="#3fb950" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+  <text x="195" y="470" fill="#8b949e" font-size="10">Memory R/W</text>
+  <line x1="270" y1="466" x2="300" y2="466" stroke="#f0883e" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrow-orange)"/>
+  <text x="305" y="470" fill="#8b949e" font-size="10">Health watch</text>
+  <rect x="50" y="482" width="12" height="12" rx="2" fill="#161b22" stroke="#388bfd" stroke-width="2"/>
+  <text x="67" y="493" fill="#8b949e" font-size="10">Core service</text>
+  <rect x="140" y="482" width="12" height="12" rx="2" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="157" y="493" fill="#8b949e" font-size="10">Memory / state</text>
+  <rect x="240" y="482" width="12" height="12" rx="2" fill="#161b22" stroke="#f0883e" stroke-width="1.5"/>
+  <text x="257" y="493" fill="#8b949e" font-size="10">Self-healing layers</text>
+  <text x="400" y="460" fill="#56d364" font-size="10">✓  No Anthropic API key required</text>
+  <text x="400" y="476" fill="#56d364" font-size="10">✓  100% local — privacy first</text>
+  <text x="400" y="492" fill="#56d364" font-size="10">✓  Runs on existing Claude Max plan</text>
+  <text x="580" y="460" fill="#8b949e" font-size="10">Platform: macOS · Linux</text>
+  <text x="580" y="476" fill="#8b949e" font-size="10">Runtime: Node.js 22+ · bash</text>
+  <text x="580" y="492" fill="#8b949e" font-size="10">Memory: LanceDB + Obsidian</text>
 
-  <!-- Layer 0 -->
-  <rect x="40" y="392" width="160" height="76" fill="#161b22" rx="8" stroke="#1f6feb" stroke-width="1.5"/>
-  <text x="120" y="412" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="700" fill="#58a6ff" text-anchor="middle">Layer 0 · Preflight</text>
-  <text x="120" y="430" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">bot-preflight.sh</text>
-  <text x="120" y="446" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">validates config</text>
-  <text x="120" y="462" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">Claude auto-fixes errors</text>
-
-  <!-- Arrow between layers -->
-  <line x1="200" y1="430" x2="218" y2="430" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
-
-  <!-- Layer 1 -->
-  <rect x="220" y="392" width="160" height="76" fill="#161b22" rx="8" stroke="#1f6feb" stroke-width="1.5"/>
-  <text x="300" y="412" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="700" fill="#58a6ff" text-anchor="middle">Layer 1 · OS-level</text>
-  <text x="300" y="430" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">launchd KeepAlive</text>
-  <text x="300" y="446" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">Docker restart:always</text>
-  <text x="300" y="462" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">restarts on any crash</text>
-
-  <!-- Arrow between layers -->
-  <line x1="380" y1="430" x2="398" y2="430" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
-
-  <!-- Layer 2 -->
-  <rect x="400" y="392" width="160" height="76" fill="#161b22" rx="8" stroke="#1f6feb" stroke-width="1.5"/>
-  <text x="480" y="412" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="700" fill="#58a6ff" text-anchor="middle">Layer 2 · Watchdog</text>
-  <text x="480" y="430" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">watchdog.sh</text>
-  <text x="480" y="446" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">log freshness check</text>
-  <text x="480" y="462" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">every 3 minutes</text>
-
-  <!-- Arrow between layers -->
-  <line x1="560" y1="430" x2="578" y2="430" stroke="#30363d" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
-
-  <!-- Layer 3 -->
-  <rect x="580" y="392" width="160" height="76" fill="#161b22" rx="8" stroke="#1f6feb" stroke-width="1.5"/>
-  <text x="660" y="412" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="11" font-weight="700" fill="#58a6ff" text-anchor="middle">Layer 3 · Guardian</text>
-  <text x="660" y="430" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">launchd-guardian.sh</text>
-  <text x="660" y="446" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">re-registers agents</text>
-  <text x="660" y="462" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#8b949e" text-anchor="middle">every 3 minutes</text>
-
-  <!-- Footer -->
-  <text x="400" y="508" font-family="'Segoe UI', -apple-system, sans-serif"
-        font-size="10" fill="#30363d" text-anchor="middle">Ramsbaby/jarvis — 76 cron tasks · 12 AI teams · $0/month extra</text>
 </svg>
