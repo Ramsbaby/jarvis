@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 160" width="800" height="160">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="160" fill="url(#bg)"/>
+  <rect x="0" y="0" width="4" height="160" fill="#388bfd" rx="2"/>
+
+  <!-- 제목 -->
+  <text x="32" y="64"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="44" font-weight="700" fill="#e6edf3">Jarvis</text>
+
+  <!-- 부제목 -->
+  <text x="32" y="90"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="14" fill="#8b949e">Claude Max 구독으로 24/7 AI 운영 — 추가 비용 $0</text>
+
+  <!-- 구분선 -->
+  <line x1="32" y1="106" x2="360" y2="106" stroke="#21262d" stroke-width="1"/>
+
+  <!-- 태그라인 -->
+  <text x="32" y="128"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="12" fill="#58a6ff">claude -p  ·  Discord  ·  크론 76개  ·  RAG 메모리  ·  자가복구</text>
+
+  <!-- 통계 1: $0 -->
+  <rect x="470" y="18" width="88" height="124" rx="8" fill="#161b22" stroke="#388bfd" stroke-width="1.5"/>
+  <text x="514" y="70" text-anchor="middle"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="30" font-weight="700" fill="#58a6ff">$0</text>
+  <text x="514" y="92" text-anchor="middle"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="10" fill="#8b949e">월 추가 비용</text>
+  <text x="514" y="112" text-anchor="middle"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="9" fill="#388bfd">API 키 불필요</text>
+
+  <!-- 통계 2: 98% -->
+  <rect x="570" y="18" width="88" height="124" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="614" y="70" text-anchor="middle"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="30" font-weight="700" fill="#3fb950">98%</text>
+  <text x="614" y="92" text-anchor="middle"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="10" fill="#8b949e">압축률</text>
+  <text x="614" y="112" text-anchor="middle"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="9" fill="#3fb950">315K→5.4K 토큰</text>
+
+  <!-- 통계 3: 76 -->
+  <rect x="670" y="18" width="88" height="124" rx="8" fill="#161b22" stroke="#f0883e" stroke-width="1.5"/>
+  <text x="714" y="70" text-anchor="middle"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="30" font-weight="700" fill="#f0883e">76</text>
+  <text x="714" y="92" text-anchor="middle"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="10" fill="#8b949e">크론 태스크</text>
+  <text x="714" y="112" text-anchor="middle"
+    font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
+    font-size="9" fill="#f0883e">AI 팀 12개</text>
+</svg>
