@@ -1,9 +1,9 @@
 <div align="center">
 
 <!-- Row 1: health & meta -->
-<a href="https://github.com/Ramsbaby/claude-discord-bridge/actions/workflows/ci.yml"><img src="https://github.com/Ramsbaby/claude-discord-bridge/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-<a href="https://github.com/Ramsbaby/claude-discord-bridge/stargazers"><img src="https://img.shields.io/github/stars/Ramsbaby/claude-discord-bridge?style=flat-square&color=yellow" alt="Stars"></a>
-<a href="https://github.com/Ramsbaby/claude-discord-bridge/network/members"><img src="https://img.shields.io/github/forks/Ramsbaby/claude-discord-bridge?style=flat-square" alt="Forks"></a>
+<a href="https://github.com/Ramsbaby/jarvis/actions/workflows/ci.yml"><img src="https://github.com/Ramsbaby/jarvis/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://github.com/Ramsbaby/jarvis/stargazers"><img src="https://img.shields.io/github/stars/Ramsbaby/jarvis?style=flat-square&color=yellow" alt="Stars"></a>
+<a href="https://github.com/Ramsbaby/jarvis/network/members"><img src="https://img.shields.io/github/forks/Ramsbaby/jarvis?style=flat-square" alt="Forks"></a>
 <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
 <img src="https://img.shields.io/badge/node-22+-green?style=flat-square&logo=node.js&logoColor=white" alt="Node 22+">
 <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgray?style=flat-square" alt="Platform">
@@ -17,6 +17,8 @@
 <img src="https://img.shields.io/badge/cron_tasks-76-orange?style=flat-square" alt="76 cron tasks">
 
 <h1>Jarvis</h1>
+
+<img src="docs/assets/hero.svg" alt="Jarvis — 24/7 AI Ops" width="800">
 
 <h3>Turn your idle Claude Max subscription into a 24/7 AI operations system</h3>
 
@@ -153,7 +155,7 @@ Without compression, context fills in ~30 min. With Nexus CIG, threads sustain f
                                                │
                                      stored for future context
 
-  ─────────────────────────────────────────────────────────────
+  ─────────────────────────────────────────────────────────────────
 
   Cron scheduler  ──►  jarvis-cron.sh  ──►  tasks.json
                                                │
@@ -164,6 +166,8 @@ Without compression, context fills in ~30 min. With Nexus CIG, threads sustain f
                                                │
                                    Discord  +  Obsidian Vault  +  RAG
 ```
+
+<img src="docs/assets/architecture.svg" alt="Jarvis Architecture" width="800">
 
 ### Self-Healing — 4 Layers (No Human Needed)
 
@@ -280,7 +284,7 @@ launchctl list | grep jarvis   # should show the service as running
 Choose how much to install:
 
 | Tier | Command | Size | Features |
-|------|---------|------|---------|
+|------|---------|------|---------| 
 | **0 — Core** | `./install.sh --tier 0` | ~150 MB | Discord bot only, no RAG |
 | **1 — Standard** | `./install.sh --tier 1` | ~350 MB | + SQLite history + BM25 search |
 | **2 — Full** | `./install.sh` (default) | ~700 MB | + LanceDB vector search + OpenAI embeddings |
@@ -380,7 +384,7 @@ Each task has configurable retry logic (exponential backoff, up to 3 attempts by
 ## Roadmap
 
 | Phase | Status | What Was Delivered |
-|-------|--------|--------------------|
+|-------|--------|-------------------|
 | **Phase 0** | ✅ Done | Bug fixes, structured logging, 4-layer self-healing |
 | **Phase 1** | ✅ Done | LLM Gateway (multi-provider), Bash/Node module split |
 | **Phase 2** | ✅ Done | Plugin system, Lite/Company mode, Team YAML, `jarvis init` |
