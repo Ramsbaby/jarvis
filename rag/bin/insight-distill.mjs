@@ -186,7 +186,7 @@ ${c.sampleText}`
 - "왜 이 데이터들이 동시에 존재하는가?"를 생각하라
 
 ## 좋은 인사이트 예시
-- "현재 이직 활동이 면접 단계에 진입했으며, 특정 회사(Company-C)에 집중하고 있다"
+- "현재 이직 활동이 면접 단계에 진입했으며, 특정 회사에 집중하고 있다"
 - "면접 준비 강도로 보아 D-day가 1-2주 이내로 추정된다"
 - "금융 도메인 미경험에 대한 불안감이 있으며, 이를 기술 경험으로 보상하려는 전략을 쓰고 있다"
 - "최근 블로그와 포트폴리오 정비 활동이 증가 — 이직 준비의 마무리 단계"
@@ -213,7 +213,7 @@ ${existingSection}
 
 ## 출력 형식
 반드시 JSON 배열만 출력. 5-8개. 설명문 없이 JSON만.
-[{"insight_text":"현재 이직 활동이 면접 단계에 진입했다","category":"life_phase","confidence":0.9,"evidence_summary":"Company-C 면접 준비 문서, 이력서 최종 수정, 도메인 Q&A 작성","supersedes":null}]`;
+[{"insight_text":"현재 이직 활동이 면접 단계에 진입했다","category":"life_phase","confidence":0.9,"evidence_summary":"면접 준비 문서, 이력서 최종 수정, 도메인 Q&A 작성","supersedes":null}]`;
 
   try {
     // ask-claude.sh: TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT]
