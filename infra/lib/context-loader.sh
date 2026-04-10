@@ -18,6 +18,14 @@ load_context() {
 "
     fi
 
+    # --- Insight report (daily auto-generated behavioural metrics) ---
+    local insight_file="${BOT_HOME}/context/insight-report.md"
+    if [[ -f "$insight_file" ]]; then
+        SYSTEM_PROMPT="${SYSTEM_PROMPT}$(cat "$insight_file")
+
+"
+    fi
+
     # --- RAG context (semantic search -> static file fallback) ---
     local rag_context=""
     local _loader_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

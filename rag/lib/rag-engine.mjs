@@ -14,7 +14,7 @@ import { join, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { appendFileSync, mkdirSync, rmdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { LANCEDB_PATH, RAG_LOCK_DIR, INFRA_HOME, ENTITY_GRAPH_PATH, INSIGHTS_TABLE_NAME, ensureDirs } from './paths.mjs';
+import { LANCEDB_PATH, RAG_LOCK_DIR, INFRA_HOME, ENTITY_GRAPH_PATH, ensureDirs } from './paths.mjs';
 
 const EMBEDDING_MODEL = 'snowflake-arctic-embed2';
 const EMBEDDING_DIM = 1024;
@@ -29,9 +29,6 @@ const TABLE_NAME = 'documents';
 // vector.isValid 같은 Arrow 내부 메타데이터가 "field not in schema" 에러를 유발함.
 // 명시적으로 스키마 필드만 plain 값으로 추출하여 안전한 object를 생성한다.
 const _SCHEMA_FIELDS = ['id','text','vector','source','chunk_index','header_path','modified_at','importance','entities','topics','deleted','deleted_at','is_latest','expires_at','chunk_type'];
-
-// ── Insights table schema fields ──
-const _INSIGHT_FIELDS = ['id','insight_text','vector','category','confidence','evidence_sources','evidence_summary','created_at','expires_at','superseded_by','active'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BM25 Hybrid Search — 순수 JS 구현 (외부 라이브러리 없음)
@@ -438,182 +435,6 @@ export class RAGEngine {
     if (this._readOnly) throw new Error('[rag] Operation not allowed in read-only mode');
   }
 
-  // ── Insights table (2nd-layer semantic memory) ──
-
-  /**
-   * Initialise the insights table. Safe to call multiple times.
-   * Creates the table if it doesn't exist; migrates schema if needed.
-   */
-  async initInsightsTable() {
-    try {
-      this._insightsTable = await this.db.openTable(INSIGHTS_TABLE_NAME);
-    } catch {
-      // Table doesn't exist — create with proper Arrow schema
-      const schema = new arrow.Schema([
-        new arrow.Field('id', new arrow.Utf8()),
-        new arrow.Field('insight_text', new arrow.Utf8()),
-        new arrow.Field('vector', new arrow.FixedSizeList(EMBEDDING_DIM, new arrow.Field('item', new arrow.Float32(), false))),
-        new arrow.Field('category', new arrow.Utf8()),
-        new arrow.Field('confidence', new arrow.Float32()),
-        new arrow.Field('evidence_sources', new arrow.Utf8()),   // JSON array
-        new arrow.Field('evidence_summary', new arrow.Utf8()),
-        new arrow.Field('created_at', new arrow.Float64()),
-        new arrow.Field('expires_at', new arrow.Float64()),       // 0 = never
-        new arrow.Field('superseded_by', new arrow.Utf8()),       // id of replacement
-        new arrow.Field('active', new arrow.Bool()),
-      ]);
-      this._insightsTable = await this.db.createEmptyTable(INSIGHTS_TABLE_NAME, schema);
-      console.log('[rag] Insights table created');
-    }
-  }
-
-  /**
-   * Add a new insight to the insights table.
-   * @param {{ insight_text: string, category: string, confidence: number,
-   *           evidence_sources: string[], evidence_summary: string,
-   *           expires_at?: number }} insight
-   * @returns {string} The generated insight ID
-   */
-  async addInsight(insight) {
-    this._assertWritable();
-    if (!this._insightsTable) await this.initInsightsTable();
-
-    const id = `ins_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const [vector] = await this.embed([insight.insight_text]);
-
-    const record = {
-      id,
-      insight_text: insight.insight_text,
-      vector,
-      category: insight.category || 'general',
-      confidence: insight.confidence ?? 0.5,
-      evidence_sources: JSON.stringify(insight.evidence_sources || []),
-      evidence_summary: insight.evidence_summary || '',
-      created_at: Date.now(),
-      expires_at: insight.expires_at ?? 0,
-      superseded_by: '',
-      active: true,
-    };
-    // Use mergeInsert (same pattern as documents table) to avoid
-    // "Found field not in schema: vector.0" Arrow serialisation bug with add()
-    await this._insightsTable.mergeInsert('id')
-      .whenMatchedUpdateAll()
-      .whenNotMatchedInsertAll()
-      .execute([record]);
-    console.log(`[rag] Insight added: ${id} — "${insight.insight_text.slice(0, 60)}"`);
-    return id;
-  }
-
-  /**
-   * Semantically search insights by query. Returns only active, non-expired,
-   * insights within the distance threshold.
-   * @param {string} query
-   * @param {number} [limit=3]
-   * @param {{ distanceThreshold?: number, confidenceThreshold?: number }} [opts]
-   * @returns {Promise<Array<{ id, insight_text, category, confidence, evidence_summary, distance }>>}
-   */
-  async searchInsights(query, limit = 3, opts = {}) {
-    if (!this._insightsTable) {
-      try { await this.initInsightsTable(); } catch { return []; }
-    }
-    const { distanceThreshold = 1.35, confidenceThreshold = 0.5 } = opts;
-
-    const [queryVec] = await this.embed([query]);
-    const now = Date.now();
-
-    let results;
-    try {
-      results = await this._insightsTable
-        .vectorSearch(queryVec)
-        .where(`active = true AND (expires_at = 0 OR expires_at > ${now}) AND (superseded_by = '' OR superseded_by IS NULL)`)
-        .limit(limit * 2)  // fetch more, filter by thresholds below
-        .toArray();
-    } catch {
-      // FTS or vector index not ready — fallback to scan
-      return [];
-    }
-
-    return results
-      .filter(r => (r._distance ?? 1) < distanceThreshold && (r.confidence ?? 0) >= confidenceThreshold)
-      .slice(0, limit)
-      .map(r => ({
-        id: r.id,
-        insight_text: r.insight_text,
-        category: r.category,
-        confidence: r.confidence,
-        evidence_summary: r.evidence_summary,
-        distance: r._distance,
-      }));
-  }
-
-  /**
-   * Get all active insights (for distiller to compare/update).
-   * @returns {Promise<Array>}
-   */
-  async getActiveInsights() {
-    if (!this._insightsTable) {
-      try { await this.initInsightsTable(); } catch { return []; }
-    }
-    const now = Date.now();
-    try {
-      return await this._insightsTable
-        .query()
-        .where('active = true')
-        .where(`expires_at = 0 OR expires_at > ${now}`)
-        .where("superseded_by = '' OR superseded_by IS NULL")
-        .toArray();
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Mark an insight as superseded by a new one.
-   * @param {string} oldId  The insight being replaced
-   * @param {string} newId  The replacement insight
-   */
-  async supersedeInsight(oldId, newId) {
-    this._assertWritable();
-    if (!this._insightsTable) return;
-    const esc = (s) => String(s).replace(/'/g, "''");
-    try {
-      await this._insightsTable.update({
-        where: `id = '${esc(oldId)}'`,
-        values: { superseded_by: newId, active: false },
-      });
-    } catch (err) {
-      console.warn(`[rag] supersedeInsight failed: ${err.message?.slice(0, 80)}`);
-    }
-  }
-
-  /**
-   * Deactivate insights past their expiry date.
-   * @returns {number} Count of expired insights
-   */
-  async expireStaleInsights() {
-    this._assertWritable();
-    if (!this._insightsTable) return 0;
-    const now = Date.now();
-    try {
-      // Count before update
-      const stale = await this._insightsTable
-        .query()
-        .where('active = true')
-        .where(`expires_at > 0 AND expires_at < ${now}`)
-        .toArray();
-      if (stale.length === 0) return 0;
-      // Single bulk update
-      await this._insightsTable.update({
-        where: `active = true AND expires_at > 0 AND expires_at < ${now}`,
-        values: { active: false },
-      });
-      console.log(`[rag] Expired ${stale.length} stale insight(s)`);
-      return stale.length;
-    } catch {
-      return 0;
-    }
-  }
-
   async dropAndReinit() {
     this._assertWritable();
     const { rm } = await import('node:fs/promises');
@@ -737,6 +558,7 @@ export class RAGEngine {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: EMBEDDING_MODEL, input: batch }),
+            signal: AbortSignal.timeout(30_000),  // 30s timeout — prevents hang if Ollama stalls
           });
           if (!res.ok) {
             throw new Error(`Ollama embed HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
