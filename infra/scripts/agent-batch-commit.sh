@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # agent-batch-commit.sh — 에이전트 산출물 일괄 git commit
 # 각 팀 크론이 개별 commit 시 발생하는 충돌을 방지하기 위해
-# board-meeting 직후 또는 별도 크론으로 변경사항을 일괄 처리.
+# 별도 크론으로 변경사항을 일괄 처리.
 #
 # 사용법:
 #   ~/.jarvis/scripts/agent-batch-commit.sh [--dry-run]
-#   크론 예시: 20 8 * * *  (board-meeting-am 08:10 이후)
-#             5  22 * * *  (board-meeting-pm 21:55 이후)
 #
 # git add 대상:
 #   state/*.md, state/*.json

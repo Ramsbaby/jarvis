@@ -148,10 +148,8 @@ find $BOT_HOME/rag/ -name "*.md" -mtime +90 -delete
 ls $BOT_HOME/config/secrets/calendar.json
 
 # 2. 수동 토큰 갱신 시도
-bash $BOT_HOME/scripts/calendar-token-refresh.sh
 
 # 3. 로그 확인
-tail -20 $BOT_HOME/logs/calendar-token-refresh.log
 ```
 
 ---

@@ -124,15 +124,12 @@ const nextTask = pickNextTask(tasks);   // returns highest-priority ready task
 
 ---
 
-## scripts/calendar-add.sh
 
 Register an event to the configured external calendar.
 
 ```bash
-bash scripts/calendar-add.sh "YYYY-MM-DD" "Title" ["Description"]
 
 # Example:
-bash scripts/calendar-add.sh "2026-05-10" "Phone plan promo ends"
 ```
 
 **Prerequisites:** `config/secrets/calendar.json` with valid tokens.
@@ -140,12 +137,10 @@ bash scripts/calendar-add.sh "2026-05-10" "Phone plan promo ends"
 
 ---
 
-## scripts/calendar-token-refresh.sh
 
 Refresh calendar access_token using refresh_token.
 
 ```bash
-bash scripts/calendar-token-refresh.sh
 ```
 
 Reads from and writes to `config/secrets/calendar.json`. Called automatically by LaunchAgent every 5 hours.
