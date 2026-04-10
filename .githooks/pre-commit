@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "  gitleaks not installed — skipping secret scan"
+  echo "  Install: brew install gitleaks"
+  exit 0
+fi
+
+echo "  Scanning staged changes for secrets and personal data..."
+
+# 1) Built-in + custom rules
+if ! gitleaks git --pre-commit --staged --config .gitleaks.toml 2>/dev/null; then
+  echo ""
+  echo "  Secrets or personal data detected! Commit blocked."
+  echo "  Fix the flagged lines or update .gitleaks.toml allowlist."
+  exit 1
+fi
+
+# 2) Personal rules (gitignored, local only)
+if [[ -f private/.gitleaks-personal.toml ]]; then
+  if ! gitleaks git --pre-commit --staged --config private/.gitleaks-personal.toml 2>/dev/null; then
+    echo ""
+    echo "  Personal data pattern matched! Commit blocked."
+    exit 1
+  fi
+fi
+
+echo "  No secrets or personal data found"
