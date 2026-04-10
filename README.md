@@ -114,6 +114,14 @@ A 24/7 interface powered by Claude with streaming responses.
 
 Discord voice messages are automatically transcribed via **OpenAI Whisper** (Korean + multilingual). The transcribed text is processed by Claude with full RAG context — speak naturally, get AI-powered responses.
 
+### File Upload → Auto-Indexing
+
+Drop a file in Discord and it's automatically indexed into RAG. Your knowledge base grows as you chat.
+
+### Auto Memory Extraction
+
+Jarvis detects important information in conversations and auto-extracts it to long-term memory — preferences, facts, corrections. No manual `/remember` needed.
+
 ### Interactive Buttons
 
 Every response includes contextual action buttons:
@@ -128,6 +136,7 @@ Every response includes contextual action buttons:
 - New users join via **pairing code** (6-digit, 10min TTL, owner approval)
 - **Family channels** automatically filter out owner's private data (trading, career)
 - Per-channel **personas** — different personality per channel (`personas.json`)
+- **Message debouncing** — consecutive messages batched (1.5s) into single Claude call
 
 ## RAG Knowledge Base + Insight Layer
 
@@ -185,7 +194,7 @@ Jarvis doesn't just chat — it **writes code**.
 </p>
 <p align="center"><em>Automated system health check: 10 services monitored every 6 hours</em></p>
 
-Jarvis doesn't just run — it **heals itself**. 110+ scripts, 11 LaunchAgents, 40+ cron jobs:
+Jarvis doesn't just run — it **heals itself**. 99 automation scripts, 11 LaunchAgents, 40+ cron jobs, 4-layer self-recovery (`bot-heal` → `process-recovery` → `cron-auditor` → `auto-diagnose`):
 
 | | What it does | When |
 |---|---|---|
@@ -214,16 +223,30 @@ Summon specialised teams via `/team <name>`:
 | **Trend** | Market signals + tech trend analysis |
 | **Recon** | Reconnaissance — competitive intelligence |
 
+### Board Meeting AI
+
+Automated executive review system. 4 AI agents convene daily:
+
+| Agent | Role |
+|-------|------|
+| **CEO** | Final decisions — system stability + market + OKR progress |
+| **Infra Chief** | Uptime, error rates, performance metrics |
+| **Strategy Advisor** | Market signals, investment analysis, career moves |
+| **Record Keeper** | Meeting minutes, decision audit log |
+
+Output: `context-bus.md` (shared context) + `decisions/{date}.jsonl` + `board-minutes/{date}.md`
+
 ### Smart Features
 
 | Feature | Description |
 |---------|-------------|
+| **Zero-Cost Automation** | All cron tasks run via `claude -p` (subscription) — no per-token API charges |
 | **Commitment Tracking** | Auto-detects promises in Claude responses, tracks fulfilment |
 | **L3 Approval Workflow** | Autonomous tasks request human approval via Discord buttons (24h TTL) |
-| **Message Debouncing** | Consecutive messages batched (1.5s window) into single Claude call |
 | **Context Budget** | Auto-classifies prompt complexity, adjusts thinking depth |
 | **Visual Generation** | Charts (ChartJS) + tables (Puppeteer) rendered as images, cached by SHA256 |
 | **Stat Cards** | "disk?", "RAG status?" → auto-generates visual embed cards |
+| **Langfuse Observability** | Prompt tracing, cost tracking, error rates, latency monitoring |
 | **Rate Limiting** | Per-user token budget + semaphore concurrency control (max 3) |
 | **i18n** | Korean + multilingual support |
 
