@@ -83,12 +83,12 @@ main() {
         find "${BOT_HOME}/state/triggers" -type f -mtime +30 -delete
     fi
 
-    # state/board-minutes/ — 90일 초과 제거 (vault-sync.sh가 Vault에 이미 복사함)
+    # state/board-minutes/ — 90일 초과 제거 (자동 아카이빙 처리됨)
     if [[ -d "${BOT_HOME}/state/board-minutes" ]]; then
         find "${BOT_HOME}/state/board-minutes" -type f -mtime +90 -delete
     fi
 
-    # state/decisions/ — 90일 초과 제거 (vault-sync.sh가 Vault에 이미 복사함)
+    # state/decisions/ — 90일 초과 제거 (자동 아카이빙 처리됨)
     if [[ -d "${BOT_HOME}/state/decisions" ]]; then
         find "${BOT_HOME}/state/decisions" -type f -mtime +90 -delete
     fi

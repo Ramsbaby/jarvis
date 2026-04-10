@@ -236,18 +236,27 @@ ${existingSection}
     }
 
     // Extract JSON array from Claude's response
+    // Use non-greedy match to avoid capturing trailing text after the array
     let insights;
-    const jsonMatch = result.match(/\[[\s\S]*\]/);
+    const jsonMatch = result.match(/\[[\s\S]*?\](?=\s*$|\s*[^,\]\}\w])/);
     if (!jsonMatch) {
-      log(`Claude response has no JSON array: "${result.slice(0, 150)}"`);
-      return [];
+      // Fallback: try parsing the entire result as JSON
+      try {
+        const parsed = JSON.parse(result);
+        insights = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        log(`Claude response has no JSON array: "${result.slice(0, 150)}"`);
+        return [];
+      }
     }
 
-    try {
-      insights = JSON.parse(jsonMatch[0]);
-    } catch {
-      log(`JSON parse failed: "${jsonMatch[0].slice(0, 100)}"`);
-      return [];
+    if (!insights) {
+      try {
+        insights = JSON.parse(jsonMatch[0]);
+      } catch {
+        log(`JSON parse failed: "${jsonMatch[0].slice(0, 100)}"`);
+        return [];
+      }
     }
     if (!Array.isArray(insights)) return [];
 
@@ -319,40 +328,48 @@ async function main() {
   // 9. Collect unique evidence sources from cluster search results
   const allSources = [...new Set(clusterTexts.flatMap(c => c.sources || []))].slice(0, 10);
 
-  // 10. Upsert: handle superseding + add new
+  // 10. Upsert: semantic dedup via vector similarity
+  // LLM produces different text for same meaning each run, so exact-match dedup is useless.
+  // Instead: embed the new insight, search existing insights, if distance < threshold → supersede.
+  const DEDUP_DISTANCE = 0.8;  // L2 distance — same meaning threshold
   let added = 0;
   let superseded = 0;
+  let skipped = 0;
   for (const ins of newInsights) {
-    // Handle superseding
-    if (ins.supersedes && typeof ins.supersedes === 'string' && ins.supersedes.startsWith('ins_')) {
+    const datePrefix = `[${new Date().toISOString().slice(0,10)} 기준] `;
+    const fullText = datePrefix + ins.insight_text;
+
+    // Semantic dedup: find existing insight with same meaning
+    const similar = await engine.searchInsights(ins.insight_text, 1, {
+      distanceThreshold: DEDUP_DISTANCE,
+      confidenceThreshold: 0,  // match any confidence
+    });
+
+    if (similar.length > 0) {
+      // Same meaning exists — supersede the old one with updated version
+      const oldId = similar[0].id;
       const newId = await engine.addInsight({
-        insight_text: `[${new Date().toISOString().slice(0,10)} 기준] ${ins.insight_text}`,
+        insight_text: fullText,
         category: ins.category,
         confidence: ins.confidence,
         evidence_sources: allSources,
         evidence_summary: ins.evidence_summary,
         expires_at: Date.now() + INSIGHT_TTL_MS,
       });
-      await engine.supersedeInsight(ins.supersedes, newId);
+      await engine.supersedeInsight(oldId, newId);
       superseded++;
       added++;
     } else {
-      // Check for near-duplicate (same category + similar text)
-      const isDuplicate = existingInsights.some(existing =>
-        existing.category === ins.category &&
-        existing.insight_text === ins.insight_text
-      );
-      if (!isDuplicate) {
-        await engine.addInsight({
-          insight_text: `[${new Date().toISOString().slice(0,10)} 기준] ${ins.insight_text}`,
-          category: ins.category,
-          confidence: ins.confidence,
-          evidence_sources: allSources,
-          evidence_summary: ins.evidence_summary,
-          expires_at: Date.now() + INSIGHT_TTL_MS,
-        });
-        added++;
-      }
+      // Genuinely new insight
+      await engine.addInsight({
+        insight_text: fullText,
+        category: ins.category,
+        confidence: ins.confidence,
+        evidence_sources: allSources,
+        evidence_summary: ins.evidence_summary,
+        expires_at: Date.now() + INSIGHT_TTL_MS,
+      });
+      added++;
     }
   }
 

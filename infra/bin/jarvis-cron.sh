@@ -170,7 +170,7 @@ RESULT_RETENTION=$(echo "$TASK_CONFIG" | jq -r '.resultRetention // 7')
 RESULT_MAX_CHARS=$(echo "$TASK_CONFIG" | jq -r '.resultMaxChars // 2000')
 MODEL=$(echo "$TASK_CONFIG" | jq -r '.model // empty')
 # TASK_AUTHOR: tasks.json의 "author" 필드, 없으면 task id를 그대로 사용
-# ask-claude.sh의 board-reaction 주입에 사용됨
+# ask-claude.sh에서 TASK_AUTHOR로 사용됨
 export TASK_AUTHOR
 TASK_AUTHOR=$(echo "$TASK_CONFIG" | jq -r '.author // .id // empty')
 DISCORD_CHANNEL=$(echo "$TASK_CONFIG" | jq -r '.discordChannel // empty')

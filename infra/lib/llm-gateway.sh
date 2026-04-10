@@ -41,7 +41,6 @@ if [[ -f "${LLM_GATEWAY_BOT_HOME}/discord/.env" ]]; then
         [[ -z "$key" || "$key" == \#* ]] && continue
         val=$(echo "$val" | sed "s/^[\"']//;s/[\"']$//")
         case "$key" in
-            ANTHROPIC_API_KEY)    ;; # removed — no Anthropic API key available
             OPENAI_API_KEY)       export OPENAI_API_KEY="${OPENAI_API_KEY:-$val}" ;;
             LANGFUSE_PUBLIC_KEY)  export LANGFUSE_PUBLIC_KEY="${LANGFUSE_PUBLIC_KEY:-$val}" ;;
             LANGFUSE_SECRET_KEY)  export LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY:-$val}" ;;
@@ -143,99 +142,6 @@ except:
     fi
     rm -f "$stderr_tmp"
     return "$exit_code"
-}
-
-# --- Provider: Anthropic API ---
-_llm_anthropic_api() {
-    local prompt="$1" system="$2" timeout="$3" model="$4" output="$5"
-
-    [[ -z "${ANTHROPIC_API_KEY:-}" ]] && return 1
-
-    # Map model names to API model IDs
-    local api_model="claude-sonnet-4-20250514"
-    case "${model:-}" in
-        *opus*)   api_model="claude-opus-4-20250514" ;;
-        *haiku*)  api_model="claude-haiku-4-5-20251001" ;;
-        *sonnet*) api_model="claude-sonnet-4-20250514" ;;
-    esac
-
-    local messages
-    messages=$(_llm_py "anthropic-msgs" -c "
-import json, sys
-msgs = [{'role': 'user', 'content': sys.argv[1]}]
-print(json.dumps(msgs))
-" "$prompt") || return 1
-
-    local body
-    if [[ -n "$system" ]]; then
-        body=$(_llm_py "anthropic-body" -c "
-import json, sys, os
-body = {
-    'model': sys.argv[1],
-    'max_tokens': int(os.environ.get('JARVIS_MAX_OUTPUT_TOKENS') or 0) or 4096,
-    'system': sys.argv[2],
-    'messages': json.loads(sys.argv[3])
-}
-print(json.dumps(body))
-" "$api_model" "$system" "$messages") || return 1
-    else
-        body=$(_llm_py "anthropic-body" -c "
-import json, sys, os
-body = {
-    'model': sys.argv[1],
-    'max_tokens': int(os.environ.get('JARVIS_MAX_OUTPUT_TOKENS') or 0) or 4096,
-    'messages': json.loads(sys.argv[2])
-}
-print(json.dumps(body))
-" "$api_model" "$messages") || return 1
-    fi
-
-    local response _curl_err
-    _curl_err=$(mktemp)
-    response=$(curl -s --max-time "$timeout" \
-        -H "x-api-key: ${ANTHROPIC_API_KEY}" \
-        -H "anthropic-version: 2023-06-01" \
-        -H "content-type: application/json" \
-        -d "$body" \
-        "https://api.anthropic.com/v1/messages" 2>"$_curl_err") || { log_warn "anthropic curl: $(cat "$_curl_err")"; rm -f "$_curl_err"; return 1; }
-    rm -f "$_curl_err"
-
-    # Validate response
-    local content_type
-    content_type=$(echo "$response" | _llm_py "anthropic-validate" -c "
-import json, sys
-r = json.load(sys.stdin)
-if r.get('type') == 'error':
-    print(r.get('error', {}).get('message', 'unknown error'), file=sys.stderr)
-    sys.exit(1)
-print(r.get('type', ''))
-") || return 1
-
-    # Convert to claude -p compatible JSON format
-    _llm_py "anthropic-convert" -c "
-import json, sys
-r = json.loads(sys.argv[1])
-text_parts = [b['text'] for b in r.get('content', []) if b.get('type') == 'text']
-result = '\n'.join(text_parts)
-usage = r.get('usage', {})
-out = {
-    'result': result,
-    'cost_usd': 0,
-    'usage': {
-        'input_tokens': usage.get('input_tokens', 0),
-        'output_tokens': usage.get('output_tokens', 0)
-    },
-    'subtype': 'anthropic_api_fallback',
-    'is_error': False
-}
-print(json.dumps(out))
-" "$response" > "$output" || return 1
-
-    # Verify non-empty result
-    local result_text
-    result_text=$(jq -r '.result // ""' "$output" 2>/dev/null)
-    [[ -z "$result_text" ]] && return 1
-    return 0
 }
 
 # --- Provider: OpenAI API ---
@@ -395,7 +301,7 @@ _detect_complexity() {
 llm_call() {
     local prompt="" system="" timeout="180" model="" output=""
     local allowed_tools="" max_budget="" work_dir="" mcp_config=""
-    # 임시파일은 각 sub-function(_llm_anthropic_api 등)에서 인라인 정리
+    # 임시파일은 각 sub-function에서 인라인 정리
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
