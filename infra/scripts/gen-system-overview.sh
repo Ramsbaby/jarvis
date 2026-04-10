@@ -2,7 +2,6 @@
 # gen-system-overview.sh — Jarvis 시스템 개요 문서 자동 생성
 # 트리거: 매일 04:05 크론 (tasks.json) + git post-commit 훅
 # 출력:   ~/.jarvis/docs/SYSTEM-OVERVIEW.md
-#         vault-sync.sh → ${VAULT_DIR:-$HOME/vault}/06-knowledge/architecture/ 자동 반영
 #
 # 수정 방법: 이 스크립트를 편집하고 저장 → 커밋 시 자동 재생성
 # 주의: docs/SYSTEM-OVERVIEW.md 는 자동 생성 파일 — 직접 편집 금지
@@ -108,7 +107,6 @@ FILE_TABLE=$(
   _r "discord/personas.json"           "채널 페르소나 설정"
   _r "scripts/system-doctor.sh"        "자동 시스템 점검 (매일 06:00)"
   _r "scripts/gen-system-overview.sh"  "이 문서 생성 스크립트"
-  _r "scripts/vault-sync.sh"           "Obsidian Vault 동기화"
 )
 
 # LaunchAgent 상태
@@ -168,7 +166,6 @@ doc = """\
 │  5층  Discord Bot           discord-bot.js                      │ ← 사람이 말 거는 창구
 ├─────────────────────────────────────────────────────────────────┤
 │  4층  크론 자동화 엔진       jarvis-cron.sh + tasks.json         │ ← 매일 자동 실행
-│       morning-standup / board-meeting / news / doctor…           │
 ├─────────────────────────────────────────────────────────────────┤
 │  3층  AI 두뇌                claude -p (ask-claude.sh)          │ ← 실제 생각하는 곳
 │       7팀 페르소나 시스템     RAG 컨텍스트 자동 주입              │
@@ -310,7 +307,6 @@ Claude Code와 자비스 시스템을 연결하는 MCP 도구 허브.
 
 ```
 각 팀 결과물 → rag/teams/reports/{team}-*.md (RAG 인덱싱)
-board-meeting → context-bus.md           (전체 요약, 모든 크론 읽음)
 council       → shared-inbox/            (긴급 브로드캐스트)
 depends 필드  → Cross-team Context 자동 주입
 ```
@@ -405,7 +401,6 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | 한계 | 원인 | 현황 |
 |------|------|------|
 | Claude 구독 의존 | claude -p 기반 구조 | pre-cron-auth-check 감시 중 |
-| 팀 에이전트 순차 실행 | sub-agent spawn 10분+ 소요 | board-meeting은 단일 claude -p로 우회 |
 | Obsidian Vault → Mac Mini 종속 | 로컬 파일 기반 | iCloud 동기화 미구현 |
 | Galaxy 직접 편집 불가 | SSH/Discord 명령만 가능 | 운영 불편 수준 |
 | rate limit (아침 클러스터) | claude -p 동시 실행 제한 | 현재 여유 있음, 병렬 증가 시 위험 |
