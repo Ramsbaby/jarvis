@@ -139,6 +139,39 @@ export function getReadyTasks() {
     .sort((a, b) => b.priority - a.priority);
 }
 
+/** 같은 parent_id를 공유하는 queued 태스크 그룹을 반환. 그룹 전체가 queued일 때만 반환. */
+export function getReadyGroup() {
+  const db = getDb();
+  const doneIds = new Set(
+    db.prepare("SELECT id FROM tasks WHERE status='done'").all().map(r => r.id)
+  );
+  // parent_id가 있는 queued 태스크를 parent별로 그룹화
+  const candidates = db.prepare(
+    "SELECT DISTINCT parent_id FROM tasks WHERE status='queued' AND parent_id IS NOT NULL"
+  ).all();
+
+  for (const { parent_id: pid } of candidates) {
+    const allSiblings = db.prepare(
+      "SELECT * FROM tasks WHERE parent_id=?"
+    ).all(pid).map(deserialize);
+
+    // 모든 형제가 queued여야 함 (일부만 queued이면 불완전 그룹)
+    if (!allSiblings.every(t => t.status === 'queued')) continue;
+
+    // getReadyTasks()와 동일한 필터 적용
+    const ready = allSiblings
+      .filter(t => t.source !== 'bot-cron')
+      .filter(t => !!(t.prompt?.trim() || t.name?.trim()))
+      .filter(t => (t.depends ?? []).every(d => doneIds.has(d)))
+      .filter(t => t.retries < (t.maxRetries ?? 2));
+
+    if (ready.length === 0 || ready.length !== allSiblings.length) continue;
+
+    return ready.sort((a, b) => b.priority - a.priority);
+  }
+  return [];
+}
+
 /** 상태 전이 (트랜잭션: tasks + task_transitions 원자적 업데이트) */
 export function transition(id, toStatus, { triggeredBy = 'system', extra = {} } = {}) {
   const db  = getDb();
@@ -410,6 +443,50 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
           } catch (_e) { try { db.exec('ROLLBACK'); } catch (_) {} }
         }
         process.stdout.write(picked + '\n');
+        break;
+      }
+      case 'pick-group-and-lock': {
+        const group = getReadyGroup();
+        const db = getDb();
+        const now = Date.now();
+        const pickedIds = [];
+
+        if (group.length === 0) {
+          process.stdout.write('[]\n');
+          break;
+        }
+
+        // BEGIN IMMEDIATE: 그룹 전체를 원자적으로 queued → running
+        let lockAcquired = false;
+        for (let attempt = 0; attempt < 10; attempt++) {
+          try { db.exec('BEGIN IMMEDIATE'); lockAcquired = true; break; } catch (_le) {
+            if (attempt < 9) { const ms = 100 + attempt * 200; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }
+          }
+        }
+        if (!lockAcquired) {
+          process.stdout.write('[]\n');
+          break;
+        }
+        try {
+          for (const task of group) {
+            const cur = db.prepare("SELECT status FROM tasks WHERE id=?").get(task.id);
+            if (!cur || cur.status !== 'queued') {
+              // 하나라도 queued가 아니면 전체 롤백 (일관성 보장)
+              db.exec('ROLLBACK');
+              pickedIds.length = 0;
+              break;
+            }
+            db.prepare("UPDATE tasks SET status='running', updated_at=? WHERE id=?").run(now, task.id);
+            db.prepare("INSERT INTO task_transitions (task_id, from_status, to_status, triggered_by, created_at) VALUES (?,?,?,?,?)")
+              .run(task.id, 'queued', 'running', 'pick-group-and-lock', now);
+            pickedIds.push(task.id);
+          }
+          if (pickedIds.length > 0) db.exec('COMMIT');
+        } catch (_e) {
+          try { db.exec('ROLLBACK'); } catch (_) {}
+          pickedIds.length = 0;
+        }
+        process.stdout.write(JSON.stringify(pickedIds) + '\n');
         break;
       }
       case 'pick': {
