@@ -104,12 +104,6 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
 
 | 파일 | 역할 |
 |------|------|
-| `bin/board-monitor.sh` | 5분 주기. 자비스 언급 감지 → 유머 응답 + Discord `#workgroup-board` 알림 |
-| `bin/board-catchup.sh` | 5분 주기 (LaunchAgent). 전체 피드(최대 100건) 스캔 → 과거 미응답 언급 소급 처리 |
-| `bin/discussion-daemon.sh` | 매 1분. `data/board-discussion.db` 스캔 → 만료된 토론 닫기 → 페르소나 댓글 디스패치 (최대 2 동시) |
-| `bin/discussion-synthesizer.sh` | 토론 종료 시 댓글 요약 + 결론 합성 → 게시판 댓글로 게시 |
-| `bin/persona-commenter.sh` | 개별 페르소나가 특정 게시글에 댓글 작성. discussion-daemon.sh에서 백그라운드 실행 |
-| `config/board-personas.json` | 페르소나 정의 (이름, delay, 말투, 주제 전문성) |
 | `lib/mcp-workgroup.mjs` | 독립 MCP 서버. Claude Code CLI에서 `wg_*` 도구 사용 (SSoT) |
 | `config/secrets/workgroup.json` | CF-Access 크리덴셜 (gitignore) |
 
@@ -122,7 +116,6 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
 - 개인 파일 경로 (`/Users/.jarvis/config/secrets` 등)
 - 금액·수입 정보 · 커리어·연봉 정보
 
-**간접 프롬프트 인젝션 방어**: board-agent/monitor/catchup 세 스크립트 모두 USER_PROMPT 내 외부 콘텐츠 앞에 `⚠️ 신뢰할 수 없는 외부 입력` 경고 레이블 삽입.
 
 **API 타임아웃**: `AbortSignal.timeout(15000)` 적용 (15초 초과 시 자동 중단).
 
@@ -136,26 +129,20 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
   ├─ claude -p (empty-mcp.json, ⚠️ untrusted 레이블) → {"action":"comment"|"post"|"skip"}
   └─ POST /api/posts/:id/comments  →  Discord embed 알림
 
-board-monitor.sh (5분)
   ├─ /api/feed?since= → 새 이벤트
   ├─ Discord webhook → 피드 요약 (#workgroup-board)
   ├─ jq: 자비스 언급 & repliedToPostIds 필터링
   ├─ claude -p (empty-mcp.json, ⚠️ untrusted 레이블) → 유머 댓글 JSON
   └─ POST /api/posts/:id/comments  →  Discord embed 알림 + STATE 갱신
 
-board-catchup.sh (5분 LaunchAgent)
   ├─ /api/feed?limit=100 (since 없음 — 전체 이력)
   ├─ jq: 미응답 언급 필터 (repliedToPostIds 교차 확인)
   ├─ postId 단위 파일 락 (mkdir 원자적 뮤텍스)
   ├─ claude -p (empty-mcp.json, ⚠️ untrusted 레이블) → 소급 댓글 JSON
   └─ POST /api/posts/:id/comments  →  Discord embed 알림 + STATE 갱신
 
-discussion-daemon.sh (매 1분)
   ├─ board-discussion.db: SELECT status='open' 토론 목록
-  ├─ 만료 토론 → status='expired' + discussion-synthesizer.sh 트리거
-  └─ 진행 중 토론마다 board-personas.json 순회
        ├─ delay 미경과 or 이미 댓글 → skip
-       └─ 조건 충족 → persona-commenter.sh [postId] [personaName] (백그라운드, max 2)
 
   ├─ Call A (병렬): context-bus.md 운영 스냅샷 갱신 (~4분)
   └─ Call B (병렬): 회의록 + 결정 + OKR 분석 (~10분)
@@ -164,7 +151,6 @@ discussion-daemon.sh (매 1분)
 
 ### 핑퐁·중복 방지
 
-- `board-monitor` / `board-catchup`: `state/board-monitor-state.json`의 `repliedToPostIds[]` — 이미 답글 단 postId 재응답 차단 (최대 100개 유지, 공유 상태)
 - **파일 락** (`tmp/board-reply-{postId}.lock`): 세 스크립트 공유 뮤텍스. `mkdir` 원자성 보장 — 동시 실행 시 하나만 처리 진행 (race condition 없음)
 
 ---
@@ -369,7 +355,6 @@ Board Meeting (08:10, 21:55 KST)
   │
   ├─ CEO judgment → decisions/{date}.jsonl
   │
-  └─ decision-dispatcher.sh (auto-runs after meeting)
        ├─ Actionable decisions → execute immediately
        │   (service restart, log cleanup, cron analysis)
        ├─ Report-only decisions → flag for human review
@@ -512,7 +497,6 @@ Automated code quality scanner (`scripts/jarvis-auditor.sh`, daily 04:45):
 
 ### Vault Sync
 
-Bi-directional sync between bot data and an Obsidian Vault (`scripts/vault-sync.sh`, every 6 hours):
 
 ```
 ~/.jarvis/rag/teams/reports/*.md  ──►  $VAULT_DIR/03-teams/{team}/

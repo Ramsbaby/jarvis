@@ -26,7 +26,7 @@ const MS_PER_WEEK = 7 * MS_PER_DAY;
 function inferDomain(source) {
   const s = String(source).toLowerCase();
   if (s.includes('interview') || s.includes('career') || s.includes('resume'))  return '커리어';
-  if (s.includes('finance') || s.includes('tqqq') || s.includes('투자'))         return '금융';
+  if (s.includes('finance') || s.includes('stock') || s.includes('투자'))        return '금융';
   if (s.includes('discord'))                                                      return 'Discord';
   if (s.includes('blog') || s.includes('netlify') || s.includes('gatsby'))       return '블로그';
   if (s.includes('jarvis') || s.includes('cron') || s.includes('infra'))         return '인프라';
