@@ -1,0 +1,272 @@
+# ============================================================================
+# Jarvis Crontab Template
+# ============================================================================
+# 설치: 아래 플레이스홀더를 환경에 맞게 치환 후 crontab에 등록
+#   sed -e "s|__HOME__|$HOME|g" \
+#       -e "s|__JARVIS_HOME__|$HOME/.jarvis|g" \
+#       -e "s|__NODE_PREFIX__|/opt/homebrew/bin|g" \
+#       crontab.example | crontab -
+#
+# 플레이스홀더:
+#   __HOME__         — 사용자 홈 디렉토리 (예: /Users/yourname)
+#   __JARVIS_HOME__  — Jarvis 설치 경로 (예: /Users/yourname/.jarvis)
+#   __NODE_PREFIX__  — Node.js bin 경로 (예: /opt/homebrew/bin)
+# ============================================================================
+
+# ────────────────────────────────────────────────────────────────────────────
+# [RAG] 인덱싱 · 품질 · 검증 · 압축
+# ────────────────────────────────────────────────────────────────────────────
+
+# RAG 인덱싱 (4시간마다 :30)
+30 */4 * * * BOT_HOME=__JARVIS_HOME__ OMP_NUM_THREADS=6 ORT_NUM_THREADS=6 /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh rag-index 2700 /bin/bash __JARVIS_HOME__/bin/rag-index-safe.sh >> __JARVIS_HOME__/logs/rag-index.log 2>&1
+# RAG 품질 모니터링 (매시간 :10)
+10 * * * * BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh rag-quality 120 /bin/bash __JARVIS_HOME__/scripts/rag-quality-check.sh >> __JARVIS_HOME__/logs/rag-quality.log 2>&1
+# RAG 데이터 검증 (매일 03:10)
+10 3 * * * /bin/bash __JARVIS_HOME__/scripts/rag-bug-detector.sh >> __JARVIS_HOME__/logs/rag-bug-detector.log 2>&1
+# RAG 건강 체크 (매일 03:00)
+0 3 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh rag-health >> __JARVIS_HOME__/logs/cron.log 2>&1
+# RAG compaction + FTS rebuild (주간 일요일 04:00)
+0 4 * * 0 /bin/bash __JARVIS_HOME__/scripts/rag-compact-safe.sh >> __JARVIS_HOME__/logs/rag-compact.log 2>&1
+# RAG LanceDB 주간 백업 (일요일 03:30)
+30 3 * * 0 BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/scripts/db-backup.sh rag >> __JARVIS_HOME__/logs/db-backup.log 2>&1
+# RAG 워치 가디언 (10분마다)
+*/10 * * * * BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh rag-watch 120 /bin/bash __JARVIS_HOME__/scripts/rag-watch-guardian.sh
+# RAG 대화 인덱싱 (6시간마다)
+0 */6 * * * BOT_HOME=__JARVIS_HOME__ bash __JARVIS_HOME__/scripts/rag-index-claude-conversations.sh >> __JARVIS_HOME__/logs/rag-conversations.log 2>&1
+# 도메인별 주간 요약 (매일 04:00)
+0 4 * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ __NODE_PREFIX__/node __JARVIS_HOME__/scripts/rag-domain-summarizer.mjs >> __JARVIS_HOME__/logs/rag-domain-summarizer.log 2>&1
+
+# ────────────────────────────────────────────────────────────────────────────
+# [Discord] 봇 관리 · 워치독 · 세션
+# ────────────────────────────────────────────────────────────────────────────
+
+# 봇 워치독 (5분마다)
+*/5 * * * * BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh bot-watchdog 120 /bin/bash __JARVIS_HOME__/bin/bot-watchdog.sh >> __JARVIS_HOME__/logs/bot-watchdog.log 2>&1
+# 세션 동기화 (15분마다)
+*/15 * * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh session-sync >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 세션 요약기 (매일 03:03)
+3 3 * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh session-summarizer 300 __NODE_PREFIX__/node __JARVIS_HOME__/discord/lib/session-summarizer.mjs >> __JARVIS_HOME__/logs/session-summarizer.log 2>&1
+# 인사이트 추출기 (매일 03:33)
+33 3 * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh insight-extractor 600 __NODE_PREFIX__/node __JARVIS_HOME__/lib/insight-extractor.mjs >> __JARVIS_HOME__/logs/insight-extractor.log 2>&1
+# 일일 요약 (매일 20:00)
+0 20 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh daily-summary >> __JARVIS_HOME__/logs/cron.log 2>&1
+# CEO 일일 다이제스트 (매일 22:00)
+0 22 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh ceo-daily-digest >> __JARVIS_HOME__/logs/cron.log 2>&1
+# Family daily schedule (매일 07:30)
+# LaunchAgent 가디언 (3분마다)
+*/3 * * * * BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh launchd-guardian 60 /bin/bash __JARVIS_HOME__/scripts/launchd-guardian.sh >> __JARVIS_HOME__/logs/launchd-guardian.log 2>&1
+# L4 에스컬레이션 — Degraded Mode 감지 (30분마다)
+*/30 * * * * /bin/bash __JARVIS_HOME__/scripts/bot-degraded-mode.sh escalate >> __JARVIS_HOME__/logs/degraded-mode.log 2>&1
+# 봇 자기 비평 (매일 02:45)
+45 2 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh bot-self-critique >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 봇 품질 분석기 (매일 02:30)
+30 2 * * * bash __JARVIS_HOME__/scripts/bot-quality-analyzer.sh >> __JARVIS_HOME__/logs/bot-quality.log 2>&1
+
+# ────────────────────────────────────────────────────────────────────────────
+# [Board] 이사회 · 토론 · 의사결정
+# ────────────────────────────────────────────────────────────────────────────
+
+# 토론 데몬 (매분)
+# 합의 폴러 (08~23시 매시간)
+# 토론 주제 제안 (근무 시간 매시간)
+# 토론 종결 처리 (5분마다)
+# Board decisions → RAG 동기화 (매시간 :25)
+# 이사회 결의 → goals.json 반영 (30분마다)
+# goals.json → 이사회 실행 현황 동기화 (하루 2회)
+0 6,18 * * * cd __JARVIS_HOME__ && /usr/bin/node bin/goals-to-board-sync.mjs >> logs/goals-to-board-sync.log 2>&1
+# 오전 이사회 (매일 08:10)
+# 오후 이사회 (매일 21:55)
+# Board DB 일일 백업 (매일 02:00)
+0 2 * * * BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/scripts/db-backup.sh board >> __JARVIS_HOME__/logs/db-backup.log 2>&1
+# Board 미실행 결의안 주간 리마인더 (월요일 09:00)
+# Dev 태스크 폴러 (5분마다)
+*/5 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ AGENT_API_KEY=__AGENT_API_KEY__ BOARD_URL=__BOARD_URL__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh dev-task-poller 240 /bin/bash __JARVIS_HOME__/scripts/dev-task-poller.sh >> __JARVIS_HOME__/logs/dev-task-poller.log 2>&1
+
+# ────────────────────────────────────────────────────────────────────────────
+# [Monitoring] 시스템 감시 · 헬스체크 · 자가복구
+# ────────────────────────────────────────────────────────────────────────────
+
+# 통합 모니터링 파이프라인 (06:00, 12:00, 18:00)
+0 6,12,18 * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-monitoring-orchestrator.sh pipeline auto >> __JARVIS_HOME__/logs/cron-monitoring-orchestrator.log 2>&1
+# 모니터링 맹점 분석 (매일 05:00)
+0 5 * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/lib/cron-blindspot-analyzer.sh analyze >> __JARVIS_HOME__/logs/cron-blindspot-analyzer.log 2>&1
+# 스마트 자가복구 리포트 (10분마다)
+*/10 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh smart-recovery 180 /bin/bash __JARVIS_HOME__/lib/cron-smart-recovery.sh report >> __JARVIS_HOME__/logs/cron-smart-recovery.log 2>&1
+# 예방적 모니터링 (30분마다)
+*/30 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-monitoring-orchestrator.sh component proactive_monitoring auto >> __JARVIS_HOME__/logs/cron-monitoring-orchestrator.log 2>&1
+# 디스크 알림 (매시간 :10)
+10 * * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh disk-alert >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 시스템 닥터 (매일 06:00)
+0 6 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh system-doctor >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 인프라 데일리 (매일 09:00)
+0 9 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh infra-daily >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 성능 베이스라인 (매일 04:20)
+20 4 * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh execution-baseline 3300 /bin/bash __JARVIS_HOME__/lib/cron-execution-baseline.sh >> __JARVIS_HOME__/logs/cron-execution-baseline.log 2>&1
+# 성능 알림 (5분마다)
+*/5 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh perf-alerts 180 /bin/bash __JARVIS_HOME__/lib/cron-performance-alerts.sh monitor >> __JARVIS_HOME__/logs/cron-performance-alerts.log 2>&1
+# 트렌드 분석기 (매일 02:00)
+0 2 * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/lib/cron-trend-analyzer.sh daily >> __JARVIS_HOME__/logs/cron-trend-analyzer.log 2>&1
+# 성능 다이제스트 (매일 09:00)
+0 9 * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/lib/cron-performance-alerts.sh digest >> __JARVIS_HOME__/logs/cron-performance-alerts.log 2>&1
+# 크론 완료 훅 — 성능 이상 실시간 감지 (부팅 시)
+@reboot PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ nohup /bin/bash __JARVIS_HOME__/lib/cron-completion-hook.sh monitor >> __JARVIS_HOME__/logs/cron-completion-hook.log 2>&1 &
+# 인증 사전 확인 (30분마다)
+*/30 * * * * BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh auth-check 90 /bin/bash __JARVIS_HOME__/scripts/pre-cron-auth-check.sh >> __JARVIS_HOME__/logs/pre-cron-auth-check.log 2>&1
+# OAuth 토큰 갱신 (2시간마다)
+0 */2 * * * /bin/bash __JARVIS_HOME__/scripts/oauth-refresh.sh >> __JARVIS_HOME__/logs/oauth-refresh.log 2>&1
+# API 사용량 캐시 갱신 (5분마다)
+*/5 * * * * python3 __HOME__/.claude/scripts/update-usage-cache.py 2>/dev/null
+# 보안 스캔 (매일 02:30)
+30 2 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh security-scan >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 서버 유지보수 (주간 일요일 03:00)
+0 3 * * 0 __HOME__/server_maintenance.sh >> __HOME__/maintenance.log 2>&1
+# Langfuse 리포트 (주간 일요일 20:10)
+10 20 * * 0 BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/scripts/langfuse-report.sh >> __JARVIS_HOME__/logs/langfuse-report.log 2>&1
+# 주간 성능 에이전트 (일요일 21:00)
+0 21 * * 0 BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/weekly-perf-agent.sh >> __JARVIS_HOME__/logs/weekly-perf-agent.log 2>&1
+# LaunchAgent DRY 감사 (주간 일요일 05:30)
+30 5 * * 0 BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/scripts/audit-la-cron-dry.sh discord >> __JARVIS_HOME__/logs/audit-la-cron.log 2>&1
+# Rate limit 확인 (30분마다)
+*/30 * * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh rate-limit-check >> __JARVIS_HOME__/logs/cron.log 2>&1
+# Stale task 감시 (30분마다)
+*/30 * * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh stale-task-watcher >> __JARVIS_HOME__/logs/cron.log 2>&1
+
+# ────────────────────────────────────────────────────────────────────────────
+# [Context] Context Bus · 뉴스 · 브리핑 · 캘린더
+# ────────────────────────────────────────────────────────────────────────────
+
+# Context Bus 전체 파이프라인 (15분마다)
+*/15 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh ctx-bus-full 600 /bin/bash __JARVIS_HOME__/bin/context-bus-pipeline.sh full >> __JARVIS_HOME__/logs/context-bus-pipeline.log 2>&1
+# Context Bus 실시간 모니터링 (5분마다)
+*/5 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh ctx-bus-rt 180 /bin/bash __JARVIS_HOME__/bin/context-bus-pipeline.sh realtime >> __JARVIS_HOME__/logs/context-bus-pipeline.log 2>&1
+# Context Bus 헬스 체크 (30분마다)
+*/30 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/context-bus-pipeline.sh health >> __JARVIS_HOME__/logs/context-bus-pipeline.log 2>&1
+# 뉴스 브리핑 (매일 06:00)
+0 6 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh news-briefing >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 모닝 스탠드업 (매일 06:15)
+15 6 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh morning-standup >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 캘린더 알림 (5분마다)
+*/5 * * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh calendar-alert >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 마켓 알림 (평일 09/13/16시)
+5 9,13,16 * * 1-5 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh market-alert >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 재무 모니터링 (평일 08:00)
+0 8 * * 1-5 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh finance-monitor >> __JARVIS_HOME__/logs/cron.log 2>&1
+# GitHub 모니터링 (매시간)
+0 * * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh github-monitor >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 업데이트 브로드캐스트 (5분마다)
+*/5 * * * * /bin/bash __JARVIS_HOME__/scripts/update-broadcast.sh >> __JARVIS_HOME__/logs/update-broadcast.log 2>&1
+# Jira 동기화 (월요일 09:00)
+# 커리어 추출기 (매일 00:30)
+# 토큰 동기화 (매일 01:00)
+0 1 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh token-sync >> __JARVIS_HOME__/logs/cron.log 2>&1
+
+# ────────────────────────────────────────────────────────────────────────────
+# [Cleanup] 로그 · 메모리 · 리소스 정리
+# ────────────────────────────────────────────────────────────────────────────
+
+# 로그 로테이션 (매일 03:15)
+15 3 * * * /bin/bash __JARVIS_HOME__/scripts/log-rotate.sh >> __JARVIS_HOME__/logs/log-rotate.log 2>&1
+# 경량 리소스 청소 (매일 03:50)
+50 3 * * * /bin/bash __JARVIS_HOME__/scripts/system-cleanup.sh >> __JARVIS_HOME__/logs/system-cleanup.log 2>&1
+# 메모리 정리 (매일 02:00)
+0 2 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh memory-cleanup >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 메모리 만료 (주간 월요일 03:00)
+0 3 * * 1 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh memory-expire >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 메모리 동기화 (주간 월요일 04:30)
+30 4 * * 1 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh memory-sync >> __JARVIS_HOME__/logs/cron.log 2>&1
+# claude-501 tmp 세션 정리 (매일 03:00)
+0 3 * * * find /private/tmp/claude-501/ -maxdepth 1 -type d -mtime +2 \( -name "*bot-work*" -o -name "*claude-discord*" \) -exec rm -rf {} + 2>/dev/null; true
+# 좀비 claude 프로세스 정리 (매시간)
+0 * * * * pgrep -f "claude.*--output-format stream-json" | while read pid; do age=$(ps -p "$pid" -o etimes= 2>/dev/null | tr -d ' '); [ -n "$age" ] && [ "$age" -gt 7200 ] && kill -9 "$pid" 2>/dev/null && echo "$(date '+%Y-%m-%d %H:%M:%S') killed zombie claude PID $pid (age ${age}s)" >> "__JARVIS_HOME__/logs/zombie-cleanup.log"; done; true
+# 워크트리 stray DB 정리 (월요일 03:00)
+0 3 * * 1 find __HOME__/jarvis-board/.claude/worktrees -name '*.db' -o -name '*.db-shm' -o -name '*.db-wal' 2>/dev/null | xargs -I{} find {} -mtime +7 -delete 2>/dev/null; true
+
+# ────────────────────────────────────────────────────────────────────────────
+# [Weekly/Periodic] 주간 · 월간 리포트 · 감사
+# ────────────────────────────────────────────────────────────────────────────
+
+# 주간 리포트 (일요일 20:05)
+5 20 * * 0 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh weekly-report >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 주간 코드 리뷰 (일요일 05:00)
+0 5 * * 0 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh weekly-code-review >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 주간 사용량 통계 (월요일 09:00)
+0 9 * * 1 /bin/bash __JARVIS_HOME__/bin/jarvis-cron.sh weekly-usage-stats >> __JARVIS_HOME__/logs/cron.log 2>&1
+# KPI 측정 (월요일 08:00)
+0 8 * * 1 /bin/bash __JARVIS_HOME__/scripts/measure-kpi.sh >> __JARVIS_HOME__/logs/measure-kpi.log 2>&1
+# 주간 KPI (월요일 08:30)
+30 8 * * 1 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh weekly-kpi >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 주간 ROI (일요일 23:55)
+55 23 * * 0 __JARVIS_HOME__/bin/weekly-roi.sh 2>&1
+# 월간 리뷰 (매월 1일 09:00)
+0 9 1 * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh monthly-review >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 스킬 평가 (일요일 04:30)
+30 4 * * 0 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh skill-eval >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 커리어 위클리 (금요일 18:00)
+0 18 * * 5 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh career-weekly >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 브랜드 위클리 (화요일 08:00)
+0 8 * * 2 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh brand-weekly >> __JARVIS_HOME__/logs/cron.log 2>&1
+# OSS 문서 (수요일 11:00)
+0 11 * * 3 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh oss-docs >> __JARVIS_HOME__/logs/cron.log 2>&1
+# OSS 프로모션 (금요일 17:00)
+0 17 * * 5 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh oss-promo >> __JARVIS_HOME__/logs/cron.log 2>&1
+# OSS 정찰 (월요일 10:30)
+30 10 * * 1 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh oss-recon >> __JARVIS_HOME__/logs/cron.log 2>&1
+# OSS 유지보수 (매일 09:15)
+15 9 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh oss-maintenance >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 비용 모니터링 (일요일 09:00)
+0 9 * * 0 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh cost-monitor >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 정찰 위클리 (월요일 09:00)
+0 9 * * 1 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh recon-weekly >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 커넥션 위클리 인사이트 (월요일 09:45)
+45 9 * * 1 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh connections-weekly-insight >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 아카데미 서포트 (일요일 20:00)
+0 20 * * 0 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh academy-support >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 에이전트 배치 커밋 (08:30, 22:20)
+30 8 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh agent-batch-commit >> __JARVIS_HOME__/logs/cron.log 2>&1
+20 22 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh agent-batch-commit >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 일일 기록 (매일 22:30)
+30 22 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh record-daily >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 카운슬 인사이트 (매일 23:05)
+5 23 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh council-insight >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 문서-코드 정합성 감사 (매일 23:20)
+20 23 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh doc-sync-auditor >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 크론 감사 (매일 05:30)
+30 5 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh cron-auditor >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 코드 감사 (매일 04:45)
+45 4 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh code-auditor >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 문서 감독 (매일 05:00)
+0 5 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh doc-supervisor >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 시스템 개요 생성 (매일 04:05)
+5 4 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh gen-system-overview >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 인벤토리 생성 (매일 04:30)
+30 4 * * * /bin/bash __JARVIS_HOME__/scripts/gen-inventory.sh >> __JARVIS_HOME__/logs/gen-inventory.log 2>&1
+# E2E 테스트 (매일 04:00)
+0 4 * * * /bin/bash __JARVIS_HOME__/scripts/e2e-cron.sh >> __JARVIS_HOME__/logs/e2e-cron.log 2>&1
+# 스케줄 정합성 (월요일 04:00)
+0 4 * * 1 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh schedule-coherence >> __JARVIS_HOME__/logs/cron.log 2>&1
+
+# ────────────────────────────────────────────────────────────────────────────
+# [Vault] Obsidian Vault 자동화
+# ────────────────────────────────────────────────────────────────────────────
+
+# Vault 자동 동기화 (6시간마다)
+0 0,6,12,18 * * * /bin/bash __JARVIS_HOME__/scripts/vault-sync.sh >> __JARVIS_HOME__/logs/vault-sync.log 2>&1
+# Vault 자동 링크 (매일 06:30)
+30 6 * * * /bin/bash __JARVIS_HOME__/scripts/vault-auto-link.sh >> __JARVIS_HOME__/logs/vault-auto-link.log 2>&1
+# Vault 자동 MOC (주간 월요일 07:00)
+0 7 * * 1 /bin/bash __JARVIS_HOME__/scripts/vault-auto-moc.sh >> __JARVIS_HOME__/logs/vault-auto-moc.log 2>&1
+# Vault 일일 다이제스트 (매일 23:50)
+50 23 * * * /bin/bash __JARVIS_HOME__/scripts/vault-daily-digest.sh >> __JARVIS_HOME__/logs/vault-daily-digest.log 2>&1
+# Vault 라이프사이클 (주간 일요일 03:30)
+30 3 * * 0 /bin/bash __JARVIS_HOME__/scripts/vault-lifecycle.sh >> __JARVIS_HOME__/logs/vault-lifecycle.log 2>&1
+
+# ────────────────────────────────────────────────────────────────────────────
+# [Reports] 자동 보고서 생성
+# ────────────────────────────────────────────────────────────────────────────
+
+# 일일 보고서 (매일 23:50)
+50 23 * * * bash __JARVIS_HOME__/scripts/report-generate.sh daily 2>&1
+# 주간 보고서 (토요일 23:50)
+50 23 * * 6 bash __JARVIS_HOME__/scripts/report-generate.sh weekly 2>&1
+# 월간 보고서 (월말 23:50)
+50 23 28-31 * * bash -c '[ "$(date -v+1d +\%d 2>/dev/null || date --date=tomorrow +\%d)" = "01" ] && bash __JARVIS_HOME__/scripts/report-generate.sh monthly' 2>&1

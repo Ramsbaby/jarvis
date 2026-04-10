@@ -1,0 +1,10 @@
+{
+  "webhook": {
+    "url": ""
+  },
+  "ntfy": { "topic": "", "server": "https://ntfy.sh" },
+  "webhooks": {
+    "jarvis": "",
+    "jarvis-system": ""
+  }
+}

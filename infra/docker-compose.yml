@@ -1,0 +1,30 @@
+# Jarvis — Docker Compose
+# Windows/Linux 설치: docker compose up -d
+
+services:
+  jarvis:
+    build: .
+    container_name: jarvis
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - JARVIS_HOME=/jarvis
+      - NODE_ENV=production
+    volumes:
+      # Claude CLI 인증 마운트
+      # macOS/Linux/WSL2: CLAUDE_HOME 미설정 시 HOME 사용 (setup.sh가 자동 설정)
+      # Windows: setup.ps1이 CLAUDE_HOME=C:/Users/USERNAME 을 .env에 자동 기록
+      - ${CLAUDE_HOME}/.claude:/root/.claude:ro
+      # 데이터 영속화
+      - ./rag:/jarvis/rag
+      - ./inbox:/jarvis/inbox
+      - ./logs:/jarvis/logs
+      - ./context:/jarvis/context
+      - ./state:/jarvis/state
+      - ./results:/jarvis/results
+      - ./plugins:/jarvis/plugins:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
