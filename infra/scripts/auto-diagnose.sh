@@ -6,13 +6,13 @@ set -euo pipefail
 BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
 
-# FSM 기록: event-trigger 실행 추적
-node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" ensure "auto-diagnose" "auto-diagnose" "event-trigger" 2>/dev/null || true
-node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" transition "auto-diagnose" "running" "event-trigger" 2>/dev/null || true
+# FSM 기록: 실행 추적
+node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" ensure "auto-diagnose" "auto-diagnose" "auto-diagnose" 2>/dev/null || true
+node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" transition "auto-diagnose" "running" "auto-diagnose" 2>/dev/null || true
 _fsm_done=false
 _fsm_cleanup() {
     if [[ "$_fsm_done" == "false" ]]; then
-        node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" transition "auto-diagnose" "failed" "event-trigger" 2>/dev/null || true
+        node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" transition "auto-diagnose" "failed" "auto-diagnose" 2>/dev/null || true
     fi
 }
 trap '_fsm_cleanup' ERR EXIT
@@ -27,7 +27,7 @@ FAILURES=$(grep -E "FAILED|ABORTED" "$CRON_LOG" 2>/dev/null \
 if [[ -z "$FAILURES" ]]; then
     _fsm_done=true
     trap - ERR EXIT
-    node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" transition "auto-diagnose" "done" "event-trigger" 2>/dev/null || true
+    node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" transition "auto-diagnose" "done" "auto-diagnose" 2>/dev/null || true
     exit 0
 fi
 
@@ -43,4 +43,4 @@ done
 
 _fsm_done=true
 trap - ERR EXIT
-node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" transition "auto-diagnose" "done" "event-trigger" 2>/dev/null || true
+node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" transition "auto-diagnose" "done" "auto-diagnose" 2>/dev/null || true

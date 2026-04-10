@@ -56,4 +56,3 @@ dev-runner.sh
 - `lib/task-fsm.mjs` — FSM 순수 함수 (`pickNextTask`, `canTransition`, `applyTransition`)
 - `lib/task-store.mjs` — SQLite 저장소 + CLI
 - `bin/dev-runner.sh` — 태스크 실행 엔진 (WIP 확장 대상)
-- `bin/dev-task-poller.sh` — 보드 디스패치 → 큐 투입
