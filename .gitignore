@@ -1,5 +1,7 @@
 .DS_Store
 node_modules/
+__pycache__/
+*.pyc
 
 # RAG data (user-specific)
 *.lance/
