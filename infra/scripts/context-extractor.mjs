@@ -69,7 +69,7 @@ const DOMAINS = {
     channels: ['jarvis-system', 'jarvis-dev', 'jarvis'],
     keywords: ['자비스', 'Jarvis', '크론', 'RAG', '자동화', '봇', 'Discord', '인덱싱',
                'LaunchAgent', '훅', 'hook', 'MCP', '모니터링', '배포', 'deploy',
-               'context-extractor', 'career-extractor', 'rag-index'],
+               'context-extractor', 'rag-index'],
     prompt: `Discord 대화에서 Jarvis 시스템 관련 내용만 추출해 마크다운으로 정리해줘.
 
 ## 추출 항목 (없으면 섹션 생략)

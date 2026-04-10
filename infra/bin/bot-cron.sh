@@ -245,7 +245,6 @@ unset _cur_md5
 
 # --- Market holiday guard (tasks with requiresMarket: true) ---
 if [[ "$REQUIRES_MARKET" == "true" ]]; then
-    if ! /bin/bash "$BOT_HOME/scripts/market-holiday-guard.sh" > /dev/null 2>&1; then
         log "SKIPPED — market closed today (holiday or weekend)"
         _TASK_DONE=true
         exit 0
@@ -363,7 +362,6 @@ _FSM_RUNNING=true
 log "START"
 
 # --- Lounge announce: task started ---
-"$BOT_HOME/bin/lounge-announce.sh" "$TASK_ID" "running" 2>/dev/null || true
 
 # --- Execute: script 필드가 있으면 직접 실행, 없으면 retry-wrapper ---
 RESULT=""
@@ -389,7 +387,6 @@ if [[ $EXIT_CODE -ne 0 ]]; then
     fi
 fi
 if [[ $EXIT_CODE -ne 0 ]]; then
-    "$BOT_HOME/bin/lounge-announce.sh" "$TASK_ID" "--done" 2>/dev/null || true
     log "FAILED (exit: $EXIT_CODE)"
     # AUTH_ERROR 즉시 감지: 첫 실패에서 ntfy 발송 (Circuit Breaker 3회 대기 없이)
     if echo "$RESULT" | grep -qE '"is_error":true.*"duration_api_ms":0|AUTH_ERROR|Not logged in'; then
@@ -444,7 +441,6 @@ if [[ $EXIT_CODE -ne 0 ]]; then
     exit "$EXIT_CODE"
 fi
 
-"$BOT_HOME/bin/lounge-announce.sh" "$TASK_ID" "--done" 2>/dev/null || true
 log "SUCCESS"
 # circuit breaker: 성공 시 초기화
 if [[ -f "$_CB_FILE" ]]; then rm -f "$_CB_FILE" 2>/dev/null || true; fi

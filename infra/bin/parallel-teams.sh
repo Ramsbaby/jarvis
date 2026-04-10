@@ -12,7 +12,7 @@
 #   parallel-teams.sh --teams "infra brand"   # 지정 팀만 병렬 실행
 #   parallel-teams.sh --dry-run               # 실행 없이 순서 출력
 #
-# 크론 예시 (board-meeting 이후 팀 병렬 실행):
+# 크론 예시 (크론 이후 팀 병렬 실행):
 #   30 8 * * * $HOME/.jarvis/bin/parallel-teams.sh >> $HOME/.jarvis/logs/parallel-teams.log 2>&1
 
 set -euo pipefail
