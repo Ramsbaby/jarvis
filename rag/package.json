@@ -1,0 +1,20 @@
+{
+  "name": "@jarvis/rag",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Optional RAG module for Jarvis — LanceDB + Ollama hybrid search",
+  "dependencies": {
+    "@lancedb/lancedb": "~0.26.2",
+    "apache-arrow": "~18.1.0",
+    "chokidar": "~4.0.3",
+    "dotenv": "~16.6.1"
+  },
+  "scripts": {
+    "query": "node lib/rag-query.mjs",
+    "index": "bash bin/rag-index-safe.sh",
+    "stats": "node bin/rag-stats.mjs",
+    "compact": "node bin/rag-compact.mjs",
+    "repair": "node bin/rag-repair.mjs"
+  }
+}

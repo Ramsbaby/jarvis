@@ -1,0 +1,122 @@
+{
+  "version": 2,
+  "patterns": [
+    {
+      "id": "ls-glob-pipe",
+      "description": "ls glob + pipe in pipefail context — glob mismatch causes exit 1",
+      "grep_pattern": "ls\\s+(-[a-zA-Z]*\\s+)?[\"${}a-zA-Z/._-]*\\*.*\\|",
+      "file_glob": "*.sh",
+      "tier": 2,
+      "severity": "high",
+      "fix_hint": "Replace with: find DIR -maxdepth 1 -name 'PATTERN' | ...",
+      "exclude_files": [],
+      "exclude_lines": ["#", "echo "]
+    },
+    {
+      "id": "set-e-and-cmd",
+      "description": "[[ cond ]] && cmd in set -e script — false condition exits script",
+      "grep_pattern": "\\[\\[.*\\]\\]\\s*&&\\s*[^|]",
+      "file_glob": "*.sh",
+      "tier": 1,
+      "severity": "high",
+      "fix_hint": "Replace with: if [[ cond ]]; then cmd; fi",
+      "auto_fix_script": "scripts/l3-actions/auditor-fix-set-e-and.sh",
+      "context_check": "^set -[a-zA-Z]*e",
+      "exclude_files": [],
+      "exclude_lines": ["#", "set -uo pipefail", "set -u", "if ", "elif ", "echo ", "printf "]
+    },
+    {
+      "id": "ephemeral-true",
+      "description": "Deprecated ephemeral: true — use MessageFlags.Ephemeral",
+      "grep_pattern": "ephemeral:\\s*true",
+      "file_glob": "*.js",
+      "tier": 1,
+      "severity": "medium",
+      "fix_hint": "Replace ephemeral: true with flags: MessageFlags.Ephemeral",
+      "sed_fix": "s/ephemeral:\\s*true/flags: MessageFlags.Ephemeral/g",
+      "exclude_files": [],
+      "exclude_lines": ["//", "/*"]
+    },
+    {
+      "id": "ephemeral-true-mjs",
+      "description": "Deprecated ephemeral: true in .mjs — use MessageFlags.Ephemeral",
+      "grep_pattern": "ephemeral:\\s*true",
+      "file_glob": "*.mjs",
+      "tier": 1,
+      "severity": "medium",
+      "fix_hint": "Replace ephemeral: true with flags: MessageFlags.Ephemeral",
+      "sed_fix": "s/ephemeral:\\s*true/flags: MessageFlags.Ephemeral/g",
+      "exclude_files": [],
+      "exclude_lines": ["//", "/*"]
+    },
+    {
+      "id": "shellcheck-quoting",
+      "description": "SC2086 unquoted variable in shell script",
+      "tool": "shellcheck",
+      "shellcheck_codes": ["SC2086", "SC2046"],
+      "file_glob": "*.sh",
+      "tier": 1,
+      "severity": "medium",
+      "fix_hint": "Quote variables: \"$var\"",
+      "exclude_files": []
+    },
+    {
+      "id": "typeof-no-array",
+      "description": "typeof === 'object' without Array.isArray guard",
+      "grep_pattern": "typeof\\s+\\w+\\s*===?\\s*['\"]object['\"]",
+      "file_glob": "*.js",
+      "tier": 2,
+      "severity": "low",
+      "fix_hint": "Add Array.isArray() check before typeof 'object'",
+      "exclude_files": [],
+      "exclude_lines": ["//", "/*", "Array.isArray"]
+    },
+    {
+      "id": "typeof-no-array-mjs",
+      "description": "typeof === 'object' without Array.isArray guard in .mjs",
+      "grep_pattern": "typeof\\s+\\w+\\s*===?\\s*['\"]object['\"]",
+      "file_glob": "*.mjs",
+      "tier": 2,
+      "severity": "low",
+      "fix_hint": "Add Array.isArray() check before typeof 'object'",
+      "exclude_files": [],
+      "exclude_lines": ["//", "/*", "Array.isArray"]
+    },
+    {
+      "id": "inline-var-injection",
+      "description": "Bash variable in inline script string literal — use env var (os.environ / process.env)",
+      "grep_pattern": "'\\$\\{?[A-Za-z_]+\\}?'",
+      "file_glob": "*.sh",
+      "tier": 2,
+      "severity": "high",
+      "fix_hint": "Python: VAR=\"$val\" python3 -c \"os.environ['VAR']\". Node: VAR=\"$val\" node -e \"process.env.VAR\"",
+      "context_check": "python3\\|node ",
+      "exclude_files": [],
+      "exclude_lines": ["#", "echo ", "printf ", "log "]
+    },
+    {
+      "id": "python-triple-quote-injection",
+      "description": "Triple-quote bash injection in Python — arbitrary code execution possible",
+      "grep_pattern": "'''\\$\\{?[A-Za-z_]",
+      "file_glob": "*.sh",
+      "tier": 2,
+      "severity": "critical",
+      "fix_hint": "Pass via env var: VAR=\"$val\" python3 -c \"import os; v = os.environ['VAR']\"",
+      "context_check": "python3",
+      "exclude_files": [],
+      "exclude_lines": ["#"]
+    },
+    {
+      "id": "non-atomic-json-write",
+      "description": "f.truncate() in inline script — likely non-atomic write, data loss on crash",
+      "grep_pattern": "\\.truncate\\(\\)",
+      "file_glob": "*.sh",
+      "tier": 2,
+      "severity": "high",
+      "fix_hint": "Use tempfile.mkstemp() + os.replace() for atomic writes",
+      "context_check": "python3",
+      "exclude_files": [],
+      "exclude_lines": ["#", "os.replace"]
+    }
+  ]
+}

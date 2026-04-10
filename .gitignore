@@ -1,0 +1,30 @@
+.DS_Store
+node_modules/
+
+# RAG data (user-specific)
+*.lance/
+index-state.json
+access-log.json
+rag-errors.jsonl
+write.lock
+
+# Infra runtime data
+infra/.env
+infra/discord/node_modules/
+infra/discord/.env
+infra/discord/personas.json
+infra/config/secrets/
+infra/config/tasks.json
+infra/config/goals.json
+infra/config/effective-tasks.json
+infra/config/company-dna.md
+infra/config/jira.env
+infra/config/tutoring-platform.env
+infra/config/google-calendar-token.json
+infra/config/user_profiles.json
+infra/config/discord-channels.json
+infra/config/discord-mcp.json
+
+# Runtime
+.jarvis.pid
+jarvis.log

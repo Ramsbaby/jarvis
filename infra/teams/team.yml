@@ -1,0 +1,5 @@
+name: "정보팀 (Trend)"
+taskId: news-briefing
+discord: jarvis
+maxTurns: 15
+tools: [Read, Write, WebSearch, Glob]
