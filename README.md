@@ -13,9 +13,14 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/jarvis-demo-chat.png" alt="Jarvis Demo — AI Chat + System Health" width="700">
+  <img src="docs/img/jarvis-demo-chat-en.png" alt="Jarvis — AI Behavioural Analysis Chat + Insight Report" width="700">
 </p>
-<p align="center"><em>Top: ask Jarvis anything — it analyses your behaviour patterns and responds. Bottom: dawn system health check.</em></p>
+<p align="center"><em>Ask Jarvis anything — it analyses your behaviour patterns + daily auto-generated insight report</em></p>
+
+<p align="center">
+  <img src="docs/img/jarvis-demo-system-en.png" alt="Jarvis — System Health + Approval Workflow" width="700">
+</p>
+<p align="center"><em>Dawn system health check (10 services) + L3 autonomous task approval workflow</em></p>
 
 ---
 
