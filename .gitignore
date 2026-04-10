@@ -3,6 +3,10 @@ node_modules/
 __pycache__/
 *.pyc
 
+# Private data (personal configs, secrets, overrides)
+private/
+!private/README.md
+
 # RAG data (user-specific)
 *.lance/
 index-state.json
@@ -11,6 +15,7 @@ rag-errors.jsonl
 write.lock
 
 # Infra runtime data
+infra/config/user-schedule.json
 infra/.env
 infra/discord/node_modules/
 infra/discord/.env
