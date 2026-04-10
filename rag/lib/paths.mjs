@@ -27,9 +27,6 @@ export const ACCESS_LOG_PATH  = join(RAG_HOME, 'access-log.json');
 export const INCIDENTS_PATH   = join(RAG_HOME, 'incidents.md');
 export const ENTITY_GRAPH_PATH = join(RAG_HOME, 'entity-graph.json');
 
-// ── Table names ──
-export const INSIGHTS_TABLE_NAME = 'insights';
-
 // ── Write lock (in RAG_HOME, not /tmp — multi-user safe) ──
 export const RAG_WRITE_LOCK  = join(RAG_HOME, 'write.lock');
 
