@@ -168,10 +168,136 @@ pick_next_task() {
     ${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" pick-and-lock 2>>"$DEV_LOG"
 }
 
+# --- 그룹 태스크 선택 (같은 parent_id를 가진 태스크 일괄) ---
+pick_next_group() {
+    local result
+    result=$(${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" pick-group-and-lock 2>>"$DEV_LOG")
+    if [[ "$result" == "[]" || -z "$result" ]]; then
+        echo ""
+        return
+    fi
+    echo "$result"
+}
+
 get_field() {
     local task_id="$1"
     local field="$2"
     ${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" field "$task_id" "$field" 2>>"$DEV_LOG"
+}
+
+# ============================================================
+# run_task_group — 그룹 태스크 일괄 실행 (하나의 Claude 세션)
+# ============================================================
+run_task_group() {
+    local GROUP_JSON="$1"
+    local TASK_IDS
+    TASK_IDS=$(echo "$GROUP_JSON" | jq -r '.[]')
+    local TASK_COUNT
+    TASK_COUNT=$(echo "$GROUP_JSON" | jq 'length')
+
+    _coder_log "그룹 태스크 시작: ${TASK_COUNT}건"
+
+    local COMBINED_PROMPT="## 이 세션에서 처리할 태스크 (총 ${TASK_COUNT}건, 동일 논의 결의안)
+모든 태스크를 순서대로 처리하라. 하나의 논의에서 도출된 연관 작업이므로 전체 맥락을 고려하라.
+각 태스크를 처리할 때 다른 태스크와의 충돌이 없도록 주의하라.
+
+"
+    local MAX_TIMEOUT=0 TOTAL_BUDGET="0" FIRST_ID=""
+    local ALL_IDS=() ALL_NAMES=()
+
+    local idx=0
+    while IFS= read -r tid; do
+        [[ -z "$tid" ]] && continue
+        idx=$((idx + 1))
+        ALL_IDS+=("$tid")
+        [[ -z "$FIRST_ID" ]] && FIRST_ID="$tid"
+        local name prompt timeout budget
+        name=$(get_field "$tid" "name"); prompt=$(get_field "$tid" "prompt"); prompt="${prompt:-$name}"
+        timeout=$(get_field "$tid" "timeout"); timeout="${timeout:-300}"
+        budget=$(get_field "$tid" "maxBudget"); budget="${budget:-1.00}"
+        ALL_NAMES+=("$name")
+        COMBINED_PROMPT="${COMBINED_PROMPT}### 태스크 ${idx}: ${name}
+${prompt}
+
+---
+
+"
+        if (( timeout > MAX_TIMEOUT )); then MAX_TIMEOUT=$timeout; fi
+        TOTAL_BUDGET=$(echo "$TOTAL_BUDGET + $budget" | bc 2>/dev/null || echo "$budget")
+    done <<< "$TASK_IDS"
+
+    MAX_TIMEOUT=$(( (MAX_TIMEOUT * 3) / 2 ))
+    [[ "$MAX_TIMEOUT" -lt 300 ]] && MAX_TIMEOUT=300
+
+    # git snapshot
+    local _SNAPSHOT_HASH=""
+    if git -C "$BOT_HOME" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git -C "$BOT_HOME" add -A >/dev/null 2>&1 || true
+        if git -C "$BOT_HOME" diff --cached --quiet 2>/dev/null; then
+            _SNAPSHOT_HASH=$(git -C "$BOT_HOME" rev-parse HEAD 2>/dev/null)
+        else
+            git -C "$BOT_HOME" commit -m "snapshot: jarvis-coder group [${FIRST_ID}+${TASK_COUNT}]" \
+                --no-gpg-sign --quiet 2>/dev/null || true
+            _SNAPSHOT_HASH=$(git -C "$BOT_HOME" rev-parse HEAD 2>/dev/null)
+        fi
+    fi
+
+    # retry-wrapper 1회
+    local RESULT="" EXIT_CODE=0
+    RESULT=$("${BOT_HOME}/bin/retry-wrapper.sh" \
+        "group-${FIRST_ID}" "$COMBINED_PROMPT" "Bash,Read,Write" "$MAX_TIMEOUT" "$TOTAL_BUDGET" "30" "") || EXIT_CODE=$?
+
+    if [[ $EXIT_CODE -ne 0 ]]; then
+        _coder_log "그룹 실행 실패 (exit: ${EXIT_CODE})"
+        rollback_snapshot "$_SNAPSHOT_HASH"
+        for tid in "${ALL_IDS[@]}"; do
+            local retries; retries=$(get_field "$tid" "retries"); retries="${retries:-0}"
+            local max_retries; max_retries=$(get_field "$tid" "maxRetries"); max_retries="${max_retries:-2}"
+            local new_retries=$(( retries + 1 ))
+            if (( new_retries >= max_retries )); then
+                update_queue "$tid" "failed" "{\"retries\": ${new_retries}, \"lastError\": \"group_exec_failed\"}"
+            else
+                update_queue "$tid" "queued" "{\"retries\": ${new_retries}, \"lastError\": \"group_exec_failed\"}"
+            fi
+        done
+        _discord_ceo_notify "❌ **Jarvis Coder**: 그룹 태스크 실패 (${TASK_COUNT}건)"
+        return 0
+    fi
+
+    # 성공: commit 1회 + 전체 done
+    if [[ -n "$_SNAPSHOT_HASH" ]]; then
+        git -C "$BOT_HOME" add -A >/dev/null 2>&1 || true
+        local _CHANGED_COUNT
+        _CHANGED_COUNT=$(git -C "$BOT_HOME" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+        if [[ "$_CHANGED_COUNT" != "0" ]]; then
+            local names_str; names_str=$(printf '%s, ' "${ALL_NAMES[@]}")
+            git -C "$BOT_HOME" commit -m "jarvis-coder: 그룹 완료 [${names_str%, }] (${TASK_COUNT}건)" \
+                --no-gpg-sign --quiet 2>/dev/null || true
+        fi
+    fi
+
+    local _changed_files_json="[]" _exec_log_json="[]"
+    if [[ -n "$_SNAPSHOT_HASH" ]]; then
+        _changed_files_json=$(git -C "$BOT_HOME" diff --name-only "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
+            | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null || echo '[]')
+        _exec_log_json=$(git -C "$BOT_HOME" log --oneline "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
+            | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null || echo '[]')
+    fi
+
+    for tid in "${ALL_IDS[@]}"; do
+        local name; name=$(get_field "$tid" "name")
+        local _done_extra
+        _done_extra=$(jq -n \
+            --arg result_summary "${name} 완료 (그룹 실행)" \
+            --argjson changed_files "$_changed_files_json" \
+            --argjson execution_log "$_exec_log_json" \
+            '{result_summary:$result_summary, changed_files:$changed_files, execution_log:$execution_log}')
+        update_queue "$tid" "done" "$_done_extra"
+    done
+
+    _coder_log "그룹 완료: ${TASK_COUNT}건"
+    _discord_ceo_notify "✅ **Jarvis Coder**: 그룹 태스크 ${TASK_COUNT}건 완료"
+    return 0
 }
 
 # ============================================================
