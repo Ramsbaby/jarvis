@@ -52,7 +52,8 @@ An **AI operations platform** — a Discord bot backed by Claude, a RAG knowledg
 |---|---------|-------------|
 | 💬 | **Discord Bot** | 24/7 text chat with streaming responses, per-channel personas, slash commands |
 | 📚 | **RAG Knowledge Base** | Long-term memory. LanceDB + Ollama hybrid search across documents, decisions, notes |
-| 🔧 | **Automation** | 110+ self-managing scripts. Health checks, watchdog, auto-restart, news briefing |
+| 🧠 | **Insight Layer** | Daily auto-generated behavioural report — detects activity trends, focus shifts, and situational context |
+| 🔧 | **Self-Healing Automation** | 110+ scripts. Auto-recovery, watchdog, dawn code audits, health monitoring |
 | 🔒 | **100% Local** | No cloud. No subscriptions. All data stays on your machine |
 | 🔌 | **MCP Integration** | Connect to Home Assistant, GitHub, Slack, Notion via [MCP ecosystem](https://github.com/topics/mcp-server) |
 
@@ -94,16 +95,31 @@ A 24/7 text interface powered by Claude with streaming responses.
 | **RAG integration** | Auto-injects relevant knowledge base context |
 | **Family mode** | Separate data boundaries for family members |
 
-## RAG Knowledge Base
+## RAG Knowledge Base + Insight Layer
 
-Hybrid search: BM25 full-text + Ollama vector similarity (`snowflake-arctic-embed2`, 1024-dim).
+Two layers work together — RAG retrieves facts, the Insight Layer understands context.
 
-```bash
-cd rag
-npm run query -- "your search query"    # Search
-npm run stats                            # Check DB status
-npm run compact                          # Reclaim space
 ```
+📊 Insight Layer (daily, ~1.2KB)                 📚 RAG Layer (per-query)
+  "career topic surged 534x"                        semantic search across
+  "focus shifted from infra to interviews"           10,000+ indexed documents
+              │                                              │
+              └──────────────┬───────────────────────────────┘
+                             ▼
+                    Claude responds with
+                    full situational awareness
+```
+
+**Insight Layer** — automated behavioural analysis, generated daily at 04:15:
+
+| Step | Script | LLM | Cost |
+|------|--------|:---:|:----:|
+| Metrics collection | `insight-metrics.mjs` | None | $0 |
+| Interpretation | `insight-distill.mjs` | Claude | ~$0.03 |
+
+Detects: topic frequency shifts, cross-domain correlations, entity momentum, daily activity patterns. Output: `~/.jarvis/context/insight-report.md` — loaded into every system prompt automatically.
+
+**RAG** — hybrid search: BM25 full-text + Ollama vector similarity (`snowflake-arctic-embed2`, 1024-dim).
 
 | Spec | Value |
 |------|-------|
@@ -114,7 +130,7 @@ npm run compact                          # Reclaim space
 
 See [`rag/README.md`](rag/README.md) for details.
 
-## Automation
+## Self-Healing Automation
 
 <p align="center">
   <img src="docs/img/discord-system-health.png" alt="System Health Check" width="700">
@@ -126,14 +142,17 @@ See [`rag/README.md`](rag/README.md) for details.
 </p>
 <p align="center"><em>AI/Tech news analysis with actionable dev-queue suggestions</em></p>
 
-110+ scripts for running Jarvis as a self-managing system:
+Jarvis doesn't just run — it **heals itself**. 110+ scripts across 11 LaunchAgents and 40+ cron jobs:
 
-| Category | Examples |
-|----------|----------|
-| **Monitoring** | System health, disk alerts, watchdog auto-restart |
-| **RAG pipeline** | Incremental indexing, weekly compaction, quality checks |
-| **Deployment** | Smoke tests, safe restart, log rotation |
-| **Scheduling** | Cron templates, LaunchAgent templates (macOS) |
+| | What it does | When |
+|---|---|---|
+| 🔄 | **Auto-Recovery** — watchdog detects crashed services, restarts them. LaunchAgent guardian re-registers unloaded daemons every 3 min | 24/7 |
+| 🔍 | **Dawn Code Audit** — scans cron health, RAG integrity, bot status. Reports anomalies to Discord before you wake up | Daily 06:00 |
+| 📊 | **Insight Report** — analyses behavioural metrics (topic trends, entity momentum) and generates situational awareness context | Daily 04:15 |
+| 📚 | **RAG Pipeline** — incremental indexing (4h), entity-graph rebuild (03:45), weekly compaction (Sunday 04:00) | Scheduled |
+| 📡 | **System Health** — monitors 10 services, disk alerts, memory checks. Sends Discord + push notifications on threshold breach | Every 6h |
+| 🚀 | **Safe Deployment** — smoke tests, graceful restart, log rotation. Zero-downtime updates | On demand |
+| 📰 | **News Briefing** — AI/Tech news curation with dev-queue suggestions | Daily |
 
 Cron template: `infra/templates/crontab.example`
 
