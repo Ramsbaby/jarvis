@@ -478,7 +478,6 @@ Pre-configured L3 actions: `cleanup-logs`, `cleanup-results`, `kill-stale-claude
 
 ### Event Trigger System
 
-Condition-based triggers that fire independently of cron schedules (`scripts/event-trigger.sh`, every 3 min):
 
 | Trigger | Condition | Cooldown | Action |
 |---------|-----------|----------|--------|

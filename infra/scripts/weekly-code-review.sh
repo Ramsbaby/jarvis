@@ -41,8 +41,6 @@ fi
 
 # 변경 없으면 주요 파일만 리뷰
 if [[ -z "$CHANGED_FILES" ]]; then
-    CHANGED_FILES="bin/decision-dispatcher.sh
-bin/board-meeting.sh
 bin/ask-claude.sh
 discord/lib/session.js"
 fi

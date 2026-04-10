@@ -18,6 +18,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { RAGEngine } from '../lib/rag-engine.mjs';
 import { LANCEDB_PATH, ENTITY_GRAPH_PATH, INFRA_HOME, ensureDirs } from '../lib/paths.mjs';
+import { collectMetrics } from './insight-metrics.mjs';
 
 const _require = createRequire(import.meta.url);
 
@@ -153,9 +154,26 @@ async function sampleChunksForClusters(engine, clusters) {
   return clusterTexts;
 }
 
+// ── Load upcoming Google Calendar events (7 days) ──
+
+function loadUpcomingEvents() {
+  try {
+    const toDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const result = execFileSync('gog', [
+      'cal', 'list',
+      '--from', 'today',
+      '--to', toDate,
+      '--account', 'yuiopnm1931@gmail.com',
+    ], { encoding: 'utf-8', timeout: 15_000 });
+    return result.trim() || '(no upcoming events)';
+  } catch {
+    return '(calendar unavailable)';
+  }
+}
+
 // ── Call Claude via ask-claude.sh for insight extraction ──
 
-async function extractInsightsViaLLM(clusterTexts, summaries, existingInsights) {
+async function extractInsightsViaLLM(clusterTexts, summaries, existingInsights, upcomingEvents) {
   const clusterSection = clusterTexts.map((c, i) =>
     `### Cluster ${i + 1}: ${c.entities.join(', ')}
 Topics: ${c.topics.join(', ') || 'none'}
@@ -210,6 +228,9 @@ ${summarySection}
 
 ## 기존 인사이트 (갱신/폐기 판단)
 ${existingSection}
+
+## 향후 7일 일정 (Google Calendar)
+${upcomingEvents}
 
 ## 출력 형식
 반드시 JSON 배열만 출력. 5-8개. 설명문 없이 JSON만.
@@ -302,22 +323,35 @@ async function main() {
   const summaries = loadConversationSummaries();
   log(`Loaded ${summaries.length} conversation summarie(s)`);
 
-  // 5. Skip if no evidence at all
+  // 5. Load upcoming calendar events (7 days)
+  const upcomingEvents = loadUpcomingEvents();
+  log(`Loaded calendar events: ${upcomingEvents.length} chars`);
+
+  // 5b. Collect behavioural metrics (LLM-free data analysis)
+  let metrics = null;
+  try {
+    metrics = await collectMetrics();
+    log(`Metrics collected: ${Object.keys(metrics.topicTrends || {}).length} topics, ${(metrics.risingEntities || []).length} rising entities`);
+  } catch (err) {
+    log(`Metrics collection failed (non-fatal): ${err.message?.slice(0, 80)}`);
+  }
+
+  // 6. Skip if no evidence at all
   if (clusterTexts.length === 0 && summaries.length === 0) {
     log('No evidence available — nothing to distil. Exiting.');
     process.exit(0);
   }
 
-  // 6. Load existing active insights
+  // 7. Load existing active insights
   const existingInsights = await engine.getActiveInsights();
   log(`Found ${existingInsights.length} existing active insight(s)`);
 
-  // 7. Expire stale insights
+  // 8. Expire stale insights
   const expired = await engine.expireStaleInsights();
   if (expired > 0) log(`Expired ${expired} stale insight(s)`);
 
-  // 8. Extract new insights via LLM
-  const newInsights = await extractInsightsViaLLM(clusterTexts, summaries, existingInsights);
+  // 9. Extract new insights via LLM
+  const newInsights = await extractInsightsViaLLM(clusterTexts, summaries, existingInsights, upcomingEvents, metrics);
   log(`LLM extracted ${newInsights.length} insight(s)`);
 
   if (newInsights.length === 0) {
@@ -325,10 +359,10 @@ async function main() {
     process.exit(0);
   }
 
-  // 9. Collect unique evidence sources from cluster search results
+  // 10. Collect unique evidence sources from cluster search results
   const allSources = [...new Set(clusterTexts.flatMap(c => c.sources || []))].slice(0, 10);
 
-  // 10. Upsert: semantic dedup via vector similarity
+  // 11. Upsert: semantic dedup via vector similarity
   // LLM produces different text for same meaning each run, so exact-match dedup is useless.
   // Instead: embed the new insight, search existing insights, if distance < threshold → supersede.
   const DEDUP_DISTANCE = 0.8;  // L2 distance — same meaning threshold
