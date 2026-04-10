@@ -680,15 +680,12 @@ async function main() {
   // proposals-tracker
   targets.push(join(RAG_HOME, 'teams', 'proposals-tracker.md'));
 
-  // 4b. Board decisions (board-discussion.db resolved 토론 → board-decisions-sync.mjs가 내보낸 파일)
   // Jarvis가 이사회 최종 의사결정 맥락을 참조할 수 있도록 인덱싱.
   try {
-    const boardDir = join(RAG_HOME, 'board-decisions');
     const boardEntries = await readdir(boardDir);
     for (const f of boardEntries) {
       if (extname(f) === '.md') targets.push(join(boardDir, f));
     }
-  } catch { /* dir doesn't exist until first board-decisions-sync run */ }
 
   // 5. 프로젝트 문서: README/ROADMAP/docs/adr는 봇 대화 컨텍스트에 부적합한 개발 메모이므로 제외.
   // Jarvis가 시스템 구조를 이해하려면 config/company-dna.md(섹션 3에서 이미 포함) 활용.

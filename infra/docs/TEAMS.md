@@ -79,7 +79,6 @@ CEO agent runs twice daily (08:10, 21:55) with data pre-collected by bash:
 - `state/decisions/{date}.jsonl` — Decision audit log
 - `config/goals.json` — OKR KR progress auto-update
 
-**Decision Dispatcher** (`bin/decision-dispatcher.sh`) auto-runs after each meeting:
 - Actionable decisions → execute immediately
 - Report-only decisions → flag for human review
 - Updates `state/team-scorecard.json` (merit/penalty system)

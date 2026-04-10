@@ -34,7 +34,7 @@ record_insight() {
 
     # Exclude log-only tasks from insight recording
     case "$task_name" in
-        system-health|rate-limit-check|disk-alert|rag-health|token-sync|memory-cleanup|security-scan|calendar-alert|github-monitor|test-echo|code-auditor)
+        system-health|rate-limit-check|disk-alert|rag-health|token-sync|memory-cleanup|security-scan|calendar|github-monitor|test-echo|code-auditor)
             return 0
             ;;
     esac

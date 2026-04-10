@@ -44,7 +44,7 @@ const SITES = [
   {
     id: 'krafton',
     company: '크래프톤',
-    url: 'https://krafton.com/careers/jobs/?category=Engineering',  // company-crawler.mjs 검증 URL
+    url: 'https://krafton.com/careers/jobs/?category=Engineering', 
     parser: 'krafton',
   },
   {
@@ -324,7 +324,7 @@ function parseJobsFromPage(parser, backendKeywords, excludeKeywords) {
     return el ? el.textContent.trim() : '';
   }
 
-  // ── URL 패턴 기반 범용 파서 (company-crawler.mjs 검증 방식) ──────────────
+  // ── URL 패턴 기반 범용 파서 () ──────────────
   // isBackend 필터 없이 전체 수집 → runCrawl에서 필터 (total 카운트 정확도 확보)
   function parseByLinkPattern(linkPattern, company, baseUrl) {
     document.querySelectorAll(`a[href*="${linkPattern}"]`).forEach(a => {
@@ -377,7 +377,7 @@ function parseJobsFromPage(parser, backendKeywords, excludeKeywords) {
       }
 
     } else if (parser === 'krafton') {
-      // /careers/jobs/12345 형태 — 슬래시 없이 jobs/ 로 매칭 (company-crawler.mjs 방식)
+      // /careers/jobs/12345 형태 — 슬래시 없이 jobs/ 로 매칭
       parseByLinkPattern('jobs/', '크래프톤', 'https://krafton.com');
 
     } else if (parser === 'toss') {
@@ -392,7 +392,7 @@ function parseJobsFromPage(parser, backendKeywords, excludeKeywords) {
       if (jobs.length === 0) parseByLinkPattern('/Recruit/', 'SK그룹', 'https://www.skcareers.com');
 
     } else if (parser === 'woowa') {
-      // 우아한형제들(배민) — /recruitment/ 패턴 (company-crawler.mjs 검증)
+      // 우아한형제들(배민) — /recruitment/ 패턴 ()
       parseByLinkPattern('recruitment', '우아한형제들', 'https://career.woowahan.com');
 
     } else if (parser === 'lgcns') {
@@ -401,7 +401,7 @@ function parseJobsFromPage(parser, backendKeywords, excludeKeywords) {
       if (jobs.length === 0) parseByLinkPattern('recruit', 'LG CNS', 'https://www.lgcns.com');
 
     } else if (parser === 'kt') {
-      // KT — /pos/ 또는 /recruit/ 패턴 (company-crawler.mjs 검증)
+      // KT — /pos/ 또는 /recruit/ 패턴 ()
       parseByLinkPattern('/pos/', 'KT', 'https://recruit.kt.com');
       if (jobs.length === 0) parseByLinkPattern('/recruit/', 'KT', 'https://recruit.kt.com');
 
