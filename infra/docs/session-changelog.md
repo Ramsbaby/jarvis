@@ -8,7 +8,7 @@
 ### 기타
 - .jarvis/context/claude-memory/project_jarvis_full_migration.md
 - .jarvis/context/discord-history/2026-04-10-060428.md
-- .jarvis/context/discord-history/user-memory-364093757018079234.md
+- .jarvis/context/discord-history/user-memory-{USER_ID}.md
 - .jarvis/context/owner/owner-profile.md
 
 ---
