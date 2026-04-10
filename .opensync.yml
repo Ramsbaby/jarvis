@@ -1,0 +1,43 @@
+# .opensync.yml — Public repo에 포함할 파일 allowlist
+# 여기에 없으면 public에 절대 안 올라감.
+# 새 기능 추가 시 이 파일에 명시적으로 등록해야 공개됨.
+
+allow:
+  # RAG module
+  - "rag/**"
+
+  # Infrastructure (Discord bot, automation, MCP)
+  - "infra/**"
+
+  # Setup wizards
+  - "scripts/setup_rag.py"
+  - "scripts/setup_infra.py"
+
+  # Documentation
+  - "docs/img/**"
+  - "README.md"
+  - "README.ko.md"
+  - "LICENSE"
+  - "CLAUDE.md"
+
+  # Configuration
+  - ".gitignore"
+  - ".gitleaks.toml"
+  - ".githooks/**"
+  - ".github/**"
+  - ".opensync.yml"
+  - "private/README.md"
+
+# allowlist 안에서도 추가로 제외할 패턴
+deny:
+  - "**/.env"
+  - "**/.env.*"
+  - "!**/.env.example"
+  - "**/secrets/**"
+  - "**/personas.json"
+  - "**/token*.json"
+  - "**/*personal*"
+  - "**/node_modules/**"
+  - "**/package-lock.json"
+  - "**/__pycache__/**"
+  - "**/*.pyc"
