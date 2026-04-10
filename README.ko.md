@@ -13,14 +13,14 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/discord-dev-chat.png" alt="Discord 봇 — 개발자 채팅" width="700">
+  <img src="docs/img/jarvis-demo-chat.gif" alt="Jarvis 데모 — AI 채팅 + 행동 분석" width="700">
 </p>
-<p align="center"><em>Discord 봇: 코드 리뷰 + 인라인 수정 제안</em></p>
+<p align="center"><em>자비스에게 물어보면 — 사용자의 현재 상황을 파악한 채 응답합니다</em></p>
 
 <p align="center">
-  <img src="docs/img/discord-auto-briefing.png" alt="Discord 봇 — 자동 브리핑" width="700">
+  <img src="docs/img/jarvis-demo-system.gif" alt="Jarvis 데모 — 시스템 점검 + 자동 복구" width="700">
 </p>
-<p align="center"><em>자동화: 일일 AI/Tech 뉴스 브리핑</em></p>
+<p align="center"><em>새벽 감사: 10개 서비스 점검, RAG 상태 확인, 이상 징후 보고</em></p>
 
 ---
 
