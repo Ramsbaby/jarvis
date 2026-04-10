@@ -30,23 +30,6 @@ async function main() {
   const engine = new RAGEngine(dbPath);
   await engine.init();
 
-  // ── Insight search: semantically relevant insights injected before RAG chunks ──
-  let insightOutput = [];
-  try {
-    await engine.initInsightsTable();
-    const insights = await engine.searchInsights(query, 3);
-    if (insights.length > 0) {
-      insightOutput.push('## User Context (inferred insights)', '');
-      for (const ins of insights) {
-        insightOutput.push(`- ${ins.insight_text} (confidence: ${ins.confidence.toFixed(2)})`);
-        if (ins.evidence_summary) {
-          insightOutput.push(`  Evidence: ${ins.evidence_summary}`);
-        }
-      }
-      insightOutput.push('');
-    }
-  } catch { /* insight search failure is non-fatal */ }
-
   // episodic 모드: discord-history 소스 한정 검색 결과를 먼저 가져온 뒤
   // 일반 검색 결과 앞에 prepend (에피소딕 메모리 우선 노출)
   let episodicResults = [];
@@ -92,12 +75,11 @@ async function main() {
 
   const results = [...episodicResults, ...rerankedGeneral];
 
-  if (results.length === 0 && insightOutput.length === 0) {
+  if (results.length === 0) {
     process.exit(0);
   }
 
-  // Insights first, then RAG chunks
-  const output = [...insightOutput, '## RAG Context (semantic search)', ''];
+  const output = ['## RAG Context (semantic search)', ''];
 
   for (const r of results) {
     const source = r.source.replace(/^\/Users\/[^/]+\//, '~/');

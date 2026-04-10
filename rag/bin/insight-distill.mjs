@@ -2,10 +2,10 @@
 /**
  * insight-distill.mjs — 2nd-layer Insight Extraction
  *
- * Reads entity-graph clusters + LanceDB chunks + conversation summaries,
+ * Reads behavioural metrics + conversation summaries,
  * then uses ask-claude.sh (claude -p) to extract high-level user insights.
  *
- * Output: insights written to LanceDB 'insights' table (via RAGEngine)
+ * Output: ~/.jarvis/context/insight-report.md
  *
  * Run: node rag/bin/insight-distill.mjs
  * Cron: daily 04:00 (after entity-graph at 03:45)
@@ -13,11 +13,10 @@
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { RAGEngine } from '../lib/rag-engine.mjs';
-import { LANCEDB_PATH, ENTITY_GRAPH_PATH, INFRA_HOME, ensureDirs } from '../lib/paths.mjs';
+import { ensureDirs } from '../lib/paths.mjs';
 import { collectMetrics } from './insight-metrics.mjs';
 
 const _require = createRequire(import.meta.url);
@@ -27,33 +26,12 @@ const SQLITE_DB_PATH = process.env.JARVIS_DB_PATH
   || join(process.env.XDG_DATA_HOME || join(homedir(), '.local', 'share'), 'jarvis', 'jarvis.db');
 const ASK_CLAUDE_SH = join(BOT_HOME, 'bin', 'ask-claude.sh');
 
-// Minimum entity co-occurrence count to form a meaningful cluster
-const MIN_ENTITY_COUNT = 3;
-// Max chunks to sample per entity cluster
-const MAX_CHUNKS_PER_CLUSTER = 5;
 // Max conversation summaries to include
 const MAX_SUMMARIES = 14;
-// Insight expiry: 30 days (ms)
-const INSIGHT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function log(msg) {
   const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
   process.stderr.write(`[insight-distill ${ts}] ${msg}\n`);
-}
-
-// ── Load entity graph ──
-
-function loadEntityGraph() {
-  if (!existsSync(ENTITY_GRAPH_PATH)) {
-    log('entity-graph.json not found — skipping graph clusters');
-    return null;
-  }
-  try {
-    return JSON.parse(readFileSync(ENTITY_GRAPH_PATH, 'utf-8'));
-  } catch (err) {
-    log(`Failed to parse entity-graph.json: ${err.message?.slice(0, 80)}`);
-    return null;
-  }
 }
 
 // ── Load conversation summaries (read-only SQLite) ──
@@ -79,81 +57,6 @@ function loadConversationSummaries() {
   }
 }
 
-// ── Build entity clusters from graph ──
-
-function buildEntityClusters(graph) {
-  if (!graph?.nodes) return [];
-
-  const clusters = [];
-  const visited = new Set();
-
-  // Sort entities by count (most referenced first)
-  const sortedEntities = Object.entries(graph.nodes)
-    .filter(([, info]) => info.count >= MIN_ENTITY_COUNT)
-    .sort((a, b) => b[1].count - a[1].count);
-
-  for (const [entity, info] of sortedEntities) {
-    if (visited.has(entity)) continue;
-    visited.add(entity);
-
-    // Collect related entities via edges
-    const related = [];
-    if (graph.edges) {
-      for (const [edgeKey, edgeInfo] of Object.entries(graph.edges)) {
-        if (edgeInfo.weight < 3) continue;
-        const [e1, e2] = edgeKey.split('|');
-        if (e1 === entity && !visited.has(e2)) {
-          related.push(e2);
-          visited.add(e2);
-        } else if (e2 === entity && !visited.has(e1)) {
-          related.push(e1);
-          visited.add(e1);
-        }
-      }
-    }
-
-    clusters.push({
-      entities: [entity, ...related.slice(0, 5)],
-      topics: [...(info.topics || [])],
-      sources: [...(info.sources || [])].slice(0, MAX_CHUNKS_PER_CLUSTER),
-      count: info.count,
-    });
-  }
-
-  return clusters.slice(0, 10); // Cap at 10 clusters to control LLM input size
-}
-
-// ── Sample chunk texts from LanceDB for each cluster ──
-
-async function sampleChunksForClusters(engine, clusters) {
-  const clusterTexts = [];
-
-  for (const cluster of clusters) {
-    const entityQuery = cluster.entities.join(' ');
-    try {
-      const results = await engine.search(entityQuery, MAX_CHUNKS_PER_CLUSTER, {
-        useHybrid: true,
-      });
-      const texts = results.map(r => r.text.slice(0, 300)).join('\n---\n');
-      const sources = results.map(r => r.source);
-      clusterTexts.push({
-        entities: cluster.entities,
-        topics: cluster.topics,
-        sampleText: texts || '(no matching chunks)',
-        sources,
-      });
-    } catch {
-      clusterTexts.push({
-        entities: cluster.entities,
-        topics: cluster.topics,
-        sampleText: '(search failed)',
-      });
-    }
-  }
-
-  return clusterTexts;
-}
-
 // ── Load upcoming Google Calendar events (7 days) ──
 
 function loadUpcomingEvents() {
@@ -171,25 +74,67 @@ function loadUpcomingEvents() {
   }
 }
 
+// ── Load existing insights from .md file ──
+
+function loadExistingInsights() {
+  const reportPath = join(BOT_HOME, 'context', 'insight-report.md');
+  try {
+    return readFileSync(reportPath, 'utf-8');
+  } catch { return ''; }
+}
+
+// ── Write insight report as .md file ──
+
+function saveInsightReport(metrics, insights, upcomingEvents) {
+  const lines = [];
+  lines.push('# Jarvis Insight Report');
+  lines.push(`> 자동 생성: ${new Date().toISOString().slice(0,10)} | 다음 갱신: 매일 04:15`);
+  lines.push('');
+
+  // Metrics section
+  lines.push('## 행동 메트릭 (최근 2주 vs 2-4주 전)');
+  if (metrics?.topicTrends) {
+    for (const [topic, t] of Object.entries(metrics.topicTrends)) {
+      lines.push(`- ${topic}: ${t.previous} → ${t.recent} (${t.trend}, x${t.ratio})`);
+    }
+  }
+  lines.push('');
+
+  // Rising/declining entities
+  if (metrics?.risingEntities?.length > 0) {
+    lines.push('## 급상승 엔티티');
+    metrics.risingEntities.forEach(e => lines.push(`- ${e.entity}: ${e.previous} → ${e.recent} (x${e.ratio})`));
+    lines.push('');
+  }
+
+  // Insights section
+  lines.push('## 상황 인사이트');
+  insights.forEach(ins => {
+    lines.push(`- ${ins.insight_text}`);
+    if (ins.evidence_summary) lines.push(`  근거: ${ins.evidence_summary}`);
+  });
+  lines.push('');
+
+  // Calendar
+  if (upcomingEvents && upcomingEvents !== '(calendar unavailable)') {
+    lines.push('## 향후 일정');
+    lines.push(upcomingEvents);
+    lines.push('');
+  }
+
+  const reportPath = join(BOT_HOME, 'context', 'insight-report.md');
+  writeFileSync(reportPath, lines.join('\n'), 'utf-8');
+  return reportPath;
+}
+
 // ── Call Claude via ask-claude.sh for insight extraction ──
 
-async function extractInsightsViaLLM(clusterTexts, summaries, existingInsights, upcomingEvents, metrics) {
-  const clusterSection = clusterTexts.map((c, i) =>
-    `### Cluster ${i + 1}: ${c.entities.join(', ')}
-Topics: ${c.topics.join(', ') || 'none'}
-Sample content:
-${c.sampleText}`
-  ).join('\n\n');
-
+async function extractInsightsViaLLM(metrics, summaries, existingReport, upcomingEvents) {
   const summarySection = summaries.length > 0
     ? summaries.map(s => `[${s.date_utc}] ${s.summary} (topics: ${s.topics || 'none'})`).join('\n')
     : '(no recent conversation summaries available)';
 
-  const existingSection = existingInsights.length > 0
-    ? existingInsights.map(ins =>
-        `- [${ins.id}] "${ins.insight_text}" (category: ${ins.category}, confidence: ${ins.confidence})`
-      ).join('\n')
-    : '(no existing insights)';
+  const existingSection = existingReport || '(no existing insights)';
 
   // ── Format metrics for prompt ──
   let metricsSection = '(metrics unavailable)';
@@ -253,17 +198,11 @@ ${metricsSection}
 ## 향후 7일 일정 (Google Calendar)
 ${upcomingEvents}
 
-## 엔티티 클러스터별 참고 텍스트
-${clusterSection}
-
 ## 최근 대화 요약 (${MAX_SUMMARIES}일)
 ${summarySection}
 
-## 기존 인사이트 (갱신/폐기 판단)
+## 기존 인사이트 보고서 (갱신/폐기 판단)
 ${existingSection}
-
-## 향후 7일 일정 (Google Calendar)
-${upcomingEvents}
 
 ## 출력 형식
 반드시 JSON 배열만 출력. 5-8개. 설명문 없이 JSON만.
@@ -337,110 +276,27 @@ async function main() {
   log('Starting insight distillation...');
   ensureDirs();
 
-  // 1. Initialise RAG engine
-  const engine = new RAGEngine(LANCEDB_PATH);
-  await engine.init();
-  await engine.initInsightsTable();
+  // 1. Collect metrics (LLM-free)
+  const metrics = await collectMetrics();
+  log(`Metrics: ${Object.keys(metrics.topicTrends || {}).length} topics`);
 
-  // 2. Load entity graph and build clusters
-  const graph = loadEntityGraph();
-  const clusters = graph ? buildEntityClusters(graph) : [];
-  log(`Built ${clusters.length} entity cluster(s)`);
-
-  // 3. Sample chunk texts for each cluster
-  const clusterTexts = clusters.length > 0
-    ? await sampleChunksForClusters(engine, clusters)
-    : [];
-
-  // 4. Load conversation summaries
+  // 2. Load supplementary data
   const summaries = loadConversationSummaries();
-  log(`Loaded ${summaries.length} conversation summarie(s)`);
-
-  // 5. Load upcoming calendar events (7 days)
   const upcomingEvents = loadUpcomingEvents();
-  log(`Loaded calendar events: ${upcomingEvents.length} chars`);
+  const existingReport = loadExistingInsights();
 
-  // 5b. Collect behavioural metrics (LLM-free data analysis)
-  let metrics = null;
-  try {
-    metrics = await collectMetrics();
-    log(`Metrics collected: ${Object.keys(metrics.topicTrends || {}).length} topics, ${(metrics.risingEntities || []).length} rising entities`);
-  } catch (err) {
-    log(`Metrics collection failed (non-fatal): ${err.message?.slice(0, 80)}`);
-  }
+  // 3. Extract insights via Claude
+  const insights = await extractInsightsViaLLM(metrics, summaries, existingReport, upcomingEvents);
+  log(`Extracted ${insights.length} insight(s)`);
 
-  // 6. Skip if no evidence at all
-  if (clusterTexts.length === 0 && summaries.length === 0) {
-    log('No evidence available — nothing to distil. Exiting.');
+  if (insights.length === 0) {
+    log('No insights extracted. Done.');
     process.exit(0);
   }
 
-  // 7. Load existing active insights
-  const existingInsights = await engine.getActiveInsights();
-  log(`Found ${existingInsights.length} existing active insight(s)`);
-
-  // 8. Expire stale insights
-  const expired = await engine.expireStaleInsights();
-  if (expired > 0) log(`Expired ${expired} stale insight(s)`);
-
-  // 9. Extract new insights via LLM
-  const newInsights = await extractInsightsViaLLM(clusterTexts, summaries, existingInsights, upcomingEvents, metrics);
-  log(`LLM extracted ${newInsights.length} insight(s)`);
-
-  if (newInsights.length === 0) {
-    log('No new insights extracted. Done.');
-    process.exit(0);
-  }
-
-  // 10. Collect unique evidence sources from cluster search results
-  const allSources = [...new Set(clusterTexts.flatMap(c => c.sources || []))].slice(0, 10);
-
-  // 11. Upsert: semantic dedup via vector similarity
-  // LLM produces different text for same meaning each run, so exact-match dedup is useless.
-  // Instead: embed the new insight, search existing insights, if distance < threshold → supersede.
-  const DEDUP_DISTANCE = 0.8;  // L2 distance — same meaning threshold
-  let added = 0;
-  let superseded = 0;
-  let skipped = 0;
-  for (const ins of newInsights) {
-    const datePrefix = `[${new Date().toISOString().slice(0,10)} 기준] `;
-    const fullText = datePrefix + ins.insight_text;
-
-    // Semantic dedup: find existing insight with same meaning
-    const similar = await engine.searchInsights(ins.insight_text, 1, {
-      distanceThreshold: DEDUP_DISTANCE,
-      confidenceThreshold: 0,  // match any confidence
-    });
-
-    if (similar.length > 0) {
-      // Same meaning exists — supersede the old one with updated version
-      const oldId = similar[0].id;
-      const newId = await engine.addInsight({
-        insight_text: fullText,
-        category: ins.category,
-        confidence: ins.confidence,
-        evidence_sources: allSources,
-        evidence_summary: ins.evidence_summary,
-        expires_at: Date.now() + INSIGHT_TTL_MS,
-      });
-      await engine.supersedeInsight(oldId, newId);
-      superseded++;
-      added++;
-    } else {
-      // Genuinely new insight
-      await engine.addInsight({
-        insight_text: fullText,
-        category: ins.category,
-        confidence: ins.confidence,
-        evidence_sources: allSources,
-        evidence_summary: ins.evidence_summary,
-        expires_at: Date.now() + INSIGHT_TTL_MS,
-      });
-      added++;
-    }
-  }
-
-  log(`Done: ${added} insight(s) added, ${superseded} superseded`);
+  // 4. Write .md report
+  const path = saveInsightReport(metrics, insights, upcomingEvents);
+  log(`Report saved: ${path}`);
 }
 
 main().catch(err => {

@@ -23,45 +23,45 @@ The embedding model (`snowflake-arctic-embed2`) is auto-installed by the setup w
 ## Architecture
 
 ```
-User query
-    |
-    v
-[Python: ragSearch tool]
-    |  subprocess call
-    v
-[Node.js: rag-query.mjs]
-    |
-    +-- [Insight DB search] ← 2nd-layer semantic memory
-    |       query와 관련된 상위 수준 인사이트 주입
-    |       (예: "사용자가 이직 준비 중")
-    |
-    +-- [rag-engine.mjs]
-    |       BM25 full-text search (primary, free)
-    |       Vector similarity (Ollama snowflake-arctic-embed2, 1024-dim)
-    |       Reciprocal Rank Fusion (RRF, k=60)
-    |
-    v
-[LanceDB]
-    |-- documents.lance  ← 1차: 원본 청크 벡터
-    |-- insights.lance   ← 2차: LLM 추론 인사이트
+User query (Discord / Cron task)
+    │
+    ├── [Static context: insight-report.md]     ← Insight Layer
+    │       매일 자동 생성되는 행동 메트릭 + 상황 인사이트
+    │       항상 system prompt에 포함 (~1.2KB)
+    │
+    ├── [Dynamic context: rag-query.mjs]        ← RAG Layer
+    │       BM25 + Vector hybrid search (RRF k=60)
+    │       쿼리별 관련 청크 5-10개 반환
+    │
+    └── [LanceDB: documents.lance]
+            snowflake-arctic-embed2 (1024-dim, multilingual)
 ```
 
-### Insight DB (2nd-layer Memory)
+### Insight Layer — 자동 상황 인식
 
-기존 RAG는 문서 청크를 벡터로 저장할 뿐, "이 사람이 지금 무엇을 하고 있는지"는 추론하지 못합니다. Insight DB는 이 문제를 해결합니다.
+매일 04:15 크론으로 사용자의 행동 패턴을 분석하여 1페이지 리포트를 생성합니다.
 
-**작동 원리:**
+**2단계 파이프라인:**
 
-1. `insight-distill.mjs` (매일 04:00 크론)가 entity-graph 클러스터 + 대화 요약을 수집
-2. Ollama LLM이 상위 수준 인사이트를 추출 (예: "사용자가 이직을 준비하고 있다")
-3. 인사이트를 벡터 임베딩과 함께 `insights.lance` 테이블에 저장
-4. 쿼리 시 `rag-query.mjs`가 관련 인사이트를 벡터 유사도로 검색하여 RAG 결과 앞에 주입
+| 단계 | 스크립트 | LLM | 비용 |
+|------|---------|:---:|:----:|
+| **Layer 1: 메트릭 수집** | `insight-metrics.mjs` | 불필요 | $0 |
+| **Layer 2: 해석** | `insight-distill.mjs` | Claude | ~$0.03/회 |
 
-**필터링:** 쿼리와 무관한 인사이트는 L2 거리 임계값(1.2) + 신뢰도 임계값(0.5)으로 자동 필터링되어 노이즈를 방지합니다.
+**Layer 1** (LLM 없이 순수 데이터 분석):
+- 토픽 빈도 변화율 (예: "커리어 토픽 534배 급증")
+- 도메인별 활동 추세 (예: "인프라 하락 + 커리어 급등 = focus shift")
+- 엔티티 모멘텀 (예: "Company-A, Company-B 급상승 = 경력 재정리 중")
+- 일별 활동 히트맵
 
-**인사이트 카테고리:** `life_phase` | `goal` | `interest` | `skill` | `routine` | `concern`
+**Layer 2** (Claude가 숫자를 해석):
+- 메트릭 + Google Calendar 일정 + 대화 요약을 Claude에 전달
+- "이 숫자들이 왜 이렇게 변하고 있는가?" 해석
+- 결과를 `~/.jarvis/context/insight-report.md`에 저장
 
-**생명주기:** 인사이트는 30일 TTL로 자동 만료되며, 다음 distill에서 갱신(supersede)됩니다.
+**소비 경로:**
+- `context-loader.sh`가 매 요청마다 자동 로드 → system prompt에 항상 포함
+- Discord 봇, 크론 태스크 모두에서 Claude가 사용자의 현재 상황을 파악한 채 응답
 
 ## Indexing
 
@@ -104,13 +104,16 @@ RAG settings in `~/.config/jarvis/config.json`:
 ```bash
 cd rag
 
-# Search (insights + RAG chunks)
+# Search
 npm run query -- "your search query"
 
 # Stats
 npm run stats
 
-# Insight distillation (extract high-level insights from chunks)
+# Insight metrics (no LLM, pure data analysis)
+node bin/insight-metrics.mjs
+
+# Insight distillation (metrics + Claude interpretation → .md report)
 node bin/insight-distill.mjs
 
 # Compact (reclaim space from deleted chunks)
@@ -154,5 +157,21 @@ ollama pull snowflake-arctic-embed2
 1. Check DB exists: `npm run stats`
 2. If no DB, run indexing: `bash bin/rag-index-safe.sh`
 3. Check logs: `cat ~/.local/share/jarvis/logs/rag-index.log`
+
+</details>
+
+<details>
+<summary>Insight report not generated</summary>
+
+```bash
+# Manual run
+BOT_HOME=~/.jarvis node rag/bin/insight-distill.mjs
+
+# Check if metrics work (no LLM needed)
+BOT_HOME=~/.jarvis node rag/bin/insight-metrics.mjs
+
+# Verify report exists
+cat ~/.jarvis/context/insight-report.md
+```
 
 </details>
