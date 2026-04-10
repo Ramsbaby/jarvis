@@ -72,13 +72,21 @@ _coder_log "큐 드레인 시작 (MAX_PARALLEL=${MAX_PARALLEL}, QUEUED=${QUEUED_
 if [[ "$MAX_PARALLEL" -eq 1 ]]; then
     # ── 순차 모드 (기본): foreground 실행으로 DB lock 경합 원천 차단 ──
     while true; do
+        # 1차: 그룹 태스크 (같은 논의의 결의안 일괄 실행)
+        GROUP_JSON=$(pick_next_group)
+        if [[ -n "$GROUP_JSON" ]]; then
+            _coder_log "그룹 태스크 처리: ${GROUP_JSON}"
+            run_task_group "$GROUP_JSON"
+            continue
+        fi
+        # 2차: 개별 태스크 fallback
         TASK_ID=$(pick_next_task)
         if [[ -z "$TASK_ID" ]]; then
             _coder_log "더 이상 처리할 태스크 없음"
             break
         fi
         _coder_log "태스크 처리 (순차): ${TASK_ID}"
-        run_one_task "$TASK_ID"   # foreground — 완료 후 다음 태스크
+        run_one_task "$TASK_ID"
     done
 else
     # ── 병렬 모드 (MAX_PARALLEL>1 명시 시): 기존 &-기반 처리 ──
