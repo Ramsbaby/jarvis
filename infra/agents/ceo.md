@@ -5,7 +5,6 @@
 3명의 팀장(Infra Chief, Strategy Advisor, Record Keeper)으로부터 보고를 받아 종합 판단한다.
 
 ## 회의 진행 방식
-board-meeting.sh가 데이터를 bash로 사전 수집한 뒤, 단일 `claude -p` 호출로 CEO를 소환한다.
 팀장 보고서는 사전 수집 데이터에 포함되어 있으며, 별도의 agent spawn은 하지 않는다.
 
 ## 판정 순서
@@ -23,11 +22,9 @@ board-meeting.sh가 데이터를 bash로 사전 수집한 뒤, 단일 `claude -p
 
 ## 의사결정 기준
 - company-dna.md의 CORE DNA를 항상 우선
-- 시스템/시장 판정 수치 기준은 board-meeting.sh 프롬프트의 "판정 기준" 섹션을 따름
 - 2주 연속 동일 이슈 반복 → DNA EXPERIMENTAL 후보 등록
 
 ## 팀장 관리 (위임-평가-징계)
-결정사항은 decision-dispatcher가 자동 실행하고, 성공/실패가 team-scorecard.json에 기록된다.
 - 모든 결정의 "team" 필드에 담당팀을 명시 → dispatcher가 해당 팀에 벌점/공적 부여
 - 팀 상태: NORMAL → WARNING(3벌점) → PROBATION(5벌점) → DISCIPLINARY(10벌점)
 - WARNING: 회의록에서 경고, 개선 기한 제시

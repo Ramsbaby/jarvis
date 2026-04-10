@@ -319,7 +319,6 @@ The `depends` array automatically injects cross-team context: if `stock-monitor`
 <details>
 <summary><strong>Do I need Obsidian?</strong></summary>
 
-No. Obsidian is optional. Jarvis uses any Markdown folder as its knowledge base. The vault-sync feature integrates with Obsidian if you have it, but the bot runs fine without it.
 
 </details>
 
@@ -392,7 +391,7 @@ See [ROADMAP.md](ROADMAP.md) for details and contribution opportunities.
 ├── bin/              # Entry points: ask-claude.sh, bot-cron.sh, jarvis-init.sh
 ├── lib/              # Core: rag-engine.mjs, mcp-nexus.mjs, llm-gateway.sh
 ├── config/           # tasks.json, monitoring.json, anti-patterns.json
-├── scripts/          # watchdog, auditor, vault-sync, KPI, E2E test suite
+├── scripts/          # watchdog, auditor, KPI, E2E test suite
 ├── teams/            # 12 team definitions (YAML + system prompts)
 ├── plugins/          # File-convention plugin system (drop a .yml, it's registered)
 ├── context/          # Per-task background knowledge (injected at runtime)
