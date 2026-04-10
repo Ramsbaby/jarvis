@@ -13,9 +13,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/jarvis-demo-chat.png" alt="Jarvis 데모 — AI 채팅 + 시스템 점검" width="700">
+  <img src="docs/img/jarvis-demo-ko.png" alt="Jarvis 데모 — 4가지 핵심 기능" width="700">
 </p>
-<p align="center"><em>위: 자비스에게 질문하면 행동 패턴을 분석해서 응답. 아래: 새벽 자동 시스템 점검.</em></p>
+<p align="center"><em>위에서부터: AI 행동 분석 대화 → 매일 자동 인사이트 리포트 → 새벽 시스템 점검 → L3 승인 워크플로우</em></p>
 
 ---
 
