@@ -409,7 +409,6 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | `discord/personas.json` | 14 | 채널 페르소나 설정 |
 | `scripts/system-doctor.sh` | 301 | 자동 시스템 점검 (매일 06:00) |
 | `scripts/gen-system-overview.sh` | 494 | 이 문서 생성 스크립트 |
-| `scripts/vault-sync.sh` | 392 | Obsidian Vault 동기화 |
 
 **디렉토리 구조:**
 ```

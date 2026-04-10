@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # coder-functions.sh — jarvis-coder 공용 함수 라이브러리
-# jarvis-coder.sh와 dev-task-daemon.sh 양쪽에서 source하여 사용.
+# jarvis-coder.sh에서 source하여 사용.
 # 호출자가 BOT_HOME을 설정한 후 source해야 함.
 
 : "${BOT_HOME:?BOT_HOME must be set before sourcing coder-functions.sh}"

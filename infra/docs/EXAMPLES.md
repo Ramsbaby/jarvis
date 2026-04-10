@@ -18,7 +18,6 @@ Jarvis: ✅ 캘린더 등록 완료
 
 **내부 동작:**
 ```bash
-bash scripts/calendar-add.sh "2026-05-10" "휴대폰요금제프로모션종료"
 # → config/secrets/calendar.json에서 access_token 로드
 # → 만료 시 token-refresh.sh 자동 실행
 # → Calendar API 호출
