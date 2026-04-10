@@ -176,7 +176,6 @@ node --experimental-sqlite --no-warnings ~/.jarvis/lib/task-store.mjs \
 # tasks.json에서 비활성화
 # "enabled": false  →  bot-cron.sh가 SKIPPED (enabled: false)로 건너뜀
 
-# 직접 crontab 등록 스크립트(board-topic-proposer 등)는 스크립트 내부에서
 # tasks.json을 읽어 enabled 필드를 확인해야 한다 (bot-cron.sh 경유하지 않음)
 ```
 
@@ -264,11 +263,8 @@ tasks.json의 주요 FSM 관련 필드 권장값:
 | LLM 분석 (council-insight 등) | 240-360s | 2       | 3600 (기본)            |
 | 스크립트 전용 (disk-alert, gen-system-overview, skill-eval) | 10-600s | 0-1 | 3600 |
 | LLM 문서 감사 (doc-sync-auditor) | 300s  | 1         | 3600                   |
-| board-meeting (긴 분석)        | 600-660s | 1        | 3600                   |
 | agent-batch-commit (스크립트)  | 60s      | 0        | 1800                   |
-| event-trigger 핸들러           | 120-180s | 1-2      | 3600                   |
 | 빠른 점검 (rate-limit-check)   | 15-30s  | 2         | 1800                   |
-| board-topic-proposer (LLM 제안) | 120s   | 1         | 1800                   |
 | recon-weekly (장시간)          | 900s    | 1         | 7200                   |
 
 **주의사항**:
@@ -277,7 +273,6 @@ tasks.json의 주요 FSM 관련 필드 권장값:
 - `retry.max`와 FSM의 `retries` 카운터는 별개: retry.max는 단일 cron 실행 내 재시도, retries는 ensureCronTask 리셋 횟수
 - `retry-wrapper.sh` 실행 로그: 시작 시 Board API에서 태스크 제목을 fetch → "⚙️ 작업 시작 — {제목}" 로그 전송. heartbeat(30초)에 경과 시간 포함 ("⏳ 진행 중 (Ns 경과)")
 - **DEV_TASK_ID 환경변수**: retry-wrapper.sh가 ask-claude.sh를 호출할 때 `DEV_TASK_ID=$TASK_ID`를 전달. 이 변수가 설정되면 llm-gateway.sh가 `stream-json` 모드로 전환하여 도구 호출 이벤트를 `stream-to-board.sh`로 실시간 전송 (3초 스로틀)
-- **dev-task-daemon.sh**: tmux 상주 데몬이 10초 간격으로 Board에서 승인 태스크를 가져와 즉시 실행 (concurrency=1). 기존 cron 폴러(*/5)는 fallback으로 유지. 멈춘 태스크(running >10분)는 자동 재큐잉
 - `script` 필드는 반드시 절대경로(`~/.jarvis/...`) 사용 — 상대경로는 cron CWD 의존으로 ENOENT 발생
 - `skipDuringRagRebuild: true` — `~/.jarvis/state/rag-rebuilding.json` 존재 시 태스크 실행 보류 (RAG 재인덱싱 중 Claude 에이전트가 DB를 파괴하는 사고 방지). `system-health`에 적용됨.
 
@@ -319,7 +314,6 @@ for t in tasks:
 
 depends에 걸린 태스크가 실패하면 다운스트림 태스크도 25h 동안 DEFERRED 된다.
 예: council-insight 실패 → morning-standup, daily-summary, ceo-daily-digest DEFERRED
-참고: board-monitor/agent/catchup은 LaunchAgent 직접 실행 방식이라 FSM 의존성 체계 외부에 있음
 
 대응:
 1. council-insight 원인 파악 및 수정

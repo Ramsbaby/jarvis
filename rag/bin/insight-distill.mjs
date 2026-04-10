@@ -160,10 +160,10 @@ function loadUpcomingEvents() {
   try {
     const toDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     const result = execFileSync('gog', [
-      'cal', 'list',
+      'calendar', 'list',
       '--from', 'today',
       '--to', toDate,
-      '--account', 'yuiopnm1931@gmail.com',
+      '--account', process.env.GOOGLE_ACCOUNT || '',
     ], { encoding: 'utf-8', timeout: 15_000 });
     return result.trim() || '(no upcoming events)';
   } catch {
@@ -173,7 +173,7 @@ function loadUpcomingEvents() {
 
 // ── Call Claude via ask-claude.sh for insight extraction ──
 
-async function extractInsightsViaLLM(clusterTexts, summaries, existingInsights, upcomingEvents) {
+async function extractInsightsViaLLM(clusterTexts, summaries, existingInsights, upcomingEvents, metrics) {
   const clusterSection = clusterTexts.map((c, i) =>
     `### Cluster ${i + 1}: ${c.entities.join(', ')}
 Topics: ${c.topics.join(', ') || 'none'}
@@ -191,36 +191,69 @@ ${c.sampleText}`
       ).join('\n')
     : '(no existing insights)';
 
-  const prompt = `아래 데이터는 한 사용자의 지식 베이스와 최근 대화에서 추출한 것이다.
-이 데이터를 종합하여 "이 사람은 지금 어떤 상황에 있는가?"를 추론하라.
+  // ── Format metrics for prompt ──
+  let metricsSection = '(metrics unavailable)';
+  if (metrics && !metrics.error) {
+    const topicLines = Object.entries(metrics.topicTrends || {})
+      .map(([t, v]) => `  ${t}: ${v.previous} → ${v.recent} (${v.trend}, x${v.ratio})`)
+      .join('\n');
+    const domainLines = Object.entries(metrics.domainTrends || {})
+      .map(([d, v]) => `  ${d}: ${v.previous} → ${v.recent} (x${v.ratio})`)
+      .join('\n');
+    const risingLines = (metrics.risingEntities || [])
+      .map(e => `  ↑ ${e.entity}: ${e.previous} → ${e.recent} (x${e.ratio})`)
+      .join('\n');
+    const decliningLines = (metrics.decliningEntities || [])
+      .map(e => `  ↓ ${e.entity}: ${e.previous} → ${e.recent} (x${e.ratio})`)
+      .join('\n');
+    const dailyLines = Object.entries(metrics.dailyActivity || {}).sort()
+      .map(([d, c]) => `  ${d}: ${c}건`)
+      .join('\n');
 
-## 절대 금지
-- 이력서/경력 내용을 요약하지 마라 (예: "Kafka 경험이 있다", "Spring 잘 쓴다" → 이건 RAG에 이미 있음)
-- 기술 스킬을 나열하지 마라
-- 관찰 가능한 사실을 반복하지 마라 (예: "자동화를 좋아한다")
+    metricsSection = `토픽 빈도 변화 (최근 2주 vs 2-4주 전):
+${topicLines}
 
-## 반드시 해야 할 것
-- 흩어진 단서들을 조합해서 **현재 상황, 임박한 이벤트, 감정 상태, 진행 중인 전환기**를 추론하라
-- "왜 이 데이터들이 동시에 존재하는가?"를 생각하라
+도메인별 활동 변화:
+${domainLines}
+
+급상승 엔티티:
+${risingLines || '  (없음)'}
+
+하락 엔티티:
+${decliningLines || '  (없음)'}
+
+일별 문서 생성량 (최근 14일):
+${dailyLines}
+
+전체 활동량: ${metrics.activityOverview?.previousChunks || 0} → ${metrics.activityOverview?.recentChunks || 0} (x${metrics.activityOverview?.ratio || 0})`;
+  }
+
+  const prompt = `아래는 한 사용자의 **행동 데이터 분석 결과**다. 숫자를 해석하여 현재 상황을 추론하라.
+
+## 핵심 규칙
+- 아래 메트릭(숫자)을 근거로 사용하라. 숫자 없는 추측 금지.
+- 이력서/경력 내용 요약 금지 (RAG에 이미 있음)
+- 기술 스킬 나열 금지
+- "왜 이 숫자들이 이렇게 변하고 있는가?"를 해석하라
 
 ## 좋은 인사이트 예시
-- "현재 이직 활동이 면접 단계에 진입했으며, 특정 회사에 집중하고 있다"
-- "면접 준비 강도로 보아 D-day가 1-2주 이내로 추정된다"
-- "금융 도메인 미경험에 대한 불안감이 있으며, 이를 기술 경험으로 보상하려는 전략을 쓰고 있다"
-- "최근 블로그와 포트폴리오 정비 활동이 증가 — 이직 준비의 마무리 단계"
-
-## 나쁜 인사이트 예시 (이런 거 쓰면 안 됨)
-- "Kafka Saga에 대한 깊은 이해가 있다" → 스킬 요약일 뿐
-- "성능 최적화에 관심이 있다" → 이력서에 이미 있는 내용
-- "자동화 인프라를 구축하고 있다" → 관찰 가능한 사실
+- "커리어 토픽이 534배 급증 — 면접 준비에 집중 전환한 것으로 보임"
+- "AI/자비스 토픽 하락(x0.36) + 커리어 급등 → 시스템 구축에서 이직 준비로 focus shift"
+- "4/1-4 소강기 후 4/5 활동 폭발 → 면접 날짜 확정 후 집중 모드"
 
 ## 카테고리
-- life_phase: 생애 단계 전환 (이직 준비, 학습기, 안정기 등)
-- goal: 단기 목표 (특정 회사 면접 통과, 프로젝트 완성 등)
-- concern: 우려/불안 (도메인 미경험, 시간 부족 등)
-- momentum: 활동 추세 (면접 준비 강도 증가/감소, 블로그 활동 증가 등)
+- life_phase: 생애 단계 전환 (이직, 학습기, 안정기)
+- goal: 단기 목표 (면접 통과, 프로젝트 완성)
+- concern: 우려/불안 (도메인 미경험, 시간 부족)
+- momentum: 활동 추세 변화 (증가/감소/전환)
 
-## 엔티티 클러스터별 증거
+## 계산된 행동 메트릭 (이것이 핵심 입력)
+${metricsSection}
+
+## 향후 7일 일정 (Google Calendar)
+${upcomingEvents}
+
+## 엔티티 클러스터별 참고 텍스트
 ${clusterSection}
 
 ## 최근 대화 요약 (${MAX_SUMMARIES}일)

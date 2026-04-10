@@ -27,7 +27,6 @@
 │  5층  Discord Bot           discord-bot.js                      │ ← 사람이 말 거는 창구
 ├─────────────────────────────────────────────────────────────────┤
 │  4층  크론 자동화 엔진       jarvis-cron.sh + tasks.json         │ ← 매일 자동 실행
-│       morning-standup / board-meeting / stock-monitor / news / doctor…   │
 ├─────────────────────────────────────────────────────────────────┤
 │  3층  AI 두뇌                claude -p (ask-claude.sh)          │ ← 실제 생각하는 곳
 │       7팀 페르소나 시스템     RAG 컨텍스트 자동 주입              │
@@ -90,15 +89,11 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `rate-limit-check` | `*/30 * * * *` | - | Rate Limit 체크 |
 | `update-usage-cache` | `*/30 * * * *` | - | /usage 명령 stale 방지 — 30분마다 ~/.claude/usage-cache.jso |
 | `stale-task-watcher` | `*/30 * * * *` | - | Stale 태스크 감지 및 자동 전이 |
-| `calendar-alert` | `*/5 * * * *` | jarvis | 일정 선제 알림 |
-| `board-conclude` | `*/5 * * * *` | jarvis-ceo | 보드 토론 자동 결론 |
 | `system-health` | `*/60 * * * *` | jarvis-system | 시스템 헬스체크 |
 | `github-monitor` | `0 * * * *` | jarvis-system | GitHub 알림 모니터 |
-| `vault-sync` | `0 */6 * * *` | jarvis | Obsidian Vault 동기화 |
 | `token-sync` | `0 1 * * *` | - | 토큰 동기화 |
 | `oss-docs` | `0 11 * * 3` | jarvis-blog | OSS README 갱신 제안 |
 | `oss-promo` | `0 17 * * 5` | jarvis-blog | OSS 주간 홍보 초안 생성 |
-| `board-perf-review` | `0 18 * * *` | jarvis-ceo | 에이전트 일일 성과 평가 및 승격/강등 처리 |
 | `career-weekly` | `0 18 * * 5` | jarvis-dev | 커리어 주간 리포트 |
 | `memory-cleanup` | `0 2 * * *` | - | 메모리 정리 |
 | `daily-summary` | `0 20 * * *` | jarvis | 일일 요약 |
@@ -126,7 +121,6 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `ceo-daily-digest` | `15 23 * * *` | jarvis-ceo | 일일 CEO 다이제스트 |
 | `oss-maintenance` | `15 9 * * *` | jarvis-blog | OSS 이슈/PR 일간 트리아지 |
 | `doc-sync-auditor` | `20 23 * * *` | jarvis-system | 문서-코드 정합성 감사 + 자동 적용 |
-| `career-extractor` | `30 0 * * *` | - | 커리어 인사이트 자동 추출 |
 | `oss-recon` | `30 10 * * 1` | jarvis-blog | OSS 경쟁자 주간 분석 |
 | `security-scan` | `30 2 * * *` | jarvis-system | 보안 스캔 |
 | `bot-quality-check` | `30 2 * * *` | jarvis-system | 봇 응답 품질 분석 |
@@ -134,7 +128,6 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `skill-eval` | `30 4 * * 0` | jarvis-ceo | 스킬 자동 평가 |
 | `memory-sync` | `30 4 * * 1` | jarvis-system | 메모리 자동 동기화 |
 | `cron-auditor` | `30 5 * * *` | jarvis-system | 크론 전체 점검 |
-| `vault-auto-link` | `30 6 * * *` | jarvis | Vault 자동 링크 생성 |
 | `agent-batch-commit` | `30 8 * * *` | - | 에이전트 산출물 일괄 커밋 |
 | `weekly-kpi` | `30 8 * * 1` | jarvis-ceo | 주간 KPI 리포트 |
 | `bot-self-critique` | `45 2 * * *` | jarvis-system | 봇 자가 품질 점검 |
@@ -143,10 +136,8 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `weekly-report` | `5 20 * * 0` | jarvis-ceo | 주간 리포트 |
 | `council-insight` | `5 23 * * *` | jarvis-ceo | 감사팀 일일 점검 (Council) |
 | `gen-system-overview` | `5 4 * * *` | - | 시스템 개요 문서 자동 재생성 (SYSTEM-OVERVIEW.md) |
-| `board-meeting-am` | `5 6 * * *` | jarvis-ceo | Board Meeting (아침) |
 | `market-alert` | `5 9,13,16 * * 1-5` | jarvis-market | 시장 급변 알림 |
 | `dev-event-bus` | `50 22 * * *` | - |  |
-| `board-meeting-pm` | `55 21 * * *` | jarvis-ceo | Board Meeting (저녁) |
 | `dev-runner` | `55 22 * * *` | jarvis-system | 자율 개발 큐 러너 |
 | `weekly-roi` | `55 23 * * 0` | jarvis-ceo | 매주 일요일 23:55 지난주 태스크들의 ROI 집계 및 리포트 생성 |
 | `daily-usage-check` | `55 5 * * *` | jarvis-lite | 매일 아침 사용량 체크 |
@@ -160,7 +151,6 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `log-cleanup` | `(event/manual)` | jarvis-system | 디스크 임계치 초과 시 로그 자동 정리 |
 | `private-sync` | `(event/manual)` | - | 커밋 후 private 레포 동기화 |
 
-> ⚠️ 비활성: `board-topic-proposer`
 
 ### 3.3 AI 두뇌 (`bin/ask-claude.sh`)
 
@@ -267,7 +257,6 @@ Claude Code와 자비스 시스템을 연결하는 MCP 도구 허브.
 
 ```
 각 팀 결과물 → rag/teams/reports/{team}-*.md (RAG 인덱싱)
-board-meeting → context-bus.md           (전체 요약, 모든 크론 읽음)
 council       → shared-inbox/            (긴급 브로드캐스트)
 depends 필드  → Cross-team Context 자동 주입
 ```
@@ -362,7 +351,6 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | 한계 | 원인 | 현황 |
 |------|------|------|
 | Claude 구독 의존 | claude -p 기반 구조 | pre-cron-auth-check 감시 중 |
-| 팀 에이전트 순차 실행 | sub-agent spawn 10분+ 소요 | board-meeting은 단일 claude -p로 우회 |
 | Obsidian Vault → Mac Mini 종속 | 로컬 파일 기반 | iCloud 동기화 미구현 |
 | Galaxy 직접 편집 불가 | SSH/Discord 명령만 가능 | 운영 불편 수준 |
 | rate limit (아침 클러스터) | claude -p 동시 실행 제한 | 현재 여유 있음, 병렬 증가 시 위험 |
@@ -439,11 +427,9 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | ai.jarvis.aggregate-metrics | 🔴 중지 | - |
 | ai.jarvis.serena-mcp | 🟢 실행중 | 11151 |
 | ai.jarvis.glances | 🟢 실행중 | 11241 |
-| ai.jarvis.sync-system-metrics | 🔴 중지 | - |
 | ai.jarvis.langfuse | 🔴 중지 | - |
 | ai.jarvis.webhook-listener | 🟢 실행중 | 20103 |
 | ai.jarvis.discord-bot | 🟢 실행중 | 355 |
-| ai.jarvis.dashboard-tunnel | 🟢 실행중 | 91707 |
 | ai.jarvis.session-summarizer | 🔴 중지 | - |
 | ai.jarvis.scorecard-enforcer | 🔴 중지 | - |
 | ai.jarvis.commitment-check | 🔴 중지 | - |
