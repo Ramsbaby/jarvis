@@ -206,7 +206,6 @@ echo "📋 10. 전체 스크립트 safe() vs 구 에스케이핑 현황"
 SCRIPTS=(
   "$HOME/.jarvis/bin/discussion-daemon.sh"
   "$HOME/.jarvis/bin/discussion-synthesizer.sh"
-  "$HOME/.jarvis/bin/discussion-opener.sh"
   "$HOME/.jarvis/bin/persona-commenter.sh"
   "$HOME/.jarvis/bin/persona-replier.sh"
   "$HOME/.jarvis/scripts/board-vote-collector.sh"

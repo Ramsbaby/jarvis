@@ -104,12 +104,9 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
 
 | 파일 | 역할 |
 |------|------|
-| `bin/board-agent.sh` | 10분 주기. 최신 피드를 Claude에게 전달해 댓글/글 작성 판단 |
 | `bin/board-monitor.sh` | 5분 주기. 자비스 언급 감지 → 유머 응답 + Discord `#workgroup-board` 알림 |
 | `bin/board-catchup.sh` | 5분 주기 (LaunchAgent). 전체 피드(최대 100건) 스캔 → 과거 미응답 언급 소급 처리 |
-| `bin/parallel-board-meeting.sh` | board-meeting-am/pm 병렬 실행 (~10분, 기존 ~18분 대비). Call A(운영 스냅샷) + Call B(회의록 분석) 동시 처리 |
 | `bin/discussion-daemon.sh` | 매 1분. `data/board-discussion.db` 스캔 → 만료된 토론 닫기 → 페르소나 댓글 디스패치 (최대 2 동시) |
-| `bin/discussion-opener.sh` | 토론 개설. 게시글 postId 기반으로 board-discussion.db에 토론 레코드 생성 |
 | `bin/discussion-synthesizer.sh` | 토론 종료 시 댓글 요약 + 결론 합성 → 게시판 댓글로 게시 |
 | `bin/persona-commenter.sh` | 개별 페르소나가 특정 게시글에 댓글 작성. discussion-daemon.sh에서 백그라운드 실행 |
 | `config/board-personas.json` | 페르소나 정의 (이름, delay, 말투, 주제 전문성) |
@@ -134,7 +131,6 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
 ### 데이터 흐름
 
 ```
-board-agent.sh (10분)
   ├─ /api/me → 쿨다운 체크
   ├─ /api/feed?since= → 새 이벤트
   ├─ claude -p (empty-mcp.json, ⚠️ untrusted 레이블) → {"action":"comment"|"post"|"skip"}
@@ -161,7 +157,6 @@ discussion-daemon.sh (매 1분)
        ├─ delay 미경과 or 이미 댓글 → skip
        └─ 조건 충족 → persona-commenter.sh [postId] [personaName] (백그라운드, max 2)
 
-parallel-board-meeting.sh (08:00 / 21:55 cron)
   ├─ Call A (병렬): context-bus.md 운영 스냅샷 갱신 (~4분)
   └─ Call B (병렬): 회의록 + 결정 + OKR 분석 (~10분)
        → 총 ~10분 (기존 직렬 ~18분 대비 44% 단축)
@@ -170,8 +165,6 @@ parallel-board-meeting.sh (08:00 / 21:55 cron)
 ### 핑퐁·중복 방지
 
 - `board-monitor` / `board-catchup`: `state/board-monitor-state.json`의 `repliedToPostIds[]` — 이미 답글 단 postId 재응답 차단 (최대 100개 유지, 공유 상태)
-- `board-agent`: `state/.board-intro-written` 마커 파일 — STATE 분실 시에도 자기소개 중복 방지
-- `board-agent`: Claude 프롬프트에 "자비스 본인이 이미 댓글 단 postId 스킵" 명시
 - **파일 락** (`tmp/board-reply-{postId}.lock`): 세 스크립트 공유 뮤텍스. `mkdir` 원자성 보장 — 동시 실행 시 하나만 처리 진행 (race condition 없음)
 
 ---
