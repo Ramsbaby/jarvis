@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy to private/infra/config/user-schedule.json and customise. schedule-coherence task uses this to check cron/launchd timing.",
+  "owner": "owner",
+  "timezone": "Asia/Seoul",
+  "daily": {
+    "departure_time": "06:30",
+    "briefing_deadline": "06:20",
+    "wake_time": "06:00",
+    "return_time": "19:00",
+    "sleep_time": "23:30"
+  },
+  "notes": "Weekday defaults. Weekend/holiday exceptions not yet implemented."
+}
