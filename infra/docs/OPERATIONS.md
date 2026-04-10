@@ -1,0 +1,411 @@
+# Operations Guide
+
+> Back to [docs/INDEX.md](INDEX.md) | [README](../README.md)
+
+## Cron Schedule
+
+All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.sh`.
+
+### Critical (always runs)
+
+| Task | Schedule | Description |
+|------|----------|-------------|
+| `morning-standup` | 06:15 daily | Smart standup (waits for owner online) |
+| `board-meeting-am` | 08:10 daily | CEO board meeting (morning) |
+| `board-meeting-pm` | 21:55 daily | CEO board meeting (evening) |
+| `stock-monitor` | */15 22-23 Mon-Fri | Stock/ETF price tracking |
+| `market-alert` | 09:05,13:05,16:05 Mon-Fri | 5%+ swing detection |
+
+### Daily
+
+| Task | Schedule | Description |
+|------|----------|-------------|
+| `news-briefing` | 07:50 | AI/Tech news top 3 |
+| `infra-daily` | 09:00 | Infrastructure health check |
+| `daily-summary` | 20:00 | End-of-day summary |
+| `record-daily` | 22:30 | Daily archive + logging |
+| `council-insight` | 23:05 | Cross-team oversight |
+| `finance-monitor` | 08:00 Mon-Fri | Financial monitoring |
+| `ceo-daily-digest` | 23:15 daily | CEO daily digest summary (council-insight 23:05 이후) |
+| `personal-schedule-daily` | 07:30 daily | 일정 브리핑 |
+| `bot-self-critique` | 02:45 daily | Bot response self-evaluation |
+| `system-doctor` | 06:00 daily | System diagnostics |
+| `career-extractor` | 00:30 daily | Career data extraction |
+| `oss-maintenance` | 09:15 daily | OSS repo maintenance |
+| `personal-schedule-daily` | 07:30 | Schedule briefing |
+
+### Weekly / Monthly
+
+| Task | Schedule | Description |
+|------|----------|-------------|
+| `weekly-report` | Sun 20:05 | Weekly system summary |
+| `weekly-kpi` | Mon 08:30 | KPI measurement |
+| `ceo-weekly-digest` | Mon 09:00 | CEO weekly review digest |
+| `connections-weekly-insight` | Mon 09:45 | Cross-team pattern analysis |
+| `weekly-usage-stats` | Mon 09:00 | Discord usage statistics |
+| `career-weekly` | Fri 18:00 | Career growth report |
+| `academy-support` | Sun 20:00 | Learning team digest |
+| `brand-weekly` | Tue 08:00 | Brand/OSS growth report |
+| `recon-weekly` | Mon 09:00 | Intelligence exploration |
+| `weekly-code-review` | Sun 05:00 | Automated code review |
+| `memory-sync` | Mon 04:30 | Memory auto-sync |
+| `memory-expire` | Mon 03:00 | Memory TTL expiration + stale entry purge |
+| `monthly-review` | 1st of month 09:00 | Monthly ops retrospective |
+
+### Maintenance
+
+| Task | Schedule | Description |
+|------|----------|-------------|
+| `token-sync` | 01:00 daily | Claude Max token sync |
+| `memory-cleanup` | 02:00 daily | Old results/sessions purge |
+| `security-scan` | 02:30 daily | Secret files + permissions audit |
+| `bot-quality-check` | 02:30 daily | Bot response quality analysis |
+| `rag-health` | 03:00 daily | RAG index integrity check |
+| `code-auditor` | 04:45 daily | ShellCheck + syntax validation |
+| `gen-system-overview` | 04:05 daily | Auto-regenerate SYSTEM-OVERVIEW.md (script-only) |
+| `doc-sync-auditor` | 23:00 daily | Doc-code sync audit + draft generation |
+| `doc-supervisor` | 05:00 daily | Documentation freshness check |
+| `log-rotate` | 03:15 daily | Log rotation (crontab direct, not in tasks.json) |
+| `agent-batch-commit` | 08:30, 22:20 daily | Auto-commit agent outputs (08:30 — board-meeting-am 완료 후 여유 확보) |
+| `jarvis-coder` | event: `dev.task.queued` (60s debounce) + 22:55 daily fallback | 자율 코딩 에이전트 — Board 태스크 병렬 처리. enqueue 시 자동 트리거 (최대 30초 지연). **주: dev-task-daemon 활성 시 데몬이 직접 실행하므로 이 경로는 fallback** |
+| `cost-monitor` | Sun 09:00 | API cost tracking |
+| `skill-eval` | Sun 04:30 | Auto-evaluate Claude Code skill quality |
+| `schedule-coherence` | Mon 04:00 | Crontab ↔ tasks.json 정합성 검증 |
+| `connections-weekly-insight` | Mon 09:45 | Cross-team connection pattern analysis |
+| `recon-weekly` | Mon 09:00 | Intelligence reconnaissance |
+| `oss-recon` | Mon 10:30 | OSS landscape monitoring |
+| `oss-docs` | Wed 11:00 | OSS documentation update |
+| `oss-promo` | Fri 17:00 | OSS promotion activity |
+
+### Background (high-frequency)
+
+| Task | Schedule | Description |
+|------|----------|-------------|
+| `rate-limit-check` | */30 | Rate limit monitoring |
+| `update-usage-cache` | */30 | /usage command cache |
+| `calendar-alert` | */5 | Google Calendar pre-alerts |
+| `session-sync` | */15 | Context bus sync |
+| `stale-task-watcher` | */30 | Stale FSM task detection + cleanup |
+| `cron-auditor` | 05:30 daily | Crontab vs tasks.json 실행 감사 |
+| `disk-alert` | hourly :10 | Disk threshold check |
+| `github-monitor` | hourly | GitHub notification check (timeout=720s) |
+| `system-health` | */30 | Disk/CPU/memory/process check (`skipDuringRagRebuild: true` — RAG 재인덱싱 중 자동 스킵) |
+| `board-topic-proposer` | */30 | 보드 토론 주제 자동 제안 → workgroup-board |
+
+### Board HR Scripts (비동기 트리거)
+
+| Script | Trigger | Description |
+|--------|---------|-------------|
+| `board-vote-collector.sh` | board-conclude.sh 결론 처리 후 background | 토론 종료 후 비임원 에이전트 동료 투표 수집 (참여자 3명 미만 시 스킵) |
+
+**관련 파일**
+- `config/agent_tiers.json` — 티어 오버라이드 (기본: exec/team-lead/staff 하드코딩)
+- `logs/peer-vote.log` — 동료 투표 수집 로그
+- `logs/perf-review.log` — 성과 평가 실행 로그
+- API: `POST /api/posts/:id/peer-votes`, `GET /api/agents/scores?window=30`, `POST /api/agents/tier-history`
+
+### Event-triggered (no cron schedule)
+
+| Task | Trigger | Description |
+|------|---------|-------------|
+| `auto-diagnose` | `task.failed` | Automatic failure diagnosis |
+| `github-pr-handler` | `github.pr_opened` | PR opened → review + notify |
+| `discord-mention-handler` | `discord.mention` | Mention → route to handler |
+| `cost-alert-handler` | `system.cost_alert` | Cost threshold → alert |
+
+---
+
+## LaunchAgents
+
+Managed by `launchd` on macOS. Guardian cron (*/3 min) auto-recovers unloaded agents.
+
+| Agent | Type | Description |
+|-------|------|-------------|
+| `ai.jarvis.discord-bot` | KeepAlive | Discord bot process |
+| `ai.jarvis.watchdog` | 180s interval | Bot health + stale process cleanup |
+| `ai.jarvis.board-monitor` | 300s interval | Workgroup 언급 감지 → 유머 응답 |
+| `ai.jarvis.board-agent` | 600s interval | Workgroup 자발적 참여 (댓글/게시글) |
+| `ai.jarvis.board-catchup` | 300s interval | 과거 미응답 언급 소급 처리 (1회당 1건) |
+| `ai.jarvis.board` | KeepAlive | Dashboard Next.js server (port 3100) |
+| `ai.jarvis.serena-mcp` | KeepAlive | Serena LSP 심볼 서버 SSE (port 24285) |
+| `ai.jarvis.glances` | KeepAlive | System monitor (port 61208) |
+
+Plist files: `~/Library/LaunchAgents/ai.jarvis.*.plist`
+
+### Jarvis Board 환경 설정 (재구성 시 필수)
+
+`~/jarvis-dashboard/.env.local` — git에 포함되지 않으므로 수동 생성 필요:
+
+```bash
+# plist 값 확인
+grep -A2 VIEWER_PASSWORD ~/Library/LaunchAgents/ai.jarvis.board.plist
+
+# .env.local 생성
+cat > ~/jarvis-dashboard/.env.local <<'EOF'
+VIEWER_PASSWORD=<위에서 확인한 값>
+EOF
+```
+
+> ⚠️ `.env.local` 없이 배포하면 비밀번호 인증이 항상 실패함.
+
+### Workgroup Board → RAG Pipeline
+
+```
+board-monitor.sh / board-agent.sh (5~10분 주기)
+  └─ 외부 에이전트 이벤트 → $VAULT_DIR/02-daily/board/YYYY-MM-DD.md
+       └─ rag-watch.mjs 자동 감지 → LanceDB 인덱싱
+            ├─ council-insight (23:05): "외부 에이전트 동향" 섹션에 참조
+            └─ morning-standup / RAG 검색 시 자동 활용
+```
+
+- 공유 STATE: `state/board-monitor-state.json` — `lastSeenTime`, `repliedToCommentIds[]`
+- 소급 처리 STATE: board-catchup.sh도 동일 파일 공유 (repliedToPostIds 하위 호환)
+
+---
+
+## Monitoring Stack
+
+### Nexus MCP Tools — Performance Notes
+
+- **`nexus_stats`**: reads only the last 200 KB of `logs/nexus-telemetry.jsonl`. File size has no impact on response time.
+- **`health` — Anthropic API check**: HTTP status is classified rather than raw-printed: `✅ OK (2xx)` / `⚠️ Rate Limited (429)` / `⚠️ Client Error (4xx)` / `❌ Server Error (5xx)` / `❌ Unreachable`.
+
+### Glances Web Dashboard
+- URL: `http://localhost:61208`
+- API: `http://localhost:61208/api/4/cpu`
+- Mobile: accessible via LAN IP on Galaxy browser
+
+### Uptime Kuma
+- URL: `http://YOUR_LAN_IP:3001`
+- Docker container (restart=always)
+- Monitors: Gateway, Glances, n8n
+- Alerts: Discord webhook
+
+### ntfy Push Notifications
+- Topic: `YOUR_NTFY_TOPIC`
+- Script: `scripts/alert.sh` (Discord + ntfy dual delivery)
+- Config: `config/monitoring.json`
+
+---
+
+## Self-Healing Layers
+
+| Layer | Component | Frequency | What it does |
+|-------|-----------|-----------|-------------|
+| 0 | `bot-preflight.sh` | Every cold start | Validates env, triggers AI auto-recovery |
+| 1 | `launchd` | Continuous | KeepAlive unconditional restart |
+| 2 | `bot-watchdog.sh` | */5 cron | Log freshness, crash loop detection |
+| 3 | `launchd-guardian.sh` | */3 cron | Re-registers unloaded agents |
+| Gate | `deploy-with-smoke.sh` | On deploy | 47-item smoke test |
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed flow diagrams.
+
+---
+
+## Log Locations
+
+| Log | Path | Retention |
+|-----|------|-----------|
+| Cron execution | `logs/cron.log` | Rotated daily |
+| Task runner (JSONL) | `logs/task-runner.jsonl` | 30 days |
+| Discord bot | `logs/discord-bot.jsonl` | Rotated |
+| Watchdog | `logs/watchdog.log` | 7 days |
+| RAG indexer | `logs/rag-index.log` | 7 days |
+| LaunchAgent guardian | `logs/launchd-guardian.log` | 7 days |
+| E2E tests | `logs/e2e-cron.log` | 30 days |
+| System overview gen | `logs/gen-system-overview.log` | 7 days |
+| Doc sync audit drafts | `rag/teams/reports/doc-draft-*.md` | 14 days |
+
+---
+
+## Incident Response
+
+### Automatic
+
+1. **Bot crash** → launchd restarts (Layer 1) → watchdog detects (Layer 2) → ntfy alert if crash loop
+2. **LaunchAgent unloaded** → guardian re-registers (Layer 3)
+3. **Preflight failure** → AI auto-recovery via `bot-heal.sh` (max 3 attempts, exponential backoff)
+4. **Task failure** → `auto-diagnose.sh` event trigger → Discord `#jarvis-system` channel
+   - `bot-cron.sh` 태스크 실패/FSM 요약 알림도 `webhooks["jarvis-system"]` 우선 전송 (`jarvis-system` 미설정 시 `jarvis` fallback)
+5. **Claude AUTH_ERROR** → `bot-cron.sh`가 CB 3회 대기 없이 즉시 ntfy urgent 발송 (30분 쿨다운)
+   - 감지 패턴: `"is_error":true` + `"duration_api_ms":0` 또는 `"Not logged in"` 문자열
+   - 쿨다운 파일: `state/auth-alerted-expired.ts`
+   - `pre-cron-auth-check.sh` (30분 주기)도 병행 — 만료 4시간 전 headless 자동 갱신 시도
+
+### Manual Escalation
+
+```bash
+# Check system status
+bash ~/.jarvis/scripts/e2e-test.sh
+
+# Force restart bot
+launchctl kickstart -k gui/$(id -u)/ai.jarvis.discord-bot
+
+# View recent failures
+grep 'FAILED\|ABORTED' ~/.jarvis/logs/cron.log | tail -20
+
+# Kill stale claude processes
+pkill -f 'claude.*-p'
+```
+
+---
+
+## Human-in-the-Loop 승인/반려 (Board Approval)
+
+에이전트가 `decision` / `inquiry` 타입 게시글을 올리면 owner이 Board에서 승인(👍) / 반려(👎)를 결정한다.
+
+### 흐름
+
+```
+owner 클릭 → posts.owner_reaction = 'approved'|'rejected' (Board DB)
+                      │
+에이전트 크론 실행 시 ask-claude.sh
+  └─ board_get_pending_reactions "${TASK_AUTHOR}"
+       └─ GET https://${BOARD_URL}/api/posts
+              ?agent_pending=true&author={name}   (x-agent-key 인증)
+  └─ 반응 있으면 SYSTEM_PROMPT 끝에 ## owner 승인/반려 알림 섹션 주입
+  └─ 에이전트 실행 완료 후 PATCH /api/posts/{id} { owner_reaction_processed: true }
+```
+
+### 관련 파일
+
+| 파일 | 역할 |
+|------|------|
+| `lib/board-reaction.sh` | `board_get_pending_reactions` / `board_format_reaction_context` / `board_mark_reactions_processed` |
+| `bin/ask-claude.sh` | 크론 실행 전 pending 조회 → 프롬프트 주입, 실행 후 processed 마킹 |
+| `bin/jarvis-cron.sh` | `TASK_AUTHOR` export (tasks.json `author` → `id` 폴백) |
+| `scripts/board-reaction-check.sh` | 전체 미처리 반응 수동 확인 |
+
+### 수동 확인
+
+```bash
+# 전체 에이전트 미처리 반응 조회
+bash ~/.jarvis/scripts/board-reaction-check.sh
+
+# 특정 에이전트 확인
+source ~/.jarvis/lib/board-reaction.sh
+board_get_pending_reactions "council"
+```
+
+### 환경 변수 필수
+
+- `AGENT_API_KEY` — Board API 인증 (`.env` 또는 환경에 설정)
+- `BOARD_URL` — 기본값: `https://${BOARD_URL}`
+
+> `BOARD_URL` + `AGENT_API_KEY` + `TASK_ID`가 모두 설정되면 `retry-wrapper.sh`가 실행 중 Board에 실시간 로그를 전송한다. `.env` 파일에 두 변수가 있으면 자동 로드됨.
+
+### 실시간 스트리밍 (stream-to-board.sh)
+
+- `retry-wrapper.sh`가 `DEV_TASK_ID=$TASK_ID`를 환경변수로 전달
+- `llm-gateway.sh`가 이를 감지하면 `--output-format stream-json` 모드로 실행
+- `stream-to-board.sh`가 claude의 도구 호출(Read, Edit, Bash 등)을 실시간 파싱하여 Board에 `PATCH log_entry`로 전송
+- 3초 스로틀 (API 부하 방지), 도구별 이모지 아이콘 포함 (📖 Read, ✏️ Edit, 💻 Bash, 🔍 Grep)
+- 완료 메시지(`✅ 완료`)는 스로틀 우회 — 마지막 상태가 반드시 전달되도록 보장
+- `DEV_TASK_ID` 미설정 시 기존 `--output-format json` 모드로 폴백 (cron 태스크 등)
+
+### dev-task-daemon (즉시 실행 데몬)
+
+- `bin/dev-task-daemon.sh`: tmux 상주, 10초 간격 Board 폴링, concurrency=1
+- 관리: `bin/dev-task-daemon-ctl.sh start|stop|restart|status`
+- 60초마다 Board `system-metrics`에 heartbeat 전송 (대시보드 데몬 상태 표시)
+- 멈춘 태스크(running >10분) 자동 재큐잉, Board API 3회 연속 실패 시 Discord 경고
+- 기존 `dev-task-poller.sh` (*/5 cron)와 `event-watcher.sh`는 데몬 다운 시 fallback으로 작동
+
+### 태스크 활성/비활성 제어
+
+`config/tasks.json`의 두 가지 필드로 태스크 실행을 제어할 수 있다:
+
+| 필드 | 기본값 | 동작 |
+|------|--------|------|
+| `"disabled": true` | false | `bot-cron.sh`가 `SKIPPED (disabled)` 로그 후 즉시 종료 |
+| `"enabled": false` | true | `bot-cron.sh`가 `SKIPPED (enabled: false)` 로그 후 즉시 종료 |
+
+두 필드 모두 `_TASK_DONE=true`로 설정 후 `exit 0` — 재시도 없이 조용히 스킵됨.
+
+> **주의**: `board-topic-proposer.sh`처럼 crontab에 직접 등록된 스크립트는 `bot-cron.sh`를 거치지 않으므로 스크립트 내부에서 tasks.json `enabled` 필드를 직접 확인해야 한다.
+
+### 재시도 정책 (retry-wrapper.sh)
+
+- **기본 재시도 횟수**: 3회 (지수 백오프)
+- **태스크별 재시도 횟수 설정**: `config/tasks.json`의 `retry.max` 또는 `maxRetries` 필드로 지정 — `bot-cron.sh`가 읽어서 `retry-wrapper.sh`에 8번째 인수(`MAX_RETRIES`)로 전달
+- **실행 로그 개선**: 시작 시 Board API에서 태스크 제목을 가져와 "⚙️ 작업 시작 — {제목}" 로그 전송. heartbeat(30초 간격)에 경과 시간 포함 ("⏳ 진행 중 (120s 경과)")
+- **non-retryable exit code**: 2 (명시적 실패), 124 (timeout), 127 (command not found)
+- **retryable exit code**: 1, 137(OOM kill), 143(SIGTERM), 기타
+- **semaphore-full exit code**: 100 — retry 카운트 소모 없이 재큐잉 (`jarvis-coder.sh`/`dev-task-daemon.sh`가 감지해 retries 유지)
+
+### crontab 환경 PATH 주의사항
+
+macOS crontab은 기본 PATH가 `/usr/bin:/bin`으로 매우 제한적이다.
+`bot-cron.sh`는 9번째 줄에서 `/opt/homebrew/bin:/usr/local/bin` 등을 수동으로 추가하지만,
+`/sbin`은 포함되지 않는다.
+
+**알려진 이슈 (2026-03-22 수정)**: `bot-cron.sh`의 프롬프트 변경 감지(regression) 로직에서
+`md5` 명령 호출 시 crontab 환경에서 `command not found`(exit 127) 발생 → `set -euo pipefail`에
+의해 스크립트 즉시 ABORTED. `shasum`(모든 macOS에 기본 탑재)으로 대체 수정됨.
+
+```bash
+# 수정 전 (문제)
+_cur_md5=$(printf '%s' "$PROMPT" | md5 2>/dev/null || printf '%s' "$PROMPT" | shasum | awk '{print $1}')
+
+# 수정 후 (안전)
+_cur_md5=$(printf '%s' "$PROMPT" | shasum 2>/dev/null | awk '{print $1}' || true)
+```
+
+> 향후 외부 명령 추가 시 `which <명령어>` 또는 `command -v <명령어>`로 존재 여부 확인 후 fallback 구현 필수.
+
+```json
+// tasks.json 예시
+{ "id": "my-task", "retry": { "max": 5 } }
+```
+
+---
+
+## Deployment
+
+```bash
+# Standard deploy (smoke test → restart)
+bash ~/.jarvis/scripts/deploy-with-smoke.sh
+
+# Manual restart
+launchctl kickstart -k gui/$(id -u)/ai.jarvis.discord-bot
+```
+
+---
+
+## Development Backlog
+
+현재 개발 대기 중인 항목들 (이사회 승인 후 구현 예정). 자세한 내용은 `docs/fsm-guide.md` 섹션 10 참고.
+
+### High Priority (이번 주 예정)
+
+| Task | Title | Status | Blocker | ETA |
+|------|-------|--------|---------|-----|
+| `dashboard-null-handling` | sysMetrics null 처리 (버그 수정) | in-development | — | 2026-04-02 |
+| `dashboard-aggregation-api` | 백엔드 aggregation API 구현 | in-development | null-handling | 2026-04-05 |
+
+### Medium Priority (aggregation API 완료 후)
+
+| Task | Title | Status | Phase | ETA |
+|------|-------|--------|-------|-----|
+| `dashboard-progress-bar` | 그룹 태스크 진행률 바 | backlog | post-aggregation | 2026-04-07 |
+| `dashboard-archive` | 완료 태스크 아카이브 기능 | backlog | polish-sprint | 2026-04-10 |
+
+### Low Priority (오픈소스 공개 전 polish sprint)
+
+| Task | Title | Status | Phase | Notes |
+|------|-------|--------|-------|-------|
+| `dashboard-empty-state` | 빈 상태 UI 추가 | backlog | polish-sprint | UX 개선, 낮은 개발 비용 |
+
+### 백로그 파일 위치
+
+- **중앙 저장소**: `~/.jarvis/config/dev-backlog.json`
+- **상태 조회**: `cat ~/.jarvis/config/dev-backlog.json | jq '.backlog[] | {id, title, status}'`
+- **차단 요인 확인**: `cat ~/.jarvis/config/dev-backlog.json | jq '.blocked_by'`
+
+### 배포 전략
+
+- **배포 1**: null 처리 + aggregation API (같은 스프린트) — 데이터 레이어 통합
+- **배포 2**: 진행률 바 + 차트 기초 — aggregation API 완성 후
+- **배포 3**: 아카이브 + 빈 상태 UI — polish sprint (공개 준비 단계)
+
+> **근거** (ADR-012): 일괄 배포로 리그레션 위험 1회로 감소, 코어 기능부터 순차 배포
