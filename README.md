@@ -26,29 +26,24 @@
 
 ## What is Jarvis?
 
-An **AI operations platform** — a Discord bot backed by Claude, a RAG knowledge base, a behavioural insight engine, and 110+ self-managing automation scripts. Everything runs locally on your machine.
+> **"An AI assistant that audits your systems, analyses news, and writes code — while you sleep."**
 
-```
-                    ┌─────────────────┐
-                    │   You interact   │
-                    └────────┬────────┘
-                ┌────────────┼────────────┐
-                ▼                         ▼
-          💬 Discord                🔧 Automation
-       text + voice 24/7           cron + agents
-                │                         │
-                └────────────┬────────────┘
-                             ▼
-               ┌────────────────────────┐
-               │      Jarvis Core       │
-               │                        │
-               │  📚 RAG (LanceDB)      │
-               │  🧠 Insight Layer      │
-               │  🔌 MCP (integrations) │
-               │  🤖 8 AI agent teams   │
-               │  📋 Dev-Queue (auto)   │
-               └────────────────────────┘
-```
+Message it on Discord and it chats. Send a voice message and it understands. Drop a file and it remembers.
+Overnight, 99 automation scripts run cron jobs. If a service dies, it self-recovers within 3 minutes.
+Every dawn, it analyses your behavioural patterns and responds knowing what you're focused on right now.
+Zero API charges — runs on a Claude subscription. 100% of your data stays on your machine.
+
+**In short**: A personal AI operations platform. Runs 24/7, fixes itself when it breaks, gets smarter as you use it.
+
+### Architecture
+
+| Layer | Components | Role |
+|:---:|------|------|
+| **Interface** | Discord (text + voice) | 24/7 conversational UI. 16+ slash commands, buttons, voice recognition |
+| **Brain** | Claude + 8 AI agent teams | Chat, analysis, code generation, decision-making |
+| **Memory** | RAG (LanceDB) + Insight Layer | 10,000+ doc search + daily behavioural metrics analysis |
+| **Automation** | 99 scripts + 11 LaunchAgents + 40+ crons | Self-healing, dawn audits, news briefing, auto code execution |
+| **Integration** | MCP + Google Calendar + GitHub | External service connectivity |
 
 ## Core Features
 
