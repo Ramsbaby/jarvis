@@ -1,0 +1,42 @@
+title = "Jarvis gitleaks config"
+
+[extend]
+# Inherits all built-in rules (AWS, GCP, GitHub tokens, generic API keys, etc.)
+
+# Hardcoded home directory paths
+[[rules]]
+id = "hardcoded-home-path"
+description = "Hardcoded personal home directory path"
+regex = '''/Users/[a-zA-Z]+/\.|/home/[a-zA-Z]+/\.|C:\\Users\\[a-zA-Z]+\\'''
+tags = ["personal", "path"]
+
+# Discord bot token pattern
+[[rules]]
+id = "discord-token"
+description = "Discord bot token"
+regex = '''[MN][A-Za-z\d]{23,}\.[A-Za-z\d_-]{6}\.[A-Za-z\d_-]{27,}'''
+tags = ["secret"]
+
+# Discord webhook URL
+[[rules]]
+id = "discord-webhook"
+description = "Discord webhook URL with ID"
+regex = '''discord\.com/api/webhooks/\d{17,20}/[A-Za-z0-9_-]+'''
+tags = ["secret"]
+
+# Hardcoded email addresses (not in .example files)
+[[rules]]
+id = "hardcoded-email"
+description = "Hardcoded email address"
+regex = '''[\w.+-]+@(?:gmail|naver|kakao|hotmail|outlook|yahoo)\.\w+'''
+tags = ["personal", "pii"]
+
+[allowlist]
+paths = [
+  '''\.gitleaks\.toml$''',
+  '''\.env\.example$''',
+  '''\.example\.json$''',
+  '''private/''',
+  '''LICENSE$''',
+  '''package-lock\.json$''',
+]
