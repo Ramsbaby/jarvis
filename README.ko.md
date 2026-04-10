@@ -13,14 +13,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/discord-dev-chat.png" alt="Discord 봇 — 개발자 채팅" width="700">
+  <img src="docs/img/jarvis-demo-chat.png" alt="Jarvis 데모 — AI 채팅 + 시스템 점검" width="700">
 </p>
-<p align="center"><em>Discord 봇: 코드 리뷰 + 인라인 수정 제안</em></p>
-
-<p align="center">
-  <img src="docs/img/discord-system-health.png" alt="시스템 헬스체크" width="700">
-</p>
-<p align="center"><em>새벽 감사: 10개 서비스 자동 점검</em></p>
+<p align="center"><em>위: 자비스에게 질문하면 행동 패턴을 분석해서 응답. 아래: 새벽 자동 시스템 점검.</em></p>
 
 ---
 

@@ -13,14 +13,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/discord-dev-chat.png" alt="Discord Bot — Developer Chat" width="700">
+  <img src="docs/img/jarvis-demo-chat.png" alt="Jarvis Demo — AI Chat + System Health" width="700">
 </p>
-<p align="center"><em>Discord Bot: code review with inline fixes</em></p>
-
-<p align="center">
-  <img src="docs/img/discord-system-health.png" alt="System Health Check" width="700">
-</p>
-<p align="center"><em>Dawn audit: 10 services checked automatically</em></p>
+<p align="center"><em>Top: ask Jarvis anything — it analyses your behaviour patterns and responds. Bottom: dawn system health check.</em></p>
 
 ---
 
