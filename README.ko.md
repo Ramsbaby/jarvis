@@ -13,9 +13,14 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/jarvis-demo-ko.png" alt="Jarvis 데모 — 4가지 핵심 기능" width="700">
+  <img src="docs/img/jarvis-demo-chat-ko.png" alt="Jarvis — AI 행동 분석 대화 + 인사이트 리포트" width="700">
 </p>
-<p align="center"><em>위에서부터: AI 행동 분석 대화 → 매일 자동 인사이트 리포트 → 새벽 시스템 점검 → L3 승인 워크플로우</em></p>
+<p align="center"><em>자비스에게 물어보면 행동 패턴을 분석해서 응답 + 매일 자동 생성되는 인사이트 리포트</em></p>
+
+<p align="center">
+  <img src="docs/img/jarvis-demo-system-ko.png" alt="Jarvis — 시스템 점검 + 승인 워크플로우" width="700">
+</p>
+<p align="center"><em>새벽 자동 시스템 점검 (10개 서비스) + L3 자율 작업 승인 워크플로우</em></p>
 
 ---
 
