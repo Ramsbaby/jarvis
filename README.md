@@ -59,6 +59,21 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 | 🔒 | **100% Local** | No cloud. No subscriptions. All data stays on your machine |
 | 🔌 | **MCP Integration** | Home Assistant, GitHub, Slack, Notion via [MCP ecosystem](https://github.com/topics/mcp-server) |
 
+## How Jarvis Compares
+
+|  | **Jarvis** | **Claude Memory** | **ChatGPT Memory** | **[OpenClaw](https://docs.openclaw.ai) Dreaming** |
+|---|:---:|:---:|:---:|:---:|
+| **Memory** | RAG + Insight Layer (metrics-driven) | File-based (CLAUDE.md + Auto Dream) | Inject-all (every memory, every turn) | 3-phase sleep cycle (Light → REM → Deep) |
+| **Trend Detection** | Yes (topic freq shifts, entity momentum) | No | No | Yes (REM-phase pattern extraction) |
+| **Automation** | 99 scripts + self-healing | No (CLI tool) | No | 1 cron (dreaming sweep) |
+| **Autonomous Coding** | Yes (Dev-Queue → jarvis-coder) | No | No | No |
+| **Multi-User** | Yes (isolated memory + family mode) | No (single user) | No (single user) | No (single agent) |
+| **Cost** | $0 (Claude subscription) | $0 (subscription) | $0 (free tier) | $0 (open source) |
+| **Data Location** | 100% local | Local (CLI) / Cloud (web) | Cloud (OpenAI servers) | Local |
+| **Interface** | Discord (text + voice) | Terminal / Web | Web / App | Terminal / Web |
+
+**What sets Jarvis apart**: It doesn't just remember — it **acts**. Memory + analysis + automation + self-healing in one system. Others stop at the memory layer; Jarvis uses memory to write code, recover services, and generate reports.
+
 ## Quick Start
 
 ```bash
