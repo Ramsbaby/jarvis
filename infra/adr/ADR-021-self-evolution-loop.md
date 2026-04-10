@@ -28,7 +28,6 @@ Phase 1~3 작업(Context Engineering, RAG Hybrid, Self-healing, Langfuse)으로 
 │           │ 사람이 DEV_TASK 승인                                │
 │           ▼                                                     │
 │  ┌──────────────────┐                                           │
-│  │  jarvis-coder    │  ← dev-task-poller → FSM queued          │
 │  │  (실행 에이전트)  │    claude -p --allowedTools ...          │
 │  └────────┬─────────┘                                           │
 │           │ 실행 완료 → task_transitions 기록                   │

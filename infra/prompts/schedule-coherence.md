@@ -11,7 +11,6 @@ ultrathink
 **2단계: 현재 설정 스캔**
 - `crontab -l` 로 morning-standup, news-briefing, pre-cron-auth-check 시간 확인
 - `cat ~/Library/LaunchAgents/com.jarvis.morning-standup.plist` 로 launchd 시간 확인
-- board-meeting-am 등 아침 시간대 태스크도 모두 목록화
 
 **3단계: 정합성 판단**
 브리핑 수신 마감(briefing_deadline) 이후에 실행되는 아침 태스크가 있으면 → 문제로 분류
