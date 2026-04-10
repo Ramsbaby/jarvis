@@ -11,8 +11,6 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 | Task | Schedule | Description |
 |------|----------|-------------|
 | `morning-standup` | 06:15 daily | Smart standup (waits for owner online) |
-| `board-meeting-am` | 08:10 daily | CEO board meeting (morning) |
-| `board-meeting-pm` | 21:55 daily | CEO board meeting (evening) |
 | `stock-monitor` | */15 22-23 Mon-Fri | Stock/ETF price tracking |
 | `market-alert` | 09:05,13:05,16:05 Mon-Fri | 5%+ swing detection |
 
@@ -30,7 +28,6 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 | `personal-schedule-daily` | 07:30 daily | 일정 브리핑 |
 | `bot-self-critique` | 02:45 daily | Bot response self-evaluation |
 | `system-doctor` | 06:00 daily | System diagnostics |
-| `career-extractor` | 00:30 daily | Career data extraction |
 | `oss-maintenance` | 09:15 daily | OSS repo maintenance |
 | `personal-schedule-daily` | 07:30 | Schedule briefing |
 
@@ -66,8 +63,6 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 | `doc-sync-auditor` | 23:00 daily | Doc-code sync audit + draft generation |
 | `doc-supervisor` | 05:00 daily | Documentation freshness check |
 | `log-rotate` | 03:15 daily | Log rotation (crontab direct, not in tasks.json) |
-| `agent-batch-commit` | 08:30, 22:20 daily | Auto-commit agent outputs (08:30 — board-meeting-am 완료 후 여유 확보) |
-| `jarvis-coder` | event: `dev.task.queued` (60s debounce) + 22:55 daily fallback | 자율 코딩 에이전트 — Board 태스크 병렬 처리. enqueue 시 자동 트리거 (최대 30초 지연). **주: dev-task-daemon 활성 시 데몬이 직접 실행하므로 이 경로는 fallback** |
 | `cost-monitor` | Sun 09:00 | API cost tracking |
 | `skill-eval` | Sun 04:30 | Auto-evaluate Claude Code skill quality |
 | `schedule-coherence` | Mon 04:00 | Crontab ↔ tasks.json 정합성 검증 |
@@ -83,20 +78,17 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 |------|----------|-------------|
 | `rate-limit-check` | */30 | Rate limit monitoring |
 | `update-usage-cache` | */30 | /usage command cache |
-| `calendar-alert` | */5 | Google Calendar pre-alerts |
 | `session-sync` | */15 | Context bus sync |
 | `stale-task-watcher` | */30 | Stale FSM task detection + cleanup |
 | `cron-auditor` | 05:30 daily | Crontab vs tasks.json 실행 감사 |
 | `disk-alert` | hourly :10 | Disk threshold check |
 | `github-monitor` | hourly | GitHub notification check (timeout=720s) |
 | `system-health` | */30 | Disk/CPU/memory/process check (`skipDuringRagRebuild: true` — RAG 재인덱싱 중 자동 스킵) |
-| `board-topic-proposer` | */30 | 보드 토론 주제 자동 제안 → workgroup-board |
 
 ### Board HR Scripts (비동기 트리거)
 
 | Script | Trigger | Description |
 |--------|---------|-------------|
-| `board-vote-collector.sh` | board-conclude.sh 결론 처리 후 background | 토론 종료 후 비임원 에이전트 동료 투표 수집 (참여자 3명 미만 시 스킵) |
 
 **관련 파일**
 - `config/agent_tiers.json` — 티어 오버라이드 (기본: exec/team-lead/staff 하드코딩)
@@ -123,9 +115,6 @@ Managed by `launchd` on macOS. Guardian cron (*/3 min) auto-recovers unloaded ag
 |-------|------|-------------|
 | `ai.jarvis.discord-bot` | KeepAlive | Discord bot process |
 | `ai.jarvis.watchdog` | 180s interval | Bot health + stale process cleanup |
-| `ai.jarvis.board-monitor` | 300s interval | Workgroup 언급 감지 → 유머 응답 |
-| `ai.jarvis.board-agent` | 600s interval | Workgroup 자발적 참여 (댓글/게시글) |
-| `ai.jarvis.board-catchup` | 300s interval | 과거 미응답 언급 소급 처리 (1회당 1건) |
 | `ai.jarvis.board` | KeepAlive | Dashboard Next.js server (port 3100) |
 | `ai.jarvis.serena-mcp` | KeepAlive | Serena LSP 심볼 서버 SSE (port 24285) |
 | `ai.jarvis.glances` | KeepAlive | System monitor (port 61208) |
@@ -151,15 +140,12 @@ EOF
 ### Workgroup Board → RAG Pipeline
 
 ```
-board-monitor.sh / board-agent.sh (5~10분 주기)
   └─ 외부 에이전트 이벤트 → $VAULT_DIR/02-daily/board/YYYY-MM-DD.md
        └─ rag-watch.mjs 자동 감지 → LanceDB 인덱싱
             ├─ council-insight (23:05): "외부 에이전트 동향" 섹션에 참조
             └─ morning-standup / RAG 검색 시 자동 활용
 ```
 
-- 공유 STATE: `state/board-monitor-state.json` — `lastSeenTime`, `repliedToCommentIds[]`
-- 소급 처리 STATE: board-catchup.sh도 동일 파일 공유 (repliedToPostIds 하위 호환)
 
 ---
 
@@ -271,19 +257,15 @@ owner 클릭 → posts.owner_reaction = 'approved'|'rejected' (Board DB)
 
 | 파일 | 역할 |
 |------|------|
-| `lib/board-reaction.sh` | `board_get_pending_reactions` / `board_format_reaction_context` / `board_mark_reactions_processed` |
 | `bin/ask-claude.sh` | 크론 실행 전 pending 조회 → 프롬프트 주입, 실행 후 processed 마킹 |
 | `bin/jarvis-cron.sh` | `TASK_AUTHOR` export (tasks.json `author` → `id` 폴백) |
-| `scripts/board-reaction-check.sh` | 전체 미처리 반응 수동 확인 |
 
 ### 수동 확인
 
 ```bash
 # 전체 에이전트 미처리 반응 조회
-bash ~/.jarvis/scripts/board-reaction-check.sh
 
 # 특정 에이전트 확인
-source ~/.jarvis/lib/board-reaction.sh
 board_get_pending_reactions "council"
 ```
 
@@ -303,13 +285,9 @@ board_get_pending_reactions "council"
 - 완료 메시지(`✅ 완료`)는 스로틀 우회 — 마지막 상태가 반드시 전달되도록 보장
 - `DEV_TASK_ID` 미설정 시 기존 `--output-format json` 모드로 폴백 (cron 태스크 등)
 
-### dev-task-daemon (즉시 실행 데몬)
 
-- `bin/dev-task-daemon.sh`: tmux 상주, 10초 간격 Board 폴링, concurrency=1
-- 관리: `bin/dev-task-daemon-ctl.sh start|stop|restart|status`
 - 60초마다 Board `system-metrics`에 heartbeat 전송 (대시보드 데몬 상태 표시)
 - 멈춘 태스크(running >10분) 자동 재큐잉, Board API 3회 연속 실패 시 Discord 경고
-- 기존 `dev-task-poller.sh` (*/5 cron)와 `event-watcher.sh`는 데몬 다운 시 fallback으로 작동
 
 ### 태스크 활성/비활성 제어
 
@@ -322,7 +300,6 @@ board_get_pending_reactions "council"
 
 두 필드 모두 `_TASK_DONE=true`로 설정 후 `exit 0` — 재시도 없이 조용히 스킵됨.
 
-> **주의**: `board-topic-proposer.sh`처럼 crontab에 직접 등록된 스크립트는 `bot-cron.sh`를 거치지 않으므로 스크립트 내부에서 tasks.json `enabled` 필드를 직접 확인해야 한다.
 
 ### 재시도 정책 (retry-wrapper.sh)
 
@@ -331,7 +308,6 @@ board_get_pending_reactions "council"
 - **실행 로그 개선**: 시작 시 Board API에서 태스크 제목을 가져와 "⚙️ 작업 시작 — {제목}" 로그 전송. heartbeat(30초 간격)에 경과 시간 포함 ("⏳ 진행 중 (120s 경과)")
 - **non-retryable exit code**: 2 (명시적 실패), 124 (timeout), 127 (command not found)
 - **retryable exit code**: 1, 137(OOM kill), 143(SIGTERM), 기타
-- **semaphore-full exit code**: 100 — retry 카운트 소모 없이 재큐잉 (`jarvis-coder.sh`/`dev-task-daemon.sh`가 감지해 retries 유지)
 
 ### crontab 환경 PATH 주의사항
 
