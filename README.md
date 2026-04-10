@@ -13,14 +13,14 @@
 </p>
 
 <p align="center">
-  <img src="docs/img/discord-dev-chat.png" alt="Discord Bot — Developer Chat" width="700">
+  <img src="docs/img/jarvis-demo-chat.gif" alt="Jarvis Demo — AI Chat with Behavioural Analysis" width="700">
 </p>
-<p align="center"><em>Discord Bot: code review with inline fixes</em></p>
+<p align="center"><em>Ask Jarvis anything — it responds with full situational awareness</em></p>
 
 <p align="center">
-  <img src="docs/img/discord-auto-briefing.png" alt="Discord Bot — Auto Briefing" width="700">
+  <img src="docs/img/jarvis-demo-system.gif" alt="Jarvis Demo — System Health + Auto Recovery" width="700">
 </p>
-<p align="center"><em>Automated: daily AI/Tech news briefing</em></p>
+<p align="center"><em>Dawn audit: 10 services checked, RAG health verified, anomalies reported</em></p>
 
 ---
 
