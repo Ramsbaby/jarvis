@@ -78,23 +78,7 @@ START_TIME=$(date +%s)
 source "${BOT_HOME}/lib/context-loader.sh"
 load_context
 
-# --- Board approval reactions (Human-in-the-loop) ---
-_board_pending_json=""
-if [[ -n "${AGENT_API_KEY:-}" && -n "${TASK_AUTHOR:-}" ]]; then
-    source "${BOT_HOME}/lib/board-reaction.sh"
-    _pending_json=$(board_get_pending_reactions "${TASK_AUTHOR}") || _pending_json="[]"
-    if [[ "$_pending_json" != "[]" && -n "$_pending_json" ]]; then
-        _reaction_ctx=$(board_format_reaction_context "$_pending_json") || _reaction_ctx=""
-        if [[ -n "$_reaction_ctx" ]]; then
-            SYSTEM_PROMPT="${SYSTEM_PROMPT}
-
-${_reaction_ctx}"
-            _board_pending_json="$_pending_json"
-            log_jsonl "info" "Board reactions injected into context" "0"
-        fi
-    fi
-    unset _pending_json _reaction_ctx
-fi
+# --- Board approval reactions removed (board system not included) ---
 
 # --- Auto-retry wrapper ---
 run_with_retry() {

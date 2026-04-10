@@ -179,7 +179,6 @@
 # 좀비 claude 프로세스 정리 (매시간)
 0 * * * * pgrep -f "claude.*--output-format stream-json" | while read pid; do age=$(ps -p "$pid" -o etimes= 2>/dev/null | tr -d ' '); [ -n "$age" ] && [ "$age" -gt 7200 ] && kill -9 "$pid" 2>/dev/null && echo "$(date '+%Y-%m-%d %H:%M:%S') killed zombie claude PID $pid (age ${age}s)" >> "__JARVIS_HOME__/logs/zombie-cleanup.log"; done; true
 # 워크트리 stray DB 정리 (월요일 03:00)
-0 3 * * 1 find __HOME__/jarvis-board/.claude/worktrees -name '*.db' -o -name '*.db-shm' -o -name '*.db-wal' 2>/dev/null | xargs -I{} find {} -mtime +7 -delete 2>/dev/null; true
 
 # ────────────────────────────────────────────────────────────────────────────
 # [Weekly/Periodic] 주간 · 월간 리포트 · 감사
@@ -250,15 +249,10 @@
 # ────────────────────────────────────────────────────────────────────────────
 
 # Vault 자동 동기화 (6시간마다)
-0 0,6,12,18 * * * /bin/bash __JARVIS_HOME__/scripts/vault-sync.sh >> __JARVIS_HOME__/logs/vault-sync.log 2>&1
 # Vault 자동 링크 (매일 06:30)
-30 6 * * * /bin/bash __JARVIS_HOME__/scripts/vault-auto-link.sh >> __JARVIS_HOME__/logs/vault-auto-link.log 2>&1
 # Vault 자동 MOC (주간 월요일 07:00)
-0 7 * * 1 /bin/bash __JARVIS_HOME__/scripts/vault-auto-moc.sh >> __JARVIS_HOME__/logs/vault-auto-moc.log 2>&1
 # Vault 일일 다이제스트 (매일 23:50)
-50 23 * * * /bin/bash __JARVIS_HOME__/scripts/vault-daily-digest.sh >> __JARVIS_HOME__/logs/vault-daily-digest.log 2>&1
 # Vault 라이프사이클 (주간 일요일 03:30)
-30 3 * * 0 /bin/bash __JARVIS_HOME__/scripts/vault-lifecycle.sh >> __JARVIS_HOME__/logs/vault-lifecycle.log 2>&1
 
 # ────────────────────────────────────────────────────────────────────────────
 # [Reports] 자동 보고서 생성

@@ -575,9 +575,10 @@ export class RAGEngine {
   async supersedeInsight(oldId, newId) {
     this._assertWritable();
     if (!this._insightsTable) return;
+    const esc = (s) => String(s).replace(/'/g, "''");
     try {
       await this._insightsTable.update({
-        where: `id = '${oldId}'`,
+        where: `id = '${esc(oldId)}'`,
         values: { superseded_by: newId, active: false },
       });
     } catch (err) {
@@ -594,18 +595,19 @@ export class RAGEngine {
     if (!this._insightsTable) return 0;
     const now = Date.now();
     try {
+      // Count before update
       const stale = await this._insightsTable
         .query()
         .where('active = true')
         .where(`expires_at > 0 AND expires_at < ${now}`)
         .toArray();
-      for (const ins of stale) {
-        await this._insightsTable.update({
-          where: `id = '${ins.id}'`,
-          values: { active: false },
-        });
-      }
-      if (stale.length > 0) console.log(`[rag] Expired ${stale.length} stale insight(s)`);
+      if (stale.length === 0) return 0;
+      // Single bulk update
+      await this._insightsTable.update({
+        where: `active = true AND expires_at > 0 AND expires_at < ${now}`,
+        values: { active: false },
+      });
+      console.log(`[rag] Expired ${stale.length} stale insight(s)`);
       return stale.length;
     } catch {
       return 0;
