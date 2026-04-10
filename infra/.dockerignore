@@ -1,0 +1,24 @@
+# Secrets
+discord/.env
+discord/personas.json
+
+# Runtime data (mounted as volumes)
+state/
+logs/
+rag/lancedb/
+context/discord-history/
+results/
+
+# Build artifacts
+discord/node_modules
+lib/node_modules
+
+# Git / IDE
+.git
+.serena
+.gitignore
+
+# Docs (not needed at runtime)
+*.md
+docs/
+LICENSE

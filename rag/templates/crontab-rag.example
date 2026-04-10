@@ -1,0 +1,20 @@
+# RAG Cron Jobs — Example crontab entries
+# Replace /path/to/jarvis with your actual Jarvis repo path.
+# Requires: BOT_HOME set if using non-default data directory.
+#
+# Install: crontab -e, then paste the lines below.
+
+# Incremental indexing (every 4 hours at :30)
+30 */4 * * * OMP_NUM_THREADS=2 bash /path/to/jarvis/rag/bin/rag-index-safe.sh
+
+# Weekly compaction (Sunday 04:00)
+0 4 * * 0 bash /path/to/jarvis/rag/scripts/rag-compact-safe.sh
+
+# Daily insight distillation (04:00, after entity-graph at 03:45)
+0 4 * * * OMP_NUM_THREADS=2 node /path/to/jarvis/rag/bin/insight-distill.mjs >> /path/to/logs/insight-distill.log 2>&1
+
+# Hourly quality check (at :10)
+10 * * * * bash /path/to/jarvis/rag/scripts/rag-quality-check.sh
+
+# Memory guardian for rag-watch (every 10 min)
+*/10 * * * * bash /path/to/jarvis/rag/scripts/rag-watch-guardian.sh
