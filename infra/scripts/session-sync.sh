@@ -12,7 +12,9 @@
 #   - 변화 없으면 아무것도 안 함 (조용히 종료)
 #   - LLM 호출 실패해도 타임스탬프만 갱신 (best-effort)
 
-set -euo pipefail
+# best-effort 스크립트: 실패해도 exit 0 (context-bus 미갱신은 치명적 오류 아님)
+# set -e 제거 — 개별 실패는 || true / 명시적 분기로 처리
+set -uo pipefail
 
 BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
