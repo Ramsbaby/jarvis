@@ -253,6 +253,11 @@ SessionStart (startup only)
 - `stop-doc-enforce.sh`: Python `-c` code no longer interpolates `$RESULT_TMP` into the code string; path passed as `sys.argv[1]` instead — eliminates injection surface.
 - `tasks.json`: `skill-eval` script path changed from relative (`scripts/skill-eval.sh`) to absolute (`~/.jarvis/scripts/skill-eval.sh`) — prevents ENOENT on cron execution.
 
+**MCP 설정 SSoT 정리 + ~/.mcp.json 폴백 (2026-04-11)**:
+- `claude-runner.js` MCP 로드 로직 변경: `discord-mcp.json` 없을 때 `~/.mcp.json`에서 `nexus`, `serena`만 필터링해서 폴백 로드. OSS 유저가 `discord-mcp.json` 없이도 `~/.mcp.json`만 설정하면 봇에서 Nexus 사용 가능.
+- `BOT_MCP_ALLOWLIST = ['nexus', 'serena']` — CLI 전용 서버(brave-search, jira, sequential-thinking 등)가 봇에 로드되는 것을 방지. 관심사 분리 유지.
+- `~/.mcp.json`에 Nexus 추가 — CLI에서도 rag_search, exec, health, discord_send 도구 사용 가능.
+
 **Serena MCP HTTP 서버 모드 전환 + Discord allowedTools 정리 (2026-04-01)**:
 - **Serena 클라이언트 분리 (2026-04-01 확정)**: `discord-mcp.json`은 stdio 유지, `~/.mcp.json`(Claude Code)만 SSE URL 사용. 이유: Serena SSE 서버는 마지막 클라이언트가 끊기면 즉시 종료 → LaunchAgent ThrottleInterval=10s 동안 포트 닫힘 → Discord 봇이 그 사이 새 세션을 시작하면 `connection refused` → SDK error → 빈 응답. Claude Code 세션은 장시간 유지되어 SSE 효과를 볼 수 있으나, Discord 세션은 짧고 빈번해 stdio가 안전함.
 - `claude-runner.js` allowedTools: `mcp__serena__check_onboarding_performed`, `write_memory` 추가. `activate_project`는 추가했다가 제거 — 공유 SSE 서버에서 프로젝트 전환 시 동시 세션 컨텍스트 충돌 위험.

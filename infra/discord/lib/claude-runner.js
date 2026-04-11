@@ -886,14 +886,30 @@ export async function* createClaudeSession(prompt, {
   const model = contextBudget === 'small' ? MODELS.small : 'opusplan';
 
   // 7. Load MCP server config (same servers, now as SDK mcpServers object)
+  // 우선순위: discord-mcp.json > ~/.mcp.json (nexus, serena만 필터)
   // ${ENV_VAR} 형식의 env var를 실제 값으로 치환 지원 (GITHUB_TOKEN 등)
   let mcpServers = {};
   try {
     const rawMcp = readFileSync(DISCORD_MCP_PATH, 'utf-8')
       .replace(/\$\{([^}]+)\}/g, (_, name) => process.env[name] ?? '');
     mcpServers = (JSON.parse(rawMcp)).mcpServers ?? {};
-  } catch (err) {
-    log('warn', 'Failed to load discord-mcp.json — MCP disabled', { error: err.message });
+  } catch {
+    // discord-mcp.json 없으면 ~/.mcp.json에서 봇에 필요한 서버만 필터링
+    const BOT_MCP_ALLOWLIST = ['nexus', 'serena'];
+    try {
+      const globalMcp = JSON.parse(readFileSync(join(HOME, '.mcp.json'), 'utf-8'));
+      const allServers = globalMcp.mcpServers ?? {};
+      for (const name of BOT_MCP_ALLOWLIST) {
+        if (allServers[name]) mcpServers[name] = allServers[name];
+      }
+      if (Object.keys(mcpServers).length > 0) {
+        log('info', 'MCP fallback: loaded from ~/.mcp.json', { servers: Object.keys(mcpServers) });
+      } else {
+        log('warn', 'No MCP servers found in discord-mcp.json or ~/.mcp.json — MCP disabled');
+      }
+    } catch {
+      log('warn', 'No MCP config found (discord-mcp.json / ~/.mcp.json) — MCP disabled');
+    }
   }
 
   // 8. SDK query
