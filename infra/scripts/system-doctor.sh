@@ -4,7 +4,11 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
+  IS_MACOS=false; IS_LINUX=false
+  case "$(uname -s)" in Darwin) IS_MACOS=true ;; Linux) IS_LINUX=true ;; esac
+}
 LOG="$BOT_HOME/logs/system-doctor.log"
 ROUTE="$BOT_HOME/bin/route-result.sh"
 TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
@@ -14,8 +18,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:$
 log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 
 # ── 결과 저장소 (임시 파일, subshell 안전) ─────────────────────────────────
-RESULTS_TMP=$(mktemp /tmp/sysdr-results-XXXXXX.tsv)
-COUNTS_TMP=$(mktemp /tmp/sysdr-counts-XXXXXX.txt)
+RESULTS_TMP=$(mktemp "/tmp/sysdr-results-$(date +%s%N)-XXXXXX.tsv")
+COUNTS_TMP=$(mktemp "/tmp/sysdr-counts-$(date +%s%N)-XXXXXX.txt")
 trap 'rm -f "$RESULTS_TMP" "$COUNTS_TMP"' EXIT
 echo "0 0" > "$COUNTS_TMP"   # ok warn_fail
 
@@ -30,40 +34,93 @@ add_result() {
   fi
 }
 
-# ── 1. LaunchAgents ──────────────────────────────────────────────────────────
+# ── 1. LaunchAgents / PM2 서비스 ─────────────────────────────────────────────
 check_launchagents() {
-  local launchd_out
-  launchd_out=$(launchctl list 2>/dev/null || echo "")
+  if $IS_MACOS; then
+    local launchd_out
+    launchd_out=$(launchctl list 2>/dev/null || echo "")
 
-  for svc in "ai.jarvis.discord-bot" "ai.jarvis.watchdog"; do
-    local line pid
-    line=$(echo "$launchd_out" | grep "$svc" || echo "")
-    if [[ -z "$line" ]]; then
-      add_result "launchd:$svc" "FAIL" "not loaded"
-    else
-      pid=$(echo "$line" | awk '{print $1}')
-      if [[ "$pid" =~ ^[0-9]+$ ]] && [[ "$pid" -gt 0 ]]; then
-        add_result "launchd:$svc" "OK" "PID $pid"
+    for svc in "ai.jarvis.discord-bot" "ai.jarvis.watchdog"; do
+      local line pid
+      line=$(echo "$launchd_out" | grep "$svc" || echo "")
+      if [[ -z "$line" ]]; then
+        add_result "launchd:$svc" "FAIL" "not loaded"
       else
-        local ec
-        ec=$(echo "$line" | awk '{print $2}')
-        add_result "launchd:$svc" "FAIL" "not running (exit=$ec)"
+        pid=$(echo "$line" | awk '{print $1}')
+        if [[ "$pid" =~ ^[0-9]+$ ]] && [[ "$pid" -gt 0 ]]; then
+          add_result "launchd:$svc" "OK" "PID $pid"
+        else
+          local ec
+          ec=$(echo "$line" | awk '{print $2}')
+          add_result "launchd:$svc" "FAIL" "not running (exit=$ec)"
+        fi
       fi
-    fi
-  done
+    done
 
-  # Glances LaunchAgent
-  if echo "$launchd_out" | grep -q "ai.jarvis.glances"; then
-    add_result "launchd:glances" "OK" "loaded"
+    # Glances LaunchAgent
+    if echo "$launchd_out" | grep -q "ai.jarvis.glances"; then
+      add_result "launchd:glances" "OK" "loaded"
+    else
+      add_result "launchd:glances" "WARN" "not loaded"
+    fi
+
+    # plist 스크립트 존재 검증
+    local missing_scripts=()
+    local la_dir="$HOME/Library/LaunchAgents"
+    if [[ -d "$la_dir" ]]; then
+      while IFS= read -r plist; do
+        local script_path
+        script_path=$(python3 -c "
+import plistlib, sys
+try:
+  d = plistlib.load(open('$plist', 'rb'))
+  args = d.get('ProgramArguments', [])
+  print(args[0] if args else '')
+except: print('')
+" 2>/dev/null || echo "")
+        if [[ -n "$script_path" && ! -f "$script_path" ]]; then
+          local svc_name
+          svc_name=$(basename "$plist" .plist | sed 's/^ai\.jarvis\.//')
+          missing_scripts+=("$svc_name")
+        fi
+      done < <(find "$la_dir" -maxdepth 1 -name 'ai.jarvis.*.plist' 2>/dev/null)
+    fi
+    if [[ ${#missing_scripts[@]} -gt 0 ]]; then
+      add_result "launchd:config-debt" "WARN" "스크립트 없음: ${missing_scripts[*]}"
+    fi
   else
-    add_result "launchd:glances" "WARN" "not loaded"
+    # Linux/WSL2: PM2 서비스 상태 확인
+    if ! command -v pm2 &>/dev/null; then
+      add_result "pm2" "FAIL" "pm2 not installed"
+      return
+    fi
+    for svc in "jarvis-bot" "jarvis-watchdog"; do
+      local status
+      status=$(pm2 jlist 2>/dev/null | python3 -c "
+import json,sys
+try:
+  procs=json.load(sys.stdin)
+  match=[p for p in procs if p['name']=='$svc']
+  print(match[0]['pm2_env']['status'] if match else 'not_found')
+except: print('error')
+" 2>/dev/null || echo "error")
+      case "$status" in
+        online)    add_result "pm2:$svc" "OK" "online" ;;
+        not_found) add_result "pm2:$svc" "FAIL" "not registered" ;;
+        *)         add_result "pm2:$svc" "FAIL" "status=$status" ;;
+      esac
+    done
   fi
 }
 
 # ── 2. Discord 봇 메모리 ─────────────────────────────────────────────────────
 check_discord_bot() {
   local pid mem_mb
-  pid=$(launchctl list 2>/dev/null | awk '/ai\.jarvis\.discord-bot/{print $1}' | grep -E '^[0-9]+$' | head -1 || echo "")
+  if $IS_MACOS; then
+    pid=$(launchctl list 2>/dev/null | awk '/ai\.jarvis\.discord-bot/{print $1}' | grep -E '^[0-9]+$' | head -1 || echo "")
+  else
+    pid=$(pgrep -f "discord-bot.js" 2>/dev/null | head -1 || echo "")
+  fi
   if [[ -z "$pid" ]]; then
     add_result "discord-bot" "FAIL" "no PID"
     return
@@ -134,6 +191,8 @@ try {
 }
 
 # ── 4. 크론 에러 (최근 24시간) ───────────────────────────────────────────────
+# task_XXXXXX_ 패턴: dev-task-daemon이 생성하는 임시 태스크 ID.
+# 구조적 크론 스크립트 오류가 아니므로 집계에서 제외한다.
 check_cron_errors() {
   if [[ ! -f "$BOT_HOME/logs/cron.log" ]]; then
     add_result "cron-errors" "OK" "로그 없음"
@@ -143,21 +202,32 @@ check_cron_errors() {
   cutoff=$(date -v-24H '+%Y-%m-%d %H:%M:%S' 2>/dev/null \
     || date -d '24 hours ago' '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "")
 
-  local err_count
+  local err_count task_count
   if [[ -n "$cutoff" ]]; then
     err_count=$(grep -E 'FAILED|ERROR|CRITICAL' "$BOT_HOME/logs/cron.log" 2>/dev/null \
+      | grep -vE 'task_[0-9]+_' \
       | awk -v c="[$cutoff" '$0 >= c' | wc -l) || err_count=0
+    task_count=$(grep -E 'FAILED|ERROR|CRITICAL' "$BOT_HOME/logs/cron.log" 2>/dev/null \
+      | grep -E 'task_[0-9]+_' \
+      | awk -v c="[$cutoff" '$0 >= c' | wc -l) || task_count=0
   else
-    err_count=$(grep -cE 'FAILED|ERROR|CRITICAL' "$BOT_HOME/logs/cron.log" 2>/dev/null) || err_count=0
+    err_count=$(grep -E 'FAILED|ERROR|CRITICAL' "$BOT_HOME/logs/cron.log" 2>/dev/null \
+      | grep -vE 'task_[0-9]+_' | wc -l) || err_count=0
+    task_count=$(grep -E 'FAILED|ERROR|CRITICAL' "$BOT_HOME/logs/cron.log" 2>/dev/null \
+      | grep -E 'task_[0-9]+_' | wc -l) || task_count=0
   fi
-  err_count=$((${err_count:-0}))  # 공백/널 제거 후 정수 변환
+  err_count=$((${err_count:-0}))
+  task_count=$((${task_count:-0}))
+
+  local task_note=""
+  [[ "$task_count" -gt 0 ]] && task_note=" (+task ${task_count}건 제외)"
 
   if (( err_count > 10 )); then
-    add_result "cron-errors" "FAIL" "24h ${err_count}건"
+    add_result "cron-errors" "FAIL" "24h ${err_count}건${task_note}"
   elif (( err_count > 0 )); then
-    add_result "cron-errors" "WARN" "24h ${err_count}건"
+    add_result "cron-errors" "WARN" "24h ${err_count}건${task_note}"
   else
-    add_result "cron-errors" "OK" "에러 없음"
+    add_result "cron-errors" "OK" "에러 없음${task_note}"
   fi
 }
 

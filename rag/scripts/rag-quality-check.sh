@@ -119,7 +119,9 @@ if [[ -f "$REBUILD_SENTINEL" ]]; then
     fi
     # ISO 8601 서브초 및 Z 제거 → macOS date -j 파싱
     _sentinel_ts_clean=$(echo "$_sentinel_ts" | sed 's/\.[0-9]*Z$//' | sed 's/Z$//')
-    sentinel_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$_sentinel_ts_clean" +%s 2>/dev/null || echo "0")
+    sentinel_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$_sentinel_ts_clean" +%s 2>/dev/null \
+      || TZ=UTC date -d "$_sentinel_ts_clean" +%s 2>/dev/null \
+      || echo "0")
     if [[ "$sentinel_epoch" -eq 0 ]]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: sentinel epoch parse failed ($sentinel_ts_clean) — keeping sentinel, skipping non-critical checks"
         exit 0
@@ -247,7 +249,9 @@ if [[ -z "$last_timestamp" ]]; then
 fi
 
 # macOS date: ISO → epoch (UTC 기준으로 파싱 — rag-index.mjs 로그는 Z 타임스탬프)
-last_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$last_timestamp" +%s 2>/dev/null || echo "0")
+last_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$last_timestamp" +%s 2>/dev/null \
+  || TZ=UTC date -d "$last_timestamp" +%s 2>/dev/null \
+  || echo "0")
 now_epoch=$(date +%s)
 
 if [[ "$last_epoch" -eq 0 ]]; then
