@@ -3,8 +3,7 @@
 source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 2>/dev/null || true
 set -euo pipefail
 
-# macOS launchctl 의존 — Linux에서는 실행 불필요
-$IS_MACOS || exit 0
+# Cross-platform: macOS는 launchctl, Linux/WSL2는 PM2 사용
 
 # bot-watchdog.sh - Discord bot log-freshness monitor
 # Detects silent death: process alive but WebSocket dead (no log output).
@@ -91,7 +90,9 @@ if [[ -z "$last_ts" ]]; then
 fi
 # Convert to epoch (strip milliseconds for date compatibility)
 last_ts_clean="${last_ts%%.*}Z"
-last_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$last_ts_clean" "+%s" 2>/dev/null || echo 0)
+last_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$last_ts_clean" "+%s" 2>/dev/null \
+  || TZ=UTC date -d "$last_ts_clean" "+%s" 2>/dev/null \
+  || echo 0)
 
 if (( last_epoch == 0 )); then
     log "WARN: Could not parse timestamp: $last_ts"
@@ -123,15 +124,24 @@ fi
 log "ALERT: Bot silent for ${silence_sec}s (>${SILENCE_THRESHOLD_SEC}s). Restarting."
 
 # Check if process is actually running (confirms silent death vs real crash)
-bot_pid=$(launchctl list 2>/dev/null | grep "$DISCORD_SERVICE" | awk '{print $1}')
+if $IS_MACOS; then
+    bot_pid=$(launchctl list 2>/dev/null | grep "$DISCORD_SERVICE" | awk '{print $1}')
+else
+    bot_pid=$(pgrep -f "discord-bot.js" 2>/dev/null | head -1 || echo "")
+fi
+
 if [[ "$bot_pid" == "-" || -z "$bot_pid" ]]; then
-    # 프로세스가 없는 상태 — 직접 재시작 (watchdog.sh에 위임하지 않고 bot-watchdog이 직접 처리)
+    # 프로세스가 없는 상태 — 직접 재시작
     log "Bot process not running. Attempting direct restart."
-    uid=$(id -u)
-    launchctl kickstart "gui/${uid}/${DISCORD_SERVICE}" 2>/dev/null || {
-        log "kickstart failed, trying bootstrap"
-        launchctl bootstrap "gui/${uid}" "$HOME/Library/LaunchAgents/${DISCORD_SERVICE}.plist" 2>/dev/null || true
-    }
+    if $IS_MACOS; then
+        uid=$(id -u)
+        launchctl kickstart "gui/${uid}/${DISCORD_SERVICE}" 2>/dev/null || {
+            log "kickstart failed, trying bootstrap"
+            launchctl bootstrap "gui/${uid}" "$HOME/Library/LaunchAgents/${DISCORD_SERVICE}.plist" 2>/dev/null || true
+        }
+    else
+        pm2 restart jarvis-bot 2>/dev/null || { log "pm2 restart failed"; }
+    fi
     log "Restart issued for stopped $DISCORD_SERVICE"
     if ! is_in_alert_cooldown; then
         send_discord_webhook "[Bot Watchdog] Bot was not running (silent ${silence_sec}s). Restart issued."
@@ -141,14 +151,23 @@ if [[ "$bot_pid" == "-" || -z "$bot_pid" ]]; then
     exit 0
 fi
 
-# Kickstart (kill + restart)
-uid=$(id -u)
-launchctl kickstart -k "gui/${uid}/${DISCORD_SERVICE}" 2>/dev/null || {
-    log "ERROR: kickstart failed, trying kill + bootstrap"
-    kill -TERM "$bot_pid" 2>/dev/null || true
-    sleep 3
-    launchctl bootstrap "gui/${uid}" "$HOME/Library/LaunchAgents/${DISCORD_SERVICE}.plist" 2>/dev/null || true
-}
+# Kill + restart
+if $IS_MACOS; then
+    uid=$(id -u)
+    launchctl kickstart -k "gui/${uid}/${DISCORD_SERVICE}" 2>/dev/null || {
+        log "ERROR: kickstart failed, trying kill + bootstrap"
+        kill -TERM "$bot_pid" 2>/dev/null || true
+        sleep 3
+        launchctl bootstrap "gui/${uid}" "$HOME/Library/LaunchAgents/${DISCORD_SERVICE}.plist" 2>/dev/null || true
+    }
+else
+    pm2 restart jarvis-bot 2>/dev/null || {
+        log "ERROR: pm2 restart failed, trying kill + restart"
+        kill -TERM "$bot_pid" 2>/dev/null || true
+        sleep 3
+        pm2 start jarvis-bot 2>/dev/null || true
+    }
+fi
 
 log "Restart issued for $DISCORD_SERVICE"
 
