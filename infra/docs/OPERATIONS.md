@@ -203,6 +203,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed flow diagrams.
 | Doc sync audit drafts | `rag/teams/reports/doc-draft-*.md` | 14 days |
 
 > **⚠️ cron.log JSON 오염 주의**: `task-store.mjs` 호출 시 `>/dev/null 2>&1` 없이 `2>/dev/null`만 쓰면 `{"ok":true,...}` JSON이 stdout으로 cron.log에 혼입됩니다. FSM 헬퍼(`_fsm_ensure`, `_fsm_transition`)와 event_trigger 스크립트(auto-diagnose.sh 등)는 반드시 `>/dev/null 2>&1 || true` 패턴을 사용해야 합니다. (2026-04-11 구현 P)
+>
+> **⚠️ best-effort 스크립트는 `set -e` 사용 금지**: context-bus 갱신(`session-sync.sh`)처럼 실패해도 서비스에 영향 없는 스크립트에 `set -e`를 적용하면 예측 불가 조건에서 Circuit Breaker가 누적되어 Discord 알림 노이즈로 이어집니다. 이런 스크립트는 `set -uo pipefail`만 사용하고 개별 실패는 `|| true`로 처리하세요. (2026-04-11 구현 Q)
 
 ---
 
