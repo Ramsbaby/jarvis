@@ -256,8 +256,8 @@ To verify it's running: `docker compose logs -f` — you should see `Discord con
 ```bash
 git clone https://github.com/your-username/jarvis ~/.jarvis
 cd ~/.jarvis
-./install.sh              # installs deps, sets up LaunchAgents and crontab
-# Edit discord/.env with your tokens, then:
+python scripts/setup_infra.py    # interactive setup wizard
+# Or manual setup — see CLAUDE-SETUP-GUIDE.md
 node discord/discord-bot.js
 ```
 
@@ -270,17 +270,7 @@ launchctl load ~/Library/LaunchAgents/ai.jarvis.discord-bot.plist
 launchctl list | grep jarvis   # should show the service as running
 ```
 
-> **First time?** [discord/SETUP.md](discord/SETUP.md) walks through Discord bot creation, finding your server/channel IDs, and verifying the first response — with screenshots.
-
-### Dependency Tiers
-
-Choose how much to install:
-
-| Tier | Command | Size | Features |
-|------|---------|------|---------|
-| **0 — Core** | `./install.sh --tier 0` | ~150 MB | Discord bot only, no RAG |
-| **1 — Standard** | `./install.sh --tier 1` | ~350 MB | + SQLite history + BM25 search |
-| **2 — Full** | `./install.sh` (default) | ~700 MB | + LanceDB vector search + OpenAI embeddings |
+> **First time?** [CLAUDE-SETUP-GUIDE.md](CLAUDE-SETUP-GUIDE.md) — comprehensive setup including MCP, personas, context files, and troubleshooting.
 
 ---
 
