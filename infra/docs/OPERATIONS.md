@@ -202,6 +202,8 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed flow diagrams.
 | System overview gen | `logs/gen-system-overview.log` | 7 days |
 | Doc sync audit drafts | `rag/teams/reports/doc-draft-*.md` | 14 days |
 
+> **⚠️ cron.log JSON 오염 주의**: `task-store.mjs` 호출 시 `>/dev/null 2>&1` 없이 `2>/dev/null`만 쓰면 `{"ok":true,...}` JSON이 stdout으로 cron.log에 혼입됩니다. FSM 헬퍼(`_fsm_ensure`, `_fsm_transition`)와 event_trigger 스크립트(auto-diagnose.sh 등)는 반드시 `>/dev/null 2>&1 || true` 패턴을 사용해야 합니다. (2026-04-11 구현 P)
+
 ---
 
 ## Incident Response

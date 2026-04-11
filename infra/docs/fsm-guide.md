@@ -1,6 +1,6 @@
 # Jarvis Task FSM 운영 가이드
 
-> 최종 업데이트: 2026-03-31 (9절 추가: transition/ensureCronTask/checkDeps API 레퍼런스)
+> 최종 업데이트: 2026-04-11 (구현 P 추가: FSM 헬퍼 stdout 억제)
 > 대상: bot-cron.sh + task-store.mjs + tasks.db + stale-task-watcher.sh + auto-diagnose.sh + dashboard/server.mjs
 
 ---
@@ -413,6 +413,7 @@ print('CB OPEN:', f.get('cb_open'))
 | **M** tasks.json retry.max 전달 | `bot-cron.sh`가 `tasks.json`의 `retry.max`(또는 `maxRetries`) 값을 읽어 `retry-wrapper.sh`에 8번째 인수(`MAX_RETRIES`)로 전달. 미설정 시 기본값 3. 태스크별 재시도 횟수를 `config/tasks.json`에서 선언적으로 제어 가능 | `bin/bot-cron.sh`, `bin/retry-wrapper.sh` |
 | **N** stale-watcher 단일 인스턴스 보장 | cron + LaunchAgent 이중 등록 시 동일 태스크를 2회 failed 처리하는 경쟁 조건 수정. `/tmp/jarvis-stale-watcher.pid` PID 파일 기반 가드 추가: 기존 PID가 살아있으면 즉시 exit 0, EXIT trap으로 PID 파일 자동 정리 | `scripts/stale-task-watcher.sh` |
 | **O** ceo-daily-digest 스케줄 22:00→23:15 | council-insight(23:05)보다 먼저 실행되어 구조적으로 항상 DEFERRED되던 문제 수정. 23:15로 변경하여 council-insight 완료 후 실행 보장 | `config/tasks.json` |
+| **P** FSM 헬퍼 stdout 억제 | `bot-cron.sh`의 `_fsm_ensure()` / `_fsm_transition()`이 `task-store.mjs` JSON 출력(`{"ok":true,...}`)을 `2>/dev/null`만 억제하고 stdout은 흘려보내 cron.log가 JSON으로 오염되던 문제 수정. `>/dev/null 2>&1`로 변경하여 stdout/stderr 모두 억제. `auto-diagnose.sh` 동일 패턴도 함께 수정 | `bin/bot-cron.sh`, `scripts/auto-diagnose.sh` |
 | **P** github-monitor timeout 180s→720s | claude -p 실행 시 LLM API 응답 대기로 실제 소요 시간이 10-25분임에도 timeout=180s(stale임계=6분)로 설정되어 항상 stale-watcher 오탐. timeout=720s(stale임계=24분)로 수정 | `config/tasks.json` |
 | **R** SQLite WAL 튜닝 | `task-store.mjs`의 DB 초기화에 3개 PRAGMA 추가: ① `busy_timeout=10000` (5→10초, 동시 쓰기 시 대기 여유 증가) ② `wal_autocheckpoint=1000` (1000페이지마다 WAL 자병합, 무한 WAL 성장 방지) ③ `PRAGMA optimize` (연결 시마다 쿼리 플래너 통계 갱신, 인덱스 활용 최적화) | `lib/task-store.mjs` |
 | **S** 부모-자식 태스크 집계 (aggregation API) | ① tasks 테이블에 `parent_id TEXT` 컬럼 추가 (마이그레이션 자동). ② `addTask()`, `ensureCronTask()`에 parent_id 파라미터 지원. ③ `deserialize()`에 parent_id 필드 추가. ④ `list-with-aggregation` CLI 명령 신규: 각 태스크에 `total_children`, `completed_children` 필드 자동 계산 (parent_id 그룹별 자식 수 + done 상태 자식 수). ⑤ Dashboard `/api/tasks` 엔드포인트를 `list-with-aggregation`으로 변경하여 API 응답에 진행률 필드 포함. 프론트엔드에서 그룹 태스크의 진행률 바 렌더링 가능 | `lib/task-store.mjs`, `dashboard/server.mjs` |

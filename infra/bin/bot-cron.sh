@@ -23,11 +23,11 @@ FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
 # --- FSM 헬퍼 ---
 _fsm_ensure() {
     # cron 태스크를 FSM DB에 등록/리셋 (failed/done → queued 재시작)
-    ${NODE_SQLITE} "${FSM_STORE}" ensure "$1" "$1" "bot-cron" 2>/dev/null || true
+    ${NODE_SQLITE} "${FSM_STORE}" ensure "$1" "$1" "bot-cron" >/dev/null 2>&1 || true
 }
 _fsm_transition() {
     local task_id="$1" to_status="$2" extra="${3:-{}}"
-    ${NODE_SQLITE} "${FSM_STORE}" transition "$task_id" "$to_status" "bot-cron" "$extra" 2>/dev/null || true
+    ${NODE_SQLITE} "${FSM_STORE}" transition "$task_id" "$to_status" "bot-cron" "$extra" >/dev/null 2>&1 || true
 }
 _fsm_discord_alert() {
     # 태스크 실패 시 Discord jarvis-system 채널에 직접 알림 (webhook)
@@ -64,15 +64,16 @@ log() {
 _TASK_DONE=false
 _SENTINEL_FILE=""
 _FSM_RUNNING=false   # FSM running 전이 성공 여부 추적
+_PHASE="init"        # 현재 실행 단계 — ABORTED 발생 위치 식별용
 _cleanup() {
     local rc=$?
     if [[ -n "$_SENTINEL_FILE" ]]; then rmdir "$_SENTINEL_FILE" 2>/dev/null || true; fi
     if [[ "$_TASK_DONE" == "false" ]]; then
-        log "ABORTED (unexpected exit: $rc — signal or set -e trigger)"
+        log "ABORTED (unexpected exit: $rc — phase=${_PHASE}, signal or set -e trigger)"
         # FSM: 비정상 종료 시 running → failed 전이 (FSM이 running 상태였을 때만)
         if [[ "$_FSM_RUNNING" == "true" ]]; then
             _fsm_transition "$TASK_ID" "failed" \
-                "{\"lastError\":\"aborted: exit ${rc}\"}" 2>/dev/null || true
+                "{\"lastError\":\"aborted: exit ${rc}, phase=${_PHASE}\"}" 2>/dev/null || true
         fi
     fi
 }
@@ -107,6 +108,7 @@ fi
 unset _jitter
 
 # --- Read task config from tasks.json ---
+_PHASE="config-load"
 TASK_CONFIG=$(jq -r --arg id "$TASK_ID" '.tasks[] | select(.id == $id or ((.aliases // []) | index($id)) != null)' "$TASKS_FILE")
 if [[ -z "$TASK_CONFIG" || "$TASK_CONFIG" == "null" ]]; then
     log "ERROR: Task '$TASK_ID' not found in tasks.json"
@@ -161,6 +163,7 @@ ${PROMPT}"
     fi
 fi
 
+_PHASE="param-load"
 ALLOWED_TOOLS=$(echo "$TASK_CONFIG" | jq -r '.allowedTools // "Read"')
 TIMEOUT=$(echo "$TASK_CONFIG" | jq -r '.timeout // 180')
 MAX_BUDGET=$(echo "$TASK_CONFIG" | jq -r '.maxBudget // empty')
@@ -245,10 +248,9 @@ unset _cur_md5
 
 # --- Market holiday guard (tasks with requiresMarket: true) ---
 if [[ "$REQUIRES_MARKET" == "true" ]]; then
-        log "SKIPPED — market closed today (holiday or weekend)"
-        _TASK_DONE=true
-        exit 0
-    fi
+    log "SKIPPED — market closed today (holiday or weekend)"
+    _TASK_DONE=true
+    exit 0
 fi
 
 # --- Duplicate run guard (atomic mkdir lock) ---
@@ -302,6 +304,7 @@ unset _ONCE_PER_DAY _TODAY_START _last_done _last_done_dt
 _CB_DIR="${BOT_HOME}/state/circuit-breaker"
 _CB_FILE="${_CB_DIR}/${TASK_ID}.json"
 mkdir -p "$_CB_DIR"
+_PHASE="circuit-breaker"
 _cb_fail=0
 _cb_last_fail=0
 if [[ -f "$_CB_FILE" ]]; then
@@ -323,6 +326,7 @@ fi
 unset _cb_now _CB_COOLDOWN
 
 # --- FSM: cron 태스크를 DB에 ensure (없으면 queued로 등록, failed/done이면 재시작) ---
+_PHASE="fsm-ensure"
 TASK_NAME_FSM=$(echo "$TASK_CONFIG" | jq -r '.name // .id // empty')
 _fsm_ensure "$TASK_ID"
 
@@ -363,7 +367,14 @@ log "START"
 
 # --- Lounge announce: task started ---
 
+# --- allowedTools 기본값 경고: 프롬프트 기반 태스크가 "Read" 단독이면 Bash/Write 필요 시 실패 ---
+if [[ -z "$SCRIPT" && "$ALLOWED_TOOLS" == "Read" ]]; then
+    log "WARN: allowedTools='Read'(기본값) — tasks.json에 allowedTools 미설정. Bash/Write 필요 시 실패함."
+fi
+
 # --- Execute: script 필드가 있으면 직접 실행, 없으면 retry-wrapper ---
+_PHASE="execute"
+_TASK_START_S=$(date +%s)
 RESULT=""
 EXIT_CODE=0
 if [[ -n "$SCRIPT" ]]; then
@@ -378,6 +389,15 @@ if [[ -n "$SCRIPT" ]]; then
 else
     RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
 fi
+
+# --- 실행 시간 측정 + timeout 80% 초과 시 경고 ---
+_TASK_END_S=$(date +%s)
+_ACTUAL_DURATION=$(( _TASK_END_S - _TASK_START_S ))
+_TIMEOUT_WARN=$(( TIMEOUT * 8 / 10 ))
+if [[ $_ACTUAL_DURATION -ge $_TIMEOUT_WARN ]]; then
+    log "WARN: 실행시간 ${_ACTUAL_DURATION}s >= timeout(${TIMEOUT}s)의 80% — timeout 증가 권장"
+fi
+unset _TASK_END_S _TIMEOUT_WARN
 
 if [[ $EXIT_CODE -ne 0 ]]; then
     # successPattern: 출력에 패턴이 있으면 exit code 무시하고 성공 처리
@@ -441,7 +461,9 @@ if [[ $EXIT_CODE -ne 0 ]]; then
     exit "$EXIT_CODE"
 fi
 
-log "SUCCESS"
+_PHASE="post-execute"
+log "SUCCESS (duration=${_ACTUAL_DURATION}s)"
+unset _ACTUAL_DURATION
 # circuit breaker: 성공 시 초기화
 if [[ -f "$_CB_FILE" ]]; then rm -f "$_CB_FILE" 2>/dev/null || true; fi
 # FSM: running → done 전이
