@@ -9,7 +9,8 @@
     "check": "node --check discord-bot.js",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "office": "node ../bin/jarvis-office.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.76",
