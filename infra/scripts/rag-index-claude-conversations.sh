@@ -21,8 +21,12 @@ CLAUDE_PROJECTS="${HOME}/.claude/projects"
 OUT_BASE="${BOT_HOME}/context/claude-code-sessions"
 LOG="${BOT_HOME}/logs/rag-conversations.log"
 DAYS_BACK="${DAYS_BACK:-14}"
-# /tmp/bot-work 같은 단명 태스크 경로는 제외, 실제 프로젝트만 인덱싱
-PROJECT_PATTERN="${PROJECT_PATTERN:--Users-$(whoami)}"  # 현재 사용자 홈 디렉토리 프로젝트만
+# Claude Code는 프로젝트 경로를 슬러그화(/ → -)해서 디렉토리 이름으로 사용.
+# macOS: /Users/alice/foo → -Users-alice-foo
+# Linux: /home/alice/foo  → -home-alice-foo
+# $HOME 기반으로 자동 감지 → macOS/Linux 양쪽 지원
+HOME_SLUG="$(printf '%s' "${HOME}" | tr '/' '-')"
+PROJECT_PATTERN="${PROJECT_PATTERN:-${HOME_SLUG}}"
 
 mkdir -p "$OUT_BASE" "$(dirname "$LOG")"
 log() { printf '[%s] [rag-conv] %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOG"; }
@@ -173,7 +177,9 @@ while IFS= read -r jsonl_file; do
   fi
 
   # 프로젝트명 / 세션 ID 추출
-  project_dir=$(dirname "$jsonl_file" | xargs dirname | xargs basename)
+  # JSONL 경로: ~/.claude/projects/<project-slug>/<session-id>.jsonl
+  # dirname 한 번 → <project-slug> 디렉토리, basename → 슬러그 이름
+  project_dir=$(basename "$(dirname "$jsonl_file")")
   session_id=$(basename "$jsonl_file" .jsonl | cut -c1-8)
   out_dir="$OUT_BASE/$project_dir"
   out_file="$out_dir/${session_id}.md"
