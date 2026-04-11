@@ -505,11 +505,34 @@ run_one_check() {
                     _now_ts=$(date +%s)
                     _last_ts=0
                     if [[ -f "$_alert_last" ]]; then _last_ts=$(cat "$_alert_last"); fi
-                    if (( _now_ts - _last_ts >= HANDLER_ERROR_ALERT_COOLDOWN )); then
+
+                    # 에러율 100% → 코드 버그 확정, 자동 heal + 재시작
+                    if (( _total_c > 0 && _err_c == _total_c )); then
+                        send_alert "[Bot Watchdog] FATAL: handleMessage 에러율 100% (${_err_c}/${_total_c}). 코드 버그 — 자동 heal 후 재시작"
+                        echo "$_now_ts" > "$_alert_last"
+                        # bot-heal.sh로 자동 수정 시도
+                        local _last_err
+                        _last_err=$(tail -20 "$BOT_HOME/logs/discord-bot.jsonl" 2>/dev/null \
+                            | python3 -c "import json,sys
+for l in sys.stdin:
+ try:
+  d=json.loads(l)
+  if d.get('msg')=='handleMessage error': print(d.get('error','unknown')); break
+ except: pass" 2>/dev/null || echo "unknown")
+                        if [[ ! -f "$BOT_HOME/state/heal-in-progress" ]]; then
+                            log "HANDLER 100% ERROR: bot-heal.sh 트리거 — ${_last_err}"
+                            nohup bash "$BOT_HOME/scripts/bot-heal.sh" "handleMessage 에러율 100%: ${_last_err}" \
+                                >> "$BOT_HOME/logs/bot-heal.log" 2>&1 &
+                        fi
+                        _bot_restart
+                        health_status="restarted:handler_errors_100pct"
+                    elif (( _now_ts - _last_ts >= HANDLER_ERROR_ALERT_COOLDOWN )); then
                         send_alert "[Bot Watchdog] DEGRADED: handleMessage errors ${_err_c}/${_total_c} (최근 5분). 코드 버그 의심 — 수동 확인 필요"
                         echo "$_now_ts" > "$_alert_last"
+                        health_status="degraded:handler_errors_${_err_c}_${_total_c}"
+                    else
+                        health_status="degraded:handler_errors_${_err_c}_${_total_c}"
                     fi
-                    health_status="degraded:handler_errors_${_err_c}_${_total_c}"
                 fi
 
                 if (( memory_mb >= MEMORY_CRITICAL_MB )); then
@@ -620,7 +643,7 @@ HEALTHEOF
     # LanceDB 크기 감시 (5GB 초과 시 경고 — 정상 운영 범위 1.9~2.7GB, compact 후 최대 하루치 증분 허용)
     lancedb_path="$BOT_HOME/rag/lancedb"
     _lancedb_alert_cooldown="$BOT_HOME/state/lancedb-alert-last.txt"
-    _lancedb_cooldown_sec=14400  # 4시간 — 3분마다 watchdog 실행, 쿨다운 없으면 폭격
+    _lancedb_cooldown_sec=86400  # 24시간 — 하루 1회 알림으로 제한
     if [[ -d "$lancedb_path" ]]; then
         lancedb_mb=$(du -sm "$lancedb_path" 2>/dev/null | awk '{print $1}')
         if (( lancedb_mb > 5120 )); then
