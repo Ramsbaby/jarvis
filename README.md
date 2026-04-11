@@ -7,8 +7,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
-  <img src="https://img.shields.io/badge/Node.js-18+-green.svg" alt="Node.js">
-  <img src="https://img.shields.io/badge/Ollama-Required-orange.svg" alt="Ollama">
+  <img src="https://img.shields.io/badge/Node.js-22+-green.svg" alt="Node.js">
+  <img src="https://img.shields.io/badge/Claude_CLI-Required-blue.svg" alt="Claude CLI">
+  <img src="https://img.shields.io/badge/Ollama-Optional-orange.svg" alt="Ollama">
   <img src="https://img.shields.io/badge/Privacy-100%25_Local-brightgreen.svg" alt="Privacy">
 </p>
 
@@ -91,21 +92,31 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 git clone https://github.com/Ramsbaby/jarvis.git && cd jarvis
 ```
 
-### Step 1: RAG — Long-Term Memory
+### Step 0: Prerequisites
 
-```bash
-python scripts/setup_rag.py
-```
+- **Claude Max or Pro subscription** + **Claude Code CLI** installed and authenticated
+  ```bash
+  npm install -g @anthropic-ai/claude-code
+  claude   # authenticate in browser on first run
+  ```
+- **Node.js 22+** and **jq**
 
-> **Requires**: [Ollama](https://ollama.com/download), Node.js 18+
-
-### Step 2: Discord Bot + Automation
+### Step 1: Discord Bot + Automation
 
 ```bash
 python scripts/setup_infra.py
 ```
 
-> **Requires**: Node.js 18+, Discord bot token
+> **Requires**: Node.js 22+, Discord bot token, Claude Code CLI
+> **Detailed guide**: [`infra/CLAUDE-SETUP-GUIDE.md`](infra/CLAUDE-SETUP-GUIDE.md) — comprehensive step-by-step including MCP, personas, and context setup
+
+### Step 2: RAG — Long-Term Memory (Optional)
+
+```bash
+python scripts/setup_rag.py
+```
+
+> **Requires**: [Ollama](https://ollama.com/download) running locally
 
 ### WSL2 / Linux — Start with PM2
 
@@ -312,9 +323,12 @@ jarvis/
 <summary><strong>Troubleshooting</strong></summary>
 
 - **Discord bot won't start** — check `.env` has valid `DISCORD_TOKEN`
+- **Bot ignores messages** — enable `MESSAGE_CONTENT_INTENT` in Discord Developer Portal → Bot → Privileged Intents
+- **No MCP tools** — copy `config/discord-mcp.example.json` to `config/discord-mcp.json` and set paths
+- **Cron tasks fail** — verify `claude` CLI is installed and `CLAUDE_BINARY` path is correct in `.env`
 - **RAG returns no results** — `cd rag && npm run stats` to check DB status
-- **Cron jobs not running** — `crontab -l`, check logs in `~/.local/share/jarvis/logs/`
-- **Insight report missing** — `BOT_HOME=~/.jarvis node rag/bin/insight-distill.mjs`
+- **macOS: "gtimeout not found"** — `brew install coreutils`
+- **Full troubleshooting**: [`infra/CLAUDE-SETUP-GUIDE.md`](infra/CLAUDE-SETUP-GUIDE.md#6-troubleshooting)
 
 </details>
 
