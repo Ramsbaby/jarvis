@@ -318,6 +318,8 @@ Edit `config/discord-mcp.json`:
 
 > **Important**: The `${BOT_HOME}` and `${DISCORD_TOKEN}` placeholders are auto-resolved at runtime from your `.env` file. You can use either placeholders or absolute paths.
 
+> **Alternative — `~/.mcp.json` fallback**: If `discord-mcp.json` doesn't exist, the bot automatically loads `nexus` and `serena` from your global `~/.mcp.json`. So if you already configured Nexus for Claude Code CLI, you can skip creating `discord-mcp.json` — the bot will pick it up automatically. Only `nexus` and `serena` are loaded from `~/.mcp.json`; other CLI-only servers (brave-search, jira, etc.) are filtered out.
+
 **What Nexus enables** (tools available to Claude in Discord):
 
 | Tool | Purpose |
