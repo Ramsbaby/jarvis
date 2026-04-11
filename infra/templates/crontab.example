@@ -135,12 +135,6 @@
 # [Context] Context Bus · 뉴스 · 브리핑 · 캘린더
 # ────────────────────────────────────────────────────────────────────────────
 
-# Context Bus 전체 파이프라인 (15분마다)
-*/15 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh ctx-bus-full 600 /bin/bash __JARVIS_HOME__/bin/context-bus-pipeline.sh full >> __JARVIS_HOME__/logs/context-bus-pipeline.log 2>&1
-# Context Bus 실시간 모니터링 (5분마다)
-*/5 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh ctx-bus-rt 180 /bin/bash __JARVIS_HOME__/bin/context-bus-pipeline.sh realtime >> __JARVIS_HOME__/logs/context-bus-pipeline.log 2>&1
-# Context Bus 헬스 체크 (30분마다)
-*/30 * * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/context-bus-pipeline.sh health >> __JARVIS_HOME__/logs/context-bus-pipeline.log 2>&1
 # 뉴스 브리핑 (매일 06:00)
 0 6 * * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh news-briefing >> __JARVIS_HOME__/logs/cron.log 2>&1
 # 모닝 스탠드업 (매일 06:15)
