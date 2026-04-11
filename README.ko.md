@@ -42,7 +42,7 @@ API 과금 없이 Claude 구독만으로 돌아갑니다. 데이터는 100% 내 
 | **접점** | Discord (텍스트 + 음성) | 24/7 대화 인터페이스. 16+ 슬래시 커맨드, 버튼, 음성 인식 |
 | **두뇌** | Claude + 8개 AI 에이전트 팀 | 대화, 분석, 코드 작성, 의사결정 |
 | **기억** | RAG (LanceDB) + 인사이트 레이어 | 10,000+ 문서 검색 + 매일 행동 메트릭 자동 분석 |
-| **자동화** | 99 스크립트 + 11 LaunchAgent + 40+ 크론 | 자가 복구, 새벽 감사, 뉴스 브리핑, 코드 자동 실행 |
+| **자동화** | 99 스크립트 + 40+ 크론 (macOS: LaunchAgent, Linux: PM2) | 자가 복구, 새벽 감사, 뉴스 브리핑, 코드 자동 실행 |
 | **연동** | MCP + Google Calendar + GitHub | 외부 서비스 통합 |
 
 ## 핵심 기능
@@ -74,6 +74,17 @@ API 과금 없이 Claude 구독만으로 돌아갑니다. 데이터는 100% 내 
 
 **Jarvis가 다른 점**: 단순히 기억하는 게 아니라 **행동한다**. 기억 + 분석 + 자동화 + 자가 복구가 하나의 시스템. 다른 도구들은 메모리 레이어에 머물지만, Jarvis는 메모리를 기반으로 코드를 짜고, 서비스를 복구하고, 리포트를 만든다.
 
+## 플랫폼 지원
+
+| 플랫폼 | 상태 | 서비스 관리 |
+|--------|:----:|------------|
+| **macOS** (주 환경) | 완전 지원 | LaunchAgents + cron |
+| **Linux / WSL2** | 완전 지원 | PM2 + cron |
+| **Docker** | 완전 지원 | PM2 (`ecosystem.config.cjs`) |
+| **Windows (네이티브)** | 미지원 | WSL2 또는 Docker 사용 |
+
+> 크로스플랫폼 추상화: `lib/compat.sh`가 OS를 자동 감지하여 서비스 명령을 라우팅 (macOS: `launchctl`, Linux/WSL2: `pm2`).
+
 ## 빠른 시작
 
 ```bash
@@ -95,6 +106,14 @@ python scripts/setup_infra.py
 ```
 
 > **필요**: Node.js 18+, Discord 봇 토큰
+
+### WSL2 / Linux — PM2로 시작
+
+```bash
+npm install -g pm2
+pm2 start infra/ecosystem.config.cjs
+pm2 startup && pm2 save   # 부팅 시 자동 시작
+```
 
 ## Discord 봇
 

@@ -42,7 +42,7 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 | **Interface** | Discord (text + voice) | 24/7 conversational UI. 16+ slash commands, buttons, voice recognition |
 | **Brain** | Claude + 8 AI agent teams | Chat, analysis, code generation, decision-making |
 | **Memory** | RAG (LanceDB) + Insight Layer | 10,000+ doc search + daily behavioural metrics analysis |
-| **Automation** | 99 scripts + 11 LaunchAgents + 40+ crons | Self-healing, dawn audits, news briefing, auto code execution |
+| **Automation** | 99 scripts + 40+ crons (LaunchAgents on macOS, PM2 on Linux) | Self-healing, dawn audits, news briefing, auto code execution |
 | **Integration** | MCP + Google Calendar + GitHub | External service connectivity |
 
 ## Core Features
@@ -74,6 +74,17 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 
 **What sets Jarvis apart**: It doesn't just remember — it **acts**. Memory + analysis + automation + self-healing in one system. Others stop at the memory layer; Jarvis uses memory to write code, recover services, and generate reports.
 
+## Platform Support
+
+| Platform | Status | Service Manager |
+|----------|:------:|-----------------|
+| **macOS** (primary) | Fully supported | LaunchAgents + cron |
+| **Linux / WSL2** | Fully supported | PM2 + cron |
+| **Docker** | Fully supported | PM2 (via `ecosystem.config.cjs`) |
+| **Windows (native)** | Not supported | Use WSL2 or Docker |
+
+> Cross-platform abstraction: `lib/compat.sh` auto-detects the OS and routes service commands (`launchctl` on macOS, `pm2` on Linux/WSL2).
+
 ## Quick Start
 
 ```bash
@@ -95,6 +106,14 @@ python scripts/setup_infra.py
 ```
 
 > **Requires**: Node.js 18+, Discord bot token
+
+### WSL2 / Linux — Start with PM2
+
+```bash
+npm install -g pm2
+pm2 start infra/ecosystem.config.cjs
+pm2 startup && pm2 save   # auto-start on boot
+```
 
 ## Discord Bot
 
