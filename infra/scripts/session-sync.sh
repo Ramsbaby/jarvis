@@ -106,7 +106,8 @@ if [[ ! -f "$LLM_GATEWAY_SH" ]]; then
 fi
 
 # shellcheck source=/dev/null
-source "$LLM_GATEWAY_SH"
+# source 실패 시 || true로 set -e 전파 방지 (llm_call 미정의 시 if llm_call이 127로 스킵됨)
+source "$LLM_GATEWAY_SH" 2>/dev/null || true
 
 KST_NOW="$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M')"
 PROMPT="아래는 오늘 자비스 컴퍼니의 최근 대화 로그와 현재 context-bus입니다.
@@ -133,7 +134,7 @@ RESULT=""
 if llm_call \
     --prompt "$PROMPT" \
     --timeout 60 \
-    --model "claude-haiku-4-5-20251015" \
+    --model "claude-haiku-4-5-20251001" \
     --output "$OUTPUT_TMP" 2>/dev/null; then
     RESULT=$(python3 -c "import json,sys; d=json.load(open('$OUTPUT_TMP')); print(d.get('result',''))" 2>/dev/null || true)
 fi
