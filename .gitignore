@@ -35,3 +35,5 @@ infra/config/discord-mcp.json
 # Runtime
 .jarvis.pid
 jarvis.log
+infra/office/node_modules
+infra/office/dist
