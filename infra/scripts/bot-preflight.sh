@@ -53,7 +53,7 @@ fail_and_heal() {
 
     # 6시간 이상 안정적이었으면 카운터 자동 리셋 (일시적 장애가 영구 차단하지 않게)
     if [[ -f "$HEAL_ATTEMPTS_FILE" ]]; then
-        last_attempt_age=$(( $(date +%s) - $(stat -f %m "$HEAL_ATTEMPTS_FILE" 2>/dev/null || stat -c '%Y' "$HEAL_ATTEMPTS_FILE" 2>/dev/null || echo 0) ))
+        last_attempt_age=$(( $(date +%s) - $(stat -c '%Y' "$HEAL_ATTEMPTS_FILE" 2>/dev/null || stat -f %m "$HEAL_ATTEMPTS_FILE" 2>/dev/null || echo 0) ))
         if (( last_attempt_age > 21600 )); then
             log "6시간 이상 경과 — 복구 카운터 자동 리셋 (이전 시도: ${attempts}회)"
             rm -f "$HEAL_ATTEMPTS_FILE"
@@ -76,7 +76,7 @@ fail_and_heal() {
     local heal_lock="$BOT_HOME/state/heal-in-progress"
     if [[ -f "$heal_lock" ]]; then
         local lock_age
-        lock_age=$(( $(date +%s) - $(stat -f %m "$heal_lock" 2>/dev/null || stat -c '%Y' "$heal_lock" 2>/dev/null || echo 0) ))
+        lock_age=$(( $(date +%s) - $(stat -c '%Y' "$heal_lock" 2>/dev/null || stat -f %m "$heal_lock" 2>/dev/null || echo 0) ))
         if (( lock_age < 600 )); then
             log "heal 이미 진행 중 (${lock_age}s ago) — 신규 기동 생략, 완료 대기"
             sleep 30

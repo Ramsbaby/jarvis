@@ -40,7 +40,7 @@ fi
 # mkdir 는 POSIX 보장 atomic — echo > file 방식(TOCTOU 레이스)과 달리 커널이 보장
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     _pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || echo 0)
-    _age=$(( $(date +%s) - $(stat -f %m "$LOCK_DIR" 2>/dev/null || stat -c '%Y' "$LOCK_DIR" 2>/dev/null || echo 0) ))
+    _age=$(( $(date +%s) - $(stat -c '%Y' "$LOCK_DIR" 2>/dev/null || stat -f %m "$LOCK_DIR" 2>/dev/null || echo 0) ))
     # 프로세스 살아있고 타임아웃 + 60초 버퍼 내라면 스킵
     if kill -0 "$_pid" 2>/dev/null && (( _age < MAX_TIMEOUT + 60 )); then
         _log "SKIP 이미 실행 중 (PID ${_pid}, ${_age}s 경과)"
