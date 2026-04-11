@@ -680,13 +680,6 @@ async function main() {
   // proposals-tracker
   targets.push(join(RAG_HOME, 'teams', 'proposals-tracker.md'));
 
-  // Jarvis가 이사회 최종 의사결정 맥락을 참조할 수 있도록 인덱싱.
-  try {
-    const boardEntries = await readdir(boardDir);
-    for (const f of boardEntries) {
-      if (extname(f) === '.md') targets.push(join(boardDir, f));
-    }
-
   // 5. 프로젝트 문서: README/ROADMAP/docs/adr는 봇 대화 컨텍스트에 부적합한 개발 메모이므로 제외.
   // Jarvis가 시스템 구조를 이해하려면 config/company-dna.md(섹션 3에서 이미 포함) 활용.
 
