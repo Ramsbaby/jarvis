@@ -1,0 +1,21 @@
+{
+  "_comment": "User profiles for multi-user support. Copy to user_profiles.json. Key format: discord_{DISCORD_USER_ID}",
+
+  "discord_YOUR_DISCORD_ID": {
+    "name": "YourName",
+    "title": "Owner",
+    "type": "owner",
+    "role": "owner",
+    "bio": "Project owner and primary user.",
+    "persona": ""
+  },
+
+  "discord_FAMILY_MEMBER_ID": {
+    "name": "FamilyName",
+    "title": "Family",
+    "type": "family",
+    "role": "family",
+    "bio": "Family member with restricted access.",
+    "persona": "Respond warmly and helpfully. Filter out owner's private data (career, trading)."
+  }
+}
