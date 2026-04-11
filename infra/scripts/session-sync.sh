@@ -38,7 +38,7 @@ if [[ -z "$DAILY_LOG" || ! -f "$DAILY_LOG" ]]; then
 fi
 
 # 최근 대화 로그 마지막 수정 시각 (epoch)
-LOG_MTIME=$(stat -f %m "$DAILY_LOG" 2>/dev/null || stat -c '%Y' "$DAILY_LOG" 2>/dev/null || echo 0)
+LOG_MTIME=$(stat -c '%Y' "$DAILY_LOG" 2>/dev/null || stat -f %m "$DAILY_LOG" 2>/dev/null || echo 0)
 NOW=$(date +%s)
 LOG_AGE=$(( NOW - LOG_MTIME ))
 
@@ -49,7 +49,7 @@ fi
 
 # context-bus 마지막 갱신 시각 확인
 if [[ -f "$CONTEXT_BUS" ]]; then
-    BUS_MTIME=$(stat -f %m "$CONTEXT_BUS" 2>/dev/null || stat -c '%Y' "$CONTEXT_BUS" 2>/dev/null || echo 0)
+    BUS_MTIME=$(stat -c '%Y' "$CONTEXT_BUS" 2>/dev/null || stat -f %m "$CONTEXT_BUS" 2>/dev/null || echo 0)
     BUS_AGE=$(( NOW - BUS_MTIME ))
     # context-bus가 최근 10분 내 갱신됐으면 건너뜀 (중복 방지)
     if (( BUS_AGE < 600 )); then
@@ -72,7 +72,7 @@ SESSION_SUMMARY_DIR="$BOT_HOME/state/session-summaries"
 if [[ -f "$SESSIONS_JSON" && -d "$SESSION_SUMMARY_DIR" ]]; then
     IDLE_COUNT=0
     while IFS= read -r -d '' summary_file; do
-        SUMMARY_MTIME=$(stat -f %m "$summary_file" 2>/dev/null || stat -c '%Y' "$summary_file" 2>/dev/null || echo 0)
+        SUMMARY_MTIME=$(stat -c '%Y' "$summary_file" 2>/dev/null || stat -f %m "$summary_file" 2>/dev/null || echo 0)
         SUMMARY_AGE=$(( NOW - SUMMARY_MTIME ))
         # 요약 파일이 2시간 이상 업데이트 안 된 경우 → stale 로그 기록
         if (( SUMMARY_AGE > 7200 )); then

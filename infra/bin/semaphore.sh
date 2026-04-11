@@ -38,7 +38,7 @@ _acquire_global_lock() {
             # Stale lock check (> 30s old)
             local lock_mtime now_ts
             now_ts=$(date +%s)
-            lock_mtime=$(stat -f %m "$GLOBAL_LOCK_FILE" 2>/dev/null || stat -c '%Y' "$GLOBAL_LOCK_FILE" 2>/dev/null || echo "0")
+            lock_mtime=$(stat -c '%Y' "$GLOBAL_LOCK_FILE" 2>/dev/null || stat -f %m "$GLOBAL_LOCK_FILE" 2>/dev/null || echo "0")
             if (( now_ts - lock_mtime > 30 )); then
                 rm -rf "$GLOBAL_LOCK_FILE" 2>/dev/null || true
             else
@@ -104,7 +104,7 @@ check_stale_locks() {
             continue
         fi
         # Check if lock is older than STALE_TIMEOUT
-        mtime=$(stat -f %m "$slot_dir" 2>/dev/null || stat -c '%Y' "$slot_dir" 2>/dev/null || echo "0")
+        mtime=$(stat -c '%Y' "$slot_dir" 2>/dev/null || stat -f %m "$slot_dir" 2>/dev/null || echo "0")
         if [[ "$mtime" == "0" ]]; then continue; fi  # slot disappeared (TOCTOU)
         if (( now - mtime > STALE_TIMEOUT )); then
             if rm -rf "$slot_dir" 2>/dev/null; then
