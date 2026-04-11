@@ -103,7 +103,7 @@ acquire_lock() {
     # Stale lock detection (600s = 10 min)
     local lock_age
     if [[ -d "$HEALING_LOCK" ]]; then
-        lock_age=$(( $(date +%s) - $(stat -f %m "$HEALING_LOCK" 2>/dev/null || stat -c '%Y' "$HEALING_LOCK" 2>/dev/null || echo "$(date +%s)") ))
+        lock_age=$(( $(date +%s) - $(stat -c '%Y' "$HEALING_LOCK" 2>/dev/null || stat -f %m "$HEALING_LOCK" 2>/dev/null || echo "$(date +%s)") ))
         if (( lock_age > 600 )); then
             log "WARN: Removing stale lock (age=${lock_age}s)"
             rmdir "$HEALING_LOCK" 2>/dev/null || true
@@ -360,7 +360,7 @@ _cleanup_stale_semaphore_slots() {
     while IFS= read -r slot_dir; do
         local pid_file="${slot_dir}/pid"
         local slot_age
-        slot_age=$(( $(date +%s) - $(stat -f %m "$slot_dir" 2>/dev/null || stat -c '%Y' "$slot_dir" 2>/dev/null || echo "$(date +%s)") ))
+        slot_age=$(( $(date +%s) - $(stat -c '%Y' "$slot_dir" 2>/dev/null || stat -f %m "$slot_dir" 2>/dev/null || echo "$(date +%s)") ))
         if (( slot_age > stale_sec )); then
             # PID가 살아있으면 건드리지 않음
             if [[ -f "$pid_file" ]]; then

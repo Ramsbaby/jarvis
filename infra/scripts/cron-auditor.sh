@@ -27,7 +27,7 @@ cron_interval_minutes() {
 log_mtime() {
   local f="$1"
   if [[ ! -f "$f" ]]; then echo 0; return; fi
-  stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo 0
+  stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0
 }
 
 last_task_ts() {
