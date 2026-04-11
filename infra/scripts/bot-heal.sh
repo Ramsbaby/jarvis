@@ -33,7 +33,7 @@ send_ntfy() {
 
 # 중복 복구 방지
 if [[ -f "$HEAL_LOCK" ]]; then
-    lock_age=$(( $(date +%s) - $(stat -f %m "$HEAL_LOCK" 2>/dev/null || stat -c '%Y' "$HEAL_LOCK" 2>/dev/null || echo 0) ))
+    lock_age=$(( $(date +%s) - $(stat -c '%Y' "$HEAL_LOCK" 2>/dev/null || stat -f %m "$HEAL_LOCK" 2>/dev/null || echo 0) ))
     if (( lock_age < 600 )); then
         log "복구 세션 이미 진행 중 (${lock_age}s ago) — 종료"
         exit 0
