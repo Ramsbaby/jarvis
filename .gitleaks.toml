@@ -39,4 +39,5 @@ paths = [
   '''private/''',
   '''LICENSE$''',
   '''package-lock\.json$''',
+  '''infra/scripts/job-apply\.mjs$''',
 ]
