@@ -4,6 +4,10 @@
 set -euo pipefail
 
 JARVIS_DIR="$HOME/.jarvis"
+source "${JARVIS_DIR}/lib/compat.sh" 2>/dev/null || {
+  IS_MACOS=false; IS_LINUX=false
+  case "$(uname -s)" in Darwin) IS_MACOS=true ;; Linux) IS_LINUX=true ;; esac
+}
 STATE_FILE="$JARVIS_DIR/state/degraded-mode.json"
 LOG="$JARVIS_DIR/logs/degraded-mode.log"
 MONITORING_CONFIG="$JARVIS_DIR/config/monitoring.json"
@@ -35,9 +39,18 @@ enter_degraded() {
 
 check_recovery() {
   # Discord bot 프로세스 정상 여부 확인
-  if launchctl list 2>/dev/null | grep -q "$DISCORD_SERVICE"; then
-    local pid
-    pid=$(launchctl list 2>/dev/null | grep "$DISCORD_SERVICE" | awk '{print $1}')
+  local pid=""
+  local found=false
+  if $IS_MACOS; then
+    if launchctl list 2>/dev/null | grep -q "$DISCORD_SERVICE"; then
+      pid=$(launchctl list 2>/dev/null | grep "$DISCORD_SERVICE" | awk '{print $1}')
+      [[ "$pid" != "-" && -n "$pid" ]] && found=true
+    fi
+  else
+    pid=$(pgrep -f "discord-bot.js" 2>/dev/null | head -1 || echo "")
+    [[ -n "$pid" ]] && found=true
+  fi
+  if $found; then
     if [[ "$pid" != "-" && -n "$pid" ]]; then
       log "복구 감지 — Discord bot PID $pid 정상"
       python3 -c "import json; f=open('$STATE_FILE','w'); json.dump({'active':False,'recovered_at':'$(date -u +%Y-%m-%dT%H:%M:%SZ)'},f)" 2>/dev/null || \

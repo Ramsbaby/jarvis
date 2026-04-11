@@ -15,6 +15,9 @@
 set -euo pipefail
 
 BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
+  IS_MACOS=false; case "$(uname -s)" in Darwin) IS_MACOS=true ;; esac
+}
 CONTEXT_BUS="$BOT_HOME/state/context-bus.md"
 LOG_DIR="$BOT_HOME/context/discord-history"
 LOG="$BOT_HOME/logs/session-sync.log"
