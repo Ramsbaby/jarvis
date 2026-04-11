@@ -1,0 +1,23 @@
+{
+  "_comment": "MCP servers for Discord bot. Copy to discord-mcp.json and configure. ${ENV_VAR} syntax is auto-resolved at runtime.",
+  "mcpServers": {
+    "nexus": {
+      "_comment": "Context Intelligence Gateway — compresses tool output 98% (315KB → 5.4KB). Required for exec/scan/rag_search/health tools.",
+      "type": "stdio",
+      "command": "node",
+      "args": ["${BOT_HOME}/lib/mcp-nexus.mjs"],
+      "env": {
+        "BOT_HOME": "${BOT_HOME}",
+        "DISCORD_TOKEN": "${DISCORD_TOKEN}",
+        "NODE_ENV": "production"
+      }
+    },
+    "serena": {
+      "_comment": "Optional — LSP-based code navigation. Enables get_symbols_overview, find_symbol, search_for_pattern. Install: npm install -g @anthropic-ai/serena",
+      "type": "stdio",
+      "command": "serena",
+      "args": ["--workspace", "${BOT_HOME}"],
+      "env": {}
+    }
+  }
+}
