@@ -119,7 +119,7 @@ for service in "${INTERVAL_SERVICES[@]+"${INTERVAL_SERVICES[@]}"}"; do
 
     # Stall detection: if log file hasn't been written in INTERVAL * STALL_MULTIPLIER, kickstart
     if [[ "$service" == "ai.jarvis.watchdog" && -f "$WATCHDOG_LOG" ]]; then
-        log_mtime=$(stat -f %m "$WATCHDOG_LOG" 2>/dev/null || stat -c '%Y' "$WATCHDOG_LOG" 2>/dev/null || echo 0)
+        log_mtime=$(stat -c '%Y' "$WATCHDOG_LOG" 2>/dev/null || stat -f %m "$WATCHDOG_LOG" 2>/dev/null || echo 0)
         now_epoch=$(date +%s)
         log_age=$(( now_epoch - log_mtime ))
         stall_threshold=$(( WATCHDOG_INTERVAL * STALL_MULTIPLIER ))
