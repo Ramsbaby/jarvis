@@ -12,10 +12,16 @@ concurrency:
   group: deploy
   cancel-in-progress: true
 
+env:
+  JARVIS_DEPLOY: "true"
+
 jobs:
   deploy:
     runs-on: self-hosted
     timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Pull latest
         run: |
@@ -32,4 +38,5 @@ jobs:
 
       - name: Smoke test + restart
         run: |
+          export BOT_HOME="$HOME/.jarvis"
           bash "$HOME/.jarvis/scripts/deploy-with-smoke.sh"
