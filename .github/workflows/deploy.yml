@@ -1,0 +1,35 @@
+name: Deploy to Mac Mini
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'docs/img/**'
+      - 'README*.md'
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Pull latest
+        run: |
+          cd "$HOME/.jarvis" && git pull --ff-only origin main
+
+      - name: Install dependencies (if changed)
+        run: |
+          cd "$HOME/.jarvis/discord"
+          if git diff HEAD~1 --name-only | grep -q 'discord/package.json'; then
+            npm install --production
+          else
+            echo "package.json unchanged — skip"
+          fi
+
+      - name: Smoke test + restart
+        run: |
+          bash "$HOME/.jarvis/scripts/deploy-with-smoke.sh"
