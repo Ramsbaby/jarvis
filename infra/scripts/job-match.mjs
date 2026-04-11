@@ -177,7 +177,7 @@ async function main() {
   if (doDiscord) {
     const lines = results.filter(r => r.score >= 50).map(r => {
       const skills = r.matchedSkills.slice(0, 5).map(s => `${s}✅`).join(' ');
-      return `${grade(r.score)} **${r.score}점** [${r.company}] ${r.title}\n   ${skills}`;
+      return `${grade(r.score)} **${r.score}점** [${r.company}] ${r.title}\n   ${skills}\n   ${r.url}`;
     });
     const msg = `🎯 **채용 매칭 결과** — ${data.jobs.length}건 중 ${top.length}건 매칭\n\n${lines.join('\n\n')}`;
     await sendDiscord(msg);
