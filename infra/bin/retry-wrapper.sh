@@ -5,6 +5,9 @@ set -euo pipefail
 # Usage: retry-wrapper.sh <task-id> <prompt> [allowed-tools] [timeout] [max-budget]
 
 BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
+  IS_MACOS=false; case "$(uname -s)" in Darwin) IS_MACOS=true ;; esac
+}
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 RETRY_LOG="${BOT_HOME}/logs/retry.jsonl"
 
@@ -184,6 +187,17 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
             classification="retryable"
             printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"quality_fail":"empty_output"}\n' \
                 "$(date -u +%FT%TZ)" "$TASK_ID" "$attempt" >> "$RETRY_LOG"
+            # 진단: 빈 output 시 ask-claude.sh의 stderr를 cron.log에 스냅샷 (근본 원인 추적용)
+            if [[ -s "${RESULT_TMP}.stderr" ]]; then
+                _stderr_snippet=$(head -c 300 "${RESULT_TMP}.stderr" 2>/dev/null | tr '\n' '|')
+                printf '[%s] [%s] [EMPTY_OUTPUT_STDERR] attempt=%d: %s\n' \
+                    "$(date '+%F %H:%M:%S')" "$TASK_ID" "$attempt" "$_stderr_snippet" \
+                    >> "${BOT_HOME}/logs/cron.log"
+            else
+                printf '[%s] [%s] [EMPTY_OUTPUT_STDERR] attempt=%d: (stderr도 비어있음)\n' \
+                    "$(date '+%F %H:%M:%S')" "$TASK_ID" "$attempt" \
+                    >> "${BOT_HOME}/logs/cron.log"
+            fi
         elif [[ "$RESULT_HAS_ERROR" == "true" ]]; then
             classification="retryable"
             printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"quality_fail":"error_in_output"}\n' \
@@ -383,4 +397,9 @@ REASON=$(human_reason "$FAIL_CLASS" "${exit_code:-1}" "$RESULT_TMP" "$STDERR_FIL
     "⚠️ $TASK_ID 실패 (재시도 ${MAX_RETRIES}회)\n$REASON"
 
 cat "$RESULT_TMP" >&2
-exit "${exit_code:-1}"
+# quality_fail(빈 output)로 여기까지 왔는데 exit_code=0이면 호출자가 SUCCESS로 잘못 판정함
+# → 명시적 exit 1로 실패 신호 전달 (exit_code가 0인 경우만 강제)
+if [[ "${exit_code:-0}" -eq 0 ]]; then
+    exit_code=1
+fi
+exit "$exit_code"

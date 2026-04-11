@@ -9,6 +9,10 @@
 set -euo pipefail
 
 BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
+  IS_MACOS=false; IS_LINUX=false
+  case "$(uname -s)" in Darwin) IS_MACOS=true ;; Linux) IS_LINUX=true ;; esac
+}
 OUTPUT="$BOT_HOME/docs/SYSTEM-OVERVIEW.md"
 LOG="$BOT_HOME/logs/gen-system-overview.log"
 export BOT_HOME
@@ -109,15 +113,33 @@ FILE_TABLE=$(
   _r "scripts/gen-system-overview.sh"  "이 문서 생성 스크립트"
 )
 
-# LaunchAgent 상태
-LAUNCHD_TABLE=$(
-  printf "| 서비스 | 상태 | PID |\n|--------|------|-----|\n"
-  launchctl list 2>/dev/null \
-    | awk '/ai\.jarvis\./ {
-        status = ($1 ~ /^[0-9]+$/ && $1+0 > 0) ? "🟢 실행중" : "🔴 중지"
-        printf "| %s | %s | %s |\n", $3, status, $1
-      }' || printf "| (launchctl 조회 실패) | - | - |\n"
-)
+# 서비스 상태
+if $IS_MACOS; then
+  LAUNCHD_TABLE=$(
+    printf "| 서비스 | 상태 | PID |\n|--------|------|-----|\n"
+    launchctl list 2>/dev/null \
+      | awk '/ai\.jarvis\./ {
+          status = ($1 ~ /^[0-9]+$/ && $1+0 > 0) ? "🟢 실행중" : "🔴 중지"
+          printf "| %s | %s | %s |\n", $3, status, $1
+        }' || printf "| (launchctl 조회 실패) | - | - |\n"
+  )
+else
+  LAUNCHD_TABLE=$(
+    printf "| 서비스 | 상태 | PID |\n|--------|------|-----|\n"
+    if command -v pm2 &>/dev/null; then
+      pm2 jlist 2>/dev/null | python3 -c "
+import json,sys
+try:
+  for p in json.load(sys.stdin):
+    s='🟢 실행중' if p['pm2_env']['status']=='online' else '🔴 중지'
+    print(f\"| {p['name']} | {s} | {p.get('pid','N/A')} |\")
+except: print('| (pm2 조회 실패) | - | - |')
+" 2>/dev/null
+    else
+      printf "| (pm2 미설치) | - | - |\n"
+    fi
+  )
+fi
 
 # 최근 git 커밋
 RECENT_GIT=$(
