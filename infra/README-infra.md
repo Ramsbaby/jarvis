@@ -6,6 +6,7 @@
 <a href="https://github.com/your-username/jarvis/network/members"><img src="https://img.shields.io/github/forks/your-username/jarvis?style=flat-square" alt="Forks"></a>
 <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
 <img src="https://img.shields.io/badge/node-22+-green?style=flat-square&logo=node.js&logoColor=white" alt="Node 22+">
+<img src="https://img.shields.io/badge/Claude_CLI-required-blue?style=flat-square" alt="Claude CLI">
 <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgray?style=flat-square" alt="Platform">
 
 <!-- Row 2: key differentiators -->
@@ -31,7 +32,8 @@
 
 <p>
   <a href="README.ko.md">한국어</a> ·
-  <a href="discord/SETUP.md">Setup Guide</a> ·
+  <a href="CLAUDE-SETUP-GUIDE.md"><strong>Setup Guide</strong></a> ·
+  <a href="discord/SETUP.md">Discord Setup</a> ·
   <a href="docs/INDEX.md">Docs</a> ·
   <a href="ROADMAP.md">Roadmap</a> ·
   <a href="CHANGELOG.md">Changelog</a>
@@ -231,8 +233,10 @@ This is Jarvis running on a real developer's machine. All numbers are measured.
 > - **Claude Max or Pro subscription** — every task calls `claude -p` (Claude Pro works for lighter use; Max recommended for 24/7 operation)
 > - **Claude Code CLI** — `npm install -g @anthropic-ai/claude-code` then run `claude` once to authenticate in your browser
 > - **Node.js 22+** and **jq** — `node --version` and `jq --version` to verify
-> - **Discord bot token** — create a bot at [discord.com/developers](https://discord.com/developers/applications); see [discord/SETUP.md](discord/SETUP.md) for screenshots
+> - **Discord bot token** — create a bot at [discord.com/developers](https://discord.com/developers/applications) with **Message Content Intent** enabled
 > - **Platform:** macOS or Linux. Windows users: use WSL2.
+>
+> **Full setup guide**: [CLAUDE-SETUP-GUIDE.md](CLAUDE-SETUP-GUIDE.md) — covers MCP (Nexus CIG), personas, context files, and troubleshooting.
 
 **Option A — Docker (simplest):**
 
