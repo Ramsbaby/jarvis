@@ -58,10 +58,9 @@ const daysArg = (() => {
 function log(level, msg) {
   const ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
   const line = `[${ts}] [${level.toUpperCase()}] ${msg}`;
+  // stdout만 사용 — crontab이 >> insight-extractor.log 로 리다이렉트
+  // appendFileSync 제거: 이중 기록(stdout 리다이렉트 + 직접 쓰기) 방지
   process.stdout.write(line + '\n');
-  try {
-    appendFileSync(join(LOGS_DIR, 'insight-extractor.log'), line + '\n');
-  } catch { /* 로그 실패는 무시 */ }
 }
 
 // ── 상태 관리 ──────────────────────────────────────────────────────────────
@@ -77,14 +76,30 @@ function saveState(state) {
 }
 function getTodayStr() { return new Date().toISOString().slice(0, 10); }
 
-// ── N일 이내 세션 요약 파일 수집 ───────────────────────────────────────────
+// ── Owner userId 목록 (세션 파일 필터링용) ────────────────────────────────
+// 파일명 패턴: {channelId}-{userId}.md
+// Boram 등 다른 사용자 세션이 오염되지 않도록 owner userId만 포함
+const OWNER_USER_IDS = (process.env.OWNER_USER_IDS || process.env.OWNER_DISCORD_ID || '').split(',').filter(Boolean);
+
+// ── N일 이내 세션 요약 파일 수집 (채널별 메타데이터 포함) ─────��───────────
 function getRecentSummaryFiles(days) {
   try {
     const cutoff = Date.now() - days * 86400_000;
     return readdirSync(SESSION_SUMMARY_DIR)
       .filter(f => f.endsWith('.md') && !f.endsWith('.bak'))
-      .map(f => join(SESSION_SUMMARY_DIR, f))
-      .filter(fp => {
+      .filter(f => {
+        // {channelId}-{userId}.md 패턴에서 userId 추출하여 owner만 통과
+        const parts = f.replace('.md', '').split('-');
+        const userId = parts[parts.length - 1];
+        return OWNER_USER_IDS.includes(userId);
+      })
+      .map(f => {
+        const fp = join(SESSION_SUMMARY_DIR, f);
+        const parts = f.replace('.md', '').split('-');
+        const channelId = parts.slice(0, -1).join('-');
+        return { file: fp, channelId, name: f };
+      })
+      .filter(({ file: fp }) => {
         try { return statSync(fp).mtimeMs >= cutoff; }
         catch { return false; }
       });
@@ -106,10 +121,10 @@ ${combinedContent}
 
 {
   "decisions": [
-    { "date": "YYYY-MM-DD", "project": "프로젝트명", "decision": "결정 내용", "reason": "이유" }
+    { "date": "YYYY-MM-DD", "project": "프로젝트명", "decision": "결정 내용", "reason": "이유", "channel": "채널ID" }
   ],
   "open_items": [
-    { "item": "미완료 항목", "context": "맥락", "priority": "high|medium|low" }
+    { "item": "미완료 항목", "context": "맥락", "priority": "high|medium|low", "channel": "채널ID" }
   ],
   "patterns": [
     { "pattern": "반복 패턴 설명", "frequency": "횟수 또는 빈도" }
@@ -118,9 +133,11 @@ ${combinedContent}
 }
 
 규칙:
+- 각 <channel> 블록은 서로 다른 Discord 채널의 대화임. 채널 간 내용을 혼동하지 말 것
+- decisions/open_items 각 항목에 해당 내용이 나온 channel ID를 반드시 포함할 것
 - decisions: 명시적으로 "하기로 했다", "결정했다", "확정", "변경"이 있는 것만
 - open_items: "해야 한다", "확인 필요", "미완료", "나중에", "TODO" 언급된 것
-- patterns: 동일 유형 요청이 2회 이상 반복된 것
+- patterns: 동일 유형 요청이 2회 이상 반복된 것 (채널 무관하게 통합 가능)
 - 내용이 없는 항목은 빈 배열 []로`;
 
   const opts = {
@@ -571,14 +588,25 @@ async function main() {
   }
   log('info', `세션 파일 ${files.length}개 로드`);
 
-  // 파일 내용 합산 (최대 100KB 제한)
+  // 파일 내용 합산 — 채널별 그룹핑 (최대 100KB 제한)
+  const byChannel = new Map();
+  for (const { file: fp, channelId, name } of files) {
+    if (!byChannel.has(channelId)) byChannel.set(channelId, []);
+    byChannel.get(channelId).push({ file: fp, name });
+  }
+
   let combined = '';
-  for (const fp of files) {
-    try {
-      const content = readFileSync(fp, 'utf-8');
-      combined += `\n\n--- 파일: ${fp.split('/').pop()} ---\n${content}`;
-      if (combined.length > 100_000) { combined += '\n[이하 생략]'; break; }
-    } catch { /* 읽기 실패 파일 스킵 */ }
+  for (const [channelId, entries] of byChannel) {
+    combined += `\n<channel id="${channelId}">\n`;
+    for (const { file: fp, name } of entries) {
+      try {
+        const content = readFileSync(fp, 'utf-8');
+        combined += `--- 파일: ${name} ---\n${content}\n`;
+        if (combined.length > 100_000) { combined += '[이하 생략]'; break; }
+      } catch { /* 읽기 실패 파일 스킵 */ }
+    }
+    combined += `</channel>\n`;
+    if (combined.length > 100_000) break;
   }
 
   // Opus 분석
