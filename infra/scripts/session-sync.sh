@@ -26,10 +26,12 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
 # KST 기준 오늘 날짜
 KST_DATE="$(TZ=Asia/Seoul date '+%Y-%m-%d')"
-DAILY_LOG="$LOG_DIR/${KST_DATE}.md"
+# 봇이 세션 단위로 YYYY-MM-DD-HHMMSS.md 파일을 생성함 (구: YYYY-MM-DD.md)
+# 오늘 날짜로 시작하는 가장 최신 세션 파일을 사용
+DAILY_LOG="$(ls -t "$LOG_DIR/${KST_DATE}"*.md 2>/dev/null | grep -v "user-memory" | head -1 || true)"
 
 # 오늘 대화 로그 없으면 할 일 없음
-if [[ ! -f "$DAILY_LOG" ]]; then
+if [[ -z "$DAILY_LOG" || ! -f "$DAILY_LOG" ]]; then
     exit 0
 fi
 
