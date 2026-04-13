@@ -389,3 +389,82 @@ launchctl kickstart -k gui/$(id -u)/ai.jarvis.discord-bot
 - **배포 3**: 아카이브 + 빈 상태 UI — polish sprint (공개 준비 단계)
 
 > **근거** (ADR-012): 일괄 배포로 리그레션 위험 1회로 감소, 코어 기능부터 순차 배포
+
+---
+
+## Token Ledger (Tier 0 — 토큰 지출 SSoT)
+
+모든 LLM 크론 호출의 지출 원장. `bin/ask-claude.sh`가 성공 종료 직후 한 줄을 append한다.
+이 원장 위에 글로벌 일일 캡, 80% 예산 경고, 결과 해시 dedup, 영구 실패 auto-disable 등이 구축된다.
+
+### 위치
+
+- **파일**: `~/.jarvis/state/token-ledger.jsonl` (append-only, 라인당 JSON 1개)
+- **Writer**: `bin/ask-claude.sh` (line ~253 직후, log_jsonl/record_outcome 블록 뒤)
+- **Rotation**: 없음 (SSoT 보존). 필요 시 월 단위 아카이브 별도 스크립트.
+
+### 스키마
+
+각 라인:
+
+```json
+{
+  "ts": "2026-04-14T09:10:23Z",
+  "task": "github-monitor",
+  "model": "claude-haiku-4-5-20251001",
+  "status": "success",
+  "input": 512,
+  "output": 1024,
+  "cost_usd": 0.0156,
+  "duration_ms": 3400,
+  "result_bytes": 691,
+  "result_hash": "a6a7c9c06246e461",
+  "max_budget_usd": 0.50
+}
+```
+
+| 필드 | 출처 | 설명 |
+|------|------|------|
+| `ts` | `date -u +%FT%TZ` | UTC ISO8601 |
+| `task` | `$TASK_ID` | tasks.json id |
+| `model` | `$MODEL` | 없으면 `default` |
+| `status` | 고정 `success` (v1) | v2에서 `error_*` 경로도 추가 예정 |
+| `input` / `output` | `jq '.usage.*'` | claude CLI 응답에서 추출 |
+| `cost_usd` | `jq '.cost_usd'` | 이미 COST_USD로 추출된 값 |
+| `duration_ms` | `DURATION * 1000` | 실행 시간 |
+| `result_bytes` | `wc -c $RESULT_FILE` | 결과 파일 바이트 |
+| `result_hash` | `shasum -a 256` 첫 16자 | dedup/waste 감지용 |
+| `max_budget_usd` | `$MAX_BUDGET` | 경고 임계값 계산용 |
+
+### 쿼리 예시
+
+```bash
+# 오늘 총 지출
+jq -s 'map(select(.ts | startswith("'"$(date -u +%Y-%m-%d)"'"))) | map(.cost_usd) | add' \
+  ~/.jarvis/state/token-ledger.jsonl
+
+# 태스크별 24h 집계
+jq -s 'map(select(.ts > (now - 86400 | strftime("%Y-%m-%dT%H:%M:%SZ")))) \
+  | group_by(.task) \
+  | map({task: .[0].task, runs: length, cost: (map(.cost_usd) | add), unique_hashes: ([.[].result_hash] | unique | length)}) \
+  | sort_by(-.cost)' \
+  ~/.jarvis/state/token-ledger.jsonl
+
+# 결과 해시 중복 탐지 (같은 해시가 N번 이상 나오면 dedup 후보)
+jq -s 'group_by(.result_hash) | map(select(length >= 3)) | map({hash: .[0].result_hash, task: .[0].task, count: length})' \
+  ~/.jarvis/state/token-ledger.jsonl
+```
+
+### 실패 모드
+
+- `|| true` 로 감싸져 있어 ledger 쓰기 실패가 태스크 실행을 차단하지 않는다
+- jq 미설치 시 (이미 ask-claude.sh 의존성) 빈 라인도 쓰지 않는다
+
+### 다음 단계 (Tier 1~4)
+
+원장이 쌓이면 아래 레이어가 순차 위에 붙는다:
+
+1. **Tier 1**: 글로벌 일일 캡 — 태스크 시작 전 ledger 오늘 합계 읽음, 임계 초과 시 non-critical skip
+2. **Tier 2**: 해시 dedup — `result_hash`가 최근 N시간 내 동일하면 LLM 호출 skip
+3. **Tier 3**: 영구 실패 auto-disable — 같은 error type 3회 연속 시 tasks.json `enabled: false`
+4. **Tier 4**: 80% 예산 경고 — `cost_usd > 0.8 × max_budget_usd` 시 Discord 경고
