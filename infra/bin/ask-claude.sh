@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# 조기 종료 진단: set -e 이전에 invocation 기록 (exit 0 + 빈 출력 재발 시 추적용)
+# task-runner.jsonl에 "start" 항목이 없는데 이 파일에 기록이 있으면 set -e 트리거 확인 필요
+_EARLY_LOG="${BOT_HOME:-${HOME}/.jarvis}/logs/ask-claude-invocations.log"
+printf '[%s] PID=%d TASK=%s\n' "$(date -u +%FT%TZ 2>/dev/null || echo unknown)" "$$" "${1:-?}" >> "$_EARLY_LOG" 2>/dev/null || true
+unset _EARLY_LOG
 source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 2>/dev/null || true
 set -euo pipefail
 
@@ -247,6 +252,27 @@ except (FileNotFoundError, json.JSONDecodeError):
 
 log_jsonl "success" "Completed in ${DURATION}s" "$DURATION" "$COST_EXTRA"
 record_outcome "$TASK_ID" "true" "$(( DURATION * 1000 ))" "${COST_USD:-0}" || true
+
+# --- Token ledger (Tier 0 observability) ---
+# SSoT ledger for all LLM spending. Downstream: daily cap, 80% alert, dedup detection.
+LEDGER_FILE="${BOT_HOME}/state/token-ledger.jsonl"
+mkdir -p "$(dirname "$LEDGER_FILE")" 2>/dev/null || true
+LEDGER_RESULT_BYTES=$(wc -c < "$RESULT_FILE" 2>/dev/null | tr -d ' ' || echo 0)
+LEDGER_RESULT_HASH=$(shasum -a 256 "$RESULT_FILE" 2>/dev/null | cut -c1-16 || echo "")
+LEDGER_MODEL="${MODEL:-default}"
+jq -cn --arg ts "$(date -u +%FT%TZ)" \
+       --arg task "$TASK_ID" \
+       --arg model "$LEDGER_MODEL" \
+       --arg status "success" \
+       --arg result_hash "$LEDGER_RESULT_HASH" \
+       --argjson input "${INPUT_TOKENS:-0}" \
+       --argjson output "${OUTPUT_TOKENS:-0}" \
+       --argjson cost_usd "${COST_USD:-0}" \
+       --argjson duration_ms "$(( DURATION * 1000 ))" \
+       --argjson result_bytes "${LEDGER_RESULT_BYTES:-0}" \
+       --argjson max_budget_usd "${MAX_BUDGET:-0}" \
+       '{ts:$ts, task:$task, model:$model, status:$status, input:$input, output:$output, cost_usd:$cost_usd, duration_ms:$duration_ms, result_bytes:$result_bytes, result_hash:$result_hash, max_budget_usd:$max_budget_usd}' \
+    >> "$LEDGER_FILE" 2>/dev/null || true
 
 # --- Mark board reactions as processed ---
 if [[ -n "${_board_pending_json:-}" ]]; then
