@@ -967,6 +967,7 @@ ${extracted}
       const summary = loadSessionSummary(sessionKey);
       if (summary) {
         // 튜터 질문인데 요약에 잘못된 MCP/캘린더 내용이 있으면 주입하지 않음
+        const skipSummary = false;
         if (!skipSummary) {
           userPrompt = summary + userPrompt;
           log('info', 'Session summary pre-injected for resume safety', { threadId: thread.id });
