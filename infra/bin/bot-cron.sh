@@ -185,6 +185,16 @@ SCRIPT_ARGS=$(echo "$TASK_CONFIG" | jq -r '.scriptArgs // "daily"')
 # output is a JSON array like ["discord","file"]
 OUTPUT_MODES=$(echo "$TASK_CONFIG" | jq -r '.output[]? // empty')
 
+# --- MCP config: 싱글톤 Serena 선택적 공유 ---
+# tasks.json에 "mcpConfig": "serena" 이면 serena-mcp.json 사용 (코드 탐색 태스크용)
+# 없거나 "empty"면 기존 empty-mcp.json (기본값, 토큰 절약)
+MCP_CONFIG_NAME=$(echo "$TASK_CONFIG" | jq -r '.mcpConfig // "empty"')
+export JARVIS_MCP_CONFIG="${BOT_HOME}/config/${MCP_CONFIG_NAME}-mcp.json"
+if [[ ! -f "$JARVIS_MCP_CONFIG" ]]; then
+    log "WARN: MCP config not found: ${JARVIS_MCP_CONFIG}, falling back to empty"
+    export JARVIS_MCP_CONFIG="${BOT_HOME}/config/empty-mcp.json"
+fi
+
 # --- Strategy parameters (OpenJarvis 차용: 태스크별 전략 설정) ---
 # tasks.json에 "strategy": { "maxOutputTokens": 2000, "contextMode": "depends_only" } 형태로 설정
 export JARVIS_MAX_OUTPUT_TOKENS

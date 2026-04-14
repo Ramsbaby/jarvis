@@ -136,7 +136,7 @@ run_with_retry llm_call \
     --allowed-tools "$ALLOWED_TOOLS" \
     --output "$CLAUDE_OUTPUT_TMP" \
     --work-dir "$WORK_DIR" \
-    --mcp-config "${BOT_HOME}/config/empty-mcp.json" \
+    --mcp-config "${JARVIS_MCP_CONFIG:-${BOT_HOME}/config/empty-mcp.json}" \
     ${MAX_BUDGET:+--max-budget "$MAX_BUDGET"} \
     ${MODEL:+--model "$MODEL"} \
     2>&9 || CLAUDE_EXIT=$?
