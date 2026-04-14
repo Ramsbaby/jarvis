@@ -145,7 +145,7 @@ node .claude/skills/onboarding/scripts/copy-config-templates.mjs
 
 ---
 
-## Step 7.5: RAG 셋업 (Optional)
+## Step 8: RAG 셋업 (Optional)
 
 Step 0에서 Ollama가 실행 중인 경우에만 이 단계를 진행합니다.
 
@@ -194,7 +194,7 @@ python3 scripts/setup_rag.py
 
 ---
 
-## Step 8: 업데이트 정책 선택
+## Step 9: 업데이트 정책 선택
 
 사용자에게 안내:
 ```
@@ -214,7 +214,7 @@ node .claude/skills/onboarding/scripts/save-update-policy.mjs --mode <auto|manua
 
 ---
 
-## Step 9: 업데이트 전용 채널 생성
+## Step 10: 업데이트 전용 채널 생성
 
 환경 파일을 로드하여 🚀jarvis-update 채널을 생성합니다.
 
@@ -236,7 +236,7 @@ node .claude/skills/onboarding/scripts/create-update-channel.mjs
 
 ---
 
-## Step 10: LaunchAgent / PM2 등록 (플랫폼별)
+## Step 11: LaunchAgent / PM2 등록 (플랫폼별)
 
 **macOS:**
 ```bash
@@ -261,7 +261,7 @@ CHANNEL_ID=<channelId> node .claude/skills/onboarding/scripts/install-linux-cron
 
 ---
 
-## Step 11: 최종 검증
+## Step 12: 최종 검증
 
 ```bash
 node .claude/skills/onboarding/scripts/verify-setup.mjs
@@ -285,7 +285,7 @@ node .claude/skills/onboarding/scripts/verify-setup.mjs
 
 ---
 
-## Step 12: 봇 첫 기동 확인
+## Step 13: 봇 첫 기동 확인
 
 ```bash
 sleep 5
@@ -304,7 +304,7 @@ tail -10 ~/.local/share/jarvis/logs/discord-bot.log
 
 ---
 
-## Step 13: 온보딩 완료 보고
+## Step 14: 온보딩 완료 보고
 
 사용자에게 다음 내용 안내:
 
