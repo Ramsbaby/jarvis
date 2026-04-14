@@ -24,6 +24,7 @@ import {
   buildPrinciplesSection, buildFormatSection, buildToolsSection,
   buildSafetySection, buildUserContextSection,
   buildOwnerPreferencesSection, buildOwnerPersonaSection, buildFamilyBriefingContext,
+  buildWikiContextSection,
 } from './prompt-sections.js';
 
 // ---------------------------------------------------------------------------
@@ -808,6 +809,12 @@ export async function* createClaudeSession(prompt, {
       memSnippet = userMemory.getPromptSnippet(userId);
     }
     if (memSnippet) systemParts.push('', '--- 사용자 기억 (User Memory) ---', memSnippet);
+  }
+
+  // LLM Wiki context (dynamic — 세션 해시 영향 없음)
+  if (userId && isOwner && prompt) {
+    const wikiCtx = buildWikiContextSection({ prompt, botHome: BOT_HOME });
+    if (wikiCtx) systemParts.push('', wikiCtx);
   }
 
   // Claude Max usage summary
