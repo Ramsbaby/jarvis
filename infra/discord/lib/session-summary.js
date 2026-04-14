@@ -125,15 +125,15 @@ export function loadSessionSummaryRecent(sessionKey) {
       const rawMatch = content.lastIndexOf('---\n[');
       if (rawMatch >= 0) {
         const rawTurns = content.slice(rawMatch).split('---\n').filter(t => t.trim());
-        sections.push(...rawTurns.slice(-2));
+        sections.push(...rawTurns.slice(-3));
       }
       if (sections.length === 0) return ''; // fallback → 호출부에서 전체 요약 사용
       return `## 직전 대화 맥락 (최근 주제만)\n${sections.join('\n---\n')}\n\n`;
     }
 
-    // raw transcript: 마지막 2턴만 슬라이스
+    // raw transcript: 마지막 3턴만 슬라이스
     const turns = content.split('---\n').filter(t => t.trim());
-    const recent = turns.slice(-2);
+    const recent = turns.slice(-3);
     if (recent.length === 0) return '';
     return `## 직전 대화 맥락 (최근 주제만)\n${recent.join('---\n')}\n\n`;
   } catch {
@@ -186,7 +186,7 @@ export async function compactSessionWithAI(sessionKey) {
     '다음은 AI 봇과 사용자의 대화 기록이다.',
     '이 대화를 아래 6-섹션 형식으로 핵심만 한국어로 요약해라.',
     '각 섹션은 중요한 정보만 포함하고, 없으면 "없음"으로 표기해라.',
-    '전체 요약은 1000자 이내로 작성해라.',
+    '전체 요약은 2000자 이내로 작성해라.',
     '',
     '형식:',
     '### 사용자 의도',
@@ -214,11 +214,14 @@ export async function compactSessionWithAI(sessionKey) {
     const { homedir: hd } = await import('node:os');
 
     const claudeBinary = process.env.CLAUDE_BINARY || pathJoin(hd(), '.local/bin/claude');
+    const compactModel = rawContent.length > 5000
+      ? 'claude-sonnet-4-5'
+      : 'claude-haiku-4-5-20251001';
 
     const stdout = await new Promise((resolve, reject) => {
       const proc = spawn(
         claudeBinary,
-        ['--model', 'claude-haiku-4-5-20251001', '--output-format', 'text', '--dangerously-skip-permissions'],
+        ['--model', compactModel, '--output-format', 'text', '--dangerously-skip-permissions'],
         {
           timeout: 60_000,
           stdio: ['pipe', 'pipe', 'pipe'],
