@@ -26,4 +26,11 @@ if [[ -f private/.gitleaks-personal.toml ]]; then
   fi
 fi
 
+# 3) PII 캐논 기반 검사 (Phase A 결과)
+if [[ -x "$HOME/.jarvis/scripts/pii-precommit-hook.sh" ]] && [[ -f "$HOME/.jarvis/security/pii-canon.json" ]]; then
+  if ! bash "$HOME/.jarvis/scripts/pii-precommit-hook.sh"; then
+    exit 1
+  fi
+fi
+
 echo "  No secrets or personal data found"
