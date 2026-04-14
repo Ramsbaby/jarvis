@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { log } from './claude-runner.js';
+import { getWikiContext, listPages } from './wiki-engine.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
 
@@ -121,7 +122,26 @@ export function closeRagEngine() {
 }
 
 /**
+ * LLM Wiki 기반 컨텍스트 검색 — RAG보다 먼저 위키에서 찾는다.
+ * 위키 페이지가 있으면 해당 컨텍스트를 반환, 없으면 빈 문자열.
+ *
+ * @param {string} userId
+ * @param {string} query
+ * @returns {string}
+ */
+export function searchWikiForContext(userId, query) {
+  try {
+    const pages = listPages(userId);
+    if (pages.length === 0) return '';
+    return getWikiContext(userId, query);
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Search RAG for context relevant to the query.
+ * LLM Wiki와 병행 사용: Wiki → RAG 순서로 컨텍스트 우선순위 결정.
  * @param {string} query - The user's prompt
  * @param {number} [limit=3] - Max results
  * @returns {Promise<string>} Formatted context block or empty string
@@ -162,13 +182,7 @@ export async function searchRagForContext(query, limit = 3, opts = {}) {
     const snippet = r.text?.slice(0, 300) ?? '';
     return `[${src}] ${snippet}`;
   });
-  let stdout = `## 관련 과거 기록 (RAG)\n${lines.join('\n\n')}\n\n`;
-  if (stdout.length > 2000) {
-    const truncated = stdout.slice(0, 2000);
-    const lastNewline = truncated.lastIndexOf('\n');
-    stdout = (lastNewline > 0 ? truncated.slice(0, lastNewline) : truncated) + '\n[...더 있음]';
-  }
-  return stdout;
+  return `## 관련 과거 기록 (RAG)\n${lines.join('\n\n')}\n\n`;
 }
 
 /**
