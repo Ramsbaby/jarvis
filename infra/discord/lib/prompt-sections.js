@@ -239,20 +239,14 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
     }
   }
 
-  // 2. 사용자 개인 위키 (pages/{userId}/) — devming PR #6 스타일
-  if (userId) {
-    const userPagesDir = join(wikiDir, 'pages', userId);
-    if (existsSync(userPagesDir)) {
-      try {
-        const userPages = readdirSync(userPagesDir).filter(f => f.endsWith('.md'));
-        for (const file of userPages.slice(0, 3)) {
-          const content = readFileSync(join(userPagesDir, file), 'utf-8');
-          if (content.trim().length > 30) {
-            const title = file.replace('.md', '');
-            parts.push(`### [개인/${title}]\n${content.trim().slice(0, 400)}`);
-          }
-        }
-      } catch {}
+  // 2. _facts.md (실시간 기록) — _summary.md가 없는 도메인 폴백
+  if (domain) {
+    const factsPath = join(wikiDir, domain, '_facts.md');
+    if (existsSync(factsPath) && !existsSync(join(wikiDir, domain, '_summary.md'))) {
+      const facts = readFileSync(factsPath, 'utf-8');
+      if (facts.trim().length > 50) {
+        parts.push(`### [${domain}/실시간]\n${facts.trim().slice(0, 400)}`);
+      }
     }
   }
 
