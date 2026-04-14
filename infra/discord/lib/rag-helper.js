@@ -162,5 +162,11 @@ export async function searchRagForContext(query, limit = 3, opts = {}) {
     const snippet = r.text?.slice(0, 300) ?? '';
     return `[${src}] ${snippet}`;
   });
-  return `## 관련 과거 기록 (RAG)\n${lines.join('\n\n')}\n\n`;
+  let stdout = `## 관련 과거 기록 (RAG)\n${lines.join('\n\n')}\n\n`;
+  if (stdout.length > 2000) {
+    const truncated = stdout.slice(0, 2000);
+    const lastNewline = truncated.lastIndexOf('\n');
+    stdout = (lastNewline > 0 ? truncated.slice(0, lastNewline) : truncated) + '\n[...더 있음]';
+  }
+  return stdout;
 }

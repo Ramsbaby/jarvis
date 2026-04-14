@@ -444,6 +444,9 @@ async function _syncOwnerProfileMarkdown(newFacts) {
 // autoExtractMemory — 대화 종료 후 기억할 사실 자동 추출 (비동기 fire-and-forget)
 // ---------------------------------------------------------------------------
 
+// User Memory 해시 캐시 — 메모리 내용 변화 없으면 getRelevantMemories 재호출 스킵
+const memoryHashCache = new Map();
+
 // 쿨다운: 유저별 마지막 추출 시각 (메모리 내, 재시작 시 초기화)
 const _extractCooldown = new Map();
 const EXTRACT_COOLDOWN_MS = 10 * 60 * 1000; // 10분
@@ -785,10 +788,21 @@ export async function* createClaudeSession(prompt, {
   if (userId) {
     let memSnippet;
     try {
-      if (prompt) {
-        memSnippet = userMemory.getRelevantMemories(userId, prompt);
+      // 해시 캐싱: 메모리 내용 변화 없고 토큰 여유 있으면 캐시된 결과 재사용
+      const rawMemData = userMemory.get(userId);
+      const rawMemStr = JSON.stringify(rawMemData);
+      const currentHash = createHash('md5').update(rawMemStr).digest('hex');
+      const cached = memoryHashCache.get(userId);
+      const stableSystemLen = stableSystemPrompt.length;
+      if (cached && cached.hash === currentHash && stableSystemLen < 40000) {
+        memSnippet = cached.snippet;
       } else {
-        memSnippet = userMemory.getPromptSnippet(userId);
+        if (prompt) {
+          memSnippet = userMemory.getRelevantMemories(userId, prompt);
+        } else {
+          memSnippet = userMemory.getPromptSnippet(userId);
+        }
+        memoryHashCache.set(userId, { hash: currentHash, snippet: memSnippet });
       }
     } catch {
       memSnippet = userMemory.getPromptSnippet(userId);

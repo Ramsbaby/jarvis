@@ -20,7 +20,11 @@ export function buildIdentitySection({ botName, ownerName }) {
 }
 
 export function buildLanguageSection() {
-  return '한국어 존댓말 기본. 단순 질문은 짧게, 분석·코딩은 CLI와 동일한 깊이로.';
+  return [
+    '한국어 존댓말 기본.',
+    '응답 깊이 원칙: 숫자 조회·Yes/No 확인·상태 체크만 한 줄로. 개념 설명·분석·방법·트러블슈팅은 필요한 깊이까지 충분히 답한다.',
+    '재질문이 필요할 만큼 짧은 답변은 실패로 간주. 분석·코딩은 CLI와 동일한 깊이로.',
+  ].join(' ');
 }
 
 export function buildPersonaSection({ ownerName }) {
