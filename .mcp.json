@@ -1,0 +1,36 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context=claude-code",
+        "--project",
+        "/Users/ramsbaby/jarvis"
+      ],
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true"
+      },
+      "description": "jarvis 본체 심볼 인덱싱 (bash/JS/Python/Next.js 혼합)"
+    },
+    "serena-board": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context=claude-code",
+        "--project",
+        "/Users/ramsbaby/jarvis-board"
+      ],
+      "env": {
+        "ENABLE_TOOL_SEARCH": "true"
+      },
+      "description": "jarvis-board 심볼 인덱싱 (TypeScript/Next.js) — 토큰 절약용 LSP 탐색"
+    }
+  }
+}
