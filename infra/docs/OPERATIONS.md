@@ -468,3 +468,39 @@ jq -s 'group_by(.result_hash) | map(select(length >= 3)) | map({hash: .[0].resul
 2. **Tier 2**: 해시 dedup — `result_hash`가 최근 N시간 내 동일하면 LLM 호출 skip
 3. **Tier 3**: 영구 실패 auto-disable — 같은 error type 3회 연속 시 tasks.json `enabled: false`
 4. **Tier 4**: 80% 예산 경고 — `cost_usd > 0.8 × max_budget_usd` 시 Discord 경고
+
+### 주간 자동 감사 (`token-ledger-audit`)
+
+**스케줄**: 매주 일요일 08:30 KST (tasks.json: `30 8 * * 0`, crontab 동시 등록)
+
+**스크립트**: `infra/scripts/token-ledger-audit.sh`
+
+**수행 작업**:
+1. 원장 커버리지 (총 엔트리, 데이터 기간, 7일 총 지출)
+2. 일별 총 지출 추이 (7d)
+3. 비용 Top 10 — `유니크결과/실행` 비율로 dedup 후보 자동 감지
+4. Dedup 후보 테이블 — 같은 `result_hash`가 5회+ 반복되는 태스크
+5. 예산 압박 — 단일 실행이 `maxBudget`의 80% 초과하는 태스크
+6. 캐시 효율 — `cache_hit` 상태 기록된 태스크의 히트율
+7. 파일 시스템 크기 (logs, state, rag)
+8. 서킷브레이커 3회+ 연속실패 태스크
+9. **자동 권장사항**:
+   - Dedup 후보가 있으면 → "gate 스크립트 작성" 권장
+   - 예산 80%+ 반복 시 → "프롬프트 다이어트 or budget 상향" 권장
+   - 주간 지출 >$5 시 → "Tier 1 활성화" 권장
+   - 14일+ stderr 로그 100개+ 시 → "로그 로테이션" 권장
+   - CB 3회+ 있으면 → "root cause 파악" 권장
+
+**출력**: `~/.jarvis/results/token-ledger-audit/<YYYY-MM-DD>.md`
+
+**알림**: 유의미한 발견(dedup/budget/cb)이 있으면 Discord `jarvis-system` 채널 + ntfy 동시 전송.
+
+**수동 실행**:
+```bash
+BOT_HOME=~/.jarvis ~/jarvis/infra/scripts/token-ledger-audit.sh
+
+# 또는 bot-cron.sh 경로로
+~/.jarvis/bin/bot-cron.sh token-ledger-audit
+```
+
+**설계 의도**: 이전에 사람이 수동으로 했던 "토큰 낭비 5팀 감사"를 매주 자동으로 수행. 원장이 1~2주 쌓이면 Tier 1~4 활성화 우선순위를 데이터 기반으로 결정할 수 있다. 땜질식 대응이 아닌 지속 가능한 waste prevention 루프를 구성.
