@@ -8,7 +8,14 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+# BOT_HOME 우선순위: 명시적 지정 > 실제 존재하는 경로 > 기본값
+if [[ -z "${BOT_HOME:-}" ]]; then
+  if [[ -d "${HOME}/.jarvis" ]]; then
+    BOT_HOME="${HOME}/.jarvis"
+  else
+    BOT_HOME="${HOME}/.local/share/jarvis"
+  fi
+fi
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; IS_LINUX=false
   case "$(uname -s)" in Darwin) IS_MACOS=true ;; Linux) IS_LINUX=true ;; esac
@@ -16,6 +23,9 @@ source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
 OUTPUT="$BOT_HOME/docs/SYSTEM-OVERVIEW.md"
 LOG="$BOT_HOME/logs/gen-system-overview.log"
 export BOT_HOME
+
+# 출력 디렉토리 자동 생성
+mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$LOG")"
 
 log() { echo "[$(date '+%F %T')] gen-system-overview: $*" >> "$LOG" 2>&1 || true; }
 log "시작"

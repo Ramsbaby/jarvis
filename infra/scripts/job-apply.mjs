@@ -1,303 +1,69 @@
 #!/usr/bin/env node
 /**
- * Jarvis Job Apply — Puppeteer + Claude 브라우저 자동 지원
+ * Jarvis Job Apply — Claude in Chrome 브라우저 자동 지원
  *
- * Usage: node job-apply.mjs <URL>
+ * Usage:
+ *   node job-apply.mjs <URL>                    # URL 직접 지원
+ *   node job-apply.mjs <회사명 또는 키워드>      # matched.json에서 검색 후 지원
+ *   node job-apply.mjs                          # matched.json 전체 목록 출력
  *
- * 1. 공고 페이지 접속 → 지원 방식 자동 감지
- * 2. 폼 기반: claude -p로 폼 분석 → 필드 매핑 → 자동 채움
- * 3. 이메일 기반: 지원 메일 본문 생성 + Gmail 작성 창
- * 4. 제출은 항상 사용자가 직접 (자동 제출 없음)
+ * Examples:
+ *   node job-apply.mjs https://kurly.career.greetinghr.com/ko/o/168026
+ *   node job-apply.mjs 컬리
+ *   node job-apply.mjs "컬리 풀필먼트"
  */
 
-import puppeteer from 'puppeteer-core';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir, tmpdir } from 'node:os';
-import { execSync } from 'node:child_process';
+import { homedir } from 'node:os';
+import { execSync, spawn } from 'node:child_process';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const CONFIG_FILE = join(BOT_HOME, 'config', 'applicant.json');
 const CRAWL_DIR = join(BOT_HOME, 'state', 'job-crawl');
-const SCREENSHOT_DIR = join(CRAWL_DIR, 'screenshots');
+const MATCHED_FILE = join(CRAWL_DIR, 'matched.json');
 const APPS_FILE = join(CRAWL_DIR, 'applications.json');
-const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
-mkdirSync(SCREENSHOT_DIR, { recursive: true });
+mkdirSync(CRAWL_DIR, { recursive: true });
 
-const url = process.argv[2];
-
-if (!url || url.startsWith('-')) {
-  console.error('Usage: node job-apply.mjs <URL>');
-  process.exit(1);
-}
+const arg = process.argv.slice(2).join(' ').trim();
 
 // ── 이력서 데이터 로드 ────────────────────────────────────────────────────
-const RESUME_DATA = {
-  name: '이정우',
-  email: 'ms6698@naver.com',
-  phone: '010-4597-9002',
-  github: 'https://github.com/Ramsbaby',
-  blog: 'https://ramsbaby.netlify.app',
-  experience: '9년',
-  currentCompany: 'Company-A',
-  currentRole: 'Backend Engineer',
-  skills: 'Java, Kotlin, Spring Boot, Spring 6, JPA, Kafka, Redis, AWS, Docker, Kubernetes, MySQL, gRPC, Datadog',
-};
-
-const RESUME_PDF = join(homedir(), 'openclaw/memory/career/resume_이정우.pdf');
-const CAREER_MD = join(homedir(), 'Jarvis-Vault/05-career/resume-data.md');
-
-// ── 지원 방식 감지 ────────────────────────────────────────────────────────
-async function detectApplyMethod(page) {
-  return await page.evaluate(() => {
-    const body = document.body.innerText.toLowerCase();
-    const html = document.documentElement.innerHTML;
-
-    // 1. 지원하기 버튼 (폼 기반)
-    const applyBtn = [...document.querySelectorAll('button, a, [role=button]')].find(el => {
-      const t = el.textContent.trim();
-      return /^(지원하기|지원|Apply Now|Apply|접수)$/i.test(t);
-    });
-    if (applyBtn) {
-      return { method: 'form', element: applyBtn.tagName, text: applyBtn.textContent.trim(), href: applyBtn.href || '' };
-    }
-
-    // 2. mailto 링크 (이메일 기반)
-    const mailtoLink = document.querySelector('a[href^="mailto:"]');
-    if (mailtoLink) {
-      const email = mailtoLink.href.replace('mailto:', '').split('?')[0];
-      return { method: 'email', email, text: mailtoLink.textContent.trim() };
-    }
-
-    // 3. 이메일 패턴 탐지 (텍스트에서)
-    const emailMatch = body.match(/[\w.+-]+@[\w-]+\.[\w.]+/);
-    if (emailMatch && (body.includes('제출') || body.includes('지원') || body.includes('이력서'))) {
-      return { method: 'email', email: emailMatch[0], text: '텍스트에서 감지' };
-    }
-
-    // 4. 외부 지원 링크
-    const extLink = [...document.querySelectorAll('a')].find(a =>
-      /recruit|apply|career|hiring|talent/i.test(a.href) && a.href !== location.href
-    );
-    if (extLink) {
-      return { method: 'external', url: extLink.href, text: extLink.textContent.trim() };
-    }
-
-    return { method: 'unknown' };
-  });
+function loadApplicant() {
+  if (!existsSync(CONFIG_FILE)) {
+    console.error(`❌ 지원자 정보 파일이 없습니다: ${CONFIG_FILE}`);
+    console.error('   예시 파일을 생성하려면 README 참고.');
+    process.exit(1);
+  }
+  return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
 }
 
-// ── 이메일 지원 처리 ──────────────────────────────────────────────────────
-async function handleEmailApply(page, applyInfo) {
-  const email = applyInfo.email;
-  const jobTitle = await page.evaluate(() => {
-    const h1 = document.querySelector('h1');
-    return h1 ? h1.textContent.trim().split('|')[0].trim() : document.title;
-  });
-  const company = await page.evaluate(() => {
-    const t = document.title;
-    return t.includes('|') ? t.split('|').pop().trim() : '';
-  });
-
-  // 지원 메일 본문 생성
-  const subject = `[지원] ${jobTitle} - 이정우`;
-  const body = `안녕하세요, ${company} 채용팀께.
-
-${jobTitle} 포지션에 지원하는 이정우입니다.
-
-9년간 SaaS·O2O·IoT 플랫폼을 개발하며 장애에 강하고 운영이 편한 시스템을 설계해왔습니다.
-현재 Company-A에서 Backend Engineer로 재직 중이며, 이전에는 토스랩(Company-B)에서 2년 8개월간 서버 개발을 담당했습니다.
-
-주요 기술: Java, Kotlin, Spring Boot, Kafka, Redis, AWS, MSA
-경력: 총 9년 (Company-A 1년+, 토스랩 2년 8개월, 하몬소프트 4년 8개월)
-
-이력서를 첨부합니다. 검토 후 연락 주시면 감사하겠습니다.
-
-이정우 드림
-${RESUME_DATA.phone} | ${RESUME_DATA.email}
-GitHub: ${RESUME_DATA.github}
-Blog: ${RESUME_DATA.blog}`;
-
-  return { email, subject, body, jobTitle, company };
-}
-
-// ── Claude로 폼 필드 매핑 ────────────────────────────────────────────────
-function askClaudeForMapping(fields, pageText) {
-  const prompt = `너는 채용 지원 폼 자동 채움 도우미야.
-아래 "폼 필드 목록"과 "지원자 정보"를 보고, 각 필드에 어떤 값을 넣어야 하는지 JSON 배열로 반환해.
-
-## 지원자 정보
-- 이름: ${RESUME_DATA.name}
-- 이메일: ${RESUME_DATA.email}
-- 전화번호: ${RESUME_DATA.phone}
-- GitHub: ${RESUME_DATA.github}
-- 블로그: ${RESUME_DATA.blog}
-- 경력: ${RESUME_DATA.experience}
-- 현 직장: ${RESUME_DATA.currentCompany}
-- 현 직무: ${RESUME_DATA.currentRole}
-- 기술스택: ${RESUME_DATA.skills}
-
-## 페이지 텍스트 (참고용, 앞 2000자)
-${pageText.slice(0, 2000)}
-
-## 폼 필드 목록
-${JSON.stringify(fields, null, 2)}
-
-## 응답 규칙
-1. 반드시 JSON 배열만 출력. 설명/마크다운 없음.
-2. 각 항목: {"selector": "CSS 선택자", "value": "입력할 값", "action": "type|select|skip"}
-3. selector는 id가 있으면 "#id", 없으면 "[name=\\"name\\"]" 사용
-4. file input(type=file)은 action: "file"로 표시
-5. 매핑할 수 없는 필드는 action: "skip"
-6. select(드롭다운)는 가장 적절한 option value를 value에 넣고 action: "select"
-7. textarea에는 간단한 자기소개(3줄 이내)를 작성해도 좋음
-
-JSON 배열만 출력:`;
-
-  const tmpFile = join(tmpdir(), `jarvis-job-apply-prompt-${Date.now()}.txt`);
+// ── matched.json 로드 ─────────────────────────────────────────────────────
+function loadMatched() {
+  if (!existsSync(MATCHED_FILE)) return null;
   try {
-    writeFileSync(tmpFile, prompt, 'utf-8');
-    const result = execSync(
-      `cat "${tmpFile}" | claude -p 2>/dev/null`,
-      { timeout: 90000, maxBuffer: 1024 * 1024, encoding: 'utf-8' },
-    );
-    // JSON 배열 추출 (앞뒤 텍스트 제거)
-    const match = result.match(/\[[\s\S]*\]/);
-    if (match) return JSON.parse(match[0]);
-    console.error('[Claude] JSON 파싱 실패, 하드코딩 폴백 사용');
-  } catch (e) {
-    console.error(`[Claude] 호출 실패: ${e.message}, 하드코딩 폴백 사용`);
-  } finally {
-    try { unlinkSync(tmpFile); } catch {}
-  }
-  return null;
+    return JSON.parse(readFileSync(MATCHED_FILE, 'utf-8'));
+  } catch { return null; }
 }
 
-// ── 폴백: 하드코딩 매핑 (claude -p 실패 시) ──────────────────────────────
-function hardcodedMapping(fields) {
-  return fields.map(field => {
-    const key = `${field.label} ${field.name} ${field.placeholder} ${field.id}`.toLowerCase();
-    let value = '';
-    let action = 'skip';
-
-    if (field.type === 'file') return { selector: field.id ? `#${field.id}` : `[name="${field.name}"]`, value: '', action: 'file' };
-    if (field.tag === 'SELECT') return { selector: field.id ? `#${field.id}` : `[name="${field.name}"]`, value: '', action: 'skip' };
-
-    if (/이름|name/i.test(key)) value = RESUME_DATA.name;
-    else if (/이메일|email/i.test(key)) value = RESUME_DATA.email;
-    else if (/전화|phone|tel|휴대/i.test(key)) value = RESUME_DATA.phone;
-    else if (/github/i.test(key)) value = RESUME_DATA.github;
-    else if (/블로그|blog|포트폴리오|portfolio/i.test(key)) value = RESUME_DATA.blog;
-    else if (/경력.*년|experience/i.test(key)) value = RESUME_DATA.experience;
-
-    if (value) action = 'type';
-    const selector = field.id ? `#${field.id}` : `[name="${field.name}"]`;
-    return { selector, value, action };
-  });
-}
-
-// ── 폼 기반 지원 처리 ─────────────────────────────────────────────────────
-async function handleFormApply(page, applyInfo) {
-  // 지원 버튼 클릭
-  if (applyInfo.href) {
-    await page.goto(applyInfo.href, { waitUntil: 'networkidle2', timeout: 20000 });
-  } else {
-    await page.evaluate((text) => {
-      const btn = [...document.querySelectorAll('button, a, [role=button]')].find(el =>
-        el.textContent.trim() === text
-      );
-      if (btn) btn.click();
-    }, applyInfo.text);
+// ── 회사명/키워드로 공고 검색 ──────────────────────────────────────────────
+function searchJob(query) {
+  const matched = loadMatched();
+  if (!matched?.results) {
+    console.error('❌ matched.json이 없습니다. 먼저 크롤링/매칭을 실행하세요.');
+    process.exit(1);
   }
-  await new Promise(r => setTimeout(r, 3000));
 
-  // 폼 필드 분석
-  const fields = await page.evaluate(() => {
-    const inputs = [...document.querySelectorAll('input, textarea, select')];
-    return inputs.map(el => ({
-      tag: el.tagName,
-      type: el.type || '',
-      name: el.name || '',
-      placeholder: el.placeholder || '',
-      label: el.closest('label')?.textContent?.trim()?.slice(0, 50) || '',
-      id: el.id || '',
-      required: el.required,
-      options: el.tagName === 'SELECT' ? [...el.options].map(o => ({ value: o.value, text: o.textContent.trim() })) : [],
-    }));
+  const keywords = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const results = matched.results.filter(job => {
+    const haystack = `${job.company} ${job.title}`.toLowerCase();
+    return keywords.every(kw => haystack.includes(kw));
   });
 
-  // 페이지 텍스트 추출 (Claude 컨텍스트용)
-  const pageText = await page.evaluate(() => document.body.innerText);
-
-  // Claude로 필드 매핑 시도 → 실패 시 하드코딩 폴백
-  console.log('🤖 Claude에게 폼 필드 매핑 요청 중...');
-  let mapping = askClaudeForMapping(fields, pageText);
-  const usedClaude = !!mapping;
-  if (!mapping) {
-    mapping = hardcodedMapping(fields);
-  }
-  console.log(`📋 매핑 완료 (${usedClaude ? 'Claude AI' : '하드코딩 폴백'}): ${mapping.filter(m => m.action !== 'skip').length}/${fields.length} 필드`);
-
-  // 매핑 결과로 폼 채움
-  let filledCount = 0;
-  for (const m of mapping) {
-    if (m.action === 'skip' || !m.selector) continue;
-
-    try {
-      if (m.action === 'type' && m.value) {
-        await page.type(m.selector, m.value, { delay: 30 });
-        filledCount++;
-      } else if (m.action === 'select' && m.value) {
-        await page.select(m.selector, m.value);
-        filledCount++;
-      } else if (m.action === 'file' && existsSync(RESUME_PDF)) {
-        const fileInput = await page.$(m.selector);
-        if (fileInput) {
-          await fileInput.uploadFile(RESUME_PDF);
-          filledCount++;
-        }
-      }
-    } catch { /* selector not found — skip */ }
-  }
-
-  console.log(`✏️  ${filledCount}개 필드 채움 완료`);
-  return { fields, mapping, filledCount, usedClaude };
+  return results;
 }
 
-// ── Discord 전송 ──────────────────────────────────────────────────────────
-async function sendDiscord(content, imagePath = null) {
-  try {
-    const monitoring = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'monitoring.json'), 'utf-8'));
-    const webhook = monitoring.webhooks?.jarvis || monitoring.webhook?.url;
-    if (!webhook) return;
-
-    if (imagePath && existsSync(imagePath)) {
-      // 이미지 첨부 전송
-      const FormData = (await import('node:buffer')).Buffer ? null : null; // Node 18+ built-in
-      const blob = readFileSync(imagePath);
-      const boundary = '----FormBoundary' + Date.now();
-      const body = Buffer.concat([
-        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="content"\r\n\r\n${content}\r\n`),
-        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="screenshot.png"\r\nContent-Type: image/png\r\n\r\n`),
-        blob,
-        Buffer.from(`\r\n--${boundary}--\r\n`),
-      ]);
-      await fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
-        body,
-      });
-    } else {
-      await fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: content.slice(0, 2000), username: 'Jarvis Job Apply' }),
-      });
-    }
-  } catch (e) { console.error('[Discord]', e.message); }
-}
-
-// ── 지원 이력 저장 ────────────────────────────────────────────────────────
+// ── 지원 이력 저장 ───────────────────────────────────────────────────────
 function saveApplication(entry) {
   let apps = [];
   try { apps = JSON.parse(readFileSync(APPS_FILE, 'utf-8')); } catch {}
@@ -305,93 +71,251 @@ function saveApplication(entry) {
   writeFileSync(APPS_FILE, JSON.stringify(apps, null, 2));
 }
 
-// ── 메인 ──────────────────────────────────────────────────────────────────
-async function main() {
-  console.log(`🚀 Jarvis Job Apply — ${url}\n`);
+// ── 중복 지원 확인 ───────────────────────────────────────────────────────
+function isAlreadyApplied(url) {
+  try {
+    const apps = JSON.parse(readFileSync(APPS_FILE, 'utf-8'));
+    return apps.some(a => a.url === url && !a.error);
+  } catch { return false; }
+}
 
-  // Puppeteer를 visible 모드로 실행 — 사용자가 화면에서 직접 확인 가능
-  const browser = await puppeteer.launch({
-    executablePath: CHROME_PATH,
-    headless: false,
-    defaultViewport: null,
-    args: ['--no-sandbox', '--disable-blink-features=AutomationControlled', '--start-maximized'],
-  });
-  console.log('🖥️  Mac 화면에 Chrome 창을 열었습니다.');
+// ── Discord 전송 ─────────────────────────────────────────────────────────
+async function sendDiscord(content) {
+  try {
+    const monitoring = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'monitoring.json'), 'utf-8'));
+    const webhook = monitoring.webhooks?.jarvis || monitoring.webhook?.url;
+    if (!webhook) return;
+    await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content.slice(0, 2000), username: 'Jarvis Job Apply' }),
+    });
+  } catch (e) { console.error('[Discord]', e.message); }
+}
 
-  const page = await browser.newPage();
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-  await new Promise(r => setTimeout(r, 4000));
+// ── Claude in Chrome 프롬프트 생성 ───────────────────────────────────────
+function buildChromePrompt(applicant, jobInfo) {
+  const b = applicant.basic;
+  const c = applicant.career;
+  const e = applicant.education;
+  const m = applicant.military;
+  const d = applicant.diversity;
+  const a = applicant.applyDefaults;
 
-  // 공고 정보 추출
-  const jobTitle = await page.evaluate(() => {
-    const h = document.querySelector('h1, h2');
-    return h ? h.textContent.trim().split('|')[0].trim() : document.title;
-  });
-  console.log(`📋 공고: ${jobTitle}`);
+  return `현재 Chrome에 열려있는 채용 지원 페이지에서 "지원하기" 또는 "Apply" 버튼을 찾아 클릭한 후, 아래 정보로 지원 폼을 채워줘.
 
-  // 지원 방식 감지
-  const applyInfo = await detectApplyMethod(page);
-  console.log(`🔍 지원 방식: ${applyInfo.method}`);
+## 공고 정보
+- 회사: ${jobInfo.company || '(알 수 없음)'}
+- 포지션: ${jobInfo.title || '(알 수 없음)'}
+- URL: ${jobInfo.url}
 
-  let result = {};
-  const screenshotPath = join(SCREENSHOT_DIR, `apply-${Date.now()}.png`);
+## 지원자 정보
+- 이름: ${b.name}
+- 이메일: ${b.email}
+- 전화번호: ${b.phone} (하이픈 없이) / ${b.phoneWithDash} (하이픈 포함)
+- 생년월일: ${b.birthDate}
+- 주소: ${b.address}
+- GitHub: ${b.github}
+- 블로그/포트폴리오: ${b.blog}
 
-  if (applyInfo.method === 'email') {
-    // ⛔ 이메일 자동화 금지 — 이메일 방식 공고는 수동 지원 필요
-    console.log(`⛔ 이메일 방식 공고입니다. 자동 지원 불가.`);
-    console.log(`   수신 주소: ${applyInfo.email}`);
-    console.log(`   직접 이력서를 첨부하여 발송하세요.`);
+## 경력
+- 총 경력: ${c.totalYears}
+- 현 직장: ${c.currentCompany}
+- 현 직무: ${c.currentRole}
+- 기술스택: ${c.skills}
+- 요약: ${c.summary}
 
-    await sendDiscord(
-      `⛔ **이메일 방식 — 수동 지원 필요**\n` +
-      `공고: ${jobTitle}\n` +
-      `수신 주소: ${applyInfo.email}\n\n` +
-      `자동 발송하지 않습니다. 직접 이력서 첨부 후 전송하세요.`,
-    );
-    result = { method: 'email', skipped: true, reason: '이메일 방식 수동 지원 필요', email: applyInfo.email };
+## 학력
+- 학력: ${e.degreeLevel}
+- 학교: ${e.university}
+- 학과: ${e.major}
+- 전공계열: ${e.majorCategory}
+- 학위: ${e.degree}
+- 입학: ${e.enrollDate}
+- 졸업: ${e.graduateDate}
+- 학점: ${e.gpa} / 기준학점: ${e.gpaScale}
 
-  } else if (applyInfo.method === 'form') {
-    // 폼 기반 지원
-    console.log('📝 폼 기반 지원 — 필드 자동 채움 시작');
-    const formResult = await handleFormApply(page, applyInfo);
-    await new Promise(r => setTimeout(r, 2000));
-    await page.screenshot({ path: screenshotPath, fullPage: false });
+## 병역
+- 병역 상태: ${m.status} (필역)
+- 군종: ${m.type} ${m.role}
+- 복무 기간: ${m.startDate} ~ ${m.endDate}
 
-    result = { method: 'form', fields: formResult.fields, filledCount: formResult.filledCount, usedClaude: formResult.usedClaude, screenshotPath };
+## 장애/보훈
+- 장애사항: ${d.disability}
+- 보훈여부: ${d.veteran}
 
-    await sendDiscord(
-      `📝 **폼 자동 채움 완료** — ${jobTitle}\n` +
-      `매핑: ${formResult.usedClaude ? 'Claude AI' : '하드코딩 폴백'}\n` +
-      `필드 ${formResult.fields.length}개 감지, ${formResult.filledCount}개 채움\n` +
-      `브라우저에서 확인 후 직접 제출해주세요.`,
-      screenshotPath,
-    );
+## 자격증
+${applicant.certifications.map(c => `- ${c.name} (${c.year})`).join('\n')}
 
-    console.log('\n⏸️  폼 자동 채움 완료. 브라우저에서 내용 확인 후 직접 제출해주세요.');
+## 이력서 파일
+- PDF: ${applicant.files.resumePdf}
 
-  } else if (applyInfo.method === 'external') {
-    console.log(`🔗 외부 링크 감지: ${applyInfo.url}`);
-    await page.goto(applyInfo.url, { waitUntil: 'networkidle2', timeout: 20000 });
-    await new Promise(r => setTimeout(r, 3000));
-    await page.screenshot({ path: screenshotPath, fullPage: false });
+## 폼 채움 규칙
+1. 드롭다운/셀렉박스: 클릭해서 옵션을 선택. 단순 type 금지.
+2. 검색형 입력 필드 (학교명, 전공, 회사명 등): 텍스트 입력 → 나타난 검색 결과 항목을 **반드시 클릭**해서 확정.
+3. 라디오 버튼 (신입/경력, 병역 대상/비대상): 해당 항목을 클릭.
+4. 날짜 필드 (YYYY.MM): 입학/졸업일을 정확한 포맷으로 입력.
+5. 경력 선택: "경력" 라디오 버튼 클릭.
+6. 이력서 PDF 파일 업로드: ${applicant.files.resumePdf} 경로의 파일 업로드.
+7. 포트폴리오: "${a.portfolioType}" 방식 선택 → ${a.portfolioUrl} 입력.
+8. 지원 경로 질문: "${a.applyChannel}" 선택.
+9. 개인정보 동의: "필수" 표시된 체크박스만 모두 체크. 선택은 건너뛰어도 됨.
+10. 자기소개/지원동기 textarea가 있으면 위 "요약" 내용 기반으로 3~5줄 작성.
 
-    result = { method: 'external', url: applyInfo.url, screenshotPath };
-    await sendDiscord(`🔗 **외부 지원 페이지** — ${jobTitle}\n${applyInfo.url}`, screenshotPath);
+## ⚠️ 절대 금지
+- 제출/지원 완료/Submit 버튼 클릭 금지
+- 폼 채움만 완료하고 멈춰야 함
 
-  } else {
-    console.log('❓ 지원 방식을 감지하지 못했습니다.');
-    await page.screenshot({ path: screenshotPath, fullPage: false });
-    result = { method: 'unknown', screenshotPath };
-    await sendDiscord(`❓ **지원 방식 미감지** — ${jobTitle}\n페이지를 직접 확인해주세요.\n${url}`, screenshotPath);
+## 완료 후
+어떤 필드를 채웠는지 한국어로 요약해줘.`;
+}
+
+// ── Chrome 제어: URL 열기 ───────────────────────────────────────────────
+function openInChrome(url) {
+  try {
+    execSync(`osascript -e '
+tell application "Google Chrome"
+    activate
+    if (count of windows) = 0 then
+        make new window
+    end if
+    set newTab to make new tab at end of tabs of window 1 with properties {URL:"${url}"}
+end tell
+'`, { stdio: 'pipe' });
+    return true;
+  } catch (e) {
+    console.error(`[Chrome] URL 열기 실패: ${e.message}`);
+    return false;
+  }
+}
+
+// ── Phase 3: Claude in Chrome으로 폼 채움 ───────────────────────────────
+async function applyViaChrome(applicant, jobInfo) {
+  console.log(`\n🚀 지원 시작: ${jobInfo.company || ''} - ${jobInfo.title || ''}`);
+  console.log(`   URL: ${jobInfo.url}\n`);
+
+  // 중복 체크
+  if (isAlreadyApplied(jobInfo.url)) {
+    console.log('⚠️  이미 지원한 공고입니다. 중단.');
+    return;
   }
 
-  // 지원 이력 저장
-  saveApplication({ url, jobTitle, ...result });
+  // 1. Chrome에서 공고 페이지 열기
+  console.log('🖥️  Chrome에서 공고 페이지 열기...');
+  if (!openInChrome(jobInfo.url)) return;
 
-  // 브라우저를 열어둔 채로 종료 — 사용자가 확인 후 직접 제출
-  browser.disconnect();
-  console.log('\n✅ 완료. Mac 화면의 Chrome에서 내용 확인 후 직접 제출해주세요.');
-  console.log('   (브라우저는 열린 상태로 유지됩니다)');
+  console.log('⏳ 페이지 로딩 대기 (5초)...');
+  await new Promise(r => setTimeout(r, 5000));
+
+  // 2. claude --chrome으로 폼 채움
+  console.log('🤖 Claude in Chrome으로 폼 채움 시작...');
+  console.log('   (Claude가 화면을 보면서 직접 클릭/입력합니다. 3-5분 소요)\n');
+
+  const prompt = buildChromePrompt(applicant, jobInfo);
+
+  const result = await new Promise((resolve) => {
+    const proc = spawn('claude', ['--chrome', '-p', '--dangerously-skip-permissions'], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', d => {
+      const chunk = d.toString();
+      stdout += chunk;
+      process.stdout.write(chunk);
+    });
+    proc.stderr.on('data', d => { stderr += d.toString(); });
+
+    proc.on('close', code => resolve({ code, stdout, stderr }));
+    proc.on('error', err => resolve({ code: -1, stdout, stderr: err.message }));
+
+    proc.stdin.write(prompt);
+    proc.stdin.end();
+  });
+
+  if (result.code !== 0) {
+    console.error(`\n❌ Claude in Chrome 실패 (exit ${result.code})`);
+    if (result.stderr) console.error(result.stderr);
+    console.log('\n💡 확인사항:');
+    console.log('   1. Chrome에 Claude 확장이 설치되어 있나요?');
+    console.log('   2. 확장에서 Claude 계정 로그인 되어 있나요?');
+    console.log('   3. Claude 사용량 한도를 초과하지 않았나요?');
+
+    saveApplication({ ...jobInfo, method: 'claude-chrome', error: result.stderr || `exit ${result.code}` });
+    return;
+  }
+
+  await sendDiscord(
+    `📝 **채용 폼 자동 채움 완료 (Claude in Chrome)**\n` +
+    `회사: ${jobInfo.company || '?'}\n` +
+    `포지션: ${jobInfo.title || '?'}\n` +
+    `URL: ${jobInfo.url}\n\n` +
+    `✅ Chrome에서 내용 확인 후 직접 제출 버튼을 눌러주세요.`,
+  );
+
+  saveApplication({ ...jobInfo, method: 'claude-chrome', success: true, resultSnippet: result.stdout.slice(0, 500) });
+
+  console.log('\n✅ 완료. Chrome에서 폼 내용 확인 후 직접 제출해주세요.');
+}
+
+// ── 목록 출력 ───────────────────────────────────────────────────────────
+function printList(results, title = '📋 매칭된 공고') {
+  console.log(`\n${title} (${results.length}건)\n`);
+  results.slice(0, 30).forEach((job, i) => {
+    const icon = job.score >= 80 ? '🟢' : job.score >= 60 ? '🟡' : '⚪';
+    const applied = isAlreadyApplied(job.url) ? ' [지원완료]' : '';
+    console.log(`${i + 1}. ${icon} ${job.score}점 [${job.company}] ${job.title}${applied}`);
+    console.log(`   ${job.url}`);
+  });
+}
+
+// ── 메인 ─────────────────────────────────────────────────────────────────
+async function main() {
+  const applicant = loadApplicant();
+  console.log(`🚀 Jarvis Job Apply (지원자: ${applicant.basic.name})`);
+
+  // 인자 없음 → 매칭 목록 전체 출력
+  if (!arg) {
+    const matched = loadMatched();
+    if (!matched?.results) {
+      console.error('❌ matched.json이 없습니다. 먼저 크롤링/매칭을 실행하세요.');
+      console.error('   cd ~/jarvis/infra && node scripts/job-crawl.mjs && node scripts/job-match.mjs --detail');
+      process.exit(1);
+    }
+    printList(matched.results.filter(j => j.score >= 60), '📋 매칭 결과 (60점 이상)');
+    console.log('\n💡 사용법:');
+    console.log('   node job-apply.mjs <URL>               # URL 직접 지원');
+    console.log('   node job-apply.mjs 컬리                 # 회사명으로 검색 후 지원');
+    console.log('   node job-apply.mjs "컬리 풀필먼트"       # 여러 키워드 AND 검색');
+    return;
+  }
+
+  // URL 직접 지원
+  if (arg.startsWith('http://') || arg.startsWith('https://')) {
+    const matched = loadMatched();
+    const job = matched?.results?.find(j => j.url === arg) || { url: arg };
+    await applyViaChrome(applicant, job);
+    return;
+  }
+
+  // 회사명/키워드 검색
+  const results = searchJob(arg);
+
+  if (results.length === 0) {
+    console.error(`❌ "${arg}" 매칭 결과 없음`);
+    process.exit(1);
+  }
+
+  if (results.length === 1) {
+    await applyViaChrome(applicant, results[0]);
+    return;
+  }
+
+  // 여러 건 → 목록 출력 후 첫 번째 자동 지원 X, 사용자 확인 필요
+  printList(results, `🔍 "${arg}" 검색 결과`);
+  console.log('\n⚠️  여러 건 매칭. 더 구체적인 키워드를 사용하거나 URL을 직접 지정하세요.');
+  console.log('   예: node job-apply.mjs "컬리 풀필먼트"');
 }
 
 main().catch(e => { console.error('Fatal:', e); process.exit(1); });

@@ -6,7 +6,7 @@ set -euo pipefail
 # result-check: 최근 크론 실행 결과의 키워드/패턴/길이 검증 (비용 $0)
 # validate: 스킬 파일 구조 + 필수 섹션 검증 (비용 $0)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
 EVAL_CONFIG="$BOT_HOME/config/skill-evals/functional.json"
 COMMANDS_DIR="$HOME/.claude/commands"
 RESULT_DIR="$BOT_HOME/state/skill-eval-results"
@@ -188,7 +188,7 @@ $(echo -e "$REPORT")
 
 # Discord 전송
 if [[ -x "$ROUTE_RESULT" ]]; then
-    echo "$SUMMARY" | "$ROUTE_RESULT" "jarvis-ceo" 2>>"$LOG_FILE" || true
+    "$ROUTE_RESULT" "discord" "skill-eval" "$SUMMARY" "jarvis-ceo" 2>>"$LOG_FILE" || true
 fi
 
 echo "$SUMMARY"

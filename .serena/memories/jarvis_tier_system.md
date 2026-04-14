@@ -67,6 +67,21 @@ Tier 0 (FOUNDATION)
 - 1회용 스크립트 금지, 재사용 가능한 패턴만
 - 검증이 병목: warn은 통과시키되 추세 관측, fail만 차단
 
+## Serena 싱글톤 공유 (크론 태스크)
+
+- `bot-cron.sh`가 tasks.json `mcpConfig` 필드로 `JARVIS_MCP_CONFIG` env export
+- `ask-claude.sh`가 `--mcp-config "$JARVIS_MCP_CONFIG"` 사용
+- 적용: doc-sync-auditor, cron-auditor, security-scan (코드 탐색 LLM 3개)
+- ⚠️ **현재 프롬프트에 Serena 도구 호출 지시 없음 → 효과 미실현**
+- 인프라는 유효 (url 형식 OK, fallback OK), 프롬프트 수정 후 ledger로 측정 필요
+
+## 자비스맵(jarvis-board) Serena 절약
+
+**진짜 금맥은 Claude Code CLI 세션 (크론 아님)**:
+- VirtualOffice.tsx(2780줄) Read ~20K tok → Serena ~2K tok (90% 절약)
+- 팀장팝업 편집 세션 총: Read ~44K → Serena ~5.3K (88% 절약)
+- Serena-first 5단계: ① symbols_overview ② find_symbol(body) ③ referencing ④ Read(md only) ⑤ re-check
+
 ## 관련 commits
 - `81f3fea` (jarvis): Tier 1-5 전면 구축
 - `f47a87a` (jarvis-board): Tier 4 consensus-parser 게이트
