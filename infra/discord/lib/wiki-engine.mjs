@@ -1,88 +1,105 @@
 /**
- * wiki-engine.mjs — LLM Wiki 엔진
+ * wiki-engine.mjs — LLM Wiki CRUD 엔진
  *
- * Karpathy의 LLM Wiki 패턴 구현.
- * 기존 flat facts JSON 대신 주제별 .md 위키 페이지로 지식을 관리.
+ * Karpathy LLM Wiki 패턴 구현 — 전역 도메인 기반 단일 구조.
+ * devming 원본 설계 + 전역 도메인 통합 (SSoT).
  *
  * 저장 구조:
  *   ~/.jarvis/wiki/
- *     schema.json              — 위키 스키마 (카테고리/페이지 규칙)
- *     pages/{userId}/
- *       profile.md             — 사용자 기본 프로필
- *       work.md                — 업무/기술 컨텍스트
- *       trading.md             — 투자/금융
- *       projects.md            — 진행 중인 프로젝트
- *       preferences.md         — 선호도/습관
- *       health.md              — 건강/생활
- *       travel.md              — 여행 계획/기록
+ *     schema.json              — 위키 스키마 (도메인 규칙)
+ *     {domain}/
+ *       _summary.md            — 야간 크론(wiki-ingest.mjs)이 합성하는 종합 요약
+ *       _facts.md              — 실시간 fact 추가 (이 엔진이 기록)
+ *       *.md                   — 기타 상세 페이지
  *
- * 핵심 철학: Stateful 지식 축적 — 새 정보가 기존 페이지를 업데이트한다.
+ * 역할 분리:
+ *   - wiki-engine.mjs (이 파일): 실시간 CRUD (키워드 기반 즉시 반영)
+ *   - wiki-ingest.mjs (크론):    야간 배치 합성 (LLM으로 _summary.md 갱신)
+ *   - wiki-ingester.mjs:         LLM 소화 (세션 전체를 분석해 페이지 업데이트)
  */
 
 import {
   readFileSync, writeFileSync, mkdirSync,
   existsSync, readdirSync, statSync,
 } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
 export const WIKI_ROOT = join(BOT_HOME, 'wiki');
 const SCHEMA_PATH = join(WIKI_ROOT, 'schema.json');
 
-// ── 기본 위키 스키마 ──────────────────────────────────────────────────────────
+// ── 도메인 스키마 (devming 7개 → 전역 8개 도메인 통합) ──────────────────────
 
 const DEFAULT_SCHEMA = {
-  version: '1.0',
-  pages: {
-    profile: {
-      title: '사용자 프로필',
-      description: '이름, 직업, 거주지, 가족 등 기본 신상 정보',
-      keywords: ['이름', '직업', '나이', '거주', '가족', '아내', '부모님'],
-    },
-    work: {
-      title: '업무 & 기술',
-      description: '현재 직장, 기술 스택, 프로젝트, 커리어 목표',
-      keywords: ['spring', 'kafka', 'redis', 'aws', 'backend', '백엔드', '개발', '이직', '회사', 'sk', 'grpc'],
+  version: '2.0',
+  domains: {
+    career: {
+      title: '커리어 & 기술',
+      description: '직장, 기술 스택, 면접, 이직, 커리어 목표, 개인 프로필',
+      keywords: ['spring', 'kafka', 'redis', 'aws', 'backend', '백엔드', '개발', '이직',
+                 '회사', 'sk', 'grpc', '면접', '이력서', '채용', '핀테크', '이름', '직업',
+                 '나이', '거주', 'star'],
     },
     trading: {
       title: '투자 & 금융',
       description: '주식/코인 포트폴리오, 투자 전략, 관심 종목',
-      keywords: ['주식', '코인', '비트코인', 'etf', '레버리지', '매수', '매도', '포트폴리오', 'nasdaq', 's&p', '코스피', '금리'],
+      keywords: ['주식', '코인', '비트코인', 'etf', '레버리지', '매수', '매도',
+                 '포트폴리오', 'nasdaq', 's&p', '코스피', '금리', 'tqqq', '수익률'],
     },
-    projects: {
-      title: '진행 중인 프로젝트',
-      description: 'Jarvis 봇, 사이드 프로젝트, 자동화 작업 등',
-      keywords: ['jarvis', '봇', '디스코드', '자동화', '프로젝트', 'claude', 'mcp'],
+    ops: {
+      title: '운영 & 인프라',
+      description: '크론, 장애, 인프라, Jarvis 봇, 자동화 프로젝트',
+      keywords: ['jarvis', '봇', '디스코드', '자동화', '프로젝트', 'claude', 'mcp',
+                 '크론', 'cron', '디스크', '장애', '서킷', '에러', 'rag', '모니터링',
+                 'watchdog', '배포'],
     },
-    preferences: {
-      title: '선호도 & 습관',
-      description: '음식, 생활 패턴, 좋아하는 것/싫어하는 것',
-      keywords: ['좋아', '싫어', '선호', '즐겨', '매일', '습관', '루틴'],
+    knowledge: {
+      title: '기술 지식 & 트렌드',
+      description: '아키텍처, 기술 트렌드, 학습, 오픈소스',
+      keywords: ['아키텍처', '디자인패턴', '기술트렌드', '오픈소스', 'github', '블로그', '학습'],
+    },
+    family: {
+      title: '가족 & 생활',
+      description: '가족, 여행, 선호도, 습관, 루틴',
+      keywords: ['아내', '와이프', '가족', '부모님', '아이', '육아',
+                 '좋아', '싫어', '선호', '습관', '루틴',
+                 '여행', '해외', '항공', '숙소', '휴가'],
     },
     health: {
       title: '건강 & 운동',
       description: '건강 상태, 운동 루틴, 식단',
-      keywords: ['운동', '건강', '병원', '다이어트', '수면', '피로'],
+      keywords: ['운동', '건강', '병원', '다이어트', '수면', '피로', '자전거', '사이클'],
     },
-    travel: {
-      title: '여행 & 계획',
-      description: '여행 기록, 다음 여행 계획',
-      keywords: ['여행', '해외', '항공', '숙소', '휴가'],
+    briefings: {
+      title: '일일/주간 브리핑',
+      description: '스탠드업, 모닝 브리핑, 주간 요약',
+      keywords: ['스탠드업', '브리핑', '모닝', '주간'],
+    },
+    meta: {
+      title: '위키 관리',
+      description: '위키 자체 관리 — 모순, 린트, 통합 이력',
+      keywords: [],
     },
   },
   crossRefEnabled: true,
-  maxPageSizeKb: 20,
+  maxPageSizeKb: 3,
 };
 
-// ── 초기화 ───────────────────────────────────────────────────────────────────
+// ── 초기화 (lazy-init) ──────────────────────────────────────────────────────
 
-export function initWiki() {
+let _initialized = false;
+
+function ensureInit() {
+  if (_initialized) return;
   mkdirSync(WIKI_ROOT, { recursive: true });
   if (!existsSync(SCHEMA_PATH)) {
     writeFileSync(SCHEMA_PATH, JSON.stringify(DEFAULT_SCHEMA, null, 2));
   }
+  _initialized = true;
 }
+
+export function initWiki() { ensureInit(); }
 
 export function getSchema() {
   try {
@@ -92,23 +109,24 @@ export function getSchema() {
   }
 }
 
-// ── 페이지 경로 ───────────────────────────────────────────────────────────────
+// ── 페이지 경로 (전역 도메인 기반) ──────────────────────────────────────────
 
-function pagePath(userId, pageKey) {
-  return join(WIKI_ROOT, 'pages', userId, `${pageKey}.md`);
+function domainDir(domain) {
+  return join(WIKI_ROOT, domain);
 }
 
-function userPagesDir(userId) {
-  return join(WIKI_ROOT, 'pages', userId);
+function factsPath(domain) {
+  return join(WIKI_ROOT, domain, '_facts.md');
 }
 
-// ── CRUD 기본 ─────────────────────────────────────────────────────────────────
+// ── CRUD ─────────────────────────────────────────────────────────────────────
 
 /**
- * 위키 페이지 읽기. 없으면 null.
+ * 도메인의 _facts.md 읽기. 없으면 null.
+ * userId 파라미터는 하위 호환용 — 무시됨 (전역 도메인 단일 구조).
  */
-export function getPage(userId, pageKey) {
-  const path = pagePath(userId, pageKey);
+export function getPage(_userId, domain) {
+  const path = factsPath(domain);
   if (!existsSync(path)) return null;
   try {
     return readFileSync(path, 'utf-8');
@@ -118,47 +136,49 @@ export function getPage(userId, pageKey) {
 }
 
 /**
- * 위키 페이지 저장. 없으면 생성.
+ * 도메인의 _facts.md 저장.
  */
-export function savePage(userId, pageKey, content) {
-  const dir = userPagesDir(userId);
+export function savePage(_userId, domain, content) {
+  ensureInit();
+  const dir = domainDir(domain);
   mkdirSync(dir, { recursive: true });
-  const path = pagePath(userId, pageKey);
+  const path = factsPath(domain);
   const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  // 헤더가 없으면 자동 추가
   const schema = getSchema();
-  const pageDef = schema.pages[pageKey];
-  const title = pageDef?.title || pageKey;
-  const header = `# ${title}\n> 마지막 업데이트: ${timestamp}\n\n`;
+  const domainDef = schema.domains?.[domain] || schema.pages?.[domain];
+  const title = domainDef?.title || domain;
+  const header = `# ${title} — 실시간 기록\n> 마지막 업데이트: ${timestamp}\n\n`;
   const finalContent = content.startsWith('#') ? content : header + content;
   writeFileSync(path, finalContent);
 }
 
 /**
- * 모든 위키 페이지 목록 반환.
+ * 전체 도메인의 _facts.md 목록 반환.
  */
-export function listPages(userId) {
-  const dir = userPagesDir(userId);
-  if (!existsSync(dir)) return [];
+export function listPages(_userId) {
+  if (!existsSync(WIKI_ROOT)) return [];
   try {
-    return readdirSync(dir)
-      .filter(f => f.endsWith('.md'))
-      .map(f => f.replace('.md', ''));
+    return readdirSync(WIKI_ROOT)
+      .filter(d => {
+        const p = join(WIKI_ROOT, d);
+        return statSync(p).isDirectory() && !d.startsWith('.') && d !== 'meta' && d !== 'pages';
+      })
+      .filter(d => existsSync(factsPath(d)));
   } catch {
     return [];
   }
 }
 
 /**
- * 텍스트가 어느 페이지에 속하는지 키워드 기반으로 판단.
- * 복수 매칭 시 점수 높은 페이지 반환.
+ * 텍스트가 어느 도메인에 속하는지 키워드 기반으로 판단.
  */
 export function detectPageKey(text, schema = null) {
   const s = schema || getSchema();
   const lText = text.toLowerCase();
   const scores = {};
+  const domains = s.domains || s.pages || {};
 
-  for (const [key, def] of Object.entries(s.pages)) {
+  for (const [key, def] of Object.entries(domains)) {
     let score = 0;
     for (const kw of (def.keywords || [])) {
       if (lText.includes(kw.toLowerCase())) score++;
@@ -166,57 +186,52 @@ export function detectPageKey(text, schema = null) {
     if (score > 0) scores[key] = score;
   }
 
-  if (Object.keys(scores).length === 0) return 'profile'; // 기본값
+  if (Object.keys(scores).length === 0) return 'career'; // 기본값 (구 profile → career)
   return Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
 }
 
 /**
- * 하나의 fact를 적절한 위키 페이지에 추가.
- * 기존 페이지가 있으면 병합, 없으면 생성.
- *
- * @returns {string} 추가된 pageKey
+ * fact를 적절한 도메인의 _facts.md에 추가.
+ * @returns {string} 추가된 도메인 키
  */
-export function addFactToWiki(userId, fact, pageKeyOverride = null) {
+export function addFactToWiki(_userId, fact, domainOverride = null) {
+  ensureInit();
   const schema = getSchema();
-  const pageKey = pageKeyOverride || detectPageKey(fact, schema);
-  const existing = getPage(userId, pageKey) || '';
+  const domain = domainOverride || detectPageKey(fact, schema);
+  const existing = getPage(null, domain) || '';
   const timestamp = new Date().toISOString().slice(0, 10);
 
   // 중복 체크
-  if (existing.includes(fact.trim())) return pageKey;
+  if (existing.includes(fact.trim())) return domain;
 
   const newEntry = `- [${timestamp}] ${fact.trim()}\n`;
 
   if (!existing) {
-    // 새 페이지 생성
-    const pageDef = schema.pages[pageKey];
-    const title = pageDef?.title || pageKey;
-    const content = `# ${title}\n> 마지막 업데이트: ${timestamp}\n\n## 기록\n${newEntry}`;
-    savePage(userId, pageKey, content);
+    const domains = schema.domains || schema.pages || {};
+    const domainDef = domains[domain];
+    const title = domainDef?.title || domain;
+    const content = `# ${title} — 실시간 기록\n> 마지막 업데이트: ${timestamp}\n\n## 기록\n${newEntry}`;
+    savePage(null, domain, content);
   } else {
-    // 기존 페이지에 항목 추가
     const updatedContent = appendToSection(existing, '## 기록', newEntry, timestamp);
-    savePage(userId, pageKey, updatedContent);
+    savePage(null, domain, updatedContent);
   }
 
-  return pageKey;
+  return domain;
 }
 
 /**
  * 섹션에 항목 추가. 섹션 없으면 생성.
  */
 function appendToSection(content, sectionHeader, newEntry, timestamp) {
-  // 마지막 업데이트 타임스탬프 갱신
   const updated = content.replace(
     /> 마지막 업데이트:.*/,
     `> 마지막 업데이트: ${timestamp}`
   );
 
   if (updated.includes(sectionHeader)) {
-    // 섹션 끝에 추가
     const parts = updated.split(sectionHeader);
     const afterSection = parts[1] || '';
-    // 다음 섹션 시작 전에 삽입
     const nextSectionIdx = afterSection.search(/\n## /);
     if (nextSectionIdx === -1) {
       return updated + newEntry;
@@ -226,61 +241,79 @@ function appendToSection(content, sectionHeader, newEntry, timestamp) {
     return parts[0] + sectionHeader + before + newEntry + after;
   }
 
-  // 섹션 없으면 끝에 추가
   return updated.trimEnd() + `\n\n${sectionHeader}\n${newEntry}`;
 }
 
 /**
  * 위키 전체 내용을 프롬프트용으로 반환.
- * 모든 페이지를 연결해 요약본으로.
+ * _summary.md (야간 합성) + _facts.md (실시간) 모두 포함.
  */
-export function getWikiContext(userId, relevantQuery = '') {
-  const pages = listPages(userId);
-  if (pages.length === 0) return '';
-
+export function getWikiContext(_userId, relevantQuery = '') {
+  if (!existsSync(WIKI_ROOT)) return '';
   const schema = getSchema();
+  const domains = schema.domains || schema.pages || {};
   const lines = ['## 위키 지식베이스'];
 
-  // 쿼리와 관련도 높은 페이지 우선
-  let orderedPages = pages;
+  // 쿼리 관련 도메인 우선
+  const allDomains = Object.keys(domains).filter(d => d !== 'meta');
+  let orderedDomains = allDomains;
   if (relevantQuery) {
-    const pageKey = detectPageKey(relevantQuery, schema);
-    orderedPages = [pageKey, ...pages.filter(p => p !== pageKey)];
+    const primary = detectPageKey(relevantQuery, schema);
+    orderedDomains = [primary, ...allDomains.filter(d => d !== primary)];
   }
 
-  for (const pk of orderedPages) {
-    const content = getPage(userId, pk);
-    if (!content) continue;
-    const pageDef = schema.pages[pk];
-    const title = pageDef?.title || pk;
-    // 각 페이지에서 최대 500자만 포함 (컨텍스트 절약)
-    const snippet = content.length > 500 ? content.slice(0, 500) + '...' : content;
-    lines.push(`\n### [${title}]\n${snippet}`);
+  for (const domain of orderedDomains) {
+    const dir = domainDir(domain);
+    if (!existsSync(dir)) continue;
+
+    // _summary.md 우선 (야간 합성 결과)
+    const summaryPath = join(dir, '_summary.md');
+    if (existsSync(summaryPath)) {
+      let content = readFileSync(summaryPath, 'utf-8');
+      content = content.replace(/^---[\s\S]*?---\n*/m, '');
+      const snippet = content.length > 500 ? content.slice(0, 500) + '...' : content;
+      lines.push(`\n### [${domains[domain]?.title || domain}]\n${snippet}`);
+      continue; // summary가 있으면 facts는 스킵 (summary가 더 구조화됨)
+    }
+
+    // _facts.md 폴백 (실시간 기록)
+    const facts = getPage(null, domain);
+    if (facts) {
+      const snippet = facts.length > 500 ? facts.slice(0, 500) + '...' : facts;
+      lines.push(`\n### [${domains[domain]?.title || domain}]\n${snippet}`);
+    }
   }
 
+  if (lines.length <= 1) return '';
   return lines.join('\n') + '\n\n';
 }
 
 /**
- * 위키 페이지 통계 반환.
+ * 위키 통계 반환.
  */
-export function getWikiStats(userId) {
-  const pages = listPages(userId);
-  const stats = { totalPages: pages.length, pages: {} };
-  for (const pk of pages) {
-    const path = pagePath(userId, pk);
-    try {
-      const { size, mtimeMs } = statSync(path);
-      stats.pages[pk] = {
-        sizeKb: (size / 1024).toFixed(1),
-        lastModified: new Date(mtimeMs).toISOString().slice(0, 10),
-      };
-    } catch {
-      stats.pages[pk] = { sizeKb: 0, lastModified: null };
+export function getWikiStats(_userId) {
+  if (!existsSync(WIKI_ROOT)) return { totalPages: 0, pages: {} };
+  const stats = { totalPages: 0, pages: {} };
+  try {
+    const domains = readdirSync(WIKI_ROOT).filter(d => {
+      const p = join(WIKI_ROOT, d);
+      return statSync(p).isDirectory() && !d.startsWith('.');
+    });
+    for (const domain of domains) {
+      const dir = domainDir(domain);
+      const files = readdirSync(dir).filter(f => f.endsWith('.md'));
+      stats.totalPages += files.length;
+      for (const f of files) {
+        const fp = join(dir, f);
+        try {
+          const { size, mtimeMs } = statSync(fp);
+          stats.pages[`${domain}/${f}`] = {
+            sizeKb: (size / 1024).toFixed(1),
+            lastModified: new Date(mtimeMs).toISOString().slice(0, 10),
+          };
+        } catch {}
+      }
     }
-  }
+  } catch {}
   return stats;
 }
-
-// 초기화 실행
-initWiki();
