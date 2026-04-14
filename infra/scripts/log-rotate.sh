@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: cron daily at 03:00
 # Keeps last 7 days of logs, compresses older ones
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 LOG_DIR="${BOT_HOME}/logs"
 RETENTION_DAYS=7
 

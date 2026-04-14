@@ -4,7 +4,7 @@ set -euo pipefail
 # route-result.sh - Route results to Discord, ntfy, file, or alert
 # Usage: route-result.sh <mode> <task-id> <message>
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 CONFIG="${BOT_HOME}/config/monitoring.json"
 
 # --- Config check ---

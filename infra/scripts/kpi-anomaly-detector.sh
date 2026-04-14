@@ -5,7 +5,7 @@ set -euo pipefail
 # 매주 월요일 08:35 실행 (crontab)
 # 측정 -> 이상 감지 -> 행동 제안 -> 재측정 루프의 핵심
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 MONITORING="${BOT_HOME}/config/monitoring.json"
 DECISIONS_FILE="${BOT_HOME}/state/kpi-decisions.jsonl"
 RESULTS_DIR="${BOT_HOME}/results/kpi-weekly"

@@ -15,7 +15,7 @@ set -euo pipefail
 #   3. Send alerts via ntfy + Discord webhook
 
 # --- Configuration ---
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 BOT_LOG="$BOT_HOME/logs/discord-bot.jsonl"
 WATCHDOG_LOG="$BOT_HOME/logs/bot-watchdog.log"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"

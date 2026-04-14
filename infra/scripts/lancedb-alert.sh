@@ -4,7 +4,7 @@ set -euo pipefail
 # lancedb-alert.sh — LanceDB 경고를 jarvis-system에 embed+Compact 버튼으로 전송
 # Usage: lancedb-alert.sh <size_mb>
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 SIZE_MB="${1:?Usage: lancedb-alert.sh <size_mb>}"
 CHANNEL_ID="${JARVIS_SYSTEM_CHANNEL_ID:-}"  # jarvis-system

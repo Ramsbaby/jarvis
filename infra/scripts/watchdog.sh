@@ -5,7 +5,7 @@ set -euo pipefail
 # KeepAlive launchd service with internal 180s loop. Monitors discord-bot, cleans stale claude -p.
 
 # --- Configuration ---
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 # Cross-platform compat
 source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 2>/dev/null || true
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true

@@ -4,7 +4,7 @@ set -euo pipefail
 # retry-wrapper.sh - Retry wrapper with exponential backoff for ask-claude.sh
 # Usage: retry-wrapper.sh <task-id> <prompt> [allowed-tools] [timeout] [max-budget]
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; case "$(uname -s)" in Darwin) IS_MACOS=true ;; esac
 }
