@@ -88,28 +88,79 @@ API 과금 없이 Claude 구독만으로 돌아갑니다. 데이터는 100% 내 
 
 ## 빠른 시작
 
+### 어떤 구성을 선택할까?
+
+| 구성 | 기능 | AI 요구사항 | 비용 |
+|------|------|-----------|------|
+| **표준** | Discord 봇 + 80개 크론 자동화 | Claude Max 또는 Pro 구독 | $20/월(Pro) 또는 $100/월(Max) |
+| **풀** | 표준 + RAG 장기 기억 | Claude 구독 + Ollama (무료, 로컬) | 동일 + 0 |
+
+> **Claude Max** = 무제한, 24/7 봇 운영에 최적. **Claude Pro** = 정상 작동하나 사용량 많으면 제한 걸릴 수 있음.
+> **Ollama** = 무료 오픈소스 AI, 로컬에서 실행. RAG(문서 검색 + 기억) 전용. 봇 자체는 Claude로 동작.
+
+---
+
+### 0단계: 사전 준비
+
+1. **Claude Code CLI** (두뇌)
+   ```bash
+   npm install -g @anthropic-ai/claude-code
+   claude   # 브라우저가 열리면 Anthropic 계정으로 로그인
+   ```
+2. **Node.js 22+** 와 **Python 3.10+**
+   ```bash
+   node -v   # 22 이상이어야 함
+   python3 --version
+   ```
+
+### 1단계: Discord 봇 토큰 발급
+
+> 이미 토큰이 있으면 2단계로 건너뛰세요.
+
+1. [Discord 개발자 포털](https://discord.com/developers/applications) 접속
+2. **"New Application"** 클릭 → 이름 입력 (예: "Jarvis") → **Create**
+3. 왼쪽 메뉴 → **"Bot"** 탭 → **"Reset Token"** 클릭 → **토큰 복사** (저장해두세요!)
+4. 아래로 스크롤 → **"Message Content Intent"** 토글 ON → Save
+5. 왼쪽 메뉴 → **"OAuth2"** → **"URL Generator"**:
+   - Scopes: `bot`, `applications.commands`
+   - Bot permissions: `Send Messages`, `Read Message History`, `Attach Files`, `Use Slash Commands`
+6. 생성된 URL 복사 → 브라우저에서 열기 → 봇을 내 Discord 서버에 초대
+
+### 2단계: 클론 & 셋업
+
 ```bash
 git clone https://github.com/Ramsbaby/jarvis.git && cd jarvis
+python scripts/setup_infra.py    # Discord 토큰 입력하라고 나오면 1단계에서 복사한 것 붙여넣기
 ```
 
-### 1단계: RAG — 장기 기억
+셋업 마법사가 자동으로:
+- Node.js 확인, 데이터 디렉토리 생성
+- **Discord 봇 토큰** 입력 요청 (1단계에서 복사한 것)
+- 의존성 설치 및 봇 설정
+
+> **상세 가이드**: [`infra/CLAUDE-SETUP-GUIDE.md`](infra/CLAUDE-SETUP-GUIDE.md) — MCP 서버, 페르소나, 컨텍스트 설정, 문제 해결
+
+### 3단계: RAG — 장기 기억 (선택, 권장)
+
+자비스가 과거 대화와 문서를 검색할 수 있게 해줍니다.
 
 ```bash
-python scripts/setup_rag.py
+# 먼저 Ollama 설치 (무료, 로컬 AI — 임베딩 전용)
+# macOS:
+brew install ollama && ollama serve
+
+# Linux:
+curl -fsSL https://ollama.com/install.sh | sh && ollama serve
+
+# RAG 셋업 실행:
+python scripts/setup_rag.py    # ~400MB 임베딩 모델 다운로드, 2-5분 소요
 ```
 
-> **필요**: [Ollama](https://ollama.com/download), Node.js 18+
+### 플랫폼별 시작
 
-### 2단계: Discord 봇 + 자동화
+**macOS** — LaunchAgent로 자동 시작 (setup_infra.py가 설정함)
 
-```bash
-python scripts/setup_infra.py
-```
-
-> **필요**: Node.js 18+, Discord 봇 토큰
-
-### WSL2 / Linux — PM2로 시작
-
+**WSL2 / Linux** — PM2 사용:
 ```bash
 npm install -g pm2
 pm2 start infra/ecosystem.config.cjs
