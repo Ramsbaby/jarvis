@@ -28,12 +28,21 @@ for arg in "$@"; do
 done
 
 # ── 로그 헬퍼 ───────────────────────────────────────────────
+#   INFO/DEBUG 는 stdout 으로, WARN/ERROR 만 stderr 로 분리한다.
+#   이전에는 level 상관없이 전부 `>&2` 로 흘려보냈는데, 크론 감사
+#   시스템(/api/crons) 이 `-err.log` 비어있지 않음 = 실패 로 판단해서
+#   정상 INFO 로그만 있는 agent-batch-commit 이 계속 failed 로 오분류됐다.
 log() {
     local level="${1:-INFO}"
     local msg="${2:-}"
     local ts
     ts=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "${ts} [${level}] agent-batch-commit: ${msg}" | tee -a "${LOG_FILE}" >&2
+    local line="${ts} [${level}] agent-batch-commit: ${msg}"
+    if [[ "${level}" == "ERROR" || "${level}" == "WARN" ]]; then
+        echo "${line}" | tee -a "${LOG_FILE}" >&2
+    else
+        echo "${line}" | tee -a "${LOG_FILE}"
+    fi
 }
 
 # ── git repo 여부 확인 ───────────────────────────────────────
