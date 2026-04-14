@@ -812,8 +812,9 @@ export async function* createClaudeSession(prompt, {
   }
 
   // LLM Wiki context (dynamic — 세션 해시 영향 없음)
+  // 2-track: 전역 도메인 위키 + 사용자 개인 페이지(pages/{userId}/)
   if (userId && isOwner && prompt) {
-    const wikiCtx = buildWikiContextSection({ prompt, botHome: BOT_HOME });
+    const wikiCtx = buildWikiContextSection({ prompt, botHome: BOT_HOME, userId });
     if (wikiCtx) systemParts.push('', wikiCtx);
   }
 

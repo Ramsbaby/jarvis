@@ -58,9 +58,15 @@ discord-bot.js ──► lib/handlers.js ──► lib/claude-runner.js
                          │         10분 쿨다운, 봇 응답 150자 이상일 때만 실행
                          │
                          ├──► buildWikiContextSection() (Dynamic section)
-                         │         프롬프트 도메인 감지 → ~/.jarvis/wiki/{domain}/_summary.md
-                         │         + 관련 페이지 최대 2개 → 2,000자 컨텍스트 주입
-                         │         야간 크론(wiki-ingest.mjs, 03:30)이 위키 페이지 합성
+                         │         Hybrid 2-track LLM Wiki context injection:
+                         │         1) 전역 도메인: ~/.jarvis/wiki/{career,trading,ops...}/_summary.md
+                         │         2) 사용자 개인: ~/.jarvis/wiki/pages/{userId}/*.md
+                         │         최대 2,000자, 세션 해시 영향 없음 (오너 전용)
+                         │         Ingest 경로:
+                         │           - 즉시 반영: session-summarizer → addFactToWiki (키워드)
+                         │           - LLM 소화: wiki-ingester.ingestSessionToWiki (Haiku, 백그라운드)
+                         │           - 배치 합성: wiki-ingest.mjs (야간 03:30, 도메인별)
+                         │         Lint: wiki-lint.mjs (일요일 04:00, 7개 점검)
                          │
                          ▼
               context/discord-history/YYYY-MM-DD-HHMMSS.md  (세션 단위)
