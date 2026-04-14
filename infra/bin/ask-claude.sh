@@ -198,6 +198,27 @@ if [[ -z "$RESULT" ]]; then
     exit 1
 fi
 
+# --- Tier 1: 독립 평가자 (evaluator.sh) ---
+# pass=통과 / warn=통과하지만 ledger에 경고 기록 / fail=재시도 또는 실패 처리
+EVALUATOR_VERDICT="pass"
+EVALUATOR_REASON=""
+EVALUATOR_LIB="${BOT_HOME}/lib/evaluator.sh"
+if [[ -f "$EVALUATOR_LIB" ]]; then
+    # shellcheck source=/dev/null
+    source "$EVALUATOR_LIB"
+    evaluate_result "$TASK_ID" "$RESULT" "$PROMPT" || true
+    if [[ "$EVALUATOR_VERDICT" == "fail" ]]; then
+        log_jsonl "error" "evaluator_fail: ${EVALUATOR_REASON}" "$DURATION"
+        echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-evaluator-fail.json"
+        record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
+        # stdout으로 에러 메시지 (retry-wrapper가 분류에 사용)
+        echo "EVALUATOR_FAIL: ${EVALUATOR_REASON}"
+        exit 1
+    elif [[ "$EVALUATOR_VERDICT" == "warn" ]]; then
+        log_jsonl "warn" "evaluator_warn: ${EVALUATOR_REASON}" "$DURATION"
+    fi
+fi
+
 # --- Extract cost and token usage ---
 COST_USD=$(echo "$RAW_OUTPUT" | jq -r '.cost_usd // 0')
 INPUT_TOKENS=$(echo "$RAW_OUTPUT" | jq -r '.usage.input_tokens // 0')
