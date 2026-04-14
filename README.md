@@ -53,7 +53,7 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 | 💬 | **Discord Bot** | 24/7 chat with streaming, voice recognition (Whisper STT), per-channel personas, 16+ slash commands |
 | 👥 | **Multi-User** | Per-user isolated memory, pairing codes for new users, family mode with privacy boundaries |
 | 📚 | **RAG Knowledge Base** | Long-term memory. BM25 + vector hybrid search across 10,000+ documents |
-| 🗂️ | **LLM Wiki** | Stateful knowledge base inspired by Karpathy's LLM Wiki. Sessions auto-digested by Claude Haiku into 7 topic wiki pages (`profile` / `work` / `trading` / `projects` / `preferences` / `health` / `travel`). Knowledge compounds over time — new info updates existing pages instead of appending raw chunks |
+| 🗂️ | **LLM Wiki** | [Karpathy's 3-layer pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (Raw/Wiki/Schema). 4 ingest paths: realtime keyword routing, background LLM digest (Haiku), nightly batch synthesis (03:30), weekly lint (Sunday 04:00). Domain wikis (`career`/`trading`/`ops`/`knowledge`) + per-user pages. Feeds Discord bot, Board API, and Map NPCs. Knowledge compounds — new info updates existing pages, not appends |
 | 🧠 | **Insight Layer** | Daily auto-generated behavioural report — detects activity trends, focus shifts, situational context |
 | 📋 | **Dev-Queue** | AI-extracted action items auto-queued, then auto-executed by `jarvis-coder.sh` — hands-free development |
 | 🤖 | **8 AI Teams** | Council, Infra, Record, Brand, Career, Academy, Trend, Recon — each with specialised agents |
