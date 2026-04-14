@@ -13,7 +13,7 @@ source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 
 LOG_FILE="${BOT_HOME}/logs/system-cleanup.log"

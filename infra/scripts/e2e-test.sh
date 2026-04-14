@@ -5,7 +5,7 @@ set -uo pipefail
 # Usage: ~/.jarvis/scripts/e2e-test.sh [--ntfy] (--ntfy sends test push notification)
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-export BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+export BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 PASS=0
 FAIL=0
 SKIP=0
@@ -202,7 +202,7 @@ check "tasks.json has depends field" bash -c "jq -e '.tasks[0].depends' '$BOT_HO
 check "ask-claude.sh has cross-team context" grep -q "Cross-team Context" "$BOT_HOME/lib/context-loader.sh"
 check "ask-claude.sh has insight filter" grep -q "system-health|rate-limit-check" "$BOT_HOME/lib/insight-recorder.sh"
 check "gen-inventory.sh exists" test -x "$BOT_HOME/scripts/gen-inventory.sh"
-ci_check "cron-catalog.md exists" test -f "${VAULT_DIR:-$HOME/vault}/01-system/cron-catalog.md"
+check "cron-catalog.md exists" test -f "${VAULT_DIR:-$HOME/vault}/01-system/cron-catalog.md"
 warn_check "council reads shared-inbox" grep -q "shared-inbox" "$BOT_HOME/context/council-insight.md"
 check "pending-tasks atomic write (renameSync)" grep -q "renameSync" "$BOT_HOME/discord/lib/handlers.js"
 check "apology cooldown implemented" grep -q "apologyCooldownFile" "$BOT_HOME/discord/discord-bot.js"
@@ -239,9 +239,20 @@ PYEOF
 "
 
 # Cron-catalog vs actual crontab consistency
-TASKS_COUNT=$(jq '[.tasks[] | select(.schedule != null and .schedule != "")] | length' "$BOT_HOME/config/tasks.json" 2>/dev/null || echo 0)
-CATALOG_COUNT=$(grep -c "^|" "${VAULT_DIR:-$HOME/vault}/01-system/cron-catalog.md" 2>/dev/null || echo 0)
-if [[ "$CATALOG_COUNT" -ge "$TASKS_COUNT" ]]; then
+# Note: cron-catalog.md includes both tasks.json scheduled tasks AND actual crontab entries
+TASKS_COUNT=$(python3 -c "
+import json
+try:
+    with open('$BOT_HOME/config/tasks.json') as f:
+        data = json.load(f)
+    count = len([t for t in data['tasks'] if t.get('schedule', '').strip()])
+    print(count)
+except:
+    print(0)
+" 2>/dev/null)
+# Catalog rows include header (2 rows) + data rows, so subtract 2 from total
+CATALOG_DATA_COUNT=$(($(grep -c "^|" "${VAULT_DIR:-$HOME/vault}/01-system/cron-catalog.md" 2>/dev/null || echo 0) - 2))
+if [[ "$CATALOG_DATA_COUNT" -ge "$TASKS_COUNT" ]]; then
   ci_check "cron-catalog matches tasks.json count" true
 else
   ci_check "cron-catalog matches tasks.json count" false

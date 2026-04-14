@@ -61,6 +61,9 @@ log_info()  { _log_emit info "$@"; }
 log_warn()  { _log_emit warn "$@"; }
 log_error() { _log_emit error "$@"; }
 
+# compat alias — 기존 스크립트들이 log() 를 사용. log_info 로 라우팅.
+log() { _log_emit info "$@"; }
+
 # Run a command, capture stderr. If it fails, log the stderr as a warning.
 # stdout passes through normally.
 # Usage: result=$(log_capture "label" some_command args...)

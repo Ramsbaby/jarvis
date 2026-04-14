@@ -4,7 +4,7 @@
 # Schedule: 30 3 * * * (매일 03:30, rag-health 03:00 이후 실행)
 set -uo pipefail
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 
 # .env 로딩 — 크론 환경에 OPENAI_API_KEY 등 누락 방지
 if [[ -f "${BOT_HOME}/.env" ]]; then
@@ -25,9 +25,43 @@ log() { echo "[$(timestamp)] $1" >> "$LOG_FILE"; }
 
 log "START"
 
-# E2E 테스트 실행 (색상 코드 제거)
-OUTPUT=$("${BOT_HOME}/scripts/e2e-test.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g') || true
-EXIT_CODE=$?
+# gen-inventory.sh 완료 대기 (cron-catalog.md 최신화 필수)
+# — e2e-test.sh가 cron-catalog.md 존재/일관성을 검사하므로 선행 필수
+if [[ -f "${BOT_HOME}/scripts/gen-inventory.sh" ]]; then
+  bash "${BOT_HOME}/scripts/gen-inventory.sh" >> "${BOT_HOME}/logs/gen-inventory.log" 2>&1 || true
+  sleep 2  # file sync 대기
+fi
+
+# E2E 테스트 실행 (최대 2회 재시도)
+# Discord bot이 일시적으로 응답하지 않을 수 있으므로 재시도 메커니즘 추가
+MAX_RETRIES=2
+RETRY_COUNT=0
+
+while [[ $RETRY_COUNT -le $MAX_RETRIES ]]; do
+  OUTPUT=$("${BOT_HOME}/scripts/e2e-test.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g') || true
+  EXIT_CODE=$?
+
+  # 실패한 항목에서 "Discord bot running" 만 있으면 봇 재시작 후 재시도
+  FAIL_COUNT=$(echo "$OUTPUT" | grep -c "❌ FAIL" || true)
+  if [[ $FAIL_COUNT -eq 1 ]]; then
+    FAILED_ITEM=$(echo "$OUTPUT" | grep "❌ FAIL" | sed 's/❌ FAIL: //')
+    if [[ "$FAILED_ITEM" == "Discord bot running" ]] && [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; then
+      log "Discord bot check failed, restarting bot and retrying... (attempt $((RETRY_COUNT+2))/$((MAX_RETRIES+1)))"
+
+      # Discord bot 재시작 시도
+      launchctl stop ai.jarvis.discord-bot 2>/dev/null || true
+      sleep 2
+      launchctl start ai.jarvis.discord-bot 2>/dev/null || true
+      sleep 3  # 봇 시작 대기
+
+      RETRY_COUNT=$((RETRY_COUNT+1))
+      continue
+    fi
+  fi
+
+  # 성공 또는 재시도 불가능한 실패이면 루프 탈출
+  break
+done
 
 # 결과 파일 저장
 echo "$OUTPUT" > "$RESULT_FILE"

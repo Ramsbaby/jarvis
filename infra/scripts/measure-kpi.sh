@@ -4,7 +4,7 @@ set -euo pipefail
 # measure-kpi.sh - 자비스 컴퍼니 팀별 KPI 자동 측정
 # Usage: measure-kpi.sh [--discord] [--json] [--days N]
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 LOG="${BOT_HOME}/logs/task-runner.jsonl"
 MONITORING="${BOT_HOME}/config/monitoring.json"
 DAYS=7
