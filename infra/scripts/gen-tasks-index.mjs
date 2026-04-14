@@ -76,7 +76,7 @@ const TEAM_REGISTRY = [
     name: '재무실 (AI 비용·시장·수입)',
     keywords: [
       'tqqq', 'market-alert', 'stock', 'macro',
-      'finance-monitor', 'cost-monitor', 'tutoring-platform', 'personal-schedule',
+      'finance-monitor', 'cost-monitor', 'tutoring', 'personal-schedule',
       'daily-usage', 'update-usage',
     ],
   },
