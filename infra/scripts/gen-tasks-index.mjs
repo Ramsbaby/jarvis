@@ -19,9 +19,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { execFileSync } from 'node:child_process';
 
 const HOME = os.homedir();
 const TASKS_JSON = path.join(HOME, '.jarvis/config/tasks.json');
+const VALIDATE_SCRIPT = path.resolve(new URL('.', import.meta.url).pathname, 'validate-tasks.mjs');
+
+// tasks.json Schema 검증 — 실패 시 잘못된 인덱스 생성 방지
+try {
+  execFileSync(process.execPath, [VALIDATE_SCRIPT], { stdio: 'inherit' });
+} catch {
+  console.error('[gen-tasks-index] validate-tasks 실패 — 인덱스 생성 중단');
+  process.exit(1);
+}
 const LOGS_DIR = path.join(HOME, '.jarvis/logs');
 const OUT_DIR = path.resolve(new URL('.', import.meta.url).pathname, '../docs');
 const OUT_MD = path.join(OUT_DIR, 'TASKS-INDEX.md');

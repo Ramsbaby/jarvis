@@ -1,0 +1,239 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://jarvis.local/tasks.schema.json",
+  "title": "Jarvis Tasks Configuration",
+  "description": "~/.jarvis/config/tasks.json 스키마. 42개 필드 정의 — 타이핑/오탈자 조기 감지용.",
+  "type": "object",
+  "required": ["tasks"],
+  "properties": {
+    "tasks": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Task" }
+    }
+  },
+  "definitions": {
+    "Task": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+
+        "id": {
+          "type": "string",
+          "description": "태스크 고유 식별자 (kebab-case). bot-cron.sh 에서 실행 키로 사용.",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "description": "태스크 한국어 이름 (Discord 알림, UI 표시용)"
+        },
+
+        "schedule": {
+          "type": "string",
+          "description": "cron 표현식 (5필드). 없으면 event_trigger 로만 실행.",
+          "examples": ["10 6 * * *", "*/15 22-23 * * 1-5"]
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "false 이면 bot-cron.sh 에서 건너뜀",
+          "default": true
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "enabled 의 역방향 alias. 둘 중 하나만 사용 권장.",
+          "default": false
+        },
+        "priority": {
+          "type": "string",
+          "description": "태스크 우선순위 — 동시 실행 슬롯 배분에 사용",
+          "enum": ["critical", "daily", "weekly", "monthly", "adhoc", "normal", "low", "system", "event"]
+        },
+        "team": {
+          "type": "string",
+          "description": "소속 팀 (TASKS-INDEX 그룹핑, 브리핑 연동)",
+          "examples": ["council", "infra", "market", "record", "ops"]
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "태스크 최대 실행 시간 (초)",
+          "minimum": 10,
+          "maximum": 7200
+        },
+        "oncePerDay": {
+          "type": "boolean",
+          "description": "true: 24h 이내 이미 성공 실행 기록이 있으면 스킵"
+        },
+
+        "prompt": {
+          "type": "string",
+          "description": "Claude 에게 전달할 프롬프트 텍스트 (직접 기입)"
+        },
+        "prompt_file": {
+          "type": "string",
+          "description": "~/.jarvis/context/ 하위 프롬프트 파일명 (.md). prompt 대신 사용."
+        },
+        "script": {
+          "type": "string",
+          "description": "직접 실행할 쉘 스크립트 경로. prompt 없이 이것만 있으면 LLM 미호출."
+        },
+        "scriptArgs": {
+          "type": "string",
+          "description": "script 에 추가로 전달할 인자 문자열"
+        },
+        "model": {
+          "type": "string",
+          "description": "사용할 Claude 모델 ID",
+          "examples": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
+        },
+        "mcpConfig": {
+          "type": "string",
+          "description": "MCP 프로파일 이름 (~/.jarvis/config/mcp-profiles/ 키)",
+          "examples": ["serena", "coding", "minimal"]
+        },
+        "allowedTools": {
+          "oneOf": [
+            { "type": "string", "description": "쉼표로 구분한 도구 목록" },
+            { "type": "array", "items": { "type": "string" } }
+          ],
+          "description": "허용할 Claude 도구 목록. 기본: 모든 도구."
+        },
+        "contextFile": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ],
+          "description": "~/.jarvis/context/ 하위 컨텍스트 파일명 (.md). 프롬프트 앞에 주입."
+        },
+        "contextBudget": {
+          "type": "string",
+          "description": "컨텍스트 토큰 예산 프리셋",
+          "enum": ["small", "medium", "large", "unlimited"]
+        },
+
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["discord", "file", "stdout", "board"]
+          },
+          "description": "결과 출력 채널"
+        },
+        "discordChannel": {
+          "type": "string",
+          "description": "monitoring.json webhooks 키. output에 discord 포함 시 필수.",
+          "examples": ["jarvis", "jarvis-system", "jarvis-market", "jarvis-career"]
+        },
+        "channel": {
+          "type": "string",
+          "description": "discordChannel 의 alias (일부 태스크 사용). 동일 의미.",
+          "examples": ["jarvis-ceo"]
+        },
+        "resultRetention": {
+          "type": "integer",
+          "description": "결과 파일 보존 일수",
+          "minimum": 1,
+          "maximum": 365
+        },
+        "resultMaxChars": {
+          "type": "integer",
+          "description": "Discord 전송 최대 글자 수",
+          "minimum": 100,
+          "maximum": 20000
+        },
+        "allowEmptyResult": {
+          "type": "boolean",
+          "description": "true: 빈 결과도 성공으로 처리 (기본 false → 빈 결과 = 실패)"
+        },
+        "successPattern": {
+          "type": "string",
+          "description": "출력에서 성공 판정에 사용할 정규식 또는 문자열"
+        },
+
+        "maxBudget": {
+          "type": "string",
+          "description": "USD 기준 최대 LLM 비용 예산 (문자열 숫자)",
+          "pattern": "^[0-9]+\\.?[0-9]*$"
+        },
+        "retry": {
+          "type": "object",
+          "description": "실패 시 재시도 설정",
+          "properties": {
+            "max": { "type": "integer", "minimum": 0, "maximum": 10 },
+            "backoff": { "type": "string", "enum": ["linear", "exponential", "fixed"] }
+          },
+          "required": ["max"],
+          "additionalProperties": false
+        },
+        "circuitBreakerCooldown": {
+          "type": "integer",
+          "description": "서킷브레이커 쿨다운 (초). 초과 실패 후 이 시간 동안 스킵.",
+          "minimum": 0
+        },
+        "bypassRag": {
+          "type": "boolean",
+          "description": "true: RAG 컨텍스트 주입 건너뜀 (RAG 재빌드 중에도 실행 허용 시 사용)"
+        },
+        "skipDuringRagRebuild": {
+          "type": "boolean",
+          "description": "true: RAG 재빌드 중에는 이 태스크를 스킵"
+        },
+        "requiresMarket": {
+          "type": "boolean",
+          "description": "true: 시장 데이터 필요 — 주말/장 마감 시 스킵 가능"
+        },
+
+        "depends": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "선행 실행 필요 태스크 ID 목록"
+        },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "이 태스크를 참조할 수 있는 추가 이름들"
+        },
+        "env": {
+          "type": "object",
+          "description": "태스크 실행 시 추가로 주입할 환경변수",
+          "additionalProperties": { "type": "string" }
+        },
+
+        "event_trigger": {
+          "type": "string",
+          "description": "event-watcher 가 감지할 이벤트 이름 (schedule 대신 또는 병행 사용)",
+          "examples": ["market.emergency", "system.alert", "rag.updated"]
+        },
+        "event_trigger_debounce_s": {
+          "type": "integer",
+          "description": "동일 이벤트 연속 발생 시 재실행 억제 시간 (초)",
+          "minimum": 0
+        },
+        "event_trigger_note": {
+          "type": "string",
+          "description": "event_trigger 설정 의도/emit 방법 설명 (개발자용)"
+        },
+
+        "description": {
+          "type": "string",
+          "description": "태스크 목적 설명 (TASKS-INDEX.md 생성, UI 툴팁 등에 사용)"
+        },
+        "note": {
+          "type": "string",
+          "description": "구현 메모, 로직 설명, 참고사항 (개발자용)"
+        },
+        "_comment": {
+          "type": "string",
+          "description": "임시 개발 메모 (배포 전 제거 권장). note 와 동일 용도."
+        },
+        "_disabled_reason": {
+          "type": "string",
+          "description": "이 태스크를 disabled 처리한 이유와 재활성화 조건"
+        },
+        "_3agent_note": {
+          "type": "string",
+          "description": "3-agent 아키텍처(plan/execute/verify) 관련 설명"
+        }
+      }
+    }
+  }
+}
