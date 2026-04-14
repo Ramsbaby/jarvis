@@ -68,7 +68,7 @@ CEO / 이사회 / KPI / 주간-월간 리뷰. 의사결정·정산 루프가 여
 
 ## 재무실 · 장원석 (`finance`) — 8 crons
 
-AI 운영 비용 + 시장 포지션 + 개인 수입 (tutoring-platform). 숫자 단위 정확성이 핵심.
+AI 운영 비용 + 시장 포지션 + 개인 수입 (tutoring). 숫자 단위 정확성이 핵심.
 
 | Task ID | Schedule | 설명 |
 |---|---|---|
@@ -79,7 +79,7 @@ AI 운영 비용 + 시장 포지션 + 개인 수입 (tutoring-platform). 숫자 
 | `cost-monitor` | 일요일 09:00 | 주간 AI 비용 정산 |
 | `daily-usage-check` | 매일 05:55 | 일일 토큰 사용량 점검 |
 | `update-usage-cache` | 30분마다 | 사용량 캐시 갱신 |
-| `personal-schedule-daily` | 매일 07:30 | 오너 tutoring-platform 일정 동기화 |
+| `personal-schedule-daily` | 매일 07:30 | 오너 tutoring 일정 동기화 |
 
 ---
 
@@ -126,14 +126,14 @@ RAG 프론트엔드 품질 담당 (사용자 검색 경험).
 
 ## 인재개발실 · 김서연 (`growth-lead`) — 4 crons
 
-커리어·학습 통합. 이력서·면접·스터디·보람 학습 스케줄이 한 팀으로 합쳐져 있다.
+커리어·학습 통합. 스터디·학습 스케줄이 한 팀으로 합쳐져 있다.
 
 | Task ID | Schedule | 설명 |
 |---|---|---|
 | `career-extractor` | 매일 00:30 | 커리어 추출 (jobs, resume 변경 감지) |
 | `career-weekly` | 금요일 18:00 | 주간 커리어 리포트 → `#jarvis-dev` |
 | `academy-support` | 일요일 20:00 | 학습 큐레이션 |
-| `boram-daily-schedule` | 매일 07:30 | 보람 일일 스케줄 |
+| `boram-daily-schedule` | 매일 07:30 | 가족 일일 스케줄 |
 
 ---
 

@@ -26,7 +26,7 @@ infra/config/goals.json
 infra/config/effective-tasks.json
 infra/config/company-dna.md
 infra/config/jira.env
-infra/config/tutoring-platform.env
+infra/config/tutoring.env
 infra/config/google-calendar-token.json
 infra/config/user_profiles.json
 infra/config/discord-channels.json

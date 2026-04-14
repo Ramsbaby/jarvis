@@ -81,14 +81,14 @@ node ~/jarvis/infra/scripts/gen-tasks-index.mjs
 | `agent_tiers.json` | Tier router | Tier 1-5 agent definitions |
 | `google-calendar-token.json` | gog CLI | OAuth token (**secret**) |
 | `jira.env` | jira-sync | Jira creds (**secret**) |
-| `tutoring-platform.env` | finance | tutoring-platform API creds (**secret**) |
+| `tutoring.env` | finance | tutoring API creds (**secret**) |
 | `secrets/` | various | Additional secret material |
 | `empty-mcp.json` | ask-claude.sh | Zero-MCP profile (Jarvis gateway) |
 | `serena-mcp.json` | Claude Code CLI | Serena-only MCP profile |
 
 ### Secret files
 
-`jira.env`, `tutoring-platform.env`, `secrets/`, `google-calendar-token.json` contain credentials. Never commit, never paste into Discord, never log. Rotate via the respective provider when exposed.
+`jira.env`, `tutoring.env`, `secrets/`, `google-calendar-token.json` contain credentials. Never commit, never paste into Discord, never log. Rotate via the respective provider when exposed.
 
 ### Backups
 

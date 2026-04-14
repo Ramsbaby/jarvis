@@ -333,10 +333,10 @@
 - **스케줄**: `30 7 * * *` — 매일 07:30
 - **타입**: LLM prompt → `ask-claude.sh`
 - **모델**: `claude-haiku-4-5-20251001`
-- **Discord**: `#jarvis-boram`
+- **Discord**: `#jarvis-family`
 - **우선순위**: normal · budget `0.10`
 - **로그**: `~/.jarvis/logs/personal-schedule-daily.log` ✓ / `~/.jarvis/logs/personal-schedule-daily-err.log` ✓ / `claude-stderr-personal-schedule-daily-*.log` ✓
-- **설명**: 매일 07:30 KST tutoring-platform 수업 일정을 #jarvis-boram 채널로 자동 전송.
+- **설명**: 매일 07:30 KST tutoring 수업 일정을 #jarvis-family 채널로 자동 전송.
 
 ### `tqqq-monitor`
 - **이름**: 시장 모니터링
@@ -468,7 +468,7 @@
 - **로그**: `~/.jarvis/logs/academy-support.log` ✓ / `~/.jarvis/logs/academy-support-err.log` ✓ / `claude-stderr-academy-support-*.log` ✗
 
 ### `boram-daily-schedule` 🚫 **disabled**
-- **이름**: 보람 일정 브리핑 (비활성 — personal-schedule-daily로 대체됨)
+- **이름**: 가족 일정 브리핑 (비활성 — personal-schedule-daily로 대체됨)
 - **스케줄**: `30 7 * * *` — 매일 07:30
 - **타입**: LLM prompt → `ask-claude.sh`
 - **로그**: `~/.jarvis/logs/boram-daily-schedule.log` ✓ / `~/.jarvis/logs/boram-daily-schedule-err.log` ✓ / `claude-stderr-boram-daily-schedule-*.log` ✗

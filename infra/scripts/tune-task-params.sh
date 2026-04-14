@@ -8,7 +8,7 @@ set -euo pipefail
 #   **제안만 생성** — tasks.json을 직접 수정하지 않음. 오너가 리뷰하고 수동 반영.
 #
 # Safety:
-#   - tasks.json 절대 수정 금지 (김서연 팀장 권고: Meta Agent 자동 수정은 premature)
+#   - tasks.json 절대 수정 금지 (growth-lead 팀장 권고: Meta Agent 자동 수정은 premature)
 #   - 제안 리포트만 ~/.jarvis/results/tune-suggestions/<date>.md 에 생성
 #   - 유의미한 제안 시 Discord 알림
 #

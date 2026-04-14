@@ -78,7 +78,7 @@ function getTodayStr() { return new Date().toISOString().slice(0, 10); }
 
 // ── Owner userId 목록 (세션 파일 필터링용) ────────────────────────────────
 // 파일명 패턴: {channelId}-{userId}.md
-// Boram 등 다른 사용자 세션이 오염되지 않도록 owner userId만 포함
+// 다른 사용자 세션이 오염되지 않도록 owner userId만 포함
 const OWNER_USER_IDS = (process.env.OWNER_USER_IDS || process.env.OWNER_DISCORD_ID || '').split(',').filter(Boolean);
 
 // ── N일 이내 세션 요약 파일 수집 (채널별 메타데이터 포함) ─────��───────────
