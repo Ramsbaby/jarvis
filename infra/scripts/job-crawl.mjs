@@ -10,6 +10,7 @@ import puppeteer from 'puppeteer-core';
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { discordSend } from '../lib/discord-notify.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
 const RESULT_DIR = join(BOT_HOME, 'state', 'job-crawl');
@@ -220,27 +221,8 @@ async function crawlWithBrowser(browser, site) {
   }
 }
 
-// ── Discord 전송 ──────────────────────────────────────────────────────────
-async function sendDiscordMsg(content) {
-  try {
-    const { config } = await import('dotenv');
-    config({ path: join(BOT_HOME, '.env') });
-    const webhook = process.env.DISCORD_WEBHOOK_CAREER || process.env.BORAM_DISCORD_WEBHOOK;
-    if (!webhook) {
-      // 봇 토큰 + 채널 ID로 전송
-      const token = process.env.DISCORD_TOKEN;
-      const channelId = '1471694919339868190'; // jarvis-career
-      if (!token) { console.log('[Discord] 토큰 없음, 스킵'); return; }
-      await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-        method: 'POST',
-        headers: { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: content.slice(0, 2000) }),
-      });
-    } else {
-      await fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: content.slice(0, 2000) }) });
-    }
-  } catch (e) { console.error('[Discord]', e.message); }
-}
+// sendDiscordMsg → SSoT: lib/discord-notify.mjs discordSend
+const sendDiscordMsg = (content) => discordSend(content, 'jarvis-career', { username: 'Jarvis Crawler' });
 
 // ── 메인 ──────────────────────────────────────────────────────────────────
 async function main() {
