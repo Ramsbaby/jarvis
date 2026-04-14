@@ -10,7 +10,7 @@
  *   Dynamic — added AFTER hash — don't affect session continuity
  */
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // ── Stable sections (always included, contribute to session hash) ──────────────
@@ -256,6 +256,18 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
   if (result.length > 2000) {
     result = result.slice(0, 2000) + '\n[...더 있음]';
   }
+
+  // 위키 주입 관찰 로그 — 실제로 주입되는지 추적
+  try {
+    const logLine = JSON.stringify({
+      ts: new Date().toISOString(),
+      domain: domain || 'none',
+      chars: result.length,
+      parts: parts.length,
+    }) + '\n';
+    appendFileSync(join(botHome, 'logs', 'wiki-inject.log'), logLine);
+  } catch {}
+
   return result;
 }
 
