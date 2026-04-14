@@ -1,6 +1,19 @@
 # Jarvis Documentation
 
 > Central navigation hub for all Jarvis documentation.
+>
+> **🗺️ New here?** Start with **[MAP.md](MAP.md)** — the 1-minute AI entry point.
+
+---
+
+## AI Entry Point (read first)
+
+| Document | Description |
+|----------|-------------|
+| [MAP.md](MAP.md) | **🗺️ Start here** — purpose · layout · subsystems · where to find what |
+| [TASKS-INDEX.md](TASKS-INDEX.md) | **🤖 Auto-generated** — 82 scheduled tasks grouped by team (via `gen-tasks-index.mjs`) |
+| [TEAMS-CRONS.md](TEAMS-CRONS.md) | Team → cron reverse index |
+| [CONFIG.md](CONFIG.md) | Config inventory + safe-edit checklist |
 
 ---
 
