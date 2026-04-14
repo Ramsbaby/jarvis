@@ -14,7 +14,7 @@ for arg in "$@"; do
     fi
 done
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 MONITORING="${BOT_HOME}/config/monitoring.json"
 DECISIONS_FILE="${BOT_HOME}/state/kpi-decisions.jsonl"
 

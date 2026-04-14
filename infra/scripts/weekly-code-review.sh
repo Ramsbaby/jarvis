@@ -5,7 +5,7 @@ set -euo pipefail
 # 패턴 매칭(auditor)으로 못 잡는 로직 버그, 보안 취약점, SSoT 위반을 LLM이 검증
 # 크론: 매주 일요일 05:00
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 REVIEW_DIR="${BOT_HOME}/results/code-review"
 TODAY="$(date +%F)"
 REVIEW_FILE="${REVIEW_DIR}/${TODAY}.md"

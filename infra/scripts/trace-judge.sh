@@ -9,7 +9,7 @@ set -euo pipefail
 #   trace-judge.sh report [days]         — 태스크별 평균 점수 리포트
 #   trace-judge.sh low-score [threshold] — 저점수 태스크 목록 (기본 0.6)
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 DB="${BOT_HOME}/data/traces.db"
 JUDGE_LOG="${BOT_HOME}/logs/judge.jsonl"
 

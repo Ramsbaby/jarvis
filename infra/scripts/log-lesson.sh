@@ -3,7 +3,7 @@ set -euo pipefail
 # log-lesson.sh "category" "message"
 # Appends a lesson to lessons-learned.md with date headers
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 LESSONS_FILE="$BOT_HOME/context/lessons-learned.md"
 LOCK_FILE="$BOT_HOME/state/lessons.lock"
 CATEGORY="${1:-general}"
