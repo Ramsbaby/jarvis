@@ -61,8 +61,11 @@ index.md 재생성 + log.jsonl 기록
 | 소비자 | 연동 포인트 | 상태 |
 |--------|------------|------|
 | Discord봇 | `buildWikiContextSection()` → prompt-sections.js | ✅ 완료 |
-| Board | `/api/wiki/*` API (lib/wiki.ts) | ✅ 완료 |
+| Board API | `/api/wiki/*` (lib/wiki.ts) | ✅ 완료 |
+| Board UI | `/wiki` 브라우저 (검색+도메인필터+마크다운뷰어) | ✅ 완료 |
 | Map NPC | `gatherTeamContext()` 위키 주입 (TEAM_WIKI_MAP) | ✅ 완료 |
+| 브리핑 연동 | morning-standup → `briefings/YYYY-MM-DD.md` | ✅ 완료 |
+| 모순 탐지 | `wiki-lint.mjs --contradictions` → LLM 분석 | ✅ 완료 |
 
 ## 크론 체계
 
