@@ -57,6 +57,11 @@ discord-bot.js ──► lib/handlers.js ──► lib/claude-runner.js
                          │         오너인 경우 owner-profile.md에도 반영
                          │         10분 쿨다운, 봇 응답 150자 이상일 때만 실행
                          │
+                         ├──► buildWikiContextSection() (Dynamic section)
+                         │         프롬프트 도메인 감지 → ~/.jarvis/wiki/{domain}/_summary.md
+                         │         + 관련 페이지 최대 2개 → 2,000자 컨텍스트 주입
+                         │         야간 크론(wiki-ingest.mjs, 03:30)이 위키 페이지 합성
+                         │
                          ▼
               context/discord-history/YYYY-MM-DD-HHMMSS.md  (세션 단위)
                          │

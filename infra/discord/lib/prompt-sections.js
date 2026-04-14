@@ -10,7 +10,7 @@
  *   Dynamic — added AFTER hash — don't affect session continuity
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 // ── Stable sections (always included, contribute to session hash) ──────────────
@@ -179,6 +179,76 @@ export function buildFamilyBriefingContext({ botHome }) {
   } catch {
     return NO_DATA_WARNING;
   }
+}
+
+// ── LLM Wiki 컨텍스트 주입 (Dynamic section) ────────────────────────────────
+
+const WIKI_DOMAIN_RULES = [
+  { domain: 'trading',   re: /stock|주식|트레이딩|레버리지|etf|매수|매도|포트폴리오|s&p|nasdaq|tqqq|수익률|시장/i },
+  { domain: 'career',    re: /이직|면접|연봉|이력서|채용|핀테크|spring|kafka|grpc|redis|star/i },
+  { domain: 'ops',       re: /크론|cron|디스크|봇.*상태|장애|서킷|에러|rag|모니터링|watchdog|배포|deploy/i },
+  { domain: 'knowledge', re: /아키텍처|디자인.*패턴|기술.*트렌드|오픈소스|github|블로그|학습|wiki/i },
+  { domain: 'health',    re: /건강|운동|병원|몸무게|다이어트|수면|자전거|사이클/i },
+  { domain: 'family',    re: /아내|와이프|가족|부모님|아이|육아|수업|레슨/i },
+];
+
+function _detectWikiDomain(prompt) {
+  for (const { domain, re } of WIKI_DOMAIN_RULES) {
+    if (re.test(prompt)) return domain;
+  }
+  return null;
+}
+
+/**
+ * LLM Wiki 컨텍스트 빌더.
+ * 프롬프트에서 도메인 감지 → 해당 _summary.md + 관련 페이지 로드 → 최대 2,000자.
+ * Dynamic section으로 주입 — 세션 해시에 영향 없음.
+ */
+export function buildWikiContextSection({ prompt, botHome }) {
+  if (!prompt) return '';
+  const wikiDir = join(botHome, 'wiki');
+  if (!existsSync(wikiDir)) return '';
+
+  const domain = _detectWikiDomain(prompt);
+  if (!domain) return '';
+
+  const domainDir = join(wikiDir, domain);
+  if (!existsSync(domainDir)) return '';
+
+  const parts = [];
+
+  // 1. _summary.md 로드 (도메인 핵심 요약)
+  const summaryPath = join(domainDir, '_summary.md');
+  if (existsSync(summaryPath)) {
+    let summary = readFileSync(summaryPath, 'utf-8');
+    // frontmatter 제거 (```yaml ... ``` 또는 --- ... --- 블록)
+    summary = summary.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
+    summary = summary.replace(/^---[\s\S]*?---\n*/m, '');
+    parts.push(summary.trim().slice(0, 1200));
+  }
+
+  // 2. 관련 페이지 (최대 2개, _summary 제외)
+  try {
+    const files = readdirSync(domainDir)
+      .filter(f => f.endsWith('.md') && f !== '_summary.md')
+      .slice(0, 2);
+    for (const file of files) {
+      let content = readFileSync(join(domainDir, file), 'utf-8');
+      content = content.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
+      content = content.replace(/^---[\s\S]*?---\n*/m, '');
+      if (content.trim().length > 50) {
+        parts.push(content.trim().slice(0, 400));
+      }
+    }
+  } catch {}
+
+  if (parts.length === 0) return '';
+
+  let result = `--- 위키 컨텍스트 (${domain}) ---\n${parts.join('\n\n---\n\n')}`;
+  if (result.length > 2000) {
+    result = result.slice(0, 2000) + '\n[...더 있음]';
+  }
+  return result;
 }
 
 // ── 튜터링 플랫폼 쿼리 판별 (pre-processor, handlers 공용) ──────────────────
