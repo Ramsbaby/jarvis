@@ -86,13 +86,14 @@ export async function ingestSessionToWiki(userId, sessionContent) {
   if (!sessionContent || sessionContent.length < 50) return {};
 
   const schema = getSchema();
-  const pageKeys = Object.keys(schema.pages);
+  const domains = schema.domains || schema.pages || {};
+  const domainKeys = Object.keys(domains).filter(k => k !== 'meta');
 
   // 기존 위키 페이지 컨텍스트 수집
   const existingWiki = {};
-  for (const pk of pageKeys) {
-    const content = getPage(userId, pk);
-    if (content) existingWiki[pk] = content.slice(0, 800); // 요약본만 사용
+  for (const dk of domainKeys) {
+    const content = getPage(userId, dk);
+    if (content) existingWiki[dk] = content.slice(0, 800);
   }
 
   const existingWikiStr = Object.entries(existingWiki)
@@ -100,10 +101,10 @@ export async function ingestSessionToWiki(userId, sessionContent) {
     .join('\n\n');
 
   // LLM 소화 프롬프트
-  const prompt = `당신은 개인 지식 관리 시스템입니다. 아래 대화 세션에서 중요한 정보를 추출해 위키 페이지를 업데이트해야 합니다.
+  const prompt = `당신은 개인 지식 관리 시스템입니다. 아래 대화 세션에서 중요한 정보를 추출해 위키 도메인별로 업데이트해야 합니다.
 
-## 위키 페이지 정의
-${pageKeys.map(k => `- **${k}**: ${schema.pages[k].description}`).join('\n')}
+## 위키 도메인 정의
+${domainKeys.map(k => `- **${k}**: ${domains[k].description}`).join('\n')}
 
 ## 현재 위키 내용 (기존 지식)
 ${existingWikiStr || '(아직 없음)'}
@@ -112,22 +113,16 @@ ${existingWikiStr || '(아직 없음)'}
 ${sessionContent.slice(0, 3000)}
 
 ## 작업 지시
-위 세션에서 각 위키 페이지에 추가할 새로운 정보를 JSON으로 반환하세요.
+위 세션에서 각 위키 도메인에 추가할 새로운 정보를 JSON으로 반환하세요.
 - 이미 위키에 있는 정보는 포함하지 마세요
 - 중요하지 않은 일상 대화는 제외하세요
 - 각 항목은 1-2줄로 간결하게
-- 업데이트가 필요 없는 페이지는 빈 배열로
+- 업데이트가 필요 없는 도메인은 빈 배열로
 
 형식:
 \`\`\`json
 {
-  "profile": ["항목1", "항목2"],
-  "work": ["항목1"],
-  "trading": [],
-  "projects": ["항목1"],
-  "preferences": [],
-  "health": [],
-  "travel": []
+${domainKeys.map(k => `  "${k}": []`).join(',\n')}
 }
 \`\`\`
 
@@ -170,9 +165,10 @@ export async function compactWikiPage(userId, pageKey) {
   if (!content || content.length < 2000) return false; // 작으면 불필요
 
   const schema = getSchema();
-  const pageDef = schema.pages[pageKey];
+  const domains = schema.domains || schema.pages || {};
+  const domainDef = domains[pageKey];
 
-  const prompt = `다음은 개인 AI 위키의 "${pageDef?.title || pageKey}" 페이지입니다.
+  const prompt = `다음은 개인 AI 위키의 "${domainDef?.title || pageKey}" 페이지입니다.
 
 ${content}
 
