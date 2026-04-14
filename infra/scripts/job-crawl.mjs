@@ -64,7 +64,6 @@ const GREETINGHR_SITES = [
   { id: 'bucketplace', company: '오늘의집(버킷플레이스)', wid: 1671, baseUrl: 'https://bucketplace.career.greetinghr.com/ko/o/' },
   { id: 'zigbang', company: '직방', wid: 1724, baseUrl: 'https://zigbang.career.greetinghr.com/ko/o/' },
   { id: 'socar', company: '쏘카', wid: 455, baseUrl: 'https://socar.career.greetinghr.com/ko/o/' },
-  { id: 'kakaopay', company: 'Company-C', wid: 14605, baseUrl: 'https://kakaopay.career.greetinghr.com/ko/o/' },
 ];
 
 // ── NineHire API (카카오스타일) ─────────────────────────────────────────────
