@@ -1182,12 +1182,12 @@
             "id": "finance",
             "name": "재무실 (AI 비용·시장·수입)"
           },
-          "discordChannel": "jarvis-boram",
+          "discordChannel": "jarvis-family",
           "model": "claude-haiku-4-5-20251001",
           "priority": "normal",
           "maxBudget": "0.10",
           "disabled": false,
-          "description": "매일 07:30 KST tutoring-platform 수업 일정을 #jarvis-boram 채널로 자동 전송.",
+          "description": "매일 07:30 KST tutoring 수업 일정을 #jarvis-family 채널로 자동 전송.",
           "logs": {
             "stdout": {
               "path": "~/.jarvis/logs/personal-schedule-daily.log",
@@ -1717,7 +1717,7 @@
         },
         {
           "id": "boram-daily-schedule",
-          "name": "보람 일정 브리핑 (비활성 — personal-schedule-daily로 대체됨)",
+          "name": "가족 일정 브리핑 (비활성 — personal-schedule-daily로 대체됨)",
           "schedule": "30 7 * * *",
           "scheduleHuman": "매일 07:30",
           "type": "prompt",

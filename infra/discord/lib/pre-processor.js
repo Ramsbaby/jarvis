@@ -354,10 +354,10 @@ export class ProductContextProcessor extends BasePreProcessor {
   }
 
   async enrich(prompt, ctx) {
-    const isBoram = (process.env.BORAM_CHANNEL_IDS || '').split(',').includes(ctx.channelId);
+    const isFamily = (process.env.FAMILY_CHANNEL_IDS || '').split(',').includes(ctx.channelId);
     const ragContext = await this.#searchFn(ctx.originalPrompt, 3, {
       sourceFilter: 'episodic',
-      ...(isBoram && { boramOnly: true }),
+      ...(isFamily && { familyOnly: true }),
     }).catch(() => null);
     if (!ragContext) return null;
 
