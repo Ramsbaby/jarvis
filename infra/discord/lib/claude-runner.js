@@ -27,6 +27,18 @@ import {
   buildWikiContextSection,
 } from './prompt-sections.js';
 
+// LLM Wiki 실시간 기록 — 대화 종료 시 facts를 위키에도 저장
+let _addFactToWiki = null;
+async function wikiAddFact(userId, fact) {
+  try {
+    if (!_addFactToWiki) {
+      const mod = await import('./wiki-engine.mjs');
+      _addFactToWiki = mod.addFactToWiki;
+    }
+    _addFactToWiki(userId, fact);
+  } catch {}
+}
+
 // ---------------------------------------------------------------------------
 // Feedback detection — recognize user signals for learning loop
 // ---------------------------------------------------------------------------
@@ -562,6 +574,7 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
           for (const f of facts2) {
             if (typeof f === 'string' && f.length > 5 && f.length < 160 && !(isFamilyChannel && FAMILY_JUNK_RE.test(f))) {
               userMemory.addFact(userId, f); saved2++;
+              wikiAddFact(userId, f); // LLM Wiki 실시간 기록
               log('info', 'Auto memory extracted (SDK)', { userId, fact: f.slice(0, 80) });
             }
           }
@@ -615,6 +628,7 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
     for (const fact of facts) {
       if (typeof fact === 'string' && fact.length > 5 && fact.length < 160 && !(isFamilyChannel && FAMILY_JUNK_RE2.test(fact))) {
         userMemory.addFact(userId, fact);
+        wikiAddFact(userId, fact); // LLM Wiki 실시간 기록
         saved++;
         log('info', 'Auto memory extracted', { userId, fact: fact.slice(0, 80) });
       }

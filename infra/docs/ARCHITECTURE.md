@@ -53,9 +53,10 @@ discord-bot.js ──► lib/handlers.js ──► lib/claude-runner.js
                          │         → state/commitments.jsonl 기록
                          │
                          ├──► autoExtractMemory() (fire-and-forget)
-                         │         대화에서 사실 자동 추출 → userMemory
+                         │         대화에서 사실 자동 추출 → userMemory + wikiAddFact()
                          │         오너인 경우 owner-profile.md에도 반영
                          │         10분 쿨다운, 봇 응답 150자 이상일 때만 실행
+                         │         위키 실시간 기록: addFact마다 {domain}/_facts.md 동시 갱신
                          │
                          ├──► buildWikiContextSection() (Dynamic section)
                          │         Hybrid 2-track LLM Wiki context injection:
