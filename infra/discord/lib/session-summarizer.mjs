@@ -11,6 +11,8 @@
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { addFactToWiki } from './wiki-engine.mjs';
+import { ingestSessionToWiki } from './wiki-ingester.mjs';
 
 /** Lone surrogate 제거 — JSON 직렬화 시 invalid high/low surrogate 방지 */
 function sanitizeUnicode(str) {
@@ -298,16 +300,32 @@ async function main() {
         totalExtracted++;
         for (const userId of targetUserIds) {
           try {
+            // 기존: flat JSON facts 저장
             const added = addFactDirect(userId, fact);
             if (added) {
               totalAdded++;
               log('info', `    [+] userId=${userId} fact: ${fact.slice(0, 80)}`);
             }
+            // LLM Wiki: 위키 페이지에도 동시 반영 (키워드 기반 빠른 경로)
+            addFactToWiki(userId, fact);
           } catch (err) {
             log('warn', `    addFact 실패 userId=${userId}: ${err.message}`);
           }
         }
       }
+
+      // LLM Wiki: 세션 전체를 LLM으로 소화해 위키 심층 업데이트 (비동기 백그라운드)
+      for (const userId of targetUserIds) {
+        ingestSessionToWiki(userId, content)
+          .then(updated => {
+            const updatedKeys = Object.keys(updated);
+            if (updatedKeys.length > 0) {
+              log('info', `  [wiki] userId=${userId} 페이지 업데이트: ${updatedKeys.join(', ')}`);
+            }
+          })
+          .catch(err => log('warn', `  [wiki] LLM 인제스트 실패 userId=${userId}: ${err.message}`));
+      }
+
     } catch (err) {
       log('warn', `파일 처리 실패 (${fpath}): ${err.message}`);
     }
@@ -318,7 +336,7 @@ async function main() {
   state.processedDates = [...(state.processedDates || []), today].slice(-30); // 최근 30일만 유지
   saveState(state);
 
-  log('info', `=== 완료: 후보 ${totalExtracted}개 추출, 신규 facts ${totalAdded}개 저장 ===`);
+  log('info', `=== 완료: 후보 ${totalExtracted}개 추출, 신규 facts ${totalAdded}개 저장 (위키 업데이트 백그라운드 진행 중) ===`);
 }
 
 main().catch(err => {

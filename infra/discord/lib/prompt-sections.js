@@ -12,6 +12,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getWikiContext, listPages } from './wiki-engine.mjs';
 
 // ── Stable sections (always included, contribute to session hash) ──────────────
 
@@ -20,11 +21,7 @@ export function buildIdentitySection({ botName, ownerName }) {
 }
 
 export function buildLanguageSection() {
-  return [
-    '한국어 존댓말 기본.',
-    '응답 깊이 원칙: 숫자 조회·Yes/No 확인·상태 체크만 한 줄로. 개념 설명·분석·방법·트러블슈팅은 필요한 깊이까지 충분히 답한다.',
-    '재질문이 필요할 만큼 짧은 답변은 실패로 간주. 분석·코딩은 CLI와 동일한 깊이로.',
-  ].join(' ');
+  return '한국어 존댓말 기본. 단순 질문은 짧게, 분석·코딩은 CLI와 동일한 깊이로.';
 }
 
 export function buildPersonaSection({ ownerName }) {
@@ -68,7 +65,7 @@ export function buildFormatSection() {
 export function buildToolsSection({ botHome }) {
   return [
     '[코드] Serena: get_symbols_overview → find_symbol(include_body=true) → search_for_pattern → find_referencing_symbols. 수정: replace_symbol_body / insert_after/before_symbol / Edit. 파일 전체 Read는 최후 수단.',
-    '[시스템] Nexus: exec(cmd) / scan(병렬) / cache_exec(TTL) / log_tail / health / file_peek. [기억] rag_search — "저번에 말한", "기억해?", "아까 얘기한" 처럼 명시적으로 이전 대화를 참조할 때만. "과거", "이전", "파라미터" 단어 단독으로는 rag_search 호출 금지 — 대화 흐름에서 의미 파악 우선. 예외: 현재 컨텍스트에 없는 고유명사(프로젝트명, 앱명, 사람 이름 등)가 등장하면 "모른다"고 하기 전에 반드시 rag_search 먼저 호출.',
+    '[시스템] Nexus: exec(cmd) / scan(병렬) / cache_exec(TTL) / log_tail / health / file_peek. [기억] rag_search — "저번에 말한", "기억해?", "아까 얘기한" 처럼 명시적으로 이전 대화를 참조할 때만. "과거", "이전", "파라미터" 단어 단독으로는 rag_search 호출 금지 — 대화 흐름에서 의미 파악 우선.',
     `[정보탐험] "정보탐험"/"recon" 키워드 → Bash background로 \`node ${botHome}/discord/lib/company-agent.mjs --team recon --channel <현재채널명>\` 실행 후 즉시 "🔭 정보탐험 시작했습니다. 7~11분 소요, 결과는 현재 채널로 전송됩니다." 응답. await 금지(90초 타임아웃). 채널명은 시스템 프롬프트 "--- Channel: <name> ---" 에서 추출.`,
   ].join('\n');
 }
@@ -144,6 +141,28 @@ export function buildOwnerPreferencesSection({ botHome }) {
 }
 
 /**
+ * Builds the LLM Wiki context section (Dynamic — AFTER hash).
+ *
+ * 기존 flat facts JSON 대신 주제별 위키 페이지에서 컨텍스트 주입.
+ * 현재 쿼리와 관련된 페이지를 우선 로드해 컨텍스트 토큰 절약.
+ *
+ * @param {string} userId
+ * @param {string} currentQuery - 현재 사용자 입력 (관련 페이지 우선순위 결정)
+ * @returns {string}
+ */
+export function buildWikiContextSection(userId, currentQuery = '') {
+  try {
+    const pages = listPages(userId);
+    if (pages.length === 0) return ''; // 위키 없으면 빈 문자열 (기존 RAG 폴백)
+    const wikiContext = getWikiContext(userId, currentQuery);
+    if (!wikiContext.trim()) return '';
+    return `--- 📚 위키 지식베이스 (LLM Wiki) ---\n${wikiContext}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Builds family channel briefing context (Dynamic — AFTER hash).
  * Reads state/family-last-briefing.json and injects today's briefing data
  * so the bot never hallucinates lesson counts or amounts after webhook delivery.
@@ -179,11 +198,4 @@ export function buildFamilyBriefingContext({ botHome }) {
   } catch {
     return NO_DATA_WARNING;
   }
-}
-
-// ── 튜터링 플랫폼 쿼리 판별 (pre-processor, handlers 공용) ──────────────────
-const TUTORING_PATTERN = /수입|매출|레슨\s*금액|얼마|정산|취소\s*보상|오늘\s*얼마|오늘\s*수업|내일\s*수업|이번\s*주\s*수업|수업\s*일정|수업\s*몇|레슨|오늘\s*일정|내일\s*일정|이번\s*주\s*일정/i;
-
-export function isTutoringQuery(prompt) {
-  return TUTORING_PATTERN.test(prompt ?? '');
 }
