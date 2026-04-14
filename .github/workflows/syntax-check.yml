@@ -1,0 +1,37 @@
+name: Syntax Check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check JS/MJS syntax (node --check)
+        run: |
+          echo "🔍 JavaScript/MJS 문법 검사..."
+          ERRORS=0
+
+          # infra/ 하위 JS/MJS 파일 전수 검사
+          for f in $(find infra/ -name '*.js' -o -name '*.mjs' | grep -v node_modules | sort); do
+            if ! node --check "$f" 2>/dev/null; then
+              echo "❌ $f"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+
+          if [[ $ERRORS -gt 0 ]]; then
+            echo ""
+            echo "🚫 $ERRORS file(s) have syntax errors. Fix before merging."
+            exit 1
+          fi
+          echo "✅ All JS/MJS files pass syntax check."
