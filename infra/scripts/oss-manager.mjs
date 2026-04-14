@@ -21,6 +21,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { discordSend as _discordNotify } from '../lib/discord-notify.mjs';
 
 // ── 경로 상수 ──────────────────────────────────────────────────────────────────
 const HOME       = homedir();
@@ -82,16 +83,13 @@ function preflight() {
   }
 }
 
-function discordSend(content, channelKey = CONFIG.settings.discordChannel ?? 'jarvis-blog') {
-  const url = MONITORING?.webhooks?.[channelKey];
-  if (!url) { log('warn', `Discord webhook 미설정 (${channelKey}) — 건너뜀`); return; }
-  const body = JSON.stringify({ content: content.slice(0, 2000) });
-  const r = spawnSync('curl', ['-s', '-X', 'POST', url,
-    '-H', 'Content-Type: application/json', '-d', body
-  ], { timeout: 10_000, encoding: 'utf8' });
-  if (r.status !== 0) {
-    log('warn', `Discord 전송 실패 (${channelKey}): ${r.status} — ${(r.stderr || r.stdout || '').trim().slice(0, 200)}`);
-  }
+// SSoT: lib/discord-notify.mjs (_discordNotify). 로컬 wrapper 이름 discordSend 유지.
+// caller 사이트들 await 없이 호출 → fire-and-forget (정상).
+// channelKey 기본값은 CONFIG 참조가 필요해 래퍼 유지.
+function discordSend(content, channelKey) {
+  _discordNotify(content, channelKey ?? CONFIG.settings?.discordChannel ?? 'jarvis-blog').catch(
+    e => log('warn', `Discord 전송 실패: ${e.message}`),
+  );
 }
 
 function ensureReportDir() {

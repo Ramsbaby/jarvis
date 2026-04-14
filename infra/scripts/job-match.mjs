@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import puppeteer from 'puppeteer-core';
+import { discordSend } from '../lib/discord-notify.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
 const CRAWL_DIR = join(BOT_HOME, 'state', 'job-crawl');
@@ -99,32 +100,8 @@ async function fetchDetailText(browser, url) {
   }
 }
 
-// ── Discord 전송 ──────────────────────────────────────────────────────────
-async function sendDiscord(content) {
-  try {
-    const monitoring = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'monitoring.json'), 'utf-8'));
-    const webhook = monitoring.webhooks?.jarvis || monitoring.webhook?.url;
-    if (!webhook) return;
-    // Discord 2000자 제한 — 줄 경계에서 청킹
-    const LIMIT = 1990;
-    let pos = 0;
-    while (pos < content.length) {
-      let end = pos + LIMIT;
-      if (end < content.length) {
-        const cut = content.lastIndexOf('\n', end);
-        if (cut > pos) end = cut + 1;
-      }
-      const chunk = content.slice(pos, end);
-      await fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: chunk, username: 'Jarvis Job Matcher' }),
-      });
-      pos = end;
-      if (pos < content.length) await new Promise(r => setTimeout(r, 500));
-    }
-  } catch (e) { console.error('[Discord]', e.message); }
-}
+// sendDiscord → SSoT: lib/discord-notify.mjs discordSend (줄경계 청킹 포함)
+const sendDiscord = (content) => discordSend(content, 'jarvis-system', { username: 'Jarvis Job Matcher' });
 
 // ── 메인 ──────────────────────────────────────────────────────────────────
 async function main() {

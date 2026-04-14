@@ -17,6 +17,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { execSync, spawn } from 'node:child_process';
+import { discordSend } from '../lib/discord-notify.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
 const CONFIG_FILE = join(BOT_HOME, 'config', 'applicant.json');
@@ -79,19 +80,8 @@ function isAlreadyApplied(url) {
   } catch { return false; }
 }
 
-// ── Discord 전송 ─────────────────────────────────────────────────────────
-async function sendDiscord(content) {
-  try {
-    const monitoring = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'monitoring.json'), 'utf-8'));
-    const webhook = monitoring.webhooks?.jarvis || monitoring.webhook?.url;
-    if (!webhook) return;
-    await fetch(webhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: content.slice(0, 2000), username: 'Jarvis Job Apply' }),
-    });
-  } catch (e) { console.error('[Discord]', e.message); }
-}
+// sendDiscord → SSoT: lib/discord-notify.mjs discordSend
+const sendDiscord = (content) => discordSend(content, 'jarvis-system', { username: 'Jarvis Job Apply' });
 
 // ── Claude in Chrome 프롬프트 생성 ───────────────────────────────────────
 function buildChromePrompt(applicant, jobInfo) {
