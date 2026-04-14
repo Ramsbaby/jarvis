@@ -204,47 +204,61 @@ function _detectWikiDomain(prompt) {
  * 프롬프트에서 도메인 감지 → 해당 _summary.md + 관련 페이지 로드 → 최대 2,000자.
  * Dynamic section으로 주입 — 세션 해시에 영향 없음.
  */
-export function buildWikiContextSection({ prompt, botHome }) {
+export function buildWikiContextSection({ prompt, botHome, userId }) {
   if (!prompt) return '';
   const wikiDir = join(botHome, 'wiki');
   if (!existsSync(wikiDir)) return '';
 
-  const domain = _detectWikiDomain(prompt);
-  if (!domain) return '';
-
-  const domainDir = join(wikiDir, domain);
-  if (!existsSync(domainDir)) return '';
-
   const parts = [];
 
-  // 1. _summary.md 로드 (도메인 핵심 요약)
-  const summaryPath = join(domainDir, '_summary.md');
-  if (existsSync(summaryPath)) {
-    let summary = readFileSync(summaryPath, 'utf-8');
-    // frontmatter 제거 (```yaml ... ``` 또는 --- ... --- 블록)
-    summary = summary.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
-    summary = summary.replace(/^---[\s\S]*?---\n*/m, '');
-    parts.push(summary.trim().slice(0, 1200));
+  // 1. 도메인 기반 전역 위키 (career/_summary.md 등)
+  const domain = _detectWikiDomain(prompt);
+  if (domain) {
+    const domainDir = join(wikiDir, domain);
+    if (existsSync(domainDir)) {
+      const summaryPath = join(domainDir, '_summary.md');
+      if (existsSync(summaryPath)) {
+        let summary = readFileSync(summaryPath, 'utf-8');
+        summary = summary.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
+        summary = summary.replace(/^---[\s\S]*?---\n*/m, '');
+        parts.push(`### [${domain}]\n${summary.trim().slice(0, 1000)}`);
+      }
+      try {
+        const files = readdirSync(domainDir)
+          .filter(f => f.endsWith('.md') && f !== '_summary.md')
+          .slice(0, 2);
+        for (const file of files) {
+          let content = readFileSync(join(domainDir, file), 'utf-8');
+          content = content.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
+          content = content.replace(/^---[\s\S]*?---\n*/m, '');
+          if (content.trim().length > 50) {
+            parts.push(content.trim().slice(0, 400));
+          }
+        }
+      } catch {}
+    }
   }
 
-  // 2. 관련 페이지 (최대 2개, _summary 제외)
-  try {
-    const files = readdirSync(domainDir)
-      .filter(f => f.endsWith('.md') && f !== '_summary.md')
-      .slice(0, 2);
-    for (const file of files) {
-      let content = readFileSync(join(domainDir, file), 'utf-8');
-      content = content.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
-      content = content.replace(/^---[\s\S]*?---\n*/m, '');
-      if (content.trim().length > 50) {
-        parts.push(content.trim().slice(0, 400));
-      }
+  // 2. 사용자 개인 위키 (pages/{userId}/) — devming PR #6 스타일
+  if (userId) {
+    const userPagesDir = join(wikiDir, 'pages', userId);
+    if (existsSync(userPagesDir)) {
+      try {
+        const userPages = readdirSync(userPagesDir).filter(f => f.endsWith('.md'));
+        for (const file of userPages.slice(0, 3)) {
+          const content = readFileSync(join(userPagesDir, file), 'utf-8');
+          if (content.trim().length > 30) {
+            const title = file.replace('.md', '');
+            parts.push(`### [개인/${title}]\n${content.trim().slice(0, 400)}`);
+          }
+        }
+      } catch {}
     }
-  } catch {}
+  }
 
   if (parts.length === 0) return '';
 
-  let result = `--- 위키 컨텍스트 (${domain}) ---\n${parts.join('\n\n---\n\n')}`;
+  let result = `--- 위키 컨텍스트 ---\n${parts.join('\n\n')}`;
   if (result.length > 2000) {
     result = result.slice(0, 2000) + '\n[...더 있음]';
   }

@@ -170,3 +170,19 @@ export async function searchRagForContext(query, limit = 3, opts = {}) {
   }
   return stdout;
 }
+
+/**
+ * 위키 기반 컨텍스트 검색 (LLM Wiki 레이어).
+ * RAG보다 먼저 호출 — 소화된 구조화 정보 제공.
+ * 비어 있으면 빈 문자열 반환 → 호출부에서 RAG로 폴백.
+ */
+export async function searchWikiForContext(userId, query) {
+  if (!userId || !query) return '';
+  try {
+    const { getWikiContext } = await import('./wiki-engine.mjs');
+    return getWikiContext(userId, query);
+  } catch (err) {
+    log('warn', '[rag-helper] wiki search failed', { error: err.message });
+    return '';
+  }
+}

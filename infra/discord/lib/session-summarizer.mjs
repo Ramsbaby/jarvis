@@ -11,6 +11,8 @@
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { addFactToWiki } from './wiki-engine.mjs';
+import { ingestSessionToWiki } from './wiki-ingester.mjs';
 
 /** Lone surrogate 제거 — JSON 직렬화 시 invalid high/low surrogate 방지 */
 function sanitizeUnicode(str) {
@@ -302,11 +304,20 @@ async function main() {
             if (added) {
               totalAdded++;
               log('info', `    [+] userId=${userId} fact: ${fact.slice(0, 80)}`);
+              // 위키 즉시 반영 (키워드 기반, LLM 호출 없음)
+              try { addFactToWiki(userId, fact); } catch {}
             }
           } catch (err) {
             log('warn', `    addFact 실패 userId=${userId}: ${err.message}`);
           }
         }
+      }
+
+      // 위키 LLM 인제스트 (백그라운드, fire-and-forget)
+      for (const userId of targetUserIds) {
+        ingestSessionToWiki(userId, content).catch(err =>
+          log('warn', `  wiki LLM ingest 실패 userId=${userId}: ${err.message}`)
+        );
       }
     } catch (err) {
       log('warn', `파일 처리 실패 (${fpath}): ${err.message}`);
