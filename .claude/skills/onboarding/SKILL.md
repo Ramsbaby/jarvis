@@ -145,6 +145,55 @@ node .claude/skills/onboarding/scripts/copy-config-templates.mjs
 
 ---
 
+## Step 7.5: RAG 셋업 (Optional)
+
+Step 0에서 Ollama가 실행 중인 경우에만 이 단계를 진행합니다.
+
+사용자에게 안내:
+```
+Ollama가 감지됐습니다. RAG(검색 증강 생성) 기능을 지금 설정하시겠습니까?
+임베딩 모델 다운로드가 포함됩니다 (~400MB).
+
+  [Y] 지금 설정
+  [N] 건너뛰기 (나중에 python scripts/setup_rag.py 로 설정 가능)
+
+입력 (Y/N):
+```
+
+**Y 선택 시:**
+
+Python 버전 확인:
+```bash
+python3 --version
+```
+- Python 3.8 미만이면 "Python 3.8 이상이 필요합니다" 안내 후 N 처리.
+
+RAG 셋업 실행:
+```bash
+python3 scripts/setup_rag.py
+```
+
+이 스크립트는:
+- Ollama에서 임베딩 모델(nomic-embed-text) 다운로드 (~400MB)
+- `~/.local/share/jarvis/rag/` 디렉토리에 벡터 DB 초기화
+- Jarvis 지식 베이스 최초 인덱싱
+
+완료 확인: 출력에 `RAG setup complete` 또는 에러 없이 종료 확인.
+
+에러 발생 시:
+- `Connection refused` → Ollama가 실행 중인지 확인: `ollama serve`
+- `model not found` → `ollama pull nomic-embed-text` 수동 실행 안내
+
+**N 선택 시 또는 Ollama 없는 경우:**
+```
+⚠️  RAG 기능 비활성 — 나중에 설정하려면:
+    1. Ollama 설치: https://ollama.ai
+    2. ollama serve 실행
+    3. 프로젝트 루트에서: python3 scripts/setup_rag.py
+```
+
+---
+
 ## Step 8: 업데이트 정책 선택
 
 사용자에게 안내:

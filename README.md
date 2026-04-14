@@ -150,6 +150,7 @@ The onboarding wizard guides you through 13 steps automatically:
 | 2–5 | Collects tokens interactively (Discord Token / Anthropic API Key / Guild ID / owner info) |
 | 6 | Creates `~/.jarvis/.env` + 8 data directories (`logs/state/context/inbox/results/rag/data/config`) |
 | 7 | Runs `npm install` + copies `*.example.json` config templates |
+| 7.5 | **RAG setup** (optional) — if Ollama detected, runs `python3 scripts/setup_rag.py` (~400MB model) |
 | 8 | Asks: **Auto-update** or **Manual-update**? |
 | 9 | Creates `🚀jarvis-update` Discord channel + registers system persona |
 | 10 | Installs LaunchAgents (macOS) or PM2 + cron (Linux) |
