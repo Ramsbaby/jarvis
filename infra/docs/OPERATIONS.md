@@ -460,14 +460,64 @@ jq -s 'group_by(.result_hash) | map(select(length >= 3)) | map({hash: .[0].resul
 - `|| true` 로 감싸져 있어 ledger 쓰기 실패가 태스크 실행을 차단하지 않는다
 - jq 미설치 시 (이미 ask-claude.sh 의존성) 빈 라인도 쓰지 않는다
 
-### 다음 단계 (Tier 1~4)
+### Tier 1 — 독립 평가자 (evaluator.sh)
 
-원장이 쌓이면 아래 레이어가 순차 위에 붙는다:
+**위치**: `lib/evaluator.sh` · **호출**: `ask-claude.sh` RESULT 추출 직후 (line ~199)
 
-1. **Tier 1**: 글로벌 일일 캡 — 태스크 시작 전 ledger 오늘 합계 읽음, 임계 초과 시 non-critical skip
-2. **Tier 2**: 해시 dedup — `result_hash`가 최근 N시간 내 동일하면 LLM 호출 skip
-3. **Tier 3**: 영구 실패 auto-disable — 같은 error type 3회 연속 시 tasks.json `enabled: false`
-4. **Tier 4**: 80% 예산 경고 — `cost_usd > 0.8 × max_budget_usd` 시 Discord 경고
+Anthropic 3-agent 아키텍처의 "evaluation" 역할을 **토큰 0원**으로 구현.
+LLM 결과를 `success`로 판정하기 전에 품질/무결성 게이트를 통과시킨다.
+
+#### 판정 체계
+
+| verdict | 의미 | 동작 |
+|---|---|---|
+| `pass` | 모든 검사 통과 | 정상 플로우 |
+| `warn` | 경고 있지만 허용 | ledger에 경고 기록, 결과 저장 |
+| `fail` | 결함 감지 | exit 1 → retry-wrapper가 재시도 또는 실패 처리 |
+
+#### 검사 항목 (순서 고정)
+
+1. **empty/near-empty**: `< 2 words` = fail, `< 5 words` = warn
+2. **identical_to_prompt**: SHA256 일치 시 fail (LLM 에코 감지)
+3. **LLM refusal**: `죄송합니다.*정보가 충분하지` / `I cannot` 등 정규식 fail
+4. **truncated markers**: `{` / `[` / `,` 로 끝나면 warn
+5. **schema miss**: 태스크별 기대 키워드 (예: github-monitor → "GitHub") 누락 시 warn
+6. **repeated loop**: 같은 줄 10회+ 반복 시 fail
+
+#### 태스크별 semantic schema
+
+`_schema_for()` case 문으로 확장 (bash 3.2 호환).
+현재 14개 태스크 등록: github-monitor, system-health, market-alert, tqqq-monitor,
+news-briefing, morning-standup, daily-summary, ceo-daily-digest, council-insight,
+monthly-review, infra-daily, rag-health, security-scan, memory-cleanup.
+등록되지 않은 태스크는 schema 검사 skip (나머지 5개 검사만 적용).
+
+#### 단독 실행
+
+```bash
+~/jarvis/infra/lib/evaluator.sh github-monitor "GitHub: 알림 없음" "prompt text"
+# verdict=warn reason=thin_result (3W)
+# exit code: 0=pass, 1=warn, 2=fail
+```
+
+#### 왜 warn이 통과인가
+
+일부 짧은 정상 결과(예: "GitHub: 알림 없음")도 thin으로 잡히기 때문에,
+**warn은 로깅만 하고 결과는 저장한다**. 주간 감사(`token-ledger-audit`)가
+warn 패턴의 누적 추세를 잡아 선제 조정할 수 있다.
+
+### 다음 단계 (Tier 2~5)
+
+Tier 1 위에 아래 레이어가 순차 구축된다:
+
+1. **Tier 2**: 해시 dedup 범용화 — `github-monitor-gate.sh` 패턴을 `gate-factory`로 일반화,
+   주간 감사가 dedup 후보를 `gate-candidates.json` 큐로 자동 수집
+2. **Tier 3**: 3-agent 선별 적용 — `council-insight` / `monthly-review` / `ceo-daily-digest`
+   3개 태스크를 `task-executors/*-3-agent.sh`로 분할 (plan/execute/verify)
+3. **Tier 4**: 소비자 검증 게이트 — `consensus-parser.ts` / `insight-recorder.sh`에
+   입력 검증 추가 (placeholder title 거부, confidence level 필터)
+4. **Tier 5**: KPI → Auto-tune 제안 엔진 — `tune-task-params.sh` 주간 cron,
+   timeout/budget/retry 조정 **제안만** (자동 수정 금지, 오너 리뷰 필수)
 
 ### 주간 자동 감사 (`token-ledger-audit`)
 

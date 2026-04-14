@@ -305,6 +305,60 @@ printf -- '---\n\n*다음 감사: %s*\n' "$(date -v+7d '+%Y-%m-%d' 2>/dev/null |
 
 log "report written: $REPORT_FILE"
 
+# --- Tier 2: Gate candidates 자동 수집 ---
+# dedup 후보를 gate-candidates.json 큐에 append (수동 리뷰 대기)
+GATE_QUEUE="${BOT_HOME}/state/gate-candidates.json"
+mkdir -p "$(dirname "$GATE_QUEUE")" 2>/dev/null || true
+if [[ ! -f "$GATE_QUEUE" ]]; then
+    echo '{"candidates":[],"last_audit_run":""}' > "$GATE_QUEUE"
+fi
+
+# 현재 감사 기준 dedup 후보 (result_hash 5회+, cache_hit 제외)
+new_candidates=$(jq -s -c '
+  map(select(.ts > (now - 7*86400 | strftime("%Y-%m-%dT%H:%M:%SZ")) and .result_hash != "" and .status != "cache_hit"))
+  | group_by([.task, .result_hash])
+  | map(select(length >= 5))
+  | map({
+      detected_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ")),
+      task: .[0].task,
+      result_hash: .[0].result_hash,
+      repeat_count: length,
+      model: .[0].model,
+      status: "pending",
+      notes: ""
+    })
+' "$LEDGER" 2>/dev/null || echo "[]")
+
+# 기존 큐에 병합 — 이미 implemented/rejected인 것은 건들지 않음
+if [[ -n "$new_candidates" && "$new_candidates" != "[]" ]]; then
+    merged=$(jq -s --arg now "$(date -u +%FT%TZ)" '
+      .[0] as $existing | .[1] as $new |
+      $existing.candidates as $old |
+      # 이미 implemented/rejected인 task+hash는 제외
+      ($old | map(select(.status != "pending")) | map({key: (.task + "|" + .result_hash), value: .}) | from_entries) as $locked |
+      # 신규 후보 중 locked되지 않은 것만
+      ($new | map(select(($locked[(.task + "|" + .result_hash)] // null) == null))) as $fresh |
+      # 이미 pending인 것은 repeat_count 업데이트
+      ($old | map(select(.status == "pending"))) as $pending |
+      ($pending | map(. as $p | $fresh | map(select(.task == $p.task and .result_hash == $p.result_hash)) | if length > 0 then ($p + {repeat_count: .[0].repeat_count, detected_at: .[0].detected_at}) else $p end)) as $updated_pending |
+      # locked + updated_pending + 완전 신규 pending
+      ($fresh | map(select(. as $f | $pending | map(select(.task == $f.task and .result_hash == $f.result_hash)) | length == 0))) as $brand_new |
+      {
+        candidates: (($locked | to_entries | map(.value)) + $updated_pending + $brand_new),
+        last_audit_run: $now
+      }
+    ' "$GATE_QUEUE" <(echo "$new_candidates") 2>/dev/null || echo "")
+
+    if [[ -n "$merged" ]]; then
+        tmp_queue="${GATE_QUEUE}.tmp"
+        echo "$merged" > "$tmp_queue" && mv "$tmp_queue" "$GATE_QUEUE"
+        pending_count=$(jq -r '.candidates | map(select(.status == "pending")) | length' "$GATE_QUEUE" 2>/dev/null || echo 0)
+        log "gate-candidates queue updated: ${pending_count} pending"
+    else
+        log "gate-candidates merge failed (jq error) — skipping"
+    fi
+fi
+
 # --- Discord alert on significant findings ---
 significant=false
 if [[ -n "$dedup_candidates" ]] || [[ -n "$budget_pressure" ]] || [[ -n "$cb_high_fails" ]]; then
