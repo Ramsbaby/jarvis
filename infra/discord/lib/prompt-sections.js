@@ -181,9 +181,9 @@ export function buildFamilyBriefingContext({ botHome }) {
   }
 }
 
-// ── tutoring-platform 쿼리 판별 (pre-processor, handlers 공용) ──────────────────────────
-const PREPLY_PATTERN = /수입|매출|레슨\s*금액|얼마|정산|취소\s*보상|오늘\s*얼마|tutoring-platform|tutoring-platform|오늘\s*수업|내일\s*수업|이번\s*주\s*수업|수업\s*일정|수업\s*몇|레슨|오늘\s*일정|내일\s*일정|이번\s*주\s*일정/i;
+// ── 튜터링 플랫폼 쿼리 판별 (pre-processor, handlers 공용) ──────────────────
+const TUTORING_PATTERN = /수입|매출|레슨\s*금액|얼마|정산|취소\s*보상|오늘\s*얼마|오늘\s*수업|내일\s*수업|이번\s*주\s*수업|수업\s*일정|수업\s*몇|레슨|오늘\s*일정|내일\s*일정|이번\s*주\s*일정/i;
 
-export function istutoring-platformQuery(prompt) {
-  return PREPLY_PATTERN.test(prompt ?? '');
+export function isTutoringQuery(prompt) {
+  return TUTORING_PATTERN.test(prompt ?? '');
 }
