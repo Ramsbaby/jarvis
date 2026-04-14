@@ -56,7 +56,7 @@ discord-bot.js ──► lib/handlers.js ──► lib/claude-runner.js
                          │         대화에서 사실 자동 추출 → userMemory + wikiAddFact()
                          │         오너인 경우 owner-profile.md에도 반영
                          │         10분 쿨다운, 봇 응답 150자 이상일 때만 실행
-                         │         위키 실시간 기록: addFact마다 {domain}/_facts.md 동시 갱신
+                         │         위키 실시간 기록: wikiAddFact()로 {domain}/_facts.md 동시 갱신
                          │
                          ├──► buildWikiContextSection() (Dynamic section)
                          │         Hybrid 2-track LLM Wiki context injection:
@@ -256,6 +256,8 @@ SessionStart (startup only)
 
 **Atomic writes**: All `doc-debt.json` mutations (skeleton creation, debt add, debt clear) use `tempfile.mkstemp() + os.rename()` — crash-safe, no partial writes.
 
+**post-tool-docdebt.sh 경로 수정 (2026-04-14)**: `~/.jarvis/` → `~/jarvis/` 마이그레이션 이후 doc-debt 자동 해소가 동작하지 않던 버그 수정. `jarvis_prefix`를 `~/jarvis/`로 변경하고 `~/jarvis/infra/` 접두어도 추가 인식. `~/.jarvis/` 경로는 `jarvis_prefix_legacy`로 하위호환 유지. 문서 해소 로직이 `infra/docs/X.md` → `docs/X.md` rel 변환을 정상 처리.
+
 **health-gateway.mjs (2026-03-18)**: `vm_stat` (macOS-only) now behind `IS_MACOS` branch — Linux uses `free -h` instead. Prevents "command not found" noise in health output on Linux.
 
 **extras-gateway.mjs (2026-03-18)**: `getMemory()` now passes `limit` as `sys.argv[2]` to `rag-query.mjs` — result count was previously always default regardless of caller request.
@@ -279,6 +281,8 @@ SessionStart (startup only)
 - `discord-bot.js` shutdown(): 스트리머가 이미 완료된 상태로 종료 시 `streamerFinalizations.length === 0` → 대기 없이 즉시 `process.exit(0)` 호출. Claude Agent SDK `ProcessTransport.close()`가 예약하는 SIGTERM 타이머(`setTimeout(2000).unref()`)가 Node.js 종료 후 실행 안 돼 자식 claude 프로세스 고아화. 활성 프로세스가 있었을 때 최소 2.5s 대기 추가로 수정.
 - `isShuttingDown` 플래그 추가: shutdown() 진입 즉시 true로 설정. `messageCreate` 핸들러에서 플래그 확인 후 신규 세션 생성 차단. 기존엔 2.5s 대기 중 `client.destroy()` 전에 새 메시지가 와서 orphan 세션이 생기는 창이 있었음.
 - `board-auto-deploy.sh`: `git diff HEAD~1 HEAD`로 package-lock 변경 감지 후 조건부 npm ci → 항상 npm ci 실행으로 변경. GitHub Actions shallow clone(--depth 1) 환경에서 HEAD~1 없음 → grep 실패 → npm ci 생략 → 의존성 누락 빌드 방지.
+
+**Discord bot reply @mention 억제 (2026-04-14)**: `Client` 생성자에 `allowedMentions: { repliedUser: false }` 추가. `message.reply()`의 discord.js v14 기본값(`repliedUser: true`)이 @mention 핑을 발생시켜 직접 답변에 amber(갈색) 배경 하이라이트가 적용되던 문제 수정. 전역 설정이므로 모든 `message.reply()` 호출에 자동 적용 — 개별 call site 수정 불필요.
 
 **Discord bot 안정성 개선 (2026-03-22)**:
 - `discord-bot.js` OOM 임계값 500MB → 800MB 상향. 실측 866MB OOM 발생으로 너무 낮았음. watchdog MEMORY_WARN_MB(900)보다 낮게 유지하여 자가 복구 우선.

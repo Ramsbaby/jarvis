@@ -17,6 +17,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { reportFormat, kstFooter } from '../discord/lib/formatters.js';
 
 // SIGPIPE 핸들러: pick-and-lock 등 stdout 쓰기 중 파이프 끊김 시 crash 방지
 process.on('SIGPIPE', () => process.exit(0));
@@ -596,18 +597,32 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         const recentFailed = tasks
           .filter(t => t.status === 'failed')
           .slice(0, 5)
-          .map(t => `  - \`${t.id}\` (${t.meta?.failedAt?.slice(0,16) ?? 'unknown'})`);
+          .map(t => ({
+            state: 'failed',
+            label: t.id,
+            note: t.meta?.failedAt?.slice(0, 16) ?? 'unknown',
+          }));
         const recentDone = tasks
           .filter(t => t.status === 'done')
           .slice(0, 3)
-          .map(t => `  - \`${t.id}\``);
-        const lines = [
-          `**FSM 태스크 현황** (총 ${tasks.length}개)`,
-          Object.entries(byStatus).map(([s, n]) => `  ${s}: ${n}개`).join('\n'),
-          recentFailed.length ? `최근 실패:\n${recentFailed.join('\n')}` : '',
-          recentDone.length   ? `최근 완료:\n${recentDone.join('\n')}` : '',
-        ].filter(Boolean).join('\n');
-        process.stdout.write(lines + '\n');
+          .map(t => ({ state: 'ok', label: t.id }));
+        const contextLine = Object.entries(byStatus)
+          .map(([s, n]) => `${s} ${n}개`)
+          .join(' · ');
+        const msg = reportFormat({
+          title: `FSM 태스크 현황 — 총 ${tasks.length}개`,
+          context: contextLine,
+          sections: [
+            recentFailed.length ? {
+              heading: '최근 실패', state: 'failed', items: recentFailed,
+            } : null,
+            recentDone.length ? {
+              heading: '최근 완료', state: 'ok', items: recentDone,
+            } : null,
+          ].filter(Boolean),
+          footer: kstFooter('fsm-summary'),
+        });
+        process.stdout.write(msg + '\n');
         break;
       }
       // aggregation 포함 태스크 목록 (parent_id별 자식 집계)

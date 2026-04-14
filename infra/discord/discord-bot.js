@@ -168,6 +168,8 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
   ],
+  // reply 시 @mention 핑 억제 → 갈색(amber) 배경 하이라이트 제거
+  allowedMentions: { repliedUser: false },
 });
 
 let lastMessageAt = Date.now();
