@@ -1,0 +1,2777 @@
+{
+  "generatedAt": "2026-04-14T06:24:07.846Z",
+  "source": "~/.jarvis/config/tasks.json",
+  "totalTasks": 83,
+  "teamDistribution": {
+    "standup": 1,
+    "president": 13,
+    "infra-lead": 16,
+    "finance": 8,
+    "trend-lead": 6,
+    "record-lead": 5,
+    "library": 1,
+    "growth-lead": 4,
+    "brand-lead": 5,
+    "audit-lead": 13,
+    "secretary": 10,
+    "uncategorized": 1
+  },
+  "typeDistribution": {
+    "prompt": 33,
+    "script": 50
+  },
+  "groups": [
+    {
+      "team": {
+        "id": "standup",
+        "name": "회의실 (모닝 스탠드업)"
+      },
+      "tasks": [
+        {
+          "id": "morning-standup",
+          "name": "모닝 스탠드업",
+          "schedule": "10 6 * * *",
+          "scheduleHuman": "매일 06:10",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "standup",
+            "name": "회의실 (모닝 스탠드업)"
+          },
+          "discordChannel": "jarvis",
+          "model": "claude-sonnet-4-6",
+          "priority": "critical",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/morning-standup.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/morning-standup-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-morning-standup-*.log",
+              "exists": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "president",
+        "name": "대표실 (CEO·이사회·KPI)"
+      },
+      "tasks": [
+        {
+          "id": "board-conclude",
+          "name": "보드 토론 자동 결론",
+          "schedule": "*/5 * * * *",
+          "scheduleHuman": "매일 5분마다",
+          "type": "script",
+          "handler": "board-conclude.sh",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": null,
+          "priority": "system",
+          "maxBudget": null,
+          "disabled": true,
+          "description": "30분 만료된 open/in-progress 토론을 Claude로 요약해 결론 댓글 포스팅 + resolved 처리",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/board-conclude.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/board-conclude-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-board-conclude-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "board-meeting-am",
+          "name": "Board Meeting (아침)",
+          "schedule": "5 6 * * *",
+          "scheduleHuman": "매일 06:05",
+          "type": "script",
+          "handler": "parallel-board-meeting.sh",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": null,
+          "priority": "critical",
+          "maxBudget": "1.20",
+          "disabled": true,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/board-meeting-am.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/board-meeting-am-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-board-meeting-am-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "board-meeting-pm",
+          "name": "Board Meeting (저녁)",
+          "schedule": "55 21 * * *",
+          "scheduleHuman": "매일 21:55",
+          "type": "script",
+          "handler": "parallel-board-meeting.sh",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": null,
+          "priority": "critical",
+          "maxBudget": "1.20",
+          "disabled": true,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/board-meeting-pm.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/board-meeting-pm-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-board-meeting-pm-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "board-perf-review",
+          "name": "에이전트 일일 성과 평가 및 승격/강등 처리",
+          "schedule": "0 18 * * *",
+          "scheduleHuman": "매일 18:00",
+          "type": "script",
+          "handler": "board-perf-review.sh",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": null,
+          "priority": "system",
+          "maxBudget": null,
+          "disabled": true,
+          "description": "30일 성과점수 기반 승격(150% 이상)/강등(40% 미만, -5 이하) 처리. 쿨다운: 승격 45일, 강등 30일.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/board-perf-review.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/board-perf-review-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-board-perf-review-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "board-topic-proposer",
+          "name": "보드 토론 주제 자동 제안",
+          "schedule": "0 8-21 * * *",
+          "scheduleHuman": "매일 8-21시 :00",
+          "type": "script",
+          "handler": "board-topic-proposer.sh",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": null,
+          "priority": "normal",
+          "maxBudget": null,
+          "disabled": true,
+          "description": "08:00~21:00 매시 정각 1회. 하루 최대 14슬롯 (실제 게시는 board-topic-proposer.sh 내 일일 상한 5개로 제한)",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/board-topic-proposer.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/board-topic-proposer-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-board-topic-proposer-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "ceo-daily-digest",
+          "name": "일일 CEO 다이제스트",
+          "schedule": "15 23 * * *",
+          "scheduleHuman": "매일 23:15",
+          "type": "script",
+          "handler": "ceo-daily-digest-3-agent.sh",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.30",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/ceo-daily-digest.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/ceo-daily-digest-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-ceo-daily-digest-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "connections-weekly-insight",
+          "name": "Connections 주간 인사이트",
+          "schedule": "45 9 * * 1",
+          "scheduleHuman": "월요일 09:45",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-opus-4-6",
+          "priority": "daily",
+          "maxBudget": "0.80",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/connections-weekly-insight.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/connections-weekly-insight-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-connections-weekly-insight-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "council-insight",
+          "name": "감사팀 일일 점검 (Council)",
+          "schedule": "5 23 * * *",
+          "scheduleHuman": "매일 23:05",
+          "type": "script",
+          "handler": "council-insight-3-agent.sh",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/council-insight.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/council-insight-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-council-insight-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "daily-summary",
+          "name": "일일 요약",
+          "schedule": "0 20 * * *",
+          "scheduleHuman": "매일 20:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/daily-summary.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/daily-summary-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-daily-summary-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "monthly-review",
+          "name": "월간 회고",
+          "schedule": "0 9 1 * *",
+          "scheduleHuman": "매월 1일 09:00",
+          "type": "script",
+          "handler": "monthly-review-3-agent.sh",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-opus-4-6",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/monthly-review.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/monthly-review-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-monthly-review-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "weekly-kpi",
+          "name": "주간 KPI 리포트",
+          "schedule": "30 8 * * 1",
+          "scheduleHuman": "월요일 08:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/weekly-kpi.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/weekly-kpi-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-weekly-kpi-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "weekly-report",
+          "name": "주간 리포트",
+          "schedule": "5 20 * * 0",
+          "scheduleHuman": "일요일 20:05",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/weekly-report.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/weekly-report-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-weekly-report-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "weekly-roi",
+          "name": "주간 ROI 집계",
+          "schedule": "55 23 * * 0",
+          "scheduleHuman": "일요일 23:55",
+          "type": "script",
+          "handler": "weekly-roi.sh",
+          "team": {
+            "id": "president",
+            "name": "대표실 (CEO·이사회·KPI)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "weekly",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": "매주 일요일 23:55 지난주 태스크들의 ROI 집계 및 리포트 생성",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/weekly-roi.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/weekly-roi-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-weekly-roi-*.log",
+              "exists": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "infra-lead",
+        "name": "SRE실 (인프라·신뢰성)"
+      },
+      "tasks": [
+        {
+          "id": "bot-crash-classifier",
+          "name": "봇 크래시 원인 분류 및 Discord 알림",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "event",
+          "maxBudget": "0.20",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/bot-crash-classifier.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/bot-crash-classifier-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-bot-crash-classifier-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "cost-alert-handler",
+          "name": "API 비용 초과 경보 처리",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "route-result.sh",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-alerts",
+          "model": "claude-sonnet-4-6",
+          "priority": "event",
+          "maxBudget": "0.10",
+          "disabled": false,
+          "description": "system.cost_alert 이벤트 발생 시 비용 초과 경보를 Discord로 즉시 전송.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/cost-alert-handler.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/cost-alert-handler-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-cost-alert-handler-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "discord-mention-handler",
+          "name": "Discord 멘션 알림 처리",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "ask-claude.sh",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-alerts",
+          "model": "claude-sonnet-4-6",
+          "priority": "event",
+          "maxBudget": "0.20",
+          "disabled": false,
+          "description": "discord.mention 이벤트 발생 시 즉시 Discord 알림 채널에 응답.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/discord-mention-handler.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/discord-mention-handler-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-discord-mention-handler-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "disk-alert",
+          "name": "디스크 사용량 경고",
+          "schedule": "10 * * * *",
+          "scheduleHuman": "매일 *:10",
+          "type": "script",
+          "handler": "disk-alert.sh",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/disk-alert.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/disk-alert-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-disk-alert-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "env-restore-notifier",
+          "name": ".env 소멸 감지 알림",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "event",
+          "maxBudget": "0.10",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/env-restore-notifier.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/env-restore-notifier-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-env-restore-notifier-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "infra-daily",
+          "name": "인프라팀 일일 점검 (Infra)",
+          "schedule": "0 9 * * *",
+          "scheduleHuman": "매일 09:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/infra-daily.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/infra-daily-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-infra-daily-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "log-cleanup",
+          "name": "디스크 임계치 초과 시 로그 자동 정리",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "event",
+          "maxBudget": "0.30",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/log-cleanup.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/log-cleanup-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-log-cleanup-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "memory-cleanup",
+          "name": "메모리 정리",
+          "schedule": "0 2 * * *",
+          "scheduleHuman": "매일 02:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/memory-cleanup.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/memory-cleanup-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-memory-cleanup-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "memory-expire",
+          "name": "기억 만료 아카이브",
+          "schedule": "0 3 * * 1",
+          "scheduleHuman": "월요일 03:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "normal",
+          "maxBudget": "0.05",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/memory-expire.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/memory-expire-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-memory-expire-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "memory-sync",
+          "name": "메모리 자동 동기화",
+          "schedule": "30 4 * * 1",
+          "scheduleHuman": "월요일 04:30",
+          "type": "script",
+          "handler": "memory-sync.sh",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "weekly",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/memory-sync.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/memory-sync-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-memory-sync-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "rag-health",
+          "name": "RAG 건강 체크",
+          "schedule": "0 3 * * *",
+          "scheduleHuman": "매일 03:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/rag-health.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/rag-health-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-rag-health-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "rate-limit-check",
+          "name": "Rate Limit 체크",
+          "schedule": "*/30 * * * *",
+          "scheduleHuman": "매일 30분마다",
+          "type": "script",
+          "handler": "rate-limit-check.sh",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/rate-limit-check.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/rate-limit-check-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-rate-limit-check-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "stale-task-watcher",
+          "name": "Stale 태스크 감지 및 자동 전이",
+          "schedule": "*/30 * * * *",
+          "scheduleHuman": "매일 30분마다",
+          "type": "script",
+          "handler": "stale-task-watcher.sh",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/stale-task-watcher.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/stale-task-watcher-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-stale-task-watcher-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "system-doctor",
+          "name": "system-doctor",
+          "schedule": "0 6 * * *",
+          "scheduleHuman": "매일 06:00",
+          "type": "script",
+          "handler": "system-doctor.sh",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": "Jarvis 자동 시스템 점검 (LaunchAgent, Discord봇, RAG, 크론, E2E, Glances, 디스크)",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/system-doctor.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/system-doctor-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-system-doctor-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "system-health",
+          "name": "시스템 헬스체크",
+          "schedule": "*/60 * * * *",
+          "scheduleHuman": "매일 60분마다",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/system-health.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/system-health-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-system-health-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "token-sync",
+          "name": "토큰 동기화",
+          "schedule": "0 1 * * *",
+          "scheduleHuman": "매일 01:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/token-sync.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/token-sync-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-token-sync-*.log",
+              "exists": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "finance",
+        "name": "재무실 (AI 비용·시장·수입)"
+      },
+      "tasks": [
+        {
+          "id": "cost-monitor",
+          "name": "비용 모니터링",
+          "schedule": "0 9 * * 0",
+          "scheduleHuman": "일요일 09:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "finance",
+            "name": "재무실 (AI 비용·시장·수입)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/cost-monitor.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/cost-monitor-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-cost-monitor-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "daily-usage-check",
+          "name": "매일 아침 사용량 체크",
+          "schedule": "55 5 * * *",
+          "scheduleHuman": "매일 05:55",
+          "type": "script",
+          "handler": "daily-usage-report.sh",
+          "team": {
+            "id": "finance",
+            "name": "재무실 (AI 비용·시장·수입)"
+          },
+          "discordChannel": "jarvis-lite",
+          "model": null,
+          "priority": "daily",
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/daily-usage-check.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/daily-usage-check-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-daily-usage-check-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "finance-monitor",
+          "name": "파이낸스팀 일일 모니터링 (Finance)",
+          "schedule": "0 8 * * 1-5",
+          "scheduleHuman": "평일 08:00",
+          "type": "script",
+          "handler": "finance-run.sh",
+          "team": {
+            "id": "finance",
+            "name": "재무실 (AI 비용·시장·수입)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.50",
+          "disabled": false,
+          "description": "평일 08:00 재무/시장 모니터링. finance/team.yml 기반으로 실행.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/finance-monitor.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/finance-monitor-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-finance-monitor-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "macro-briefing",
+          "name": "시장 매크로 브리핑",
+          "schedule": "30 23 * * 0-4",
+          "scheduleHuman": "*/*/0-4 23:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "finance",
+            "name": "재무실 (AI 비용·시장·수입)"
+          },
+          "discordChannel": "jarvis-market",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/macro-briefing.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/macro-briefing-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-macro-briefing-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "market-alert",
+          "name": "시장 급변 알림",
+          "schedule": "5 9,13,16 * * 1-5",
+          "scheduleHuman": "평일 9,13,16시 :05",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "finance",
+            "name": "재무실 (AI 비용·시장·수입)"
+          },
+          "discordChannel": "jarvis-market",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "critical",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/market-alert.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/market-alert-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-market-alert-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "personal-schedule-daily",
+          "name": "개인 일정 브리핑",
+          "schedule": "30 7 * * *",
+          "scheduleHuman": "매일 07:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "finance",
+            "name": "재무실 (AI 비용·시장·수입)"
+          },
+          "discordChannel": "jarvis-boram",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "normal",
+          "maxBudget": "0.10",
+          "disabled": false,
+          "description": "매일 07:30 KST tutoring-platform 수업 일정을 #jarvis-boram 채널로 자동 전송.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/personal-schedule-daily.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/personal-schedule-daily-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-personal-schedule-daily-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "tqqq-monitor",
+          "name": "시장 모니터링",
+          "schedule": "*/15 22-23 * * 1-5",
+          "scheduleHuman": "평일 22-23:*/15",
+          "type": "script",
+          "handler": "tqqq-monitor.sh",
+          "team": {
+            "id": "finance",
+            "name": "재무실 (AI 비용·시장·수입)"
+          },
+          "discordChannel": "jarvis-market",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/tqqq-monitor.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/tqqq-monitor-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-tqqq-monitor-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "update-usage-cache",
+          "name": "Claude usage 캐시 갱신",
+          "schedule": "*/30 * * * *",
+          "scheduleHuman": "매일 30분마다",
+          "type": "script",
+          "handler": "update-usage-cache.sh",
+          "team": {
+            "id": "finance",
+            "name": "재무실 (AI 비용·시장·수입)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": "/usage 명령 stale 방지 — 30분마다 ~/.claude/usage-cache.json 갱신",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/update-usage-cache.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/update-usage-cache-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-update-usage-cache-*.log",
+              "exists": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "trend-lead",
+        "name": "전략기획실 (트렌드·뉴스)"
+      },
+      "tasks": [
+        {
+          "id": "calendar-alert",
+          "name": "일정 선제 알림",
+          "schedule": "*/5 * * * *",
+          "scheduleHuman": "매일 5분마다",
+          "type": "script",
+          "handler": "calendar-alert.sh",
+          "team": {
+            "id": "trend-lead",
+            "name": "전략기획실 (트렌드·뉴스)"
+          },
+          "discordChannel": "jarvis",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": null,
+          "maxBudget": "0.10",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/calendar-alert.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/calendar-alert-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-calendar-alert-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "github-monitor",
+          "name": "GitHub 알림 모니터",
+          "schedule": "0 * * * *",
+          "scheduleHuman": "매일 *:0",
+          "type": "script",
+          "handler": "github-monitor-gate.sh",
+          "team": {
+            "id": "trend-lead",
+            "name": "전략기획실 (트렌드·뉴스)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/github-monitor.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/github-monitor-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-github-monitor-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "github-pr-handler",
+          "name": "GitHub PR 오픈 즉시 처리",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "ask-claude.sh",
+          "team": {
+            "id": "trend-lead",
+            "name": "전략기획실 (트렌드·뉴스)"
+          },
+          "discordChannel": "jarvis-dev",
+          "model": "claude-sonnet-4-6",
+          "priority": "event",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": "github.pr_opened 이벤트 발생 시 PR 요약 및 Discord 알림 전송.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/github-pr-handler.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/github-pr-handler-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-github-pr-handler-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "news-briefing",
+          "name": "뉴스 브리핑",
+          "schedule": "0 6 * * *",
+          "scheduleHuman": "매일 06:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "trend-lead",
+            "name": "전략기획실 (트렌드·뉴스)"
+          },
+          "discordChannel": "jarvis",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/news-briefing.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/news-briefing-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-news-briefing-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "oss-recon",
+          "name": "OSS 경쟁자 주간 분석",
+          "schedule": "30 10 * * 1",
+          "scheduleHuman": "월요일 10:30",
+          "type": "script",
+          "handler": "oss-recon.sh",
+          "team": {
+            "id": "trend-lead",
+            "name": "전략기획실 (트렌드·뉴스)"
+          },
+          "discordChannel": "jarvis-blog",
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/oss-recon.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/oss-recon-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-oss-recon-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "recon-weekly",
+          "name": "정보탐험대 주간 리포트 (Recon)",
+          "schedule": "0 9 * * 1",
+          "scheduleHuman": "월요일 09:00",
+          "type": "script",
+          "handler": "recon-run.sh",
+          "team": {
+            "id": "trend-lead",
+            "name": "전략기획실 (트렌드·뉴스)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": "3.00",
+          "disabled": false,
+          "description": "매주 월요일 AI/기술/시장 정보탐험. recon/team.yml 기반으로 실행.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/recon-weekly.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/recon-weekly-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-recon-weekly-*.log",
+              "exists": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "record-lead",
+        "name": "데이터실 (메모리·RAG 백엔드)"
+      },
+      "tasks": [
+        {
+          "id": "private-sync",
+          "name": "커밋 후 private 레포 동기화",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "record-lead",
+            "name": "데이터실 (메모리·RAG 백엔드)"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "event",
+          "maxBudget": "0.10",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/private-sync.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/private-sync-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-private-sync-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "record-daily",
+          "name": "기록팀 일일 마감 (Record)",
+          "schedule": "30 22 * * *",
+          "scheduleHuman": "매일 22:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "record-lead",
+            "name": "데이터실 (메모리·RAG 백엔드)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/record-daily.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/record-daily-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-record-daily-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "session-sync",
+          "name": "세션 동기화",
+          "schedule": "*/15 * * * *",
+          "scheduleHuman": "매일 15분마다",
+          "type": "script",
+          "handler": "session-sync.sh",
+          "team": {
+            "id": "record-lead",
+            "name": "데이터실 (메모리·RAG 백엔드)"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": "최근 30분 내 대화 활동 감지 시 context-bus 즉시 갱신",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/session-sync.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/session-sync-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-session-sync-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "vault-auto-link",
+          "name": "Vault 자동 링크 생성",
+          "schedule": "30 6 * * *",
+          "scheduleHuman": "매일 06:30",
+          "type": "script",
+          "handler": "vault-auto-link.sh",
+          "team": {
+            "id": "record-lead",
+            "name": "데이터실 (메모리·RAG 백엔드)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/vault-auto-link.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/vault-auto-link-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-vault-auto-link-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "vault-sync",
+          "name": "Obsidian Vault 동기화",
+          "schedule": "0 */6 * * *",
+          "scheduleHuman": "매일 6시간마다",
+          "type": "script",
+          "handler": "vault-sync.sh",
+          "team": {
+            "id": "record-lead",
+            "name": "데이터실 (메모리·RAG 백엔드)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/vault-sync.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/vault-sync-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-vault-sync-*.log",
+              "exists": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "library",
+        "name": "자료실 (RAG 프론트엔드)"
+      },
+      "tasks": [
+        {
+          "id": "rag-bench",
+          "name": "RAG 품질 측정",
+          "schedule": "0 3 * * 0",
+          "scheduleHuman": "일요일 03:00",
+          "type": "script",
+          "handler": "memorybench.mjs",
+          "team": {
+            "id": "library",
+            "name": "자료실 (RAG 프론트엔드)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/rag-bench.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/rag-bench-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-rag-bench-*.log",
+              "exists": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "growth-lead",
+        "name": "인재개발실 (커리어·학습)"
+      },
+      "tasks": [
+        {
+          "id": "academy-support",
+          "name": "학습팀 주간 보고 (Academy)",
+          "schedule": "0 20 * * 0",
+          "scheduleHuman": "일요일 20:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "growth-lead",
+            "name": "인재개발실 (커리어·학습)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/academy-support.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/academy-support-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-academy-support-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "boram-daily-schedule",
+          "name": "보람 일정 브리핑 (비활성 — personal-schedule-daily로 대체됨)",
+          "schedule": "30 7 * * *",
+          "scheduleHuman": "매일 07:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "growth-lead",
+            "name": "인재개발실 (커리어·학습)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": true,
+          "description": "2026-03-19 tasks.json에서 제거됨. plist가 잔존하여 ABORTED 방지용 stub.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/boram-daily-schedule.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/boram-daily-schedule-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-boram-daily-schedule-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "career-extractor",
+          "name": "커리어 인사이트 자동 추출",
+          "schedule": "30 0 * * *",
+          "scheduleHuman": "매일 00:30",
+          "type": "script",
+          "handler": "career-extractor.mjs",
+          "team": {
+            "id": "growth-lead",
+            "name": "인재개발실 (커리어·학습)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/career-extractor.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/career-extractor-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-career-extractor-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "career-weekly",
+          "name": "커리어 주간 리포트",
+          "schedule": "0 18 * * 5",
+          "scheduleHuman": "금요일 18:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "growth-lead",
+            "name": "인재개발실 (커리어·학습)"
+          },
+          "discordChannel": "jarvis-dev",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/career-weekly.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/career-weekly-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-career-weekly-*.log",
+              "exists": true
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "brand-lead",
+        "name": "마케팅실 (OSS·블로그)"
+      },
+      "tasks": [
+        {
+          "id": "brand-visibility-check",
+          "name": "브랜드 외부 노출 자동 감지",
+          "schedule": "0 */6 * * *",
+          "scheduleHuman": "매일 6시간마다",
+          "type": "script",
+          "handler": "brand-visibility-check.sh",
+          "team": {
+            "id": "brand-lead",
+            "name": "마케팅실 (OSS·블로그)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "normal",
+          "maxBudget": null,
+          "disabled": false,
+          "description": "6시간 주기(0, 6, 12, 18시) GitHub 검색 순위 + 블로그 최신 게시일 자동 감지. RED 임계값 초과 시 DEV_TASK 자동 생성. context-bus.md Brand Metrics 섹션 자동 갱신",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/brand-visibility-check.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/brand-visibility-check-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-brand-visibility-check-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "brand-weekly",
+          "name": "브랜드팀 주간 보고 (Brand)",
+          "schedule": "0 8 * * 2",
+          "scheduleHuman": "화요일 08:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "brand-lead",
+            "name": "마케팅실 (OSS·블로그)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/brand-weekly.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/brand-weekly-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-brand-weekly-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "oss-docs",
+          "name": "OSS README 갱신 제안",
+          "schedule": "0 11 * * 3",
+          "scheduleHuman": "수요일 11:00",
+          "type": "script",
+          "handler": "oss-docs.sh",
+          "team": {
+            "id": "brand-lead",
+            "name": "마케팅실 (OSS·블로그)"
+          },
+          "discordChannel": "jarvis-blog",
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/oss-docs.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/oss-docs-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-oss-docs-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "oss-maintenance",
+          "name": "OSS 이슈/PR 일간 트리아지",
+          "schedule": "15 9 * * *",
+          "scheduleHuman": "매일 09:15",
+          "type": "script",
+          "handler": "oss-maintenance.sh",
+          "team": {
+            "id": "brand-lead",
+            "name": "마케팅실 (OSS·블로그)"
+          },
+          "discordChannel": "jarvis-blog",
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/oss-maintenance.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/oss-maintenance-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-oss-maintenance-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "oss-promo",
+          "name": "OSS 주간 홍보 초안 생성",
+          "schedule": "0 17 * * 5",
+          "scheduleHuman": "금요일 17:00",
+          "type": "script",
+          "handler": "oss-promo.sh",
+          "team": {
+            "id": "brand-lead",
+            "name": "마케팅실 (OSS·블로그)"
+          },
+          "discordChannel": "jarvis-blog",
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/oss-promo.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/oss-promo-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-oss-promo-*.log",
+              "exists": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "audit-lead",
+        "name": "QA실 (품질·감사·E2E)"
+      },
+      "tasks": [
+        {
+          "id": "code-auditor",
+          "name": "코드 품질 감사",
+          "schedule": "45 4 * * *",
+          "scheduleHuman": "매일 04:45",
+          "type": "script",
+          "handler": "jarvis-auditor.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": null,
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/code-auditor.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/code-auditor-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-code-auditor-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "cron-auditor",
+          "name": "크론 전체 점검",
+          "schedule": "30 5 * * *",
+          "scheduleHuman": "매일 05:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/cron-auditor.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/cron-auditor-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-cron-auditor-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "doc-supervisor",
+          "name": "문서화 시스템 감독 (Doc Supervisor)",
+          "schedule": "0 5 * * *",
+          "scheduleHuman": "매일 05:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/doc-supervisor.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/doc-supervisor-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-doc-supervisor-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "doc-sync-auditor",
+          "name": "문서-코드 정합성 감사 + 자동 적용",
+          "schedule": "20 23 * * *",
+          "scheduleHuman": "매일 23:20",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-sonnet-4-6",
+          "priority": "daily",
+          "maxBudget": "0.80",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/doc-sync-auditor.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/doc-sync-auditor-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-doc-sync-auditor-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "gen-gotchas",
+          "name": "Gotchas 자동 승격",
+          "schedule": "0 3 * * 1",
+          "scheduleHuman": "월요일 03:00",
+          "type": "script",
+          "handler": "gen-gotchas.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": "recovery-learnings.md에서 3회↑ 반복 패턴을 gotchas.md에 자동 승격. 매주 월요일 03:00 KST.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/gen-gotchas.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/gen-gotchas-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-gen-gotchas-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "gen-system-overview",
+          "name": "시스템 개요 자동 재생성",
+          "schedule": "5 4 * * *",
+          "scheduleHuman": "매일 04:05",
+          "type": "script",
+          "handler": "gen-system-overview.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": "시스템 개요 문서 자동 재생성 (SYSTEM-OVERVIEW.md)",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/gen-system-overview.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/gen-system-overview-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-gen-system-overview-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "jira-sync",
+          "name": "JIRA 커리어 히스토리 동기화",
+          "schedule": "0 9 * * 1",
+          "scheduleHuman": "월요일 09:00",
+          "type": "script",
+          "handler": "jira-sync.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/jira-sync.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/jira-sync-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-jira-sync-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "schedule-coherence",
+          "name": "일정 정합성 점검",
+          "schedule": "0 4 * * 1",
+          "scheduleHuman": "월요일 04:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "weekly",
+          "maxBudget": "0.30",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/schedule-coherence.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/schedule-coherence-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-schedule-coherence-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "security-scan",
+          "name": "보안 스캔",
+          "schedule": "30 2 * * *",
+          "scheduleHuman": "매일 02:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/security-scan.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/security-scan-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-security-scan-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
+          "id": "token-ledger-audit",
+          "name": "토큰 원장 주간 감사",
+          "schedule": "30 8 * * 0",
+          "scheduleHuman": "일요일 08:30",
+          "type": "script",
+          "handler": "token-ledger-audit.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": null,
+          "disabled": false,
+          "description": "토큰 낭비 패턴 주간 자동 감사 — dedup 후보·예산 압박·캐시 효율·서킷브레이커·Tier 로드맵 권장사항을 리포트로 생성하고 유의미한 발견 시 Discord 알림.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/token-ledger-audit.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/token-ledger-audit-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-token-ledger-audit-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "tune-task-params",
+          "name": "태스크 파라미터 자동 튜닝 제안",
+          "schedule": "35 8 * * 0",
+          "scheduleHuman": "일요일 08:35",
+          "type": "script",
+          "handler": "tune-task-params.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": null,
+          "disabled": false,
+          "description": "token-ledger 7일 데이터 기반으로 각 태스크의 timeout/budget/retry 조정을 제안. **제안만 생성**, tasks.json 자동 수정 금지. 매주 일요일 08:35 KST (token-ledger-audit 직후).",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/tune-task-params.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/tune-task-params-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-tune-task-params-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "weekly-code-review",
+          "name": "주간 LLM 코드 리뷰",
+          "schedule": "0 5 * * 0",
+          "scheduleHuman": "일요일 05:00",
+          "type": "script",
+          "handler": "weekly-code-review.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/weekly-code-review.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/weekly-code-review-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-weekly-code-review-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "weekly-perf-agent",
+          "name": "주간 성과 분석 에이전트",
+          "schedule": "0 21 * * 0",
+          "scheduleHuman": "일요일 21:00",
+          "type": "script",
+          "handler": "weekly-perf-agent.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-sonnet-4-6",
+          "priority": "weekly",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": "매주 일요일 21:00 FSM/Langfuse/RAG/Board 데이터 종합 분석 → Board 포스트 + Discord 알림",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/weekly-perf-agent.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/weekly-perf-agent-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-weekly-perf-agent-*.log",
+              "exists": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "secretary",
+        "name": "컨시어지 (Discord 봇)"
+      },
+      "tasks": [
+        {
+          "id": "agent-batch-commit",
+          "name": "에이전트 산출물 일괄 커밋",
+          "schedule": "30 8 * * *",
+          "scheduleHuman": "매일 08:30",
+          "type": "script",
+          "handler": "agent-batch-commit.sh",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "low",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/agent-batch-commit.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/agent-batch-commit-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-agent-batch-commit-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "auto-diagnose",
+          "name": "자동 실패 진단",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "auto-diagnose.sh",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": null,
+          "maxBudget": "0",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/auto-diagnose.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/auto-diagnose-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-auto-diagnose-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "bot-quality-check",
+          "name": "봇 응답 품질 분석",
+          "schedule": "30 2 * * *",
+          "scheduleHuman": "매일 02:30",
+          "type": "script",
+          "handler": "bot-quality-analyzer.sh",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "normal",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/bot-quality-check.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/bot-quality-check-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-bot-quality-check-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "bot-self-critique",
+          "name": "봇 자가 품질 점검",
+          "schedule": "45 2 * * *",
+          "scheduleHuman": "매일 02:45",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "normal",
+          "maxBudget": "0.15",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/bot-self-critique.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/bot-self-critique-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-bot-self-critique-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "dev-event-bus",
+          "name": "dev-event-bus",
+          "schedule": "50 22 * * *",
+          "scheduleHuman": "매일 22:50",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": true,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/dev-event-bus.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/dev-event-bus-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-dev-event-bus-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "dev-event-watcher",
+          "name": "dev-event-watcher",
+          "schedule": "0 23 * * *",
+          "scheduleHuman": "매일 23:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": null,
+          "maxBudget": null,
+          "disabled": true,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/dev-event-watcher.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/dev-event-watcher-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-dev-event-watcher-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "dev-runner",
+          "name": "자율 개발 큐 러너",
+          "schedule": "55 22 * * *",
+          "scheduleHuman": "매일 22:55",
+          "type": "script",
+          "handler": "jarvis-coder.sh",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "normal",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/dev-runner.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/dev-runner-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-dev-runner-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "jarvis-coder",
+          "name": "자비스 코더 (온디맨드)",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "jarvis-coder.sh",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "normal",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/jarvis-coder.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/jarvis-coder-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-jarvis-coder-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "skill-eval",
+          "name": "스킬 자동 평가",
+          "schedule": "30 4 * * 0",
+          "scheduleHuman": "일요일 04:30",
+          "type": "script",
+          "handler": "skill-eval.sh",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/skill-eval.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/skill-eval-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-skill-eval-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "weekly-usage-stats",
+          "name": "Discord 주간 활용도 통계",
+          "schedule": "0 9 * * 1",
+          "scheduleHuman": "월요일 09:00",
+          "type": "script",
+          "handler": "usage-stats.sh",
+          "team": {
+            "id": "secretary",
+            "name": "컨시어지 (Discord 봇)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "weekly",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/weekly-usage-stats.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/weekly-usage-stats-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-weekly-usage-stats-*.log",
+              "exists": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "uncategorized",
+        "name": "미분류"
+      },
+      "tasks": [
+        {
+          "id": "gen-indexes",
+          "name": "AI 네비게이션 인덱스 자동 생성",
+          "schedule": "17 6 * * *",
+          "scheduleHuman": "매일 06:17",
+          "type": "script",
+          "handler": "gen-indexes.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": "TASKS-INDEX.md + API-INDEX.md 일일 갱신. 맥도날드식 AI 네비게이션의 인덱스 드리프트 방지.",
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/gen-indexes.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/gen-indexes-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-gen-indexes-*.log",
+              "exists": false
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
