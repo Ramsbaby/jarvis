@@ -10,6 +10,10 @@ import { homedir } from 'node:os';
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
 const USERS_DIR = join(BOT_HOME, 'state', 'users');
 
+// Family 채널용 노이즈 fact 필터 — 컴팩션 아티팩트·세션 메타 텍스트 제거
+// 너무 광범위한 userid 패턴 대신 정확한 노이즈 패턴만 차단
+const FAMILY_JUNK_RE = /^\[userid:|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조/i;
+
 // 카테고리 자동 감지 — 텍스트 키워드 기반 분류
 const CATEGORY_RULES = [
   { cat: 'trading',  re: /stock|주식|트레이딩|레버리지|etf|매수|매도|포트폴리오|s&p|nasdaq|코스피|cpi|fomc|금리|배당|수익률/i },
