@@ -31,7 +31,8 @@ jobs:
 
           FOUND=0
           for pattern in "${PATTERNS[@]}"; do
-            matches=$(git grep -nE "$pattern" -- ':!node_modules' ':!*.lock' || true)
+            # 워크플로우 자체 제외 — 패턴 정의가 PII로 오탐되는 것 방지
+            matches=$(git grep -nE "$pattern" -- ':!node_modules' ':!*.lock' ':!.github/workflows/pii-scan.yml' || true)
             if [[ -n "$matches" ]]; then
               echo "❌ Pattern detected: $pattern"
               echo "$matches"
