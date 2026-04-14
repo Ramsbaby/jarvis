@@ -10,7 +10,7 @@ set -euo pipefail
 # ask-claude.sh - Core wrapper around `claude -p` for AI task execution
 # Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET]
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 LOG_FILE="${BOT_HOME}/logs/task-runner.jsonl"
 
 # --- Arguments ---

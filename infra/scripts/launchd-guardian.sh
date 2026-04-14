@@ -5,7 +5,7 @@ set -euo pipefail
 # Runs every 3 minutes via cron. Detects unloaded launchd services and re-registers them.
 # Ensures critical LaunchAgents remain registered after system sleep or restart.
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 # Cross-platform compat
 source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 2>/dev/null || true
 

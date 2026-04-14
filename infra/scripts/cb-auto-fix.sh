@@ -7,7 +7,7 @@ set -euo pipefail
 
 RUNNER_NAME="${1:-unknown}"
 CB_FAILS="${2:-3}"
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 
 LOG_FILE="$BOT_HOME/logs/${RUNNER_NAME}.log"
 CB_FILE="$BOT_HOME/state/circuit-breaker/${RUNNER_NAME}.json"

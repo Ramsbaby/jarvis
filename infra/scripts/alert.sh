@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 ALERT_STATE_DIR="$BOT_HOME/state"
 LAST_ALERT_FILE="$ALERT_STATE_DIR/last-alert"

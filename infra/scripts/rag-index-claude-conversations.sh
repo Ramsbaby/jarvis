@@ -16,7 +16,7 @@ set -euo pipefail
 # Homebrew PATH 설정 (크론 환경에서 node 명령어 사용 위함)
 export PATH="/opt/homebrew/bin:$PATH"
 
-BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 CLAUDE_PROJECTS="${HOME}/.claude/projects"
 OUT_BASE="${BOT_HOME}/context/claude-code-sessions"
 LOG="${BOT_HOME}/logs/rag-conversations.log"
