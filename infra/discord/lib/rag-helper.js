@@ -10,7 +10,6 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { log } from './claude-runner.js';
-import { getWikiContext, listPages } from './wiki-engine.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
 
@@ -118,24 +117,6 @@ export function closeRagEngine() {
   if (_ragEngine) {
     _ragEngine.close();
     _ragEngine = null;
-  }
-}
-
-/**
- * LLM Wiki 기반 컨텍스트 검색 — RAG보다 먼저 위키에서 찾는다.
- * 위키 페이지가 있으면 해당 컨텍스트를 반환, 없으면 빈 문자열.
- *
- * @param {string} userId
- * @param {string} query
- * @returns {string}
- */
-export function searchWikiForContext(userId, query) {
-  try {
-    const pages = listPages(userId);
-    if (pages.length === 0) return '';
-    return getWikiContext(userId, query);
-  } catch {
-    return '';
   }
 }
 
