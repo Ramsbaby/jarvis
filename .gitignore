@@ -7,6 +7,11 @@ __pycache__/
 private/
 !private/README.md
 
+# Local IDE/LSP caches (may contain personal context)
+.serena/
+.vscode/
+.idea/
+
 # RAG data (user-specific)
 *.lance/
 index-state.json
