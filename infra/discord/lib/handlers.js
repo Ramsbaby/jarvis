@@ -69,7 +69,7 @@ import { saveSessionSummary, loadSessionSummary, loadSessionSummaryRecent, saveC
 import { pendingQueue, enqueue, processQueue } from './queue-processor.js';
 import { MessageDebouncer } from './message-debouncer.js';
 import { ProcessorContext, createPreProcessorRegistry } from './pre-processor.js';
-import { istutoring-platformQuery } from './prompt-sections.js';
+import { isTutoringQuery } from './prompt-sections.js';
 import { langfuse } from './langfuse-client.mjs';
 import { detectAndRecord as _trackCommitment } from './commitment-tracker.js';
 import { detectStatType, sendStatVisual } from './stat-visual.js';
@@ -970,22 +970,22 @@ ${extracted}
     if (!_continueHandled) {
       const summary = loadSessionSummary(sessionKey);
       if (summary) {
-        // tutoring-platform 질문인데 요약에 잘못된 MCP/캘린더 내용이 있으면 주입하지 않음
+        // tutoring 질문인데 요약에 잘못된 MCP/캘린더 내용이 있으면 주입하지 않음
         const BAD_TUTORING_SUMMARY = /google calendar|캘린더.*mcp|mcp.*캘린더|settings\.json.*수정|재시작.*후.*다시/is;
-        const skipSummary = istutoring-platformQuery(originalPrompt) && BAD_TUTORING_SUMMARY.test(summary);
+        const skipSummary = isTutoringQuery(originalPrompt) && BAD_TUTORING_SUMMARY.test(summary);
         if (!skipSummary) {
           userPrompt = summary + userPrompt;
           _summaryInjected = true;
           log('info', 'Session summary pre-injected for resume safety', { threadId: thread.id });
         } else {
-          log('info', 'Session summary skipped (bad tutoring-platform context detected)', { threadId: thread.id });
+          log('info', 'Session summary skipped (bad tutoring context detected)', { threadId: thread.id });
         }
       }
     }
 
     // 새 세션이고 summary도 없으면 Discord 히스토리로 봇 이전 응답 컨텍스트 복원
     // (봇 재시작/세션 만료 후 "아까 뭐라 했어?" 같은 상황 대응)
-    if (!_continueHandled && !sessionId && !_summaryInjected && !istutoring-platformQuery(originalPrompt)) {
+    if (!_continueHandled && !sessionId && !_summaryInjected && !isTutoringQuery(originalPrompt)) {
       try {
         const cached = message.channel.messages.cache;
         const botId = message.client.user.id;
@@ -1428,8 +1428,8 @@ ${extracted}
         }
       }
 
-      // RAG re-inject on retry: skip for tutoring-platform queries (data already pre-injected)
-      if (!istutoring-platformQuery(originalPrompt)) {
+      // RAG re-inject on retry: skip for tutoring queries (data already pre-injected)
+      if (!isTutoringQuery(originalPrompt)) {
         // PAST_REF_PATTERN 감지 시 episodic 모드로 discord-history 우선 검색
         // family 채널: familyOnly=true → Owner stock/career 데이터 RAG 결과 제외
         const isEpisodic = PAST_REF_PATTERN.test(originalPrompt);
