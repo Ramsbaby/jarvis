@@ -89,38 +89,79 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 
 ## Quick Start
 
-```bash
-git clone https://github.com/Ramsbaby/jarvis.git && cd jarvis
-```
+### Which plan do I need?
+
+| Setup | What you get | AI requirement | Cost |
+|-------|-------------|----------------|------|
+| **Standard** | Discord bot + 80 cron automations | Claude Max **or** Pro subscription | $20/mo (Pro) or $100/mo (Max) |
+| **Full** | Standard + RAG long-term memory | Claude subscription + Ollama (free, local) | same + 0 |
+
+> **Claude Max** = unlimited usage, best for 24/7 bot. **Claude Pro** = works fine, may hit rate limits under heavy use.
+> **Ollama** = free, open-source AI that runs locally. Only needed for RAG (document search + memory). The Discord bot itself runs on Claude.
+
+---
 
 ### Step 0: Prerequisites
 
-- **Claude Max or Pro subscription** + **Claude Code CLI** installed and authenticated
-  ```bash
-  npm install -g @anthropic-ai/claude-code
-  claude   # authenticate in browser on first run
-  ```
-- **Node.js 22+** and **jq**
+1. **Claude Code CLI** (the brain)
+   ```bash
+   npm install -g @anthropic-ai/claude-code
+   claude   # opens browser to authenticate — log in with your Anthropic account
+   ```
+2. **Node.js 22+** and **Python 3.10+**
+   ```bash
+   node -v   # should be 22+
+   python3 --version
+   ```
 
-### Step 1: Discord Bot + Automation
+### Step 1: Get a Discord Bot Token
+
+> If you already have a token, skip to Step 2.
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Click **"New Application"** → name it (e.g., "Jarvis") → **Create**
+3. Left sidebar → **"Bot"** tab → click **"Reset Token"** → **Copy the token** (save it!)
+4. Scroll down → enable **"Message Content Intent"** toggle → Save
+5. Left sidebar → **"OAuth2"** → **"URL Generator"**:
+   - Scopes: `bot`, `applications.commands`
+   - Bot permissions: `Send Messages`, `Read Message History`, `Attach Files`, `Use Slash Commands`
+6. Copy the generated URL → open in browser → invite the bot to your Discord server
+
+### Step 2: Clone & Setup
 
 ```bash
-python scripts/setup_infra.py
+git clone https://github.com/Ramsbaby/jarvis.git && cd jarvis
+python scripts/setup_infra.py    # paste your Discord token when prompted
 ```
 
-> **Requires**: Node.js 22+, Discord bot token, Claude Code CLI
-> **Detailed guide**: [`infra/CLAUDE-SETUP-GUIDE.md`](infra/CLAUDE-SETUP-GUIDE.md) — comprehensive step-by-step including MCP, personas, and context setup
+The setup wizard will:
+- Check Node.js, create data directories
+- Ask for your **Discord bot token** (from Step 1)
+- Install dependencies and configure the bot
 
-### Step 2: RAG — Long-Term Memory (Optional)
+> **Detailed guide**: [`infra/CLAUDE-SETUP-GUIDE.md`](infra/CLAUDE-SETUP-GUIDE.md) — MCP servers, personas, context setup, and troubleshooting
+
+### Step 3: RAG — Long-Term Memory (Optional, recommended)
+
+This gives Jarvis the ability to search past conversations and documents.
 
 ```bash
-python scripts/setup_rag.py
+# Install Ollama first (free, local AI for embeddings)
+# macOS:
+brew install ollama && ollama serve
+
+# Linux:
+curl -fsSL https://ollama.com/install.sh | sh && ollama serve
+
+# Then run RAG setup:
+python scripts/setup_rag.py    # downloads ~400MB embedding model, takes 2-5 min
 ```
 
-> **Requires**: [Ollama](https://ollama.com/download) running locally
+### Platform-specific start
 
-### WSL2 / Linux — Start with PM2
+**macOS** — auto-starts via LaunchAgent (setup_infra.py configures this)
 
+**WSL2 / Linux** — use PM2:
 ```bash
 npm install -g pm2
 pm2 start infra/ecosystem.config.cjs
