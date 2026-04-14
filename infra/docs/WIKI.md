@@ -60,9 +60,26 @@ index.md 재생성 + log.jsonl 기록
 
 | 소비자 | 연동 포인트 | 상태 |
 |--------|------------|------|
-| Discord봇 | `buildWikiContextSection()` → prompt-sections.js | 계획 |
-| Board | `/api/wiki/*` API + CronDetailPopup 확장 | 계획 |
-| Map NPC | `gatherTeamContext()` 위키 주입 | 계획 |
+| Discord봇 | `buildWikiContextSection()` → prompt-sections.js | ✅ 완료 |
+| Board | `/api/wiki/*` API (lib/wiki.ts) | ✅ 완료 |
+| Map NPC | `gatherTeamContext()` 위키 주입 (TEAM_WIKI_MAP) | ✅ 완료 |
+
+## 크론 체계
+
+| 크론 | LaunchAgent | 스케줄 | 역할 |
+|------|-------------|--------|------|
+| wiki-ingest | `ai.jarvis.wiki-ingest` | 매일 03:30 KST | session + facts → 위키 합성 |
+| wiki-lint | `ai.jarvis.wiki-lint` | 일요일 04:00 KST | 모순/고아/decay/confidence 점검 |
+
+## Lint 점검 항목 (wiki-lint.mjs)
+
+1. **고아 페이지** — 파일은 있으나 index.md에 미등록
+2. **깨진 링크** — index.md에 있으나 파일 없음
+3. **Confidence 재평가** — 90일+ 미갱신 시 high→medium, 180일+ → low
+4. **Decay 처리** — fast(7일) 만료 시 archive/ 이동 (--fix 모드)
+5. **크기 점검** — 3,000자 초과 시 분할 권장
+6. **Cross-reference 검증** — [[경로]] 링크 대상 파일 존재 확인
+7. **Frontmatter 필수 필드** — title, domain, type 누락 탐지
 
 ## 기존 시스템과의 관계
 
