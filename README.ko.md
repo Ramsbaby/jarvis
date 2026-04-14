@@ -52,7 +52,7 @@ API 과금 없이 Claude 구독만으로 돌아갑니다. 데이터는 100% 내 
 | 💬 | **Discord 봇** | 24/7 채팅. 스트리밍 응답, 음성 인식(Whisper STT), 채널별 페르소나, 16+ 슬래시 커맨드 |
 | 👥 | **멀티유저** | 유저별 격리된 메모리, 페어링 코드로 신규 유저 등록, 가족 모드(프라이버시 경계) |
 | 📚 | **RAG 지식 베이스** | 장기 기억. BM25 + 벡터 하이브리드 검색, 10,000+ 문서 |
-| 🗂️ | **LLM Wiki** | Karpathy의 LLM Wiki에서 영감받은 Stateful 지식 베이스. 매일 대화를 Claude Haiku가 소화해 7개 주제 위키 페이지(`profile` / `work` / `trading` / `projects` / `preferences` / `health` / `travel`)를 자동 업데이트. 지식이 복리로 축적됨 |
+| 🗂️ | **LLM Wiki** | [Karpathy 3-layer 패턴](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (Raw/Wiki/Schema) 기반. 4개 인제스트 경로: 실시간 키워드 라우팅, 백그라운드 LLM 소화(Haiku), 야간 배치 합성(03:30), 주간 린트(일요일 04:00). 도메인 위키(`career`/`trading`/`ops`/`knowledge`) + 사용자별 페이지. Discord봇·Board API·Map NPC가 위키를 참조. 지식이 복리로 축적 — 새 정보가 기존 페이지를 업데이트 |
 | 🧠 | **인사이트 레이어** | 매일 자동 생성되는 행동 분석 리포트 — 활동 추세, 집중 전환, 상황 맥락 감지 |
 | 📋 | **Dev-Queue** | AI가 추출한 작업 항목을 자동 큐잉 → `jarvis-coder.sh`가 자동 실행 — 손 안 대고 개발 |
 | 🤖 | **8개 AI 팀** | Council, Infra, Record, Brand, Career, Academy, Trend, Recon — 전문 에이전트 |
