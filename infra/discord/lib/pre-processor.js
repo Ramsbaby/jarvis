@@ -332,6 +332,45 @@ export class TaskContextProcessor extends BasePreProcessor {
 }
 
 // ---------------------------------------------------------------------------
+// ProductContextProcessor
+// 출시/앱/프로젝트 관련 키워드 → RAG 자동 주입 (고유명사 누락 방지)
+// AI 판단에 의존하지 않고 코드 레벨에서 확실하게 처리.
+// 예: "고스톱 출시" → "고스톱"이 일반 단어여도 출시 키워드로 RAG 트리거.
+// ---------------------------------------------------------------------------
+const PRODUCT_CONTEXT_PATTERN = /출시|런칭|launching|사이드\s*프로젝트|앱스토어|플레이스토어|구글\s*플레이|스토어\s*등록|릴리즈|release|앱.*개발|개발.*앱/i;
+
+export class ProductContextProcessor extends BasePreProcessor {
+  #searchFn;
+
+  constructor(searchFn) {
+    super();
+    this.#searchFn = searchFn;
+  }
+
+  get name() { return 'ProductContextProcessor'; }
+
+  matches(ctx) {
+    return PRODUCT_CONTEXT_PATTERN.test(ctx.originalPrompt);
+  }
+
+  async enrich(prompt, ctx) {
+    const isBoram = (process.env.BORAM_CHANNEL_IDS || '').split(',').includes(ctx.channelId);
+    const ragContext = await this.#searchFn(ctx.originalPrompt, 3, {
+      sourceFilter: 'episodic',
+      ...(isBoram && { boramOnly: true }),
+    }).catch(() => null);
+    if (!ragContext) return null;
+
+    const ragSnippet = ragContext.length > 800 ? ragContext.slice(0, 800) + '...' : ragContext;
+    log('info', '[ProductContextProcessor] RAG 자동 주입 (출시/프로젝트 키워드)', {
+      threadId: ctx.threadId,
+      ragLen: ragSnippet.length,
+    });
+    return ragSnippet + '\n\n' + prompt;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 export function createPreProcessorRegistry(searchFn = _defaultSearch) {
@@ -340,5 +379,6 @@ export function createPreProcessorRegistry(searchFn = _defaultSearch) {
     .register(new GoalsProcessor())
     .register(new SystemApiProcessor())
     .register(new TaskContextProcessor())
+    .register(new ProductContextProcessor(searchFn))  // 출시/앱/프로젝트 → RAG 자동 주입
     .register(new RagContextProcessor(searchFn));
 }

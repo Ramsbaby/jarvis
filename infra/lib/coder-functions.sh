@@ -91,6 +91,97 @@ update_queue() {
     fi
 }
 
+# --- 변경 파일 문법 검증 (syntax gate) ---
+# snapshot hash 이후 변경된 파일에 대해 언어별 문법+참조 검사 수행
+# JS/MJS: eslint no-undef (ReferenceError 사전 차단) + bash -n / py_compile
+# 실패 시 stderr에 에러 내용 출력 + return 1
+_ESLINT_GATE_CONFIG="${BOT_HOME}/config/eslint-gate.config.mjs"
+run_syntax_gate() {
+    local snapshot_hash="${1:-}"
+    [[ -z "$snapshot_hash" ]] && return 0
+
+    local changed_files errors=0 error_details=""
+    changed_files=$(git -C "$BOT_HOME" diff --name-only "$snapshot_hash" 2>/dev/null || true)
+    [[ -z "$changed_files" ]] && return 0
+
+    # eslint config 자동 생성 (없으면)
+    if [[ ! -f "$_ESLINT_GATE_CONFIG" ]]; then
+        mkdir -p "$(dirname "$_ESLINT_GATE_CONFIG")"
+        cat > "$_ESLINT_GATE_CONFIG" << 'ESLINTEOF'
+export default [{
+  languageOptions: {
+    ecmaVersion: 2022,
+    sourceType: "module",
+    globals: {
+      console: "readonly", process: "readonly", Buffer: "readonly",
+      __dirname: "readonly", __filename: "readonly", require: "readonly",
+      module: "readonly", exports: "readonly", setTimeout: "readonly",
+      setInterval: "readonly", clearTimeout: "readonly", clearInterval: "readonly",
+      URL: "readonly", fetch: "readonly", Response: "readonly",
+      global: "readonly", globalThis: "readonly", TextEncoder: "readonly",
+      TextDecoder: "readonly", AbortController: "readonly", AbortSignal: "readonly",
+    }
+  },
+  rules: { "no-undef": "error" }
+}];
+ESLINTEOF
+    fi
+
+    # 직접 문법 검증 수행
+    while IFS= read -r f; do
+        local full_path="$BOT_HOME/$f"
+        [[ -f "$full_path" ]] || continue
+
+        local _out="" ext=""
+        ext="${f##*.}"
+
+        case "$ext" in
+            js|mjs)
+                if command -v npx >/dev/null 2>&1; then
+                    _out=$(npx eslint --config "$_ESLINT_GATE_CONFIG" --no-eslintrc "$full_path" 2>&1) || {
+                        errors=$(( errors + 1 ))
+                        error_details="${error_details}\n${full_path}: ${_out}"
+                        _coder_log "SYNTAX_GATE 실패 (eslint): ${f}: ${_out:0:200}"
+                    }
+                else
+                    # eslint 없으면 Node.js 문법 검사라도
+                    _out=$(node --check "$full_path" 2>&1) || {
+                        errors=$(( errors + 1 ))
+                        error_details="${error_details}\n${full_path}: ${_out}"
+                        _coder_log "SYNTAX_GATE 실패 (node --check): ${f}: ${_out:0:200}"
+                    }
+                fi
+                ;;
+            sh|bash)
+                _out=$(bash -n "$full_path" 2>&1) || {
+                    errors=$(( errors + 1 ))
+                    error_details="${error_details}\n${full_path}: ${_out}"
+                    _coder_log "SYNTAX_GATE 실패 (bash -n): ${f}: ${_out:0:200}"
+                }
+                ;;
+            py)
+                _out=$(python3 -m py_compile "$full_path" 2>&1) || {
+                    errors=$(( errors + 1 ))
+                    error_details="${error_details}\n${full_path}: ${_out}"
+                    _coder_log "SYNTAX_GATE 실패 (py_compile): ${f}: ${_out:0:200}"
+                }
+                ;;
+            md|txt|json|yaml|yml|csv|log)
+                # 텍스트/설정 파일은 문법 검사 제외
+                ;;
+        esac
+    done <<< "$changed_files"
+
+    if (( errors > 0 )); then
+        _coder_log "SYNTAX_GATE: ${errors}개 파일 문법/참조 에러 발견"
+        echo -e "$error_details" >&2
+        return 1
+    fi
+
+    _coder_log "SYNTAX_GATE: 변경 파일 문법 검증 통과"
+    return 0
+}
+
 # --- completionCheck 실행 ---
 run_completion_check() {
     local check="$1"
@@ -264,6 +355,50 @@ ${prompt}
         return 0
     fi
 
+    # 문법 검증 게이트 (그룹) — 실패 시 에러 피드백 재호출
+    if [[ -n "$_SNAPSHOT_HASH" ]]; then
+        local _syntax_err=""
+        if ! _syntax_err=$(run_syntax_gate "$_SNAPSHOT_HASH" 2>&1); then
+            _coder_log "SYNTAX_GATE 실패 (그룹) — 에러 피드백 재호출 시도"
+
+            local _fix_prompt="[SYNTAX GATE 실패 — 즉시 수정 필요]
+
+아래 파일에서 문법/참조 에러가 발견되었습니다. 에러를 수정하세요.
+
+에러 내용:
+${_syntax_err:0:500}
+
+규칙:
+- 선언되지 않은 변수를 사용하면 안 됩니다 (ReferenceError)
+- 함수를 제거했으면 해당 함수를 호출하는 코드도 함께 제거하세요
+- 수정 후 다른 기능이 깨지지 않도록 주의하세요"
+
+            "${BOT_HOME}/bin/retry-wrapper.sh" \
+                "group-${FIRST_ID}-fix" "$_fix_prompt" "Read,Edit,Bash" "120" "5" "30" "" \
+                > /dev/null 2>&1 || true
+
+            local _syntax_err2=""
+            if ! _syntax_err2=$(run_syntax_gate "$_SNAPSHOT_HASH" 2>&1); then
+                _coder_log "SYNTAX_GATE 2차 실패 (그룹) → rollback"
+                rollback_snapshot "$_SNAPSHOT_HASH"
+                for tid in "${ALL_IDS[@]}"; do
+                    local retries; retries=$(get_field "$tid" "retries"); retries="${retries:-0}"
+                    local max_retries; max_retries=$(get_field "$tid" "maxRetries"); max_retries="${max_retries:-2}"
+                    local new_retries=$(( retries + 1 ))
+                    if (( new_retries >= max_retries )); then
+                        update_queue "$tid" "failed" "{\"retries\": ${new_retries}, \"lastError\": \"syntax_gate_failed\"}"
+                    else
+                        update_queue "$tid" "queued" "{\"retries\": ${new_retries}, \"lastError\": \"syntax_gate_failed\"}"
+                    fi
+                done
+                _discord_ceo_notify "❌ **Jarvis Coder**: 그룹 문법 에러 (자가수정 실패) → rollback\n\`\`\`${_syntax_err2:0:300}\`\`\`"
+                return 0
+            fi
+            _coder_log "SYNTAX_GATE: 에러 피드백 후 자가수정 성공 (그룹)"
+            _discord_ceo_notify "🔧 **Jarvis Coder**: 그룹 문법 에러 자가수정 완료"
+        fi
+    fi
+
     # 성공: commit 1회 + 전체 done
     if [[ -n "$_SNAPSHOT_HASH" ]]; then
         git -C "$BOT_HOME" add -A >/dev/null 2>&1 || true
@@ -389,6 +524,54 @@ run_one_task() {
             update_queue "$TASK_ID" "queued" "$local_extra"
         fi
         return 0
+    fi
+
+    # Step 5.5: 문법 검증 게이트 — ReferenceError/SyntaxError 배포 방지
+    # 실패 시: rollback 없이 에러 피드백으로 Claude 재호출 → 자가 수정 기회 부여
+    if [[ -n "$_SNAPSHOT_HASH" ]]; then
+        local _syntax_err=""
+        if ! _syntax_err=$(run_syntax_gate "$_SNAPSHOT_HASH" 2>&1); then
+            _coder_log "SYNTAX_GATE 실패: ${TASK_ID} — 에러 피드백 재호출 시도"
+
+            # 에러 내용을 Claude에게 전달해서 자가 수정 요청
+            local _fix_prompt="[SYNTAX GATE 실패 — 즉시 수정 필요]
+
+아래 파일에서 문법/참조 에러가 발견되었습니다. 에러를 수정하세요.
+
+에러 내용:
+${_syntax_err:0:500}
+
+규칙:
+- 선언되지 않은 변수를 사용하면 안 됩니다 (ReferenceError)
+- 함수를 제거했으면 해당 함수를 호출하는 코드도 함께 제거하세요
+- 수정 후 다른 기능이 깨지지 않도록 주의하세요"
+
+            local _FIX_EXIT=0
+            "${BOT_HOME}/bin/retry-wrapper.sh" \
+                "${TASK_ID}-fix" "$_fix_prompt" "Read,Edit,Bash" "120" "5" "30" "" \
+                > /dev/null 2>&1 || _FIX_EXIT=$?
+
+            # 수정 후 재검증
+            local _syntax_err2=""
+            if ! _syntax_err2=$(run_syntax_gate "$_SNAPSHOT_HASH" 2>&1); then
+                # 2차도 실패 → rollback + failed
+                _coder_log "SYNTAX_GATE 2차 실패 → rollback: ${TASK_ID}"
+                rollback_snapshot "$_SNAPSHOT_HASH"
+                local NEW_RETRIES=$(( RETRIES + 1 ))
+                if (( NEW_RETRIES >= MAX_RETRIES )); then
+                    update_queue "$TASK_ID" "failed" \
+                        "{\"retries\": ${NEW_RETRIES}, \"lastError\": \"syntax_gate_failed\", \"syntax_errors\": $(echo "$_syntax_err2" | jq -Rs .)}"
+                    _discord_ceo_notify "❌ **Jarvis Coder**: \`${TASK_ID}\` 문법 에러 (자가수정 실패) → failed\n\`\`\`${_syntax_err2:0:300}\`\`\`"
+                else
+                    update_queue "$TASK_ID" "queued" \
+                        "{\"retries\": ${NEW_RETRIES}, \"lastError\": \"syntax_gate_failed\"}"
+                    _discord_ceo_notify "⚠️ **Jarvis Coder**: \`${TASK_ID}\` 문법 에러 (자가수정 실패) → 재시도 (${NEW_RETRIES}/${MAX_RETRIES})"
+                fi
+                return 0
+            fi
+            _coder_log "SYNTAX_GATE: 에러 피드백 후 자가수정 성공: ${TASK_ID}"
+            _discord_ceo_notify "🔧 **Jarvis Coder**: \`${TASK_ID}\` 문법 에러 자가수정 완료"
+        fi
     fi
 
     # Step 6: completionCheck 재확인

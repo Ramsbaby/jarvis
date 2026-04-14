@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 2>/dev/null || true
+export JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"  # BOT_HOME 환경변수 오염 방지 (QW-14, 2026-04-13)
+source "${JARVIS_HOME}/lib/compat.sh" || {
+  echo "ERROR: Failed to source compat.sh from $JARVIS_HOME" >&2
+  exit 1
+}
 set -uo pipefail
 # jarvis-auditor.sh - Autonomous code quality auditor
 # set -e 없음: 감지 실패는 정상 흐름 (e2e-test.sh와 동일 패턴)
@@ -663,8 +667,8 @@ run_e2e_audit() {
     fails=$(grep "FAIL" "$result_file" 2>/dev/null | grep -v "^#" || true)
 
     if [[ -n "$fails" ]]; then
-        local fail_count
-        fail_count=$(echo "$fails" | grep -c . || true)
+        local fail_count=0
+        fail_count=$(echo "$fails" | grep -c . || echo 0)
         local result_date
         result_date=$(basename "$result_file" .txt)
         report "- $fail_count FAIL items (from $result_date):"
@@ -673,9 +677,11 @@ run_e2e_audit() {
                 report "  - $line"
             fi
         done <<< "$fails"
-        ((TOTAL_ISSUES += fail_count))
-        ((WARN_ISSUES += fail_count))
-        enqueue_to_devqueue "E2E 테스트 실패: $fail_count건 ($result_date)" "high" "e2e-health 결과 파일에서 FAIL 항목 $fail_count건 감지"
+        TOTAL_ISSUES=$((TOTAL_ISSUES + fail_count))
+        WARN_ISSUES=$((WARN_ISSUES + fail_count))
+        msg="E2E Test Failed: $fail_count items from $result_date"
+        desc="Detected $fail_count FAIL items in e2e-health result file"
+        enqueue_to_devqueue "$msg" "high" "$desc"
     else
         report "- OK: No e2e failures detected"
     fi

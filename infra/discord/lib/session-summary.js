@@ -91,6 +91,57 @@ export function loadSessionSummary(sessionKey) {
 }
 
 /**
+ * Load only the most recent topic for "계속" (continue) command.
+ * Instead of injecting the entire session summary, returns only the last 2 turns
+ * and relevant compacted sections to prevent topic confusion.
+ */
+export function loadSessionSummaryRecent(sessionKey) {
+  try {
+    const filePath = join(SESSION_SUMMARY_DIR, `${sessionKey.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`);
+    if (!existsSync(filePath)) return '';
+    const content = readFileSync(filePath, 'utf-8').trim();
+    if (!content || _hasDanger(content)) return '';
+
+    const isCompacted = content.startsWith('<!-- compacted');
+    if (isCompacted) {
+      // compacted 요약: "### 마지막 진행 주제" + "### 미완 작업" 섹션만 추출
+      // + compacted 뒤에 raw 턴이 붙어있으면 마지막 2턴만 포함
+      const sections = [];
+      for (const hdr of ['### 마지막 진행 주제', '### 미완 작업']) {
+        const idx = content.indexOf(hdr);
+        if (idx >= 0) {
+          const nextHdr = content.indexOf('\n###', idx + hdr.length);
+          const nextSep = content.indexOf('\n---', idx);
+          const end = Math.min(
+            nextHdr >= 0 ? nextHdr : Infinity,
+            nextSep >= 0 ? nextSep : Infinity,
+            content.length,
+          );
+          const sec = content.slice(idx, end).trim();
+          if (sec && !sec.endsWith('없음')) sections.push(sec);
+        }
+      }
+      // compacted 뒤에 붙은 raw 턴 (timestamp로 시작)이 있으면 마지막 2턴
+      const rawMatch = content.lastIndexOf('---\n[');
+      if (rawMatch >= 0) {
+        const rawTurns = content.slice(rawMatch).split('---\n').filter(t => t.trim());
+        sections.push(...rawTurns.slice(-2));
+      }
+      if (sections.length === 0) return ''; // fallback → 호출부에서 전체 요약 사용
+      return `## 직전 대화 맥락 (최근 주제만)\n${sections.join('\n---\n')}\n\n`;
+    }
+
+    // raw transcript: 마지막 2턴만 슬라이스
+    const turns = content.split('---\n').filter(t => t.trim());
+    const recent = turns.slice(-2);
+    if (recent.length === 0) return '';
+    return `## 직전 대화 맥락 (최근 주제만)\n${recent.join('---\n')}\n\n`;
+  } catch {
+    return '';
+  }
+}
+
+/**
  * AI가 생성한 구조화 컴팩션 요약 저장.
  * haiku가 5-섹션 형식으로 생성한 요약을 session-summary 파일에 덮어씀.
  * 다음 세션에서 loadSessionSummary()로 주입됨.
@@ -133,9 +184,9 @@ export async function compactSessionWithAI(sessionKey) {
 
   const summarizePrompt = [
     '다음은 AI 봇과 사용자의 대화 기록이다.',
-    '이 대화를 아래 5-섹션 형식으로 핵심만 한국어로 요약해라.',
+    '이 대화를 아래 6-섹션 형식으로 핵심만 한국어로 요약해라.',
     '각 섹션은 중요한 정보만 포함하고, 없으면 "없음"으로 표기해라.',
-    '전체 요약은 800자 이내로 작성해라.',
+    '전체 요약은 1000자 이내로 작성해라.',
     '',
     '형식:',
     '### 사용자 의도',
@@ -148,6 +199,8 @@ export async function compactSessionWithAI(sessionKey) {
     '(아직 처리 안 된 것, 있다면)',
     '### 핵심 참조',
     '(중요한 파일명, 에러 메시지, 설정값 등)',
+    '### 마지막 진행 주제',
+    '(대화 기록의 마지막 1-2턴에서 다루던 구체적 주제 한 줄. 사용자가 "계속"이라고 하면 이 주제를 이어감)',
     '',
     '---대화 기록---',
     rawContent,

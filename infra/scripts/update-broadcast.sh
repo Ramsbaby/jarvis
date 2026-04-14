@@ -134,6 +134,7 @@ ${commit_msgs}
 - 불릿 외의 텍스트 출력 금지 (인사말, 설명, 마크다운 등 절대 금지)"
 
     local result=""
+    local claude_exit_code=0
     # claude -p 사용 (timeout 30초, 저비용)
     if command -v claude >/dev/null 2>&1; then
         _sum_cmd=()
@@ -142,11 +143,17 @@ ${commit_msgs}
         result=$("${_sum_cmd[@]}" \
             --model claude-haiku-4-5-20251001 \
             --max-turns 3 \
-            2>/dev/null || true)
+            2>&1) || claude_exit_code=$?
+
+        # Timeout 또는 명령 실패 시 로깅
+        if [[ $claude_exit_code -ne 0 ]]; then
+            log "Claude 요약 실패 (exit code: $claude_exit_code, 일반 fallback 사용)"
+        fi
     fi
 
     # claude 실패 또는 에러 메시지 출력 시 fallback
     if [[ -z "$result" ]] || echo "$result" | grep -q "^Error:\|Reached max turns\|error_"; then
+        log "Claude 응답 에러 감지 또는 공백, fallback 사용"
         result=$(echo "$commit_msgs" | sed -E 's/^[a-z]+(\([^)]*\))?:[[:space:]]*/• /')
     fi
 

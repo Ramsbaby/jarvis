@@ -87,7 +87,7 @@ _llm_claude_cli() {
     if [[ -n "${_TIMEOUT_CMD:-}" ]]; then
         cmd+=("${_TIMEOUT_CMD}" "$timeout")
     fi
-    cmd+=(claude -p "$prompt"
+    cmd+=(claude -p
         --output-format json
         --permission-mode bypassPermissions
         --strict-mcp-config
@@ -99,6 +99,9 @@ _llm_claude_cli() {
     [[ -n "$max_budget" ]]    && cmd+=(--max-budget-usd "$max_budget")
     [[ -n "$model" ]]         && cmd+=(--model "$model")
     [[ -n "$work_dir" ]]      && cmd+=(--plugin-dir "${work_dir}/.empty-plugins")
+
+    # -- 로 옵션 종료: -로 시작하는 프롬프트가 옵션으로 오인되는 것을 방지
+    cmd+=(-- "$prompt")
 
     local stderr_tmp
     stderr_tmp=$(mktemp)
@@ -353,10 +356,17 @@ llm_call() {
         || claude_exit=$?
 
     if [[ $claude_exit -eq 0 ]]; then
-        lf_trace_generation --task-id "${TASK_ID:-llm-gateway}" \
-            --name "${TASK_ID:-llm-call}" --model "$model" \
-            --provider "claude-cli" --output "$output"
-        return 0
+        # False-success guard: stream-json 경로에서 claude가 exit 0이어도 output 파일이 비어있으면
+        # stream-to-board.sh가 result 이벤트를 받지 못한 것 → 실패로 처리
+        if [[ ! -s "$output" ]]; then
+            log_warn "claude-cli: exit=0 but output file is empty (stream-json false-success) — treating as failure"
+            claude_exit=1
+        else
+            lf_trace_generation --task-id "${TASK_ID:-llm-gateway}" \
+                --name "${TASK_ID:-llm-call}" --model "$model" \
+                --provider "claude-cli" --output "$output"
+            return 0
+        fi
     fi
     log_warn "claude -p failed (exit $claude_exit)"
 
