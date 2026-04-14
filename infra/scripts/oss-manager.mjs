@@ -88,8 +88,10 @@ function discordSend(content, channelKey = CONFIG.settings.discordChannel ?? 'ja
   const body = JSON.stringify({ content: content.slice(0, 2000) });
   const r = spawnSync('curl', ['-s', '-X', 'POST', url,
     '-H', 'Content-Type: application/json', '-d', body
-  ], { timeout: 10_000 });
-  if (r.status !== 0) log('warn', `Discord 전송 실패: ${(r.stderr || '').trim()}`);
+  ], { timeout: 10_000, encoding: 'utf8' });
+  if (r.status !== 0) {
+    log('warn', `Discord 전송 실패 (${channelKey}): ${r.status} — ${(r.stderr || r.stdout || '').trim().slice(0, 200)}`);
+  }
 }
 
 function ensureReportDir() {
@@ -300,7 +302,7 @@ bug / enhancement / question / documentation / help wanted / invalid / wontfix`;
     });
   }
 
-  // Discord 리포트 (채널: jarvis-system — 유지보수 알림)
+  // Discord 리포트 (채널: tasks.json discordChannel 설정 따름 → jarvis-blog)
   if (summary.length > 0) {
     const lines = summary.map(s => {
       let line = `**${s.repo}**: 이슈 ${s.openIssues}개`;
@@ -311,7 +313,7 @@ bug / enhancement / question / documentation / help wanted / invalid / wontfix`;
       if (s.stalePRs > 0) line += ` | ⚠️ Stale PR ${s.stalePRs}개`;
       return line;
     }).join('\n');
-    discordSend(`🔧 **OSS 유지보수 — ${TODAY}**\n\n${lines}`, 'jarvis-system');
+    discordSend(`🔧 **OSS 유지보수 — ${TODAY}**\n\n${lines}`);
   }
 
   return summary;

@@ -511,7 +511,7 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         process.stdout.write(JSON.stringify(exportJson(), null, 2) + '\n');
         break;
       case 'count-queued': {
-        const n = getDb().prepare("SELECT COUNT(*) as c FROM tasks WHERE status='queued'").get();
+        const n = getDb().prepare("SELECT COUNT(*) as c FROM tasks WHERE status='queued' AND COALESCE(JSON_EXTRACT(meta,'$.source'),'') != 'bot-cron'").get();
         process.stdout.write(String(n.c) + '\n');
         break;
       }
@@ -523,7 +523,7 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         for (let i = 0; i < args.length - 1; i++) {
           if (args[i].startsWith('--')) flagMap[args[i].slice(2)] = args[i + 1];
         }
-        const { id: eId, title, prompt: ePrompt, priority: ePrio = 'medium', source: eSrc = 'agent', type: eType = 'improvement', 'post-title': ePostTitle, timeout: eTimeout, maxBudget: eMaxBudget } = flagMap;
+        const { id: eId, title, prompt: ePrompt, priority: ePrio = 'medium', source: eSrc = 'agent', type: eType = 'improvement', 'post-title': ePostTitle, timeout: eTimeout, maxBudget: eMaxBudget, allowedTools: eAllowedTools } = flagMap;
         if (!eId || !title) { process.stderr.write('enqueue: --id and --title required\n'); process.exit(1); }
         const db = getDb();
         const existing = db.prepare("SELECT status FROM tasks WHERE id=?").get(eId);
@@ -539,6 +539,7 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         if (ePostTitle) metaObj.postTitle = ePostTitle;
         if (eTimeout) metaObj.timeout = parseInt(eTimeout, 10);
         if (eMaxBudget) metaObj.maxBudget = eMaxBudget;
+        if (eAllowedTools) metaObj.allowedTools = eAllowedTools;
         const meta = JSON.stringify(metaObj);
         db.prepare('INSERT OR REPLACE INTO tasks (id, status, priority, retries, depends, meta, updated_at) VALUES (?,?,?,?,?,?,?)')
           .run(eId, 'queued', ePrioInt, 0, '[]', meta, Date.now());
@@ -557,9 +558,12 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
       // cron 태스크 ensure: DB에 없으면 queued로 삽입, failed/done이면 queued로 리셋
       // Usage: node task-store.mjs ensure <id> [name] [source]
       case 'ensure': {
-        const [id, name, source, prompt] = args;
+        // Usage: node task-store.mjs ensure <id> <name> <source> <prompt> [allowedTools]
+        // debug-cron-* 태스크는 코드 수정이 필요하므로 allowedTools 기본값 포함
+        const [id, name, source, prompt, allowedTools] = args;
         const taskMeta = { name: name ?? id, source: source ?? 'bot-cron' };
         if (prompt) taskMeta.prompt = prompt;
+        taskMeta.allowedTools = allowedTools ?? 'Bash,Read,Write,Edit';
         const result = ensureCronTask(id, taskMeta);
         process.stdout.write(JSON.stringify({ ok: true, ...result }) + '\n');
         break;

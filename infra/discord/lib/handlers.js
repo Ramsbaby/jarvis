@@ -64,11 +64,12 @@ import { recordError } from './error-tracker.js';
 
 // Extracted modules
 import { PAST_REF_PATTERN, searchRagForContext } from './rag-helper.js';
-import { saveSessionSummary, loadSessionSummary, saveCompactionSummary, compactSessionWithAI } from './session-summary.js';
+import { saveSessionSummary, loadSessionSummary, loadSessionSummaryRecent, saveCompactionSummary, compactSessionWithAI } from './session-summary.js';
 // classifyBudget 미사용 — 전역 opusplan 모드 (claude-runner.js에서 항상 Opus+thinking:adaptive)
 import { pendingQueue, enqueue, processQueue } from './queue-processor.js';
 import { MessageDebouncer } from './message-debouncer.js';
 import { ProcessorContext, createPreProcessorRegistry } from './pre-processor.js';
+import { istutoring-platformQuery } from './prompt-sections.js';
 import { langfuse } from './langfuse-client.mjs';
 import { detectAndRecord as _trackCommitment } from './commitment-tracker.js';
 import { detectStatType, sendStatVisual } from './stat-visual.js';
@@ -736,7 +737,9 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
     let _continueHandled = false; // 세션 요약 중복 주입 방지 플래그
     if (CONTINUE_PATTERN.test(userPrompt.trim())) {
       const pending = _loadPendingTask(sessionKey);
-      const summary = loadSessionSummary(sessionKey);
+      // "계속" 시 직전 주제만 주입 (전체 요약 대신) — 다중 주제 혼동 방지
+      const recentSummary = loadSessionSummaryRecent(sessionKey);
+      const summary = recentSummary || loadSessionSummary(sessionKey); // recent 실패 시 전체 fallback
 
       if (!pending && !summary) {
         // 이어받을 작업도, 세션 요약도 없음 → 안내만 하고 종료
@@ -963,15 +966,58 @@ ${extracted}
     // Session summary pre-injection for resume safety
     // _continueHandled=true이면 이미 "계속" 블록에서 요약을 주입했으므로 중복 방지
     // sessionId 조건 제거: compact 직후 첫 턴(sessionId=null)에도 요약 주입
+    let _summaryInjected = false;
     if (!_continueHandled) {
       const summary = loadSessionSummary(sessionKey);
       if (summary) {
-        // 튜터 질문인데 요약에 잘못된 MCP/캘린더 내용이 있으면 주입하지 않음
+        // tutoring-platform 질문인데 요약에 잘못된 MCP/캘린더 내용이 있으면 주입하지 않음
+        const BAD_TUTORING_SUMMARY = /google calendar|캘린더.*mcp|mcp.*캘린더|settings\.json.*수정|재시작.*후.*다시/is;
+        const skipSummary = istutoring-platformQuery(originalPrompt) && BAD_TUTORING_SUMMARY.test(summary);
         if (!skipSummary) {
           userPrompt = summary + userPrompt;
+          _summaryInjected = true;
           log('info', 'Session summary pre-injected for resume safety', { threadId: thread.id });
         } else {
+          log('info', 'Session summary skipped (bad tutoring-platform context detected)', { threadId: thread.id });
         }
+      }
+    }
+
+    // 새 세션이고 summary도 없으면 Discord 히스토리로 봇 이전 응답 컨텍스트 복원
+    // (봇 재시작/세션 만료 후 "아까 뭐라 했어?" 같은 상황 대응)
+    if (!_continueHandled && !sessionId && !_summaryInjected && !istutoring-platformQuery(originalPrompt)) {
+      try {
+        const cached = message.channel.messages.cache;
+        const botId = message.client.user.id;
+        const hasBotMsg = [...cached.values()].some(m => m.author.id === botId && m.id !== message.id);
+        if (hasBotMsg) {
+          const historyLines = [];
+          let totalLen = 0;
+          const MAX_HIST = 3000;
+          const BOT_LIMIT = 1000;
+          const sorted = [...cached.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+          for (const msg of sorted) {
+            if (msg.id === message.id) continue;
+            const isBot = msg.author.id === botId;
+            let content = msg.content?.trim() || '';
+            if (!content) continue;
+            if (isBot && content.length > BOT_LIMIT) content = content.slice(0, BOT_LIMIT) + '...';
+            const label = isBot ? 'Jarvis' : 'User';
+            const line = `${label}: ${content}`;
+            if (totalLen + line.length > MAX_HIST) break;
+            historyLines.push(line);
+            totalLen += line.length;
+          }
+          if (historyLines.length > 0) {
+            userPrompt = `## 이전 대화 (세션 재연결 컨텍스트)\n${historyLines.join('\n')}\n\n` + userPrompt;
+            log('info', 'Discord message cache injected for session reconnect', {
+              messageCount: historyLines.length,
+              totalLen,
+            });
+          }
+        }
+      } catch (histErr) {
+        log('debug', 'Discord cache history inject failed', { error: histErr.message });
       }
     }
 
@@ -1372,14 +1418,18 @@ ${extracted}
         });
       }
 
-      // Session summary fallback
-      const summary = loadSessionSummary(sessionKey);
-      if (summary) {
-        userPrompt = summary + userPrompt;
-        log('info', 'Injected session summary fallback', { threadId: thread.id });
+      // Session summary fallback — 중복 주입 방지
+      if (!_summaryInjected) {
+        const summary = loadSessionSummary(sessionKey);
+        if (summary) {
+          userPrompt = summary + userPrompt;
+          _summaryInjected = true;
+          log('info', 'Injected session summary fallback [path-D: auto-resume]', { threadId: thread.id });
+        }
       }
 
-      {
+      // RAG re-inject on retry: skip for tutoring-platform queries (data already pre-injected)
+      if (!istutoring-platformQuery(originalPrompt)) {
         // PAST_REF_PATTERN 감지 시 episodic 모드로 discord-history 우선 검색
         // family 채널: familyOnly=true → Owner stock/career 데이터 RAG 결과 제외
         const isEpisodic = PAST_REF_PATTERN.test(originalPrompt);
@@ -1562,9 +1612,10 @@ export async function rerunQuery(channel, query, sessionKey, state, opts = {}) {
     // Option B: 세션 요약 주입 — handleMessage와 동일한 컨텍스트 품질 보장
     let fullQuery = query;
     const summary = loadSessionSummary(sessionKey);
-    if (summary) {
+    const BAD_RERUN_SUMMARY = /google calendar|캘린더.*mcp|mcp.*캘린더|settings\.json.*수정|재시작.*후.*다시/is;
+    if (summary && !BAD_RERUN_SUMMARY.test(summary)) {
       fullQuery = summary + fullQuery;
-      log('info', 'rerunQuery: session summary injected', { sessionKey, summaryLen: summary.length });
+      log('info', 'rerunQuery: session summary injected [path-E]', { sessionKey, summaryLen: summary.length });
     }
 
     // Pre-processor pipeline: RAG context enrichment
