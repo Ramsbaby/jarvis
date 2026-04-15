@@ -297,6 +297,14 @@ SessionStart (startup only)
 - 수정: 훅 파이썬 블록 상단에 정규식 기반 worktree 경로 정규화 추가. `^~/jarvis/.claude/worktrees/<name>/(rest)$` 매치 시 `file_path`를 `~/jarvis/(rest)`로 재작성 후 기존 로직에 투입. 같은 정규화가 `frel` 계산 경로에도 자동 적용되어 debt 엔트리의 `triggered_by` 값도 main 체크아웃과 동일한 상대 경로로 통일됨.
 - 효과: Stop 훅의 doc-debt 차단이 worktree 기반 PR 작업 흐름을 더 이상 방해하지 않음.
 
+**표면 통합 메모리 — Phase 2: MCP `wiki_add_fact` + `/remember` 스킬 (2026-04-15)**:
+- 배경: Phase 1은 Claude Code CLI 세션 종료 훅으로 위키 자동 주입을 확보했으나, (1) 세션 종료까지 반영이 지연되고 (2) macOS Claude 앱은 로컬 세션 히스토리가 없어 Phase 1의 자동 경로가 원리상 불가능. 즉각·수동·표면 무관 주입 경로가 필요.
+- `infra/lib/nexus/extras-gateway.mjs`: `addFactToWiki` 임포트 + `wiki_add_fact` MCP 도구 신규 등록. 대화 중 에이전트(디스코드 봇/Claude Code CLI/macOS 앱의 MCP 클라이언트)가 즉시 호출 가능. 입력 검증: fact 5~500자, domain/source 선택. source 기본값 `"mcp-client"` (호출자 구분 태깅). `wikiAddFactTool` 핸들러는 동일 프로세스에서 wiki-engine을 직접 호출(프로세스 간 IPC 없음 — 파일락 race는 감수, wiki-engine이 read-modify-write 단위로 원자성 유지).
+- `handle()` 라우터에 `wiki_add_fact` dispatch + 텔레메트리 메타(fact 60자, source, domain) 기록. 기존 nexus_stats 도구로 사용 통계 추적 가능.
+- `.claude/skills/remember/SKILL.md` (신규): `/remember <fact>` 또는 `/remember` (인자 없음 = 최근 대화 핵심 추출) 형태의 명시적 플러시 스킬. Claude가 사실을 추출/정제 후 `mcp__nexus__wiki_add_fact` 호출. CLI/macOS 앱 양쪽에서 동일 동작.
+- `CLAUDE.md` (repo): "표면 메모리 경계" 섹션 추가 — macOS 앱 = 즉석 질의용, Claude Code CLI = 기억 누적·작업 지속용으로 역할 구분 명시. 오너와 에이전트 모두가 따를 규범.
+- macOS 앱 제약 솔직화: 서버-only 대화 이력 때문에 Phase 1 자동 경로 불가 → Phase 2의 MCP 도구로 "명시적 주입"만 가능. `/remember`가 사실상 유일한 기억 입금 창구. 이 점은 CLAUDE.md와 스킬 본문에 모두 명시.
+
 **표면 통합 메모리 — Phase 1: Claude Code CLI → 위키 실시간 주입 (2026-04-15)**:
 - 간극 진단: `stop-session-save.sh`가 Claude Code 세션을 `~/.jarvis/context/claude-code-sessions/{project}/{ts}.md`로 덤프해왔으나, 이후 `context-extractor.mjs`(nightly)는 도메인 summary만 생성하고 `wikiAddFact`를 호출하지 않음 → Claude Code 대화는 RAG에는 증분 인덱싱되지만 위키로는 수렴하지 못하는 비대칭 (읽기만 공유, 쓰기는 분리).
 - `wiki-engine.mjs::addFactToWiki()`: 3번째 인자를 `opts = { domainOverride, source }` 객체로 확장. 백워드 호환 유지(문자열 전달 시 domainOverride로 해석). `_facts.md` 기록 라인 포맷을 `- [YYYY-MM-DD] [source:X] 팩트`로 변경 — 어느 표면에서 주입되었는지 사후 감사 가능. 중복 체크는 source 무관 (첫 주입이 SSoT).
