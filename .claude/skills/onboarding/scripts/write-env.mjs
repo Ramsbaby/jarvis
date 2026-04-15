@@ -54,10 +54,12 @@ const ALL_DIRS = [
  * 주석·빈 줄·포맷 유지. 기존에 없던 키는 끝에 추가.
  */
 function mergeEnv(filePath, updates) {
-  const existing = existsSync(filePath) ? readFileSync(filePath, 'utf-8') : '';
+  const raw = existsSync(filePath) ? readFileSync(filePath, 'utf-8') : '';
+  // 파일이 없거나 비어있으면 빈 배열로 시작 (trailing newline 방지)
+  const existing = raw.trimEnd();
   const updated = new Set();
 
-  const lines = existing.split('\n').map(line => {
+  const lines = (existing ? existing.split('\n') : []).map(line => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) return line;
     const eqIdx = trimmed.indexOf('=');
