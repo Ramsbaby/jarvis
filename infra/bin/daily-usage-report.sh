@@ -1,1 +1,1 @@
-report-usage-daily.sh
+/Users/ramsbaby/jarvis/infra/bin/report-usage-daily.sh

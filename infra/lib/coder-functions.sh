@@ -120,6 +120,7 @@ export default [{
       URL: "readonly", fetch: "readonly", Response: "readonly",
       global: "readonly", globalThis: "readonly", TextEncoder: "readonly",
       TextDecoder: "readonly", AbortController: "readonly", AbortSignal: "readonly",
+      window: "readonly", document: "readonly", navigator: "readonly",
     }
   },
   rules: { "no-undef": "error" }
@@ -138,7 +139,8 @@ ESLINTEOF
         case "$ext" in
             js|mjs)
                 if command -v npx >/dev/null 2>&1; then
-                    _out=$(npx eslint --config "$_ESLINT_GATE_CONFIG" --no-eslintrc "$full_path" 2>&1) || {
+                    # ESLint v10 flat config — eslint.config.mjs 사용
+                    _out=$(NODE_OPTIONS="--no-warnings" npx eslint --config "$_ESLINT_GATE_CONFIG" "$full_path" 2>&1) || {
                         errors=$(( errors + 1 ))
                         error_details="${error_details}\n${full_path}: ${_out}"
                         _coder_log "SYNTAX_GATE 실패 (eslint): ${f}: ${_out:0:200}"
@@ -637,4 +639,33 @@ ${_syntax_err:0:500}
         _coder_log "completionCheck 미통과: ${TASK_ID} (${NEW_RETRIES}/${MAX_RETRIES})"
     fi
     return 0
+}
+
+# ── L2 자동승인 게이트 ─────────────────────────────────────────────────────────
+# return 0 = 자동승인 통과 (L2), return 1 = 사람 승인 필요 (L1 유지)
+#
+# PASS  : priority low/medium + 코드 변경 주체 아님 + 저위험 출력 경로
+# BLOCK : urgent/critical/high, 코드 변경 주체 5종, 나머지 불확실
+#
+_l2_auto_approve() {
+    local tname="${1:-}" tdetail="${2:-}" tpri="${3:-medium}"
+
+    # 1. 고위험 우선순위 → L1 유지
+    if [[ "$tpri" =~ ^(urgent|critical|high)$ ]]; then
+        return 1
+    fi
+
+    # 2. 코드 직접 변경 주체 블랙리스트 → L1 유지
+    local blocked
+    for blocked in dev-runner jarvis-coder agent-batch-commit oss-maintenance code-fix; do
+        [[ "$tname" == *"$blocked"* ]] && return 1
+    done
+
+    # 3. 출력 경로가 저위험 디렉토리 → L2 자동승인
+    if [[ "$tdetail" =~ results/|state/|docs/|rag/|config/ ]]; then
+        return 0
+    fi
+
+    # 4. 나머지 불확실 → L1 유지
+    return 1
 }

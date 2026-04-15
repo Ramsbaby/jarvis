@@ -84,7 +84,7 @@ ZERO_TOOL=$(jq -sc --argjson since "$SINCE_EPOCH" '
    select((.ts // "") | gsub("T";" ") | split(".")[0] | strptime("%Y-%m-%d %H:%M:%S") | mktime > $since) |
    select(.toolCount == 0) |
    select(.elapsed != null) |
-   select((.elapsed | if type == "string" then gsub("s";"") else . end | tonumber) > 5)
+   select((.elapsed | if type == "string" then gsub("s";"") else . end | tonumber // 0) > 5)
   ] | length
 ' "$LOG_FILE" 2>/dev/null || echo 0)
 
@@ -164,9 +164,33 @@ done
 MSG+="\n전체: ${TOTAL}건 | 에러율: ${ERROR_PCT}% | 리포트: \`results/quality/$(date +%F).json\`"
 
 if [[ -n "$WEBHOOK_URL" ]]; then
-    curl -sf -X POST "$WEBHOOK_URL" \
-        -H "Content-Type: application/json" \
-        -d "{\"content\":\"${MSG}\"}" > /dev/null 2>&1 || true
+    # 2000자 청킹 전송 (Discord 제한)
+    python3 - "$WEBHOOK_URL" "$MSG" << 'PYEOF'
+import sys, json, time, urllib.request
+
+url = sys.argv[1]
+text = sys.argv[2].replace('\\n', '\n')
+LIMIT = 1900
+
+chunks = []
+while len(text) > LIMIT:
+    cut = text.rfind('\n', 0, LIMIT)
+    cut = cut if cut > 0 else LIMIT
+    chunks.append(text[:cut])
+    text = text[cut:].lstrip('\n')
+if text:
+    chunks.append(text)
+
+for chunk in chunks:
+    payload = json.dumps({'content': chunk}).encode('utf-8')
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f'[quality] webhook error: {e}', file=sys.stderr)
+    if len(chunks) > 1:
+        time.sleep(0.5)
+PYEOF
     echo "[quality] 이상 ${#ISSUES[@]}건 → #jarvis-system 전송"
 else
     echo "[quality] WEBHOOK 없음 — 로컬 기록만"
@@ -180,13 +204,36 @@ if [[ "$ERROR_PCT" -ge 20 ]]; then CEO_ESCALATE=1; CEO_REASONS+=("에러율 **${
 if [[ "$FORBIDDEN" -ge 1  ]]; then CEO_ESCALATE=1; CEO_REASONS+=("금지어 노출 **${FORBIDDEN}건** — 즉시 프롬프트 점검 필요"); fi
 
 if [[ "$CEO_ESCALATE" -eq 1 && -n "$CEO_WEBHOOK_URL" ]]; then
-    CEO_MSG="🚨 **[봇 품질 심각 이슈]** $(date +%F)\\n\\n"
+    CEO_MSG="🚨 **[봇 품질 심각 이슈]** $(date +%F)\n\n"
     for reason in "${CEO_REASONS[@]}"; do
-        CEO_MSG+="• ${reason}\\n"
+        CEO_MSG+="• ${reason}\n"
     done
-    CEO_MSG+="\\n전체 응답: ${TOTAL}건 | 에러율: ${ERROR_PCT}% | 리포트: \`results/quality/$(date +%F).json\`"
-    curl -sf -X POST "$CEO_WEBHOOK_URL" \
-        -H "Content-Type: application/json" \
-        -d "{\"content\":\"${CEO_MSG}\"}" > /dev/null 2>&1 || true
+    CEO_MSG+="\n전체 응답: ${TOTAL}건 | 에러율: ${ERROR_PCT}% | 리포트: \`results/quality/$(date +%F).json\`"
+    python3 - "$CEO_WEBHOOK_URL" "$CEO_MSG" << 'PYEOF'
+import sys, json, time, urllib.request
+
+url = sys.argv[1]
+text = sys.argv[2].replace('\\n', '\n')
+LIMIT = 1900
+
+chunks = []
+while len(text) > LIMIT:
+    cut = text.rfind('\n', 0, LIMIT)
+    cut = cut if cut > 0 else LIMIT
+    chunks.append(text[:cut])
+    text = text[cut:].lstrip('\n')
+if text:
+    chunks.append(text)
+
+for chunk in chunks:
+    payload = json.dumps({'content': chunk}).encode('utf-8')
+    req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f'webhook error: {e}', file=sys.stderr)
+    if len(chunks) > 1:
+        time.sleep(0.5)
+PYEOF
     echo "[quality] 심각 이슈 → #jarvis-ceo 에스컬레이션"
 fi

@@ -664,7 +664,7 @@ run_e2e_audit() {
     fi
 
     local fails
-    fails=$(grep "FAIL" "$result_file" 2>/dev/null | grep -v "^#" || true)
+    fails=$(grep "❌ FAIL" "$result_file" 2>/dev/null | grep -v "^#" || true)
 
     if [[ -n "$fails" ]]; then
         local fail_count=0

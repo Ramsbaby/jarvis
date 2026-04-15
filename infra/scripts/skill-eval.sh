@@ -73,7 +73,7 @@ for i in $(seq 0 $((SKILL_COUNT - 1))); do
         fi
 
         # 파일 나이 확인
-        file_age_sec=$(( $(date +%s) - $(stat -c '%Y' "$result_file" 2>/dev/null || stat -f %m "$result_file" 2>/dev/null || echo 0) ))
+        file_age_sec=$(( $(date +%s) - $(stat -f %m "$result_file" 2>/dev/null || stat -c '%Y' "$result_file" 2>/dev/null || echo 0) ))
         file_age_hours=$((file_age_sec / 3600))
         if [[ "$file_age_hours" -gt "$max_age_hours" ]]; then
             REPORT="${REPORT}- ⚠️ **${SKILL_NAME}** · 결과 오래됨 (${file_age_hours}h > ${max_age_hours}h)\n"
@@ -188,7 +188,7 @@ $(echo -e "$REPORT")
 
 # Discord 전송
 if [[ -x "$ROUTE_RESULT" ]]; then
-    "$ROUTE_RESULT" "discord" "skill-eval" "$SUMMARY" "jarvis-ceo" 2>>"$LOG_FILE" || true
+    "$ROUTE_RESULT" "discord" "skill-eval" "$SUMMARY" 2>>"$LOG_FILE" || true
 fi
 
 echo "$SUMMARY"

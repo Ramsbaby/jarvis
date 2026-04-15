@@ -57,7 +57,6 @@ discord-bot.js ──► lib/handlers.js ──► lib/claude-runner.js
                          │         오너인 경우 owner-profile.md에도 반영
                          │         + wikiAddFact() → addFactToWiki(source: 'discord')
                          │         10분 쿨다운, 봇 응답 150자 이상일 때만 실행
-                         │         위키 실시간 기록: wikiAddFact()로 {domain}/_facts.md 동시 갱신
                          │
                          │  ※ Claude Code CLI 세션도 동일 위키로 수렴:
                          │     stop-session-save.sh → .md 덤프
@@ -117,12 +116,21 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
 
 ## Workgroup Board Integration — AI 커뮤니티 게시판
 
-`your-workgroup-domain.com` — AI 에이전트·오너들이 소통하는 공유 게시판. 자비스는 두 독립 에이전트로 참여한다.
+`workgroup.jangwonseok.com` — AI 에이전트·오너들이 소통하는 공유 게시판. 자비스는 두 독립 에이전트로 참여한다.
 
 ### 구성 요소
 
 | 파일 | 역할 |
 |------|------|
+| `bin/board-agent.sh` | 10분 주기. 최신 피드를 Claude에게 전달해 댓글/글 작성 판단 |
+| `bin/board-monitor.sh` | 5분 주기. 자비스 언급 감지 → 유머 응답 + Discord `#workgroup-board` 알림 |
+| `bin/board-catchup.sh` | 5분 주기 (LaunchAgent). 전체 피드(최대 100건) 스캔 → 과거 미응답 언급 소급 처리 |
+| `bin/parallel-board-meeting.sh` | board-meeting-am/pm 병렬 실행 (~10분, 기존 ~18분 대비). Call A(운영 스냅샷) + Call B(회의록 분석) 동시 처리 |
+| `bin/discussion-daemon.sh` | 매 1분. `data/board-discussion.db` 스캔 → 만료된 토론 닫기 → 페르소나 댓글 디스패치 (최대 2 동시) |
+| `bin/discussion-opener.sh` | 토론 개설. 게시글 postId 기반으로 board-discussion.db에 토론 레코드 생성 |
+| `bin/discussion-synthesizer.sh` | 토론 종료 시 댓글 요약 + 결론 합성 → 게시판 댓글로 게시 |
+| `bin/persona-commenter.sh` | 개별 페르소나가 특정 게시글에 댓글 작성. discussion-daemon.sh에서 백그라운드 실행 |
+| `config/board-personas.json` | 페르소나 정의 (이름, delay, 말투, 주제 전문성) |
 | `lib/mcp-workgroup.mjs` | 독립 MCP 서버. Claude Code CLI에서 `wg_*` 도구 사용 (SSoT) |
 | `config/secrets/workgroup.json` | CF-Access 크리덴셜 (gitignore) |
 
@@ -135,6 +143,7 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
 - 개인 파일 경로 (`/Users/.jarvis/config/secrets` 등)
 - 금액·수입 정보 · 커리어·연봉 정보
 
+**간접 프롬프트 인젝션 방어**: board-agent/monitor/catchup 세 스크립트 모두 USER_PROMPT 내 외부 콘텐츠 앞에 `⚠️ 신뢰할 수 없는 외부 입력` 경고 레이블 삽입.
 
 **API 타임아웃**: `AbortSignal.timeout(15000)` 적용 (15초 초과 시 자동 중단).
 
@@ -143,26 +152,34 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
 ### 데이터 흐름
 
 ```
+board-agent.sh (10분)
   ├─ /api/me → 쿨다운 체크
   ├─ /api/feed?since= → 새 이벤트
   ├─ claude -p (empty-mcp.json, ⚠️ untrusted 레이블) → {"action":"comment"|"post"|"skip"}
   └─ POST /api/posts/:id/comments  →  Discord embed 알림
 
+board-monitor.sh (5분)
   ├─ /api/feed?since= → 새 이벤트
   ├─ Discord webhook → 피드 요약 (#workgroup-board)
   ├─ jq: 자비스 언급 & repliedToPostIds 필터링
   ├─ claude -p (empty-mcp.json, ⚠️ untrusted 레이블) → 유머 댓글 JSON
   └─ POST /api/posts/:id/comments  →  Discord embed 알림 + STATE 갱신
 
+board-catchup.sh (5분 LaunchAgent)
   ├─ /api/feed?limit=100 (since 없음 — 전체 이력)
   ├─ jq: 미응답 언급 필터 (repliedToPostIds 교차 확인)
   ├─ postId 단위 파일 락 (mkdir 원자적 뮤텍스)
   ├─ claude -p (empty-mcp.json, ⚠️ untrusted 레이블) → 소급 댓글 JSON
   └─ POST /api/posts/:id/comments  →  Discord embed 알림 + STATE 갱신
 
+discussion-daemon.sh (매 1분)
   ├─ board-discussion.db: SELECT status='open' 토론 목록
+  ├─ 만료 토론 → status='expired' + discussion-synthesizer.sh 트리거
+  └─ 진행 중 토론마다 board-personas.json 순회
        ├─ delay 미경과 or 이미 댓글 → skip
+       └─ 조건 충족 → persona-commenter.sh [postId] [personaName] (백그라운드, max 2)
 
+parallel-board-meeting.sh (08:00 / 21:55 cron)
   ├─ Call A (병렬): context-bus.md 운영 스냅샷 갱신 (~4분)
   └─ Call B (병렬): 회의록 + 결정 + OKR 분석 (~10분)
        → 총 ~10분 (기존 직렬 ~18분 대비 44% 단축)
@@ -170,6 +187,9 @@ JSON → key extraction · Logs → dedup + tail · Process tables → column fi
 
 ### 핑퐁·중복 방지
 
+- `board-monitor` / `board-catchup`: `state/board-monitor-state.json`의 `repliedToPostIds[]` — 이미 답글 단 postId 재응답 차단 (최대 100개 유지, 공유 상태)
+- `board-agent`: `state/.board-intro-written` 마커 파일 — STATE 분실 시에도 자기소개 중복 방지
+- `board-agent`: Claude 프롬프트에 "자비스 본인이 이미 댓글 단 postId 스킵" 명시
 - **파일 락** (`tmp/board-reply-{postId}.lock`): 세 스크립트 공유 뮤텍스. `mkdir` 원자성 보장 — 동시 실행 시 하나만 처리 진행 (race condition 없음)
 
 ---
@@ -263,8 +283,6 @@ SessionStart (startup only)
 
 **Atomic writes**: All `doc-debt.json` mutations (skeleton creation, debt add, debt clear) use `tempfile.mkstemp() + os.rename()` — crash-safe, no partial writes.
 
-**post-tool-docdebt.sh 경로 수정 (2026-04-14)**: `~/.jarvis/` → `~/jarvis/` 마이그레이션 이후 doc-debt 자동 해소가 동작하지 않던 버그 수정. `jarvis_prefix`를 `~/jarvis/`로 변경하고 `~/jarvis/infra/` 접두어도 추가 인식. `~/.jarvis/` 경로는 `jarvis_prefix_legacy`로 하위호환 유지. 문서 해소 로직이 `infra/docs/X.md` → `docs/X.md` rel 변환을 정상 처리.
-
 **health-gateway.mjs (2026-03-18)**: `vm_stat` (macOS-only) now behind `IS_MACOS` branch — Linux uses `free -h` instead. Prevents "command not found" noise in health output on Linux.
 
 **extras-gateway.mjs (2026-03-18)**: `getMemory()` now passes `limit` as `sys.argv[2]` to `rag-query.mjs` — result count was previously always default regardless of caller request.
@@ -274,10 +292,44 @@ SessionStart (startup only)
 - `stop-doc-enforce.sh`: Python `-c` code no longer interpolates `$RESULT_TMP` into the code string; path passed as `sys.argv[1]` instead — eliminates injection surface.
 - `tasks.json`: `skill-eval` script path changed from relative (`scripts/skill-eval.sh`) to absolute (`~/.jarvis/scripts/skill-eval.sh`) — prevents ENOENT on cron execution.
 
+**Discord bot + infra 개인정보 범용화 (2026-04-10)**:
+- `claude-runner.js`: `BORAM_*` → `FAMILY_*` 전환 완료. tutor/preply 기능 완전 삭제 (`isTutorQuery`, `buildTutorSection` import 및 호출 제거, Dynamic sections 블록에서 tutor 조건부 주입 제거). Kakao Calendar 주석 → 범용 "calendar" 참조로 변경. owner preferences 주석에서 개인 서비스명 제거. Linter 복원 대응으로 2차 삭제 수행.
+- `rag-helper.js`: `filterBoramSources` → `filterFamilySources`, `BORAM_USER_ID` → `FAMILY_USER_ID`. TQQQ 참조 제거.
+- `handlers.js`: `isTutorQuery` import 제거, `BAD_TUTOR_SUMMARY` 로직 제거, tqqq→stock 범용화.
+- `pre-processor.js`: `TutorScheduleProcessor`, `TutorIncomeProcessor` 클래스 완전 삭제. `createPreProcessorRegistry()`에서 tutor 프로세서 등록 제거.
+- `prompt-sections.js`: `TUTOR_PATTERN`, `isTutorQuery()`, `buildTutorSection()` 완전 삭제. Kakao 참조 제거.
+- `session-summarizer.mjs`: preply 수업 content check 제거.
+- `user-memory.js`: tutor 관련 키워드 (수업, 레슨, 학생, 강의, 수강생) family 카테고리에서 제거.
+- 전체 infra/: 18개 개인정보 키워드 전수 검사 → ZERO matches 달성.
+
+**세션 컨텍스트 오염 방지 — 시스템적 방어 (2026-04-11)**:
+- `session-summary.js`: `loadSessionSummaryRecent(sessionKey)` 신규 export 추가. "계속" 명령어 전용 로드 함수로, 전체 세션 요약(최대 10턴) 대신 직전 2턴 + compacted 요약의 `### 마지막 진행 주제` / `### 미완 작업` 섹션만 반환. 다중 주제가 축적된 세션에서 "계속" 시 엉뚱한 맥락으로 응답하는 문제 해결.
+- `session-summary.js`: `compactSessionWithAI()` 프롬프트 5-섹션 → 6-섹션 확장. `### 마지막 진행 주제` 섹션 추가 (마지막 1-2턴의 구체적 주제 한 줄). 요약 길이 제한 800자 → 1000자.
+- `handlers.js`: "계속" 처리(740행)에서 `loadSessionSummary` → `loadSessionSummaryRecent || loadSessionSummary` fallback 체인으로 변경. auto-resume fallback(path-D, 1421행)에 `_summaryInjected` 중복 주입 방지 조건 추가. rerunQuery(path-E, 1611행)에 `BAD_RERUN_SUMMARY` 패턴 필터 추가.
+- `insight-extractor.mjs`: `getRecentSummaryFiles()` 반환값을 `string[]` → `{ file, channelId, name }[]` 객체 배열로 변경. `main()`에서 채널별 `<channel id="...">` XML 태그로 그룹핑하여 Opus에 전달. `synthesizeWithOpus()` 프롬프트에 채널 분리 지시 + JSON 스키마에 `channel` 필드 추가. 다른 채널 작업이 인사이트에 혼합 등장하는 크로스채널 오염 방지.
+
+**LLM Wiki 컨텍스트 주입 + PII 2차 정리 (2026-04-14)**:
+- `claude-runner.js`: `buildWikiContextSection` import 추가. `createClaudeSession()`의 Dynamic sections 블록에서 오너 쿼리 시 위키 컨텍스트 자동 주입 (`isOwner && prompt` 조건). 세션 해시에 영향 없음.
+- `prompt-sections.js`: `isPreplyQuery()` → `isTutoringQuery()` 리네임. `PREPLY_PATTERN` → `TUTORING_PATTERN`. 정규식에서 플랫폼 고유명사 제거.
+- `handlers.js`: `isTutoringQuery` import 전환. `BAD_PREPLY_SUMMARY` → `BAD_TUTORING_SUMMARY`. 주석/로그 메시지 범용화.
+- `rag-engine.mjs`: COMPANY_TERMS에서 전 직장 고유명사 제거.
+- 12개 파일 PII sanitize + `git-filter-repo`로 전체 히스토리 142건 PII 정리.
+
+**채용공고 자동 크롤링·매칭·지원 스킬 `/job-apply` (2026-04-11)**:
+- `job-crawl.mjs` (신규): Puppeteer + API 하이브리드 독립 크롤러. GreetingHR API 7사 + NineHire API 1사 + Puppeteer DOM 파싱 30사 = 38개 회사 백엔드 공고 수집. Chrome 확장 없이 CLI에서 실행. 결과 `~/.jarvis/state/job-crawl/latest.json` 저장.
+- `job-match.mjs` (신규): 이력서 키워드 vs 공고 요구사항 스코어링 엔진. `--detail` 모드에서 각 공고 상세 페이지 접속하여 정밀 매칭. 점수순 정렬 + Discord #jarvis 전송.
+- `job-apply.mjs` (신규): Puppeteer headless 분석 + `open -a "Google Chrome"` GUI 표시 하이브리드. 지원 방식 자동 감지 (폼/이메일/외부링크) → 폼 필드 자동 채움 + 이력서 PDF 첨부 + 스크린샷 Discord 전송. `--submit` 플래그로 제출 모드 전환. NineHire 지원 폼 `/job_posting/{key}/apply` 경로 자동 탐색.
+- `claude-runner.js`: 변경 없음 (job-apply는 독립 스크립트로 Claude 세션 외부에서 실행).
+
 **MCP 설정 SSoT 정리 + ~/.mcp.json 폴백 (2026-04-11)**:
 - `claude-runner.js` MCP 로드 로직 변경: `discord-mcp.json` 없을 때 `~/.mcp.json`에서 `nexus`, `serena`만 필터링해서 폴백 로드. OSS 유저가 `discord-mcp.json` 없이도 `~/.mcp.json`만 설정하면 봇에서 Nexus 사용 가능.
 - `BOT_MCP_ALLOWLIST = ['nexus', 'serena']` — CLI 전용 서버(brave-search, jira, sequential-thinking 등)가 봇에 로드되는 것을 방지. 관심사 분리 유지.
 - `~/.mcp.json`에 Nexus 추가 — CLI에서도 rag_search, exec, health, discord_send 도구 사용 가능.
+
+**Nexus RAG gateway 경로 마이그레이션 (2026-04-10)**:
+- `rag-gateway.mjs`: RAGEngine import를 `../rag-engine.mjs` → `../../../rag/lib/rag-engine.mjs`로 변경. RAG 코드가 `~/jarvis/rag/`로 통합되면서 상대경로 갱신. LanceDB 경로도 `JARVIS_RAG_HOME` 환경변수 우선 참조하도록 수정.
+- `extras-gateway.mjs`: `getMemory()` 내 `rag-query.mjs` 경로를 `BOT_HOME/lib/` → `import.meta.dirname` 기반 상대경로(`../../rag/lib/rag-query.mjs`)로 변경. 코드 위치가 `infra/lib/nexus/`로 이동되면서 BOT_HOME 의존 제거.
+- Discord `rag-helper.js`: RAGEngine import를 `import.meta.dirname` 기반 상대경로로 변경, LanceDB 경로에 `JARVIS_RAG_HOME` 폴백 추가.
 
 **Serena MCP HTTP 서버 모드 전환 + Discord allowedTools 정리 (2026-04-01)**:
 - **Serena 클라이언트 분리 (2026-04-01 확정)**: `discord-mcp.json`은 stdio 유지, `~/.mcp.json`(Claude Code)만 SSE URL 사용. 이유: Serena SSE 서버는 마지막 클라이언트가 끊기면 즉시 종료 → LaunchAgent ThrottleInterval=10s 동안 포트 닫힘 → Discord 봇이 그 사이 새 세션을 시작하면 `connection refused` → SDK error → 빈 응답. Claude Code 세션은 장시간 유지되어 SSE 효과를 볼 수 있으나, Discord 세션은 짧고 빈번해 stdio가 안전함.
@@ -289,7 +341,45 @@ SessionStart (startup only)
 - `isShuttingDown` 플래그 추가: shutdown() 진입 즉시 true로 설정. `messageCreate` 핸들러에서 플래그 확인 후 신규 세션 생성 차단. 기존엔 2.5s 대기 중 `client.destroy()` 전에 새 메시지가 와서 orphan 세션이 생기는 창이 있었음.
 - `board-auto-deploy.sh`: `git diff HEAD~1 HEAD`로 package-lock 변경 감지 후 조건부 npm ci → 항상 npm ci 실행으로 변경. GitHub Actions shallow clone(--depth 1) 환경에서 HEAD~1 없음 → grep 실패 → npm ci 생략 → 의존성 누락 빌드 방지.
 
-**Discord bot reply @mention 억제 (2026-04-14)**: `Client` 생성자에 `allowedMentions: { repliedUser: false }` 추가. `message.reply()`의 discord.js v14 기본값(`repliedUser: true`)이 @mention 핑을 발생시켜 직접 답변에 amber(갈색) 배경 하이라이트가 적용되던 문제 수정. 전역 설정이므로 모든 `message.reply()` 호출에 자동 적용 — 개별 call site 수정 불필요.
+**channel feed context 주입 (2026-04-15) — 완전 구현**:
+- **근본 문제**: 봇/크론/알람이 채널로 보낸 메시지는 Claude 세션 히스토리에 저장되지 않음 → 사용자가 "방금 크론이 보낸 거 뭐야?" 물어보면 Jarvis가 매번 재질문. 오너 강제 요청으로 모든 채널 전체 대상 구조적 수정.
+- **`channel-feed.js`** (신규): `~/.jarvis/state/channel-feed/{channelName}.jsonl` 에 발신 메시지 기록. `appendFeed(name, from, text)` + `loadFeed(name, limit)` + `buildChannelFeedSection(name)`. 롤링 30건 유지. `from` 구분: `jarvis`(응답), `cron`(discord_send), `alert`(AlertBatcher), `system`(봇 생명주기).
+- **`handlers.js`**: Claude 응답 완료 후 `appendFeed(chName, 'jarvis', lastAssistantText)` 호출 — 봇 응답 전체 기록.
+- **`alert-batcher.js`**: `flush()` 후 `appendFeed(channelName, 'alert', description)` 호출 — 배치 알람 기록.
+- **`extras-gateway.mjs`**: `discordSend()` 성공 후 `_appendChannelFeed(channel, message)` 호출 — 크론/스크립트 발신 메시지 기록 (nexus는 별도 프로세스이므로 독립 구현).
+- **`claude-runner.js`**: Dynamic sections에서 `buildChannelFeedSection(channelName, 15)` 주입. 신규 세션(systemParts)과 resume(ctxParts) 모두 커버. 세션 해시에 영향 없음.
+
+**표면 통합 메모리 — Phase 2: MCP `wiki_add_fact` + `/remember` 스킬 (2026-04-15, PR #25)**:
+- Phase 1의 제약 해소: (1) 세션 종료 지연 없이 즉시 주입, (2) macOS Claude 앱에서도 동작.
+- `extras-gateway.mjs`: `addFactToWiki` 임포트 + `wiki_add_fact` MCP 도구 등록 (`wikiAddFactTool` 핸들러, 5~500자 검증, source 기본 `"mcp-client"`).
+- `.claude/skills/remember/SKILL.md`: `/remember <사실>` 또는 `/remember` (최근 대화 자동 추출) 2모드. Claude가 사실 추출/정제 후 `mcp__nexus__wiki_add_fact` 호출. Fallback 금지 (nexus 미로드 시 에러 반환).
+- `CLAUDE.md`: "Surface Memory Boundary" 섹션 — macOS 앱 = 즉석 질의용, CLI = 기억 누적용 원칙화.
+- macOS Claude 앱은 서버-only 대화이므로 Phase 1 자동 경로 불가 → Phase 2 `/remember`가 **유일한 기억 입금 창구**.
+
+**표면 통합 메모리 — Phase 1: Claude Code CLI → 위키 실시간 주입 (2026-04-15)**:
+- 간극 진단: `stop-session-save.sh`가 Claude Code 세션을 `~/.jarvis/context/claude-code-sessions/{project}/{ts}.md`로 덤프해왔으나, 이후 `context-extractor.mjs`(nightly)는 도메인 summary만 생성하고 `wikiAddFact`를 호출하지 않음 → Claude Code 대화는 RAG에는 증분 인덱싱되지만 위키로는 수렴하지 못하는 비대칭.
+- `wiki-engine.mjs::addFactToWiki()`: 3번째 인자를 `opts = { domainOverride, source }` 객체로 확장. 백워드 호환 유지(문자열 전달 시 domainOverride로 해석). `_facts.md` 기록 라인 포맷을 `- [YYYY-MM-DD] [source:X] 팩트` 로 변경 — 어느 표면에서 주입되었는지 사후 감사 가능. 중복 체크는 source 무관 (첫 주입이 SSoT).
+- `claude-runner.js::wikiAddFact()` 래퍼: `opts` 파라미터 추가, `{ source: 'discord', ...opts }` 명시. Discord 봇 경로의 모든 주입은 `source:discord` 태그됨.
+- `infra/scripts/wiki-ingest-claude-session.mjs` (신규): 세션 .md 1개를 입력받아 Haiku(4.5)로 facts 추출 후 `addFactToWiki(source: 'claude-code-cli')` 루프. `--latest [project]` 플래그로 mtime 기준 최신 세션 자동 선택. LLM 실패 시에도 exit 0 (파이프라인 비차단). autoExtractMemory 추출 프롬프트를 Claude Code 세션 맥락에 맞춰 각색.
+- `~/.claude/hooks/stop-wiki-ingest.sh` (신규): Claude Code Stop 훅(async, 45s). `stop-session-save.sh`와 경합 방지를 위해 최대 8초 mtime poll 후 최신 세션 .md가 60초 이내 생성되었을 때만 ingester 호출. 경합/순서 의존 제거.
+- `~/.claude/settings.json` Stop 배열에 `stop-wiki-ingest.sh` 추가.
+- macOS Claude 앱은 로컬 세션 히스토리가 없어(서버-only) CLI와 동등한 자동 수집 불가 — Phase 2에서 MCP `wiki_add_fact` + `/remember` 스킬 + CLAUDE.md 경계 명시로 해결 예정.
+
+**Discord 응답 렌더링 개선 2차 (2026-04-15)**:
+- `streaming.js` `_wrapInCV2()`: 자동 래핑 완전 비활성화. 기존: 500자 이상 + ## 제목 있으면 무조건 CV2 카드 변환 → LLM 지시(명시적 요청 시에만 CV2)와 상충. 수정: 함수 진입 즉시 return. 명시적 CV2_DATA 마커가 있을 때만 CV2 사용.
+- `streaming.js` TABLE_DATA 렌더링: Chrome PNG → Discord 텍스트로 전환. 기존: Puppeteer Chrome 싱글톤으로 HTML 렌더링 후 PNG 전송. 수정: `- **항목** · 값` bullet list 형식으로 즉시 텍스트 전송. Chrome 의존성 제거, 모바일 가독성 향상.
+
+**user-memory 오염 버그 수정 (2026-04-15)**:
+- `claude-runner.js`: `autoExtractMemory()`의 `isFamilyChannel` 판정 버그 수정. 기존: `FAMILY_CHANNEL_ID`(단수) 환경변수 참조 → 항상 `''` → `isFamilyChannel` 영구 `false` → FAMILY_JUNK_RE 필터 무력화. 수정: `FAMILY_CHANNEL_IDS`(복수, handlers.js와 동일) 참조 + 쉼표 분리 목록 `includes()` 체크. 결과: 보람 채널 대화 로그 raw 조각이 facts에 저장되던 문제 해소.
+- `claude-runner.js`: `FAMILY_JUNK_RE` / `FAMILY_JUNK_RE2` 패턴에 `userid.*boram` 추가. 기존 패턴이 `userid.*family`, `userid.*owner`만 잡고 `userId: boram` 형태의 컴팩션 헤더를 누락하던 빈틈 보완.
+
+**아키텍처 개선 — 토큰 효율 & 요약 품질 (2026-04-14)**:
+- `rag-helper.js`: RAG stdout 2000자 하드캡 추가. 초과 시 마지막 줄바꿈 기준으로 자르고 `\n[...더 있음]` 표시. 장문 매칭 시 10K+ 토큰 주입 방지.
+- `session-summary.js`: 요약 크기 제한 1000자 → 2000자 확대. 기술 대화 평면화 문제 해소.
+- `session-summary.js`: `compactSessionWithAI()` 모델 조건부 전환 — rawContent.length > 5000 이면 `claude-sonnet-4-5`, 아니면 `claude-haiku-4-5-20251001`. 복잡한 세션 요약 품질 향상.
+- `session-summary.js`: `loadSessionSummaryRecent()` 직전 턴 수 2턴 → 3턴 확대. "계속" 명령어 시 컨텍스트 손실 감소.
+- `claude-runner.js`: User Memory 해시 캐싱 추가 (`memoryHashCache` Map). 메모리 변화 없으면 `getRelevantMemories()` 재조회 생략 — 반복 세션 턴당 1~2K 토큰 절감.
+- `user-memory.js`: Family 채널 노이즈 필터 정규식 정밀화. 기존 광범위한 userid 패턴 → `FAMILY_JUNK_RE = /^\[userid:|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조/i` 으로 교체. 정당한 학생/일정 정보 오탐 방지.
 
 **post-tool-docdebt.sh worktree 경로 정규화 (2026-04-15)**:
 - 버그: `~/jarvis/.claude/worktrees/<name>/infra/docs/X.md` 경로 편집 시 debt 해소 로직이 경로를 인식하지 못함. 기존 prefix 검사는 `~/jarvis/infra/`, `~/jarvis/`, `~/.jarvis/` 세 가지만 대응. worktree 경로는 `~/jarvis/` prefix에는 매치되지만 `rel`이 `.claude/worktrees/...`로 시작해 `startswith("docs/")` 검사에서 탈락 → debt 해소 실패.
@@ -322,7 +412,7 @@ SessionStart (startup only)
 - `session-summary.js` compactSessionWithAI 모델 ID `claude-haiku-4-5-20251015` → `claude-haiku-4-5-20251001` 수정. 잘못된 모델 ID로 `claude exited 1` 반복 실패 발생. 세션 요약 AI 압축이 매번 fallback으로 처리되던 문제 해소.
 
 **OSS readiness hardening (2026-03-18)**:
-- All personal files (personal scripts and backup files) untracked from git index; `.gitignore` updated to cover them permanently.
+- All personal files (boram-*.sh, relay-to-owner.sh, PERSONALIZATION-AUDIT.md, backup files) untracked from git index; `.gitignore` updated to cover them permanently.
 - Personal identifiers (names, email, Discord channel IDs, LAN IP, ntfy topic) removed from all git-tracked files; replaced with env var placeholders (`FAMILY_MEMBER_NAME`, `FAMILY_CHANNEL`, `GOOGLE_ACCOUNT`, etc.).
 - `NODE` hardcoding fixed in 10 scripts: `NODE="${NODE:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"` pattern applied; `commands.js` uses `process.execPath` for runtime node binary.
 - `rag-compact-wrapper.sh`: rewritten to use `$BOT_HOME` and `$NODE` — was hardcoding absolute paths.
@@ -407,6 +497,7 @@ Board Meeting (08:10, 21:55 KST)
   │
   ├─ CEO judgment → decisions/{date}.jsonl
   │
+  └─ decision-dispatcher.sh (auto-runs after meeting)
        ├─ Actionable decisions → execute immediately
        │   (service restart, log cleanup, cron analysis)
        ├─ Report-only decisions → flag for human review
@@ -515,10 +606,11 @@ Pre-configured L3 actions: `cleanup-logs`, `cleanup-results`, `kill-stale-claude
 
 ### Event Trigger System
 
+Condition-based triggers that fire independently of cron schedules (`scripts/event-trigger.sh`, every 3 min):
 
 | Trigger | Condition | Cooldown | Action |
 |---------|-----------|----------|--------|
-| Stock price | Market hours + threshold crossed | 4 hours | Discord alert |
+| TQQQ price | Market hours + threshold crossed | 4 hours | Discord alert |
 | Disk usage | > 85% | 24 hours | L3 approval → cleanup |
 | Claude load | 3+ concurrent `claude -p` | 30 min | Discord warning |
 
@@ -549,10 +641,11 @@ Automated code quality scanner (`scripts/jarvis-auditor.sh`, daily 04:45):
 
 ### Vault Sync
 
+Bi-directional sync between bot data and an Obsidian Vault (`scripts/vault-sync.sh`, every 6 hours):
 
 ```
-~/.jarvis/rag/teams/reports/*.md  ──►  $VAULT_DIR/03-teams/{team}/
-~/.jarvis/docs/*.md               ──►  $VAULT_DIR/06-knowledge/
+~/.jarvis/rag/teams/reports/*.md  ──►  ~/Jarvis-Vault/03-teams/{team}/
+~/.jarvis/docs/*.md               ──►  ~/Jarvis-Vault/06-knowledge/
 ```
 
 Each team folder retains the 7 most recent reports. Enables browsing AI-generated reports in Obsidian with full graph and backlink support.

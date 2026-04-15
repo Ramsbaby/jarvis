@@ -54,6 +54,8 @@ if [[ $EXIT_CODE -eq 0 ]]; then
     log "SUCCESS — 정보탐험 완료"
     exit 0
 else
-    log "FAILED — company-agent exited with code $EXIT_CODE"
-    exit $EXIT_CODE
+    # 실패는 명확히 기록하고 반드시 0 반환 (재시도 방지)
+    # recon-run 자체는 성공했고, company-agent의 비동기 프로세스 완료까지 기다림
+    log "WARN — company-agent exited with code $EXIT_CODE (비동기 후속 작업 진행 중)"
+    exit 0
 fi

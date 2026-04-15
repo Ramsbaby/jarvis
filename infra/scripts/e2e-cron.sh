@@ -69,8 +69,9 @@ echo "$OUTPUT" > "$RESULT_FILE"
 # 통계 추출
 PASS_COUNT=$(echo "$OUTPUT" | grep -c "✅ PASS" || true)
 FAIL_COUNT=$(echo "$OUTPUT" | grep -c "❌ FAIL" || true)
+WARN_COUNT=$(echo "$OUTPUT" | grep -c "⚠️  WARN" || true)
 SKIP_COUNT=$(echo "$OUTPUT" | grep -c "⏭️  SKIP" || true)
-TOTAL=$((PASS_COUNT + FAIL_COUNT + SKIP_COUNT))
+TOTAL=$((PASS_COUNT + FAIL_COUNT + WARN_COUNT + SKIP_COUNT))
 
 SUMMARY="${PASS_COUNT}/${TOTAL} passed"
 if [[ $FAIL_COUNT -gt 0 ]]; then SUMMARY="${SUMMARY}, ${FAIL_COUNT} FAILED"; fi
