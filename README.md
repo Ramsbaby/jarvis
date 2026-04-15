@@ -131,6 +131,42 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 
 ```bash
 git clone https://github.com/Ramsbaby/jarvis.git && cd jarvis
+```
+
+#### ⚡ Option A — Interactive Onboarding (Recommended)
+
+Open the project in **Claude Code** and run:
+
+```
+/onboarding
+```
+
+The onboarding wizard guides you through 13 steps automatically:
+
+| Step | What it does |
+|------|-------------|
+| 0 | Checks Node.js 18+, git, Ollama (optional — RAG only) |
+| 1 | Detects existing `.env` — skips token steps if already configured |
+| 2–5 | Collects tokens interactively (Discord Token / Anthropic API Key / Guild ID / owner info) |
+| 6 | Creates `~/.jarvis/.env` + 8 data directories (`logs/state/context/inbox/results/rag/data/config`) |
+| 7 | Runs `npm install` + copies `*.example.json` config templates |
+| 8 | **RAG setup** (optional) — if Ollama detected, runs `python3 scripts/setup_rag.py` (~400MB model) |
+| 9 | Asks: **Auto-update** or **Manual-update**? |
+| 10 | Creates `🚀jarvis-update` Discord channel + registers system persona |
+| 11 | Installs LaunchAgents (macOS) or PM2 + cron (Linux) |
+| 12 | Runs full verification: node_modules · bot syntax · data dirs · `.env` keys |
+| 13 | Confirms bot startup via log output |
+| 14 | Prints completion summary |
+
+**Auto-update**: When a new release is detected at 03:00 KST, Jarvis pulls latest code, syncs files, restarts the bot, and posts a notice to `#🚀jarvis-update`. Uses semver comparison (upstream > installed only).
+
+**Manual-update**: Posts a release alert to `#🚀jarvis-update` and waits for you to update.
+
+---
+
+#### Option B — Python Wizard
+
+```bash
 python scripts/setup_infra.py    # paste your Discord token when prompted
 ```
 
