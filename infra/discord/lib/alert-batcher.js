@@ -1,17 +1,20 @@
 import discordPkg from 'discord.js';
 const { EmbedBuilder } = discordPkg;
 import { t } from './i18n.js';
+import { appendFeed } from './channel-feed.js';
 
 class AlertBatcher {
   constructor({ windowMs = 30_000 } = {}) {
     this.windowMs = windowMs;
     this.channel = null;
+    this.channelName = null;
     this.queue = [];
     this.timer = null;
   }
 
   init(channel) {
     this.channel = channel;
+    this.channelName = channel?.name ?? null;
   }
 
   push({ title, message, level = 'default' }) {
@@ -49,6 +52,9 @@ class AlertBatcher {
 
     if (this.channel) {
       await this.channel.send({ embeds: [embed] });
+      if (this.channelName) {
+        appendFeed(this.channelName, 'alert', description);
+      }
     }
   }
 

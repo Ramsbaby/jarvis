@@ -906,78 +906,31 @@ export class StreamingMessage {
         }
       }
 
-      // Send TABLE_DATA as high-quality PNG via Chrome singleton + improved CSS
+      // TABLE_DATA → Discord mobile-friendly 텍스트 (Chrome PNG 제거 — 2026-04-15)
+      // Chrome 렌더링 PNG 대신 bullet list 형식으로 전송
       if (tableJson) {
         const { title, columns = [], dataSource = [] } = tableJson;
         if (columns.length > 0 && dataSource.length > 0) {
-          const tableCacheKey = _cacheKey(tableJson);
-          const tableCached = _imageCacheGet(tableCacheKey);
-          if (tableCached) {
-            log('info', 'TABLE_DATA cache hit', { key: tableCacheKey });
-            tableImgBuf = tableCached;
-          } else {
-          let page = null;
           try {
-            const browser = await _getChromeBrowser();
-            page = await browser.newPage();
-            await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 2 });
-
-            const thCells = columns.map((c) =>
-              `<th>${String(c.title ?? c.dataIndex ?? '')}</th>`).join('');
-            const bodyRows = dataSource.map((row) => {
-              const cls = row._highlight ? ' class="highlight"' : '';
-              return `<tr${cls}>${columns.map((c) => `<td>${String(row[c.dataIndex] ?? '')}</td>`).join('')}</tr>`;
-            }).join('');
-
-            const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  background:#313338;
-  font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Segoe UI",sans-serif;
-  padding:20px 22px;display:inline-block;min-width:200px
-}
-h2{
-  color:#fff;font-size:15px;font-weight:700;
-  margin-bottom:14px;padding-bottom:8px;
-  border-bottom:2px solid #5865f2;letter-spacing:.01em
-}
-table{
-  border-collapse:separate;border-spacing:0;
-  font-size:13.5px;color:#dbdee1;
-  border-radius:8px;overflow:hidden;
-  border:1px solid #3b3d43
-}
-th{
-  background:#1e1f22;color:#9b9fa8;
-  padding:10px 18px;text-align:left;
-  font-size:11.5px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.07em;
-  white-space:nowrap;border-bottom:1px solid #3b3d43
-}
-th:not(:last-child){border-right:1px solid #3b3d43}
-td{padding:9px 18px;white-space:nowrap}
-td:not(:last-child){border-right:1px solid #3b3d43}
-tr:not(:last-child) td{border-bottom:1px solid #3b3d43}
-tbody tr:nth-child(even) td{background:#2b2d31}
-tbody tr:nth-child(odd) td{background:#313338}
-tbody tr.highlight td{background:#3c3f6e !important;color:#fff}
-tbody tr.highlight td{border-left:3px solid #5865f2}
-</style></head><body>${title ? `<h2>${title}</h2>` : ''}
-<table><thead><tr>${thCells}</tr></thead><tbody>${bodyRows}</tbody></table>
-</body></html>`;
-
-            await page.setContent(html, { waitUntil: 'networkidle0' });
-            const bodyEl = await page.$('body');
-            const imgBuf = await bodyEl.screenshot({ type: 'png' });
-            _imageCacheSet(tableCacheKey, imgBuf);
-            tableImgBuf = imgBuf;
+            const lines = [];
+            if (title) lines.push(`**${title}**`);
+            // 헤더: 첫 컬럼 외 나머지 컬럼명 표시
+            const restHeaders = columns.slice(1).map(c => c.title ?? c.dataIndex ?? '').join(' · ');
+            if (restHeaders) lines.push(`*${restHeaders}*`);
+            lines.push('─'.repeat(24));
+            for (const row of dataSource) {
+              const firstCol = columns[0];
+              const firstVal = firstCol ? String(row[firstCol.dataIndex] ?? '') : '';
+              const restVals = columns.slice(1).map(c => String(row[c.dataIndex] ?? '')).join(' · ');
+              lines.push(restVals ? `- **${firstVal}** · ${restVals}` : `- ${firstVal}`);
+            }
+            const tableText = lines.join('\n').slice(0, 2000); // Discord 2000자 제한
+            await this.channel.send({ content: tableText });
+            this._markerCardSent = true;
+            log('info', 'TABLE_DATA sent as text', { rows: dataSource.length });
           } catch (tErr) {
-            log('error', 'TABLE_DATA image render failed', { error: tErr.message });
-            _chromeBrowser = null; // 오류 시 싱글톤 리셋 → 다음 요청에서 재시작
-          } finally {
-            if (page) await page.close().catch(() => {});
+            log('error', 'TABLE_DATA text render failed', { error: tErr.message });
           }
-          } // end cache-miss block
         }
       }
 
@@ -1156,6 +1109,9 @@ mermaid.initialize({
    * 버튼은 마지막 청크에만 부착.
    */
   async _wrapInCV2() {
+    // 자동 래핑 비활성화 — Discord 응답 평문 markdown 전환 정책 (2026-04-15)
+    // 명시적 CV2_DATA 마커가 있을 때만 CV2 사용. streaming 레이어 자동 래핑 금지.
+    return;
     if (!this.currentMessage) return;
     const rawContent = (this.currentMessage.content || '').replace(/ ▌$/, '').trim();
     if (!rawContent || rawContent === '\u200b' || rawContent.length < 10) return;
@@ -1163,7 +1119,7 @@ mermaid.initialize({
     // 래핑 스킵 조건 — flash 유발 최소화
     const hasHeadings = /^#{1,4} /m.test(rawContent);
     const isLongContent = rawContent.length >= 500;
-    if (!hasHeadings && !isLongContent) return; // 단문 + 구조 없음 → 텍스트 유지
+    if (!hasHeadings || !isLongContent) return; // 500자 미만 OR ## 제목 없음 → 텍스트 유지
 
     // 마커 카드가 이미 있고 남은 텍스트가 짧으면 → 래핑 스킵 (마커 카드가 메인)
     if (this._markerCardSent && rawContent.length < 300) return;
