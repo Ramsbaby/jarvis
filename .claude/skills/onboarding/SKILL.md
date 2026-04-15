@@ -54,7 +54,7 @@ node .claude/skills/onboarding/scripts/check-setup.mjs
 |------|------|------|
 | 완전 신규 | missing에 항목 있음 | Steps 2~14 순서대로 진행 |
 | 환경 설정됨, 정책 없음 | missing 비어있음 + updatePolicy null | Steps 2~5 스킵 → Step 9(정책 설정)로 이동 |
-| 완전 설치됨 | missing 비어있음 + updatePolicy 있음 | "이미 설치된 환경입니다." 안내 후 선택 요청:<br>  [V] 검증만 실행 → Step 12로 이동<br>  [U] 특정 값 업데이트 → 변경할 키 확인 → 해당 Step(2~5)에서 값 입력받기 → Step 6 케이스 B(--merge)로 저장<br>  [R] 완전 재설치 → Step 2부터 진행 |
+| 완전 설치됨 | missing 비어있음 + updatePolicy 있음 | "이미 설치된 환경입니다." 안내 후 선택 요청:<br>  [V] 검증만 실행 → Step 12로 이동 (읽기 전용, 자동 수정 없음)<br>  [U] 특정 값 업데이트 → 변경할 키 확인 → 해당 Step(2~5)에서 값 입력받기 → Step 6 케이스 B(--merge)로 저장 → Step 10(채널 ID 확인) → Step 11(--skip-if-loaded로 누락 에이전트만 추가) → Step 12(검증)<br>  [R] 완전 재설치 → Step 2부터 진행 |
 
 > **check-setup 결과를 변수로 보관**: 이후 Steps에서 `missing` 배열과 `updatePolicy` 값을 참조합니다.
 
@@ -355,6 +355,13 @@ node .claude/skills/onboarding/scripts/verify-setup.mjs
   "details": { "discordDeps": true, "botSyntax": true, "dataDirs": true, "envFile": true, "launchAgents": true }
 }
 ```
+
+검증 결과 대응:
+- `launchAgents: false` (또는 `{ discordBot: false }` / `{ releaseChecker: false }`) → Step 11을 `--skip-if-loaded` 없이 직접 실행 권고
+  - discordBot만 false → 봇이 실행 중이지 않음, Step 11 재실행
+  - releaseChecker만 false → 자동 업데이트 체커 미설치, Step 11 재실행하여 추가
+- `envFile: false` → Step 6으로 돌아가 환경 파일 재생성
+- `discordDeps: false` → Step 7 `npm install` 재시도
 
 ---
 
