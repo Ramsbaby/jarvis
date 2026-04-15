@@ -2,7 +2,7 @@
 # cron-auditor.sh — 모든 크론 정상 동작 여부 수집 → stdout으로 리포트 출력
 
 set -euo pipefail
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 NOW=$(date +%s)
 TASKS_TMP=$(mktemp /tmp/cron-audit-tasks-XXXXXX.tsv)
 COUNTS_TMP=$(mktemp /tmp/cron-audit-counts-XXXXXX.txt)
