@@ -163,6 +163,36 @@ ${PROMPT}"
     fi
 fi
 
+# autoInject: SSoT 파일을 프롬프트 앞에 자동 주입 (하드코딩 방지)
+# tasks.json: "autoInject": ["portfolio", "goals"] 또는 절대경로 직접 지정 가능
+# 별칭 매핑: portfolio → state/portfolio.json, goals → config/goals.json
+_INJECT_PREFIX=""
+while IFS= read -r _alias; do
+    [[ -z "$_alias" ]] && continue
+    case "$_alias" in
+        portfolio) _inject_path="${BOT_HOME}/state/portfolio.json" ;;
+        goals)     _inject_path="${BOT_HOME}/config/goals.json" ;;
+        /*)        _inject_path="$_alias" ;;  # 절대경로 직접 지정
+        *)         _inject_path="${BOT_HOME}/state/${_alias}" ;;
+    esac
+    if [[ -f "$_inject_path" ]]; then
+        _inject_label=$(basename "$_inject_path")
+        _INJECT_PREFIX="${_INJECT_PREFIX}[자동 주입 — SSoT: ${_inject_label}]
+$(cat "$_inject_path")
+
+---
+
+"
+        log "autoInject: ${_inject_label} ($(wc -c < "$_inject_path" | tr -d ' ')bytes)"
+    else
+        log "WARN: autoInject 파일 없음: ${_inject_path}"
+    fi
+done < <(echo "$TASK_CONFIG" | jq -r '.autoInject[]? // empty' 2>/dev/null)
+if [[ -n "$_INJECT_PREFIX" ]]; then
+    PROMPT="${_INJECT_PREFIX}${PROMPT}"
+fi
+unset _INJECT_PREFIX _alias _inject_path _inject_label
+
 _PHASE="param-load"
 ALLOWED_TOOLS=$(echo "$TASK_CONFIG" | jq -r '.allowedTools // "Read"')
 TIMEOUT=$(echo "$TASK_CONFIG" | jq -r '.timeout // 180')
@@ -390,12 +420,22 @@ EXIT_CODE=0
 if [[ -n "$SCRIPT" ]]; then
     # script 경로의 ~ 확장
     SCRIPT_PATH="${SCRIPT/#\~/$HOME}"
-    if [[ ! -x "$SCRIPT_PATH" ]]; then
-        log "ERROR: script not found or not executable: $SCRIPT_PATH"
+    if [[ ! -f "$SCRIPT_PATH" ]]; then
+        log "ERROR: script not found: $SCRIPT_PATH"
         _TASK_DONE=true
         exit 1
     fi
-    RESULT=$("$SCRIPT_PATH" "$SCRIPT_ARGS" 2>>"${BOT_HOME}/logs/cron.log") || EXIT_CODE=$?
+    # .mjs/.js 파일은 node로 명시적 실행, 아니면 shebang에 의존
+    if [[ "$SCRIPT_PATH" == *.mjs || "$SCRIPT_PATH" == *.js ]]; then
+        RESULT=$(node "$SCRIPT_PATH" "$SCRIPT_ARGS" 2>>"${BOT_HOME}/logs/cron.log") || EXIT_CODE=$?
+    else
+        if [[ ! -x "$SCRIPT_PATH" ]]; then
+            log "ERROR: script not executable: $SCRIPT_PATH"
+            _TASK_DONE=true
+            exit 1
+        fi
+        RESULT=$("$SCRIPT_PATH" "$SCRIPT_ARGS" 2>>"${BOT_HOME}/logs/cron.log") || EXIT_CODE=$?
+    fi
 else
     RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
 fi
