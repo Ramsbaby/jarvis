@@ -53,10 +53,17 @@ discord-bot.js ──► lib/handlers.js ──► lib/claude-runner.js
                          │         → state/commitments.jsonl 기록
                          │
                          ├──► autoExtractMemory() (fire-and-forget)
-                         │         대화에서 사실 자동 추출 → userMemory + wikiAddFact()
+                         │         대화에서 사실 자동 추출 → userMemory
                          │         오너인 경우 owner-profile.md에도 반영
+                         │         + wikiAddFact() → addFactToWiki(source: 'discord')
                          │         10분 쿨다운, 봇 응답 150자 이상일 때만 실행
                          │         위키 실시간 기록: wikiAddFact()로 {domain}/_facts.md 동시 갱신
+                         │
+                         │  ※ Claude Code CLI 세션도 동일 위키로 수렴:
+                         │     stop-session-save.sh → .md 덤프
+                         │     → stop-wiki-ingest.sh (Stop 훅, async)
+                         │     → wiki-ingest-claude-session.mjs
+                         │     → addFactToWiki(source: 'claude-code-cli')
                          │
                          ├──► buildWikiContextSection() (Dynamic section)
                          │         Hybrid 2-track LLM Wiki context injection:
@@ -283,6 +290,22 @@ SessionStart (startup only)
 - `board-auto-deploy.sh`: `git diff HEAD~1 HEAD`로 package-lock 변경 감지 후 조건부 npm ci → 항상 npm ci 실행으로 변경. GitHub Actions shallow clone(--depth 1) 환경에서 HEAD~1 없음 → grep 실패 → npm ci 생략 → 의존성 누락 빌드 방지.
 
 **Discord bot reply @mention 억제 (2026-04-14)**: `Client` 생성자에 `allowedMentions: { repliedUser: false }` 추가. `message.reply()`의 discord.js v14 기본값(`repliedUser: true`)이 @mention 핑을 발생시켜 직접 답변에 amber(갈색) 배경 하이라이트가 적용되던 문제 수정. 전역 설정이므로 모든 `message.reply()` 호출에 자동 적용 — 개별 call site 수정 불필요.
+
+**post-tool-docdebt.sh worktree 경로 정규화 (2026-04-15)**:
+- 버그: `~/jarvis/.claude/worktrees/<name>/infra/docs/X.md` 경로 편집 시 debt 해소 로직이 경로를 인식하지 못함. 기존 prefix 검사는 `~/jarvis/infra/`, `~/jarvis/`, `~/.jarvis/` 세 가지만 대응. worktree 경로는 `~/jarvis/` prefix에는 매치되지만 `rel`이 `.claude/worktrees/...`로 시작해 `startswith("docs/")` 검사에서 탈락 → debt 해소 실패.
+- 대칭 비대칭 문제: 반면 코드 편집 시 `match_glob`은 `mg in file_path` (substring 매치)를 쓰기 때문에 worktree 경로에서도 debt 추가는 정상 동작. 결과적으로 worktree에서 작업 시 **debt는 쌓이는데 해소가 안 되는** stuck 상태 발생.
+- 수정: 훅 파이썬 블록 상단에 정규식 기반 worktree 경로 정규화 추가. `^~/jarvis/.claude/worktrees/<name>/(rest)$` 매치 시 `file_path`를 `~/jarvis/(rest)`로 재작성 후 기존 로직에 투입. 같은 정규화가 `frel` 계산 경로에도 자동 적용되어 debt 엔트리의 `triggered_by` 값도 main 체크아웃과 동일한 상대 경로로 통일됨.
+- 효과: Stop 훅의 doc-debt 차단이 worktree 기반 PR 작업 흐름을 더 이상 방해하지 않음.
+
+**표면 통합 메모리 — Phase 1: Claude Code CLI → 위키 실시간 주입 (2026-04-15)**:
+- 간극 진단: `stop-session-save.sh`가 Claude Code 세션을 `~/.jarvis/context/claude-code-sessions/{project}/{ts}.md`로 덤프해왔으나, 이후 `context-extractor.mjs`(nightly)는 도메인 summary만 생성하고 `wikiAddFact`를 호출하지 않음 → Claude Code 대화는 RAG에는 증분 인덱싱되지만 위키로는 수렴하지 못하는 비대칭 (읽기만 공유, 쓰기는 분리).
+- `wiki-engine.mjs::addFactToWiki()`: 3번째 인자를 `opts = { domainOverride, source }` 객체로 확장. 백워드 호환 유지(문자열 전달 시 domainOverride로 해석). `_facts.md` 기록 라인 포맷을 `- [YYYY-MM-DD] [source:X] 팩트`로 변경 — 어느 표면에서 주입되었는지 사후 감사 가능. 중복 체크는 source 무관 (첫 주입이 SSoT).
+- `claude-runner.js::wikiAddFact()` 래퍼: `opts` 파라미터 추가, `{ source: 'discord', ...opts }` 명시. Discord 봇 경로의 모든 주입은 `source:discord` 태그됨.
+- `infra/scripts/wiki-ingest-claude-session.mjs` (신규): 세션 .md 1개를 입력받아 Haiku(4.5)로 facts 추출 후 `addFactToWiki(source: 'claude-code-cli')` 루프. `--latest [project]` 플래그로 mtime 기준 최신 세션 자동 선택. LLM 실패 시에도 exit 0 (파이프라인 비차단). autoExtractMemory 추출 프롬프트를 Claude Code 세션 맥락에 맞춰 각색 (구체적 결정·선호·제약 위주, diff/코드라인/행동 요약 금지). KST 타임스탬프 로깅.
+- `~/.claude/hooks/stop-wiki-ingest.sh` (신규, user config): Claude Code Stop 훅(async, 45s). `stop-session-save.sh`와 경합 방지를 위해 최대 8초 mtime poll 후 최신 세션 .md가 60초 이내 생성되었을 때만 ingester 호출. 경합/순서 의존 제거.
+- `~/.claude/settings.json` Stop 배열에 `stop-wiki-ingest.sh` 추가 (user config, repo 외부).
+- Smoke test: 5798 bytes 세션 1개로 end-to-end 검증 — Haiku가 5개 추출, junk 필터 1개 제외 후 4개를 `ops` 도메인에 `[source:claude-code-cli]` 태그로 주입 성공.
+- macOS Claude 앱은 로컬 세션 히스토리가 없어(서버-only, `~/Library/Application Support/Claude/`에 config 파일 1개만 존재) CLI와 동등한 자동 수집 불가 — Phase 2에서 MCP `wiki_add_fact` 도구 + `/remember` 스킬 + CLAUDE.md 경계 명시로 해결 예정.
 
 **Discord bot 안정성 개선 (2026-03-22)**:
 - `discord-bot.js` OOM 임계값 500MB → 800MB 상향. 실측 866MB OOM 발생으로 너무 낮았음. watchdog MEMORY_WARN_MB(900)보다 낮게 유지하여 자가 복구 우선.
