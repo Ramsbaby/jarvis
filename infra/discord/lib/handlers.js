@@ -57,6 +57,7 @@ import {
   reloadUserProfiles,
   getUserProfile,
 } from './claude-runner.js';
+import { appendFeed } from './channel-feed.js';
 import { generateCode, verifyCode } from './pairing.js';
 import { userMemory } from './user-memory.js';
 import { t } from './i18n.js';
@@ -956,6 +957,7 @@ ${extracted}
     }
 
     const effectiveChannelId = isThread ? message.channel.parentId : message.channel.id;
+    const chName = isThread ? (message.channel.parent?.name ?? 'thread') : (message.channel.name ?? 'dm');
     // 재생성 버튼 대비: sessionKey별 마지막 원본 쿼리 저장
     lastQueryStore.set(sessionKey, originalPrompt);
     streamer = new StreamingMessage(thread, message, sessionKey, effectiveChannelId);
@@ -1085,6 +1087,7 @@ ${extracted}
         sessionId: sid,
         threadId: thread.id,
         channelId: effectiveChannelId,
+        channelName: chName,
         attachments: imageAttachments,
         userId: message.author.id,
         contextBudget,
@@ -1253,7 +1256,6 @@ ${extracted}
           });
 
           if (lastAssistantText.length > 20) {
-            const chName = isThread ? (message.channel.parent?.name ?? 'thread') : (message.channel.name ?? 'dm');
             saveConversationTurn(originalPrompt, lastAssistantText, chName, message.author.id);
             saveSessionSummary(sessionKey, originalPrompt, lastAssistantText);
             // 토큰 누적: result 이벤트의 usage.input_tokens (claude-runner.js에서 포워딩)
