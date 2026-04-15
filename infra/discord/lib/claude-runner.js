@@ -29,13 +29,13 @@ import {
 
 // LLM Wiki 실시간 기록 — 대화 종료 시 facts를 위키에도 저장
 let _addFactToWiki = null;
-async function wikiAddFact(userId, fact) {
+async function wikiAddFact(userId, fact, opts = {}) {
   try {
     if (!_addFactToWiki) {
       const mod = await import('./wiki-engine.mjs');
       _addFactToWiki = mod.addFactToWiki;
     }
-    _addFactToWiki(userId, fact);
+    _addFactToWiki(userId, fact, { source: 'discord', ...opts });
   } catch {}
 }
 
