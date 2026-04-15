@@ -10,7 +10,30 @@ import { promisify } from 'node:util';
 import { readFile, appendFile, open as fsOpen, stat as fsStat } from 'node:fs/promises';
 import { mkResult, mkError, logTelemetry, BOT_HOME } from './shared.mjs';
 import { listTasks, getTask } from '../task-store.mjs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { addFactToWiki } from '../../discord/lib/wiki-engine.mjs';
+
+// ---------------------------------------------------------------------------
+// 채널 피드 기록 — discordSend 발신 시 ~/.jarvis/state/channel-feed/{name}.jsonl 에 append
+// discord-bot 프로세스와 분리된 nexus 프로세스이므로 독립 구현 (import 불가)
+// ---------------------------------------------------------------------------
+const _FEED_DIR = join(homedir(), '.jarvis', 'state', 'channel-feed');
+const _FEED_MAX = 30;
+
+function _appendChannelFeed(channelName, text) {
+  if (!channelName || !text?.trim()) return;
+  try {
+    mkdirSync(_FEED_DIR, { recursive: true });
+    const fp = join(_FEED_DIR, `${channelName}.jsonl`);
+    const now = new Date();
+    const kst = new Date(now.getTime() + 9 * 3600 * 1000);
+    const ts = kst.toISOString().replace('T', ' ').slice(0, 16) + ' KST';
+    appendFileSync(fp, JSON.stringify({ ts, from: 'cron', text: text.slice(0, 2000) }) + '\n', 'utf-8');
+    // 롤링 트림
+    const lines = readFileSync(fp, 'utf-8').split('\n').filter(Boolean);
+    if (lines.length > _FEED_MAX) writeFileSync(fp, lines.slice(-_FEED_MAX).join('\n') + '\n', 'utf-8');
+  } catch { /* best-effort */ }
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -195,6 +218,8 @@ async function discordSend({ channel, message }) {
   }
 
   const data = await res.json();
+  // 채널 피드 기록 — 크론/스크립트가 보낸 메시지를 세션 컨텍스트에 반영
+  _appendChannelFeed(channel, message);
   return { ok: true, message_id: data.id, channel, channel_id: channelId };
 }
 
