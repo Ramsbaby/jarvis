@@ -169,12 +169,12 @@ check "/alert command" grep -q "'alert'" "$BOT_HOME/discord/discord-bot.js"
 # --- Cron Tests ---
 echo ""
 echo "▶ Cron Jobs"
-ci_check "RAG indexer cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-index'"
-ci_check "morning-standup cron exists" bash -c "crontab -l 2>/dev/null | grep -qE 'morning-standup|smart-standup'"
-ci_check "e2e-cron.sh registered" bash -c "crontab -l 2>/dev/null | grep -q 'e2e-cron'"
-ci_check "weekly-kpi cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'weekly-kpi'"
-ci_check "security-scan cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'security-scan'"
-ci_check "rag-health cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-health'"
+check "RAG indexer cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-index'"
+check "morning-standup cron exists" bash -c "crontab -l 2>/dev/null | grep -qE 'morning-standup|smart-standup'"
+check "e2e-cron.sh registered" bash -c "crontab -l 2>/dev/null | grep -q 'e2e-cron'"
+check "weekly-kpi cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'weekly-kpi'"
+check "security-scan cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'security-scan'"
+check "rag-health cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-health'"
 
 # --- Phase 3~5 Tasks ---
 echo ""

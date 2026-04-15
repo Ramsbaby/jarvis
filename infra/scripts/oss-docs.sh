@@ -8,7 +8,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/.local/share/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
 LOG="$JARVIS_HOME/logs/oss-manager.log"
 NODE="${NODE:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
 

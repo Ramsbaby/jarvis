@@ -445,6 +445,12 @@ run_one_check() {
             pid="${bot_status#RUNNING:}"
             memory_mb=$(check_memory "$pid")
             health_status="healthy"
+            # Degraded Mode 자동 복구 — 봇 정상 실행 중이면 해제
+            local _deg_script="$BOT_HOME/scripts/bot-degraded-mode.sh"
+            if [[ -x "$_deg_script" ]] && ! bash "$_deg_script" status >/dev/null 2>&1; then
+                log "봇 정상 확인 — Degraded Mode 자동 복구 시도"
+                bash "$_deg_script" recover >> "$LOG_FILE" 2>&1 || true
+            fi
             # 크래시 루프 감지 (PID 변경 빈도 추적)
             detect_crash_loop "$pid"
 

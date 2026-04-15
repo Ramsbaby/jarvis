@@ -188,6 +188,9 @@ ${currentReadme}
 
     results.push({ repo: `${repo.owner}/${repo.name}`, stars: myRepo.stargazerCount, analysis });
     log('info', `[recon] 완료: ${repo.name}`);
+
+    // API 레이트 제한 회피 — 다음 분석 전 지연
+    await new Promise(resolve => setTimeout(resolve, 3000));
   }
 
   // 리포트 파일 저장

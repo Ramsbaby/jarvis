@@ -44,11 +44,11 @@ check_recovery() {
   if $IS_MACOS; then
     if launchctl list 2>/dev/null | grep -q "$DISCORD_SERVICE"; then
       pid=$(launchctl list 2>/dev/null | grep "$DISCORD_SERVICE" | awk '{print $1}')
-      [[ "$pid" != "-" && -n "$pid" ]] && found=true
+      if [[ "$pid" != "-" && -n "$pid" ]]; then found=true; fi
     fi
   else
     pid=$(pgrep -f "discord-bot.js" 2>/dev/null | head -1 || echo "")
-    [[ -n "$pid" ]] && found=true
+    if [[ -n "$pid" ]]; then found=true; fi
   fi
   if $found; then
     if [[ "$pid" != "-" && -n "$pid" ]]; then
@@ -94,6 +94,16 @@ now = datetime.now(timezone.utc)
 print(int((now - entered).total_seconds() / 60))
 " 2>/dev/null || echo "0")
     if [[ $elapsed_min -lt 30 ]]; then log "진입 ${elapsed_min}분 경과 — 30분 미달, 에스컬레이션 보류"; exit 0; fi
+    # 쿨다운 체크 — 30분 내 중복 발송 방지
+    _esc_cooldown="$JARVIS_DIR/state/l4-escalation-last.txt"
+    _now_ep=$(date +%s)
+    _last_ep=$(cat "$_esc_cooldown" 2>/dev/null || echo "0")
+    _el=$(( _now_ep - _last_ep ))
+    if (( _el < 1800 )); then
+      log "쿨다운 중 ($(( (1800 - _el) / 60 ))분 남음) — 중복 발송 생략"
+      exit 0
+    fi
+    echo "$_now_ep" > "$_esc_cooldown"
     webhook=$(python3 -c "
 import json
 d=json.load(open('$MONITORING_CONFIG'))
