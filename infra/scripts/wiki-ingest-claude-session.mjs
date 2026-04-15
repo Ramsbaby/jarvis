@@ -140,7 +140,7 @@ function callHaiku(prompt, timeoutMs = HAIKU_TIMEOUT) {
   return new Promise((resolve, reject) => {
     const proc = spawn(
       CLAUDE_BIN,
-      ['--model', MODEL, '--output-format', 'text', '--dangerously-skip-permissions'],
+      ['--model', MODEL, '--output-format', 'text', '--max-turns', '1', '--tools', '', '--dangerously-skip-permissions'],
       {
         timeout: timeoutMs,
         stdio: ['pipe', 'pipe', 'pipe'],

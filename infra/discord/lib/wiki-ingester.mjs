@@ -39,7 +39,7 @@ async function callHaiku(prompt, timeoutMs = 60_000) {
   return new Promise((resolve, reject) => {
     const proc = spawn(
       CLAUDE_BINARY,
-      ['--model', 'claude-haiku-4-5-20251001', '--output-format', 'text', '--dangerously-skip-permissions'],
+      ['--model', 'claude-haiku-4-5-20251001', '--output-format', 'text', '--max-turns', '1', '--tools', '', '--dangerously-skip-permissions'],
       {
         timeout: timeoutMs,
         stdio: ['pipe', 'pipe', 'pipe'],
