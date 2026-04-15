@@ -291,6 +291,12 @@ SessionStart (startup only)
 
 **Discord bot reply @mention 억제 (2026-04-14)**: `Client` 생성자에 `allowedMentions: { repliedUser: false }` 추가. `message.reply()`의 discord.js v14 기본값(`repliedUser: true`)이 @mention 핑을 발생시켜 직접 답변에 amber(갈색) 배경 하이라이트가 적용되던 문제 수정. 전역 설정이므로 모든 `message.reply()` 호출에 자동 적용 — 개별 call site 수정 불필요.
 
+**post-tool-docdebt.sh worktree 경로 정규화 (2026-04-15)**:
+- 버그: `~/jarvis/.claude/worktrees/<name>/infra/docs/X.md` 경로 편집 시 debt 해소 로직이 경로를 인식하지 못함. 기존 prefix 검사는 `~/jarvis/infra/`, `~/jarvis/`, `~/.jarvis/` 세 가지만 대응. worktree 경로는 `~/jarvis/` prefix에는 매치되지만 `rel`이 `.claude/worktrees/...`로 시작해 `startswith("docs/")` 검사에서 탈락 → debt 해소 실패.
+- 대칭 비대칭 문제: 반면 코드 편집 시 `match_glob`은 `mg in file_path` (substring 매치)를 쓰기 때문에 worktree 경로에서도 debt 추가는 정상 동작. 결과적으로 worktree에서 작업 시 **debt는 쌓이는데 해소가 안 되는** stuck 상태 발생.
+- 수정: 훅 파이썬 블록 상단에 정규식 기반 worktree 경로 정규화 추가. `^~/jarvis/.claude/worktrees/<name>/(rest)$` 매치 시 `file_path`를 `~/jarvis/(rest)`로 재작성 후 기존 로직에 투입. 같은 정규화가 `frel` 계산 경로에도 자동 적용되어 debt 엔트리의 `triggered_by` 값도 main 체크아웃과 동일한 상대 경로로 통일됨.
+- 효과: Stop 훅의 doc-debt 차단이 worktree 기반 PR 작업 흐름을 더 이상 방해하지 않음.
+
 **표면 통합 메모리 — Phase 1: Claude Code CLI → 위키 실시간 주입 (2026-04-15)**:
 - 간극 진단: `stop-session-save.sh`가 Claude Code 세션을 `~/.jarvis/context/claude-code-sessions/{project}/{ts}.md`로 덤프해왔으나, 이후 `context-extractor.mjs`(nightly)는 도메인 summary만 생성하고 `wikiAddFact`를 호출하지 않음 → Claude Code 대화는 RAG에는 증분 인덱싱되지만 위키로는 수렴하지 못하는 비대칭 (읽기만 공유, 쓰기는 분리).
 - `wiki-engine.mjs::addFactToWiki()`: 3번째 인자를 `opts = { domainOverride, source }` 객체로 확장. 백워드 호환 유지(문자열 전달 시 domainOverride로 해석). `_facts.md` 기록 라인 포맷을 `- [YYYY-MM-DD] [source:X] 팩트`로 변경 — 어느 표면에서 주입되었는지 사후 감사 가능. 중복 체크는 source 무관 (첫 주입이 SSoT).
