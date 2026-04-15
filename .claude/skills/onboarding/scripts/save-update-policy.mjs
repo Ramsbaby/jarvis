@@ -27,7 +27,13 @@ if (!mode) {
 }
 
 const configDir = join(HOME, '.jarvis', 'config');
-mkdirSync(configDir, { recursive: true });
+
+try {
+  mkdirSync(configDir, { recursive: true });
+} catch (e) {
+  console.error(JSON.stringify({ error: 'Failed to create config directory: ' + e.message, path: configDir }));
+  process.exit(1);
+}
 
 const policyPath = join(configDir, 'update-policy.json');
 const policy = {
@@ -38,5 +44,6 @@ const policy = {
     : '새 릴리즈 발견 시 #🚀jarvis-update 채널에 알림만 발송',
 };
 
-writeFileSync(policyPath, JSON.stringify(policy, null, 2));
+// 파일 모드 0o600 설정 (write-env.mjs와 일관성)
+writeFileSync(policyPath, JSON.stringify(policy, null, 2), { mode: 0o600 });
 console.log(JSON.stringify({ status: 'ok', mode, path: policyPath }));

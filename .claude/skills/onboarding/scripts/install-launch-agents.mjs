@@ -38,20 +38,56 @@ const projectRoot  = join(__dirname, '../../../../');
 const botHome      = process.env.BOT_HOME || join(HOME, '.local', 'share', 'jarvis');
 const agentsDir    = join(HOME, 'Library', 'LaunchAgents');
 const envPath      = join(HOME, '.jarvis', '.env');
-const nodePath     = execSync('which node').toString().trim();
 
-// .env에서 DISCORD_TOKEN 등 읽기
-function readEnvValue(key) {
-  if (!existsSync(envPath)) return '';
-  const line = readFileSync(envPath, 'utf-8').split('\n').find(l => l.startsWith(`${key}=`));
-  return line ? line.slice(key.length + 1).trim() : '';
+// which node를 try/catch로 감싸기
+let nodePath;
+try {
+  nodePath = execSync('which node').toString().trim();
+} catch (e) {
+  console.error(JSON.stringify({ error: 'node not found in PATH: ' + e.message }));
+  process.exit(1);
 }
 
-const discordToken   = readEnvValue('DISCORD_TOKEN');
-const guildId        = readEnvValue('GUILD_ID');
-const channelIds     = readEnvValue('CHANNEL_IDS');
-const ownerDiscordId = readEnvValue('OWNER_DISCORD_ID');
-const ownerName      = readEnvValue('OWNER_NAME');
+// XML 특수문자 이스케이프 함수
+function escapeXml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// .env에서 값 읽기 (따옴표/공백 처리 강화)
+function readEnvValue(key) {
+  if (!existsSync(envPath)) return '';
+  const lines = readFileSync(envPath, 'utf-8').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const k = trimmed.slice(0, eqIdx).trim();
+    if (k !== key) continue;
+    let v = trimmed.slice(eqIdx + 1).trim();
+    // 따옴표 제거
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1);
+    }
+    return v;
+  }
+  return '';
+}
+
+const discordToken   = escapeXml(readEnvValue('DISCORD_TOKEN'));
+const guildId        = escapeXml(readEnvValue('GUILD_ID'));
+const channelIds     = escapeXml(readEnvValue('CHANNEL_IDS'));
+const ownerDiscordId = escapeXml(readEnvValue('OWNER_DISCORD_ID'));
+const ownerName      = escapeXml(readEnvValue('OWNER_NAME'));
+const safeNodePath   = escapeXml(nodePath);
+const safeBotHome    = escapeXml(botHome);
+const safeEnvPath    = escapeXml(envPath);
+const safeChannelId  = escapeXml(channelId);
 
 const plists = {
   'ai.jarvis.discord-bot': `<?xml version="1.0" encoding="UTF-8"?>
@@ -64,15 +100,15 @@ const plists = {
   <array>
     <string>/usr/bin/caffeinate</string>
     <string>-s</string>
-    <string>${nodePath}</string>
-    <string>${join(projectRoot, 'infra', 'discord', 'discord-bot.js')}</string>
+    <string>${safeNodePath}</string>
+    <string>${escapeXml(join(projectRoot, 'infra', 'discord', 'discord-bot.js'))}</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>${join(projectRoot, 'infra', 'discord')}</string>
+  <string>${escapeXml(join(projectRoot, 'infra', 'discord'))}</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>BOT_HOME</key>
-    <string>${botHome}</string>
+    <string>${safeBotHome}</string>
     <key>DISCORD_TOKEN</key>
     <string>${discordToken}</string>
     <key>CHANNEL_IDS</key>
@@ -89,9 +125,9 @@ const plists = {
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>${join(botHome, 'logs', 'discord-bot.log')}</string>
+  <string>${escapeXml(join(botHome, 'logs', 'discord-bot.log'))}</string>
   <key>StandardErrorPath</key>
-  <string>${join(botHome, 'logs', 'discord-bot.log')}</string>
+  <string>${escapeXml(join(botHome, 'logs', 'discord-bot.log'))}</string>
 </dict>
 </plist>`,
 
@@ -103,19 +139,19 @@ const plists = {
   <string>ai.jarvis.release-checker</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${nodePath}</string>
-    <string>${join(projectRoot, 'infra', 'scripts', 'release-checker.mjs')}</string>
+    <string>${safeNodePath}</string>
+    <string>${escapeXml(join(projectRoot, 'infra', 'scripts', 'release-checker.mjs'))}</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>${projectRoot}</string>
+  <string>${escapeXml(projectRoot)}</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>BOT_HOME</key>
-    <string>${botHome}</string>
+    <string>${safeBotHome}</string>
     <key>UPDATE_CHANNEL_ID</key>
-    <string>${channelId}</string>
+    <string>${safeChannelId}</string>
     <key>ENV_PATH</key>
-    <string>${envPath}</string>
+    <string>${safeEnvPath}</string>
   </dict>
   <key>StartCalendarInterval</key>
   <dict>
@@ -125,9 +161,9 @@ const plists = {
     <integer>0</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>${join(botHome, 'logs', 'release-checker.log')}</string>
+  <string>${escapeXml(join(botHome, 'logs', 'release-checker.log'))}</string>
   <key>StandardErrorPath</key>
-  <string>${join(botHome, 'logs', 'release-checker.log')}</string>
+  <string>${escapeXml(join(botHome, 'logs', 'release-checker.log'))}</string>
   <key>RunAtLoad</key>
   <false/>
 </dict>
@@ -146,6 +182,7 @@ for (const [label, content] of Object.entries(plists)) {
 
   writeFileSync(plistPath, content);
 
+  // launchctl load 실패 시 에러를 명확히 리포트하되 다음 plist 계속 시도
   try {
     execSync(`launchctl load "${plistPath}"`);
     results.push({ label, status: 'loaded', path: plistPath });

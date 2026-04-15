@@ -37,14 +37,22 @@ try {
 details.dataDirs = DATA_SUBDIRS.every(d => existsSync(join(botHome, d)));
 details.missingDirs = DATA_SUBDIRS.filter(d => !existsSync(join(botHome, d)));
 
-// 4. .env 파일 + 필수 키
+// 4. .env 파일 + 필수 키 (주석 줄 제외하는 파싱)
 const envPath = join(HOME, '.jarvis', '.env');
 if (existsSync(envPath)) {
-  const content = readFileSync(envPath, 'utf-8');
-  const presentKeys = REQUIRED_ENV_KEYS.filter(k => content.includes(`${k}=`));
+  const lines = readFileSync(envPath, 'utf-8').split('\n');
+  const definedKeys = new Set();
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    definedKeys.add(trimmed.slice(0, eqIdx).trim());
+  }
+  const presentKeys = REQUIRED_ENV_KEYS.filter(k => definedKeys.has(k));
   details.envFile = true;
   details.envKeysOk = presentKeys.length === REQUIRED_ENV_KEYS.length;
-  details.missingEnvKeys = REQUIRED_ENV_KEYS.filter(k => !content.includes(`${k}=`));
+  details.missingEnvKeys = REQUIRED_ENV_KEYS.filter(k => !definedKeys.has(k));
 } else {
   details.envFile = false;
   details.envKeysOk = false;
@@ -54,18 +62,21 @@ if (existsSync(envPath)) {
 // 5. LaunchAgent 상태 (macOS only)
 if (process.platform === 'darwin') {
   try {
-    const laCtl = execSync('launchctl list 2>/dev/null').toString();
+    // stdio: ['pipe','pipe','pipe'] 로 stderr를 캡처하여 2>/dev/null 대체
+    const laCtl = execSync('launchctl list', { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
     details.launchAgents = {
-      discordBot:      laCtl.includes('ai.jarvis.discord-bot'),
-      releaseChecker:  laCtl.includes('ai.jarvis.release-checker'),
+      discordBot:     laCtl.includes('ai.jarvis.discord-bot'),
+      releaseChecker: laCtl.includes('ai.jarvis.release-checker'),
     };
   } catch {
     details.launchAgents = { discordBot: false, releaseChecker: false };
   }
 } else {
   try {
-    const pm2List = execSync('pm2 list --no-color 2>/dev/null').toString();
-    details.pm2 = pm2List.includes('jarvis') || pm2List.includes('discord');
+    // pm2 검사: 라인 전체에서 jarvis/discord 포함 여부로 판단 (공백 포함 프로세스명 대응)
+    const pm2List = execSync('pm2 list --no-color', { stdio: ['pipe', 'pipe', 'pipe'] }).toString();
+    const pm2Lines = pm2List.split('\n');
+    details.pm2 = pm2Lines.some(l => l.includes('jarvis') || l.includes('discord'));
   } catch {
     details.pm2 = false;
   }

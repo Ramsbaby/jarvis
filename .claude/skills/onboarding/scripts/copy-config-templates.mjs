@@ -20,7 +20,7 @@ const dstDir     = join(process.env.BOT_HOME || join(HOME, '.local', 'share', 'j
 
 mkdirSync(dstDir, { recursive: true });
 
-const results = { copied: [], skipped: [], notFound: [] };
+const results = { copied: [], skipped: [], failed: [], notFound: [] };
 
 if (!existsSync(srcDir)) {
   console.log(JSON.stringify({ status: 'warn', message: `infra/config/ not found at ${srcDir}`, ...results }));
@@ -44,8 +44,14 @@ for (const file of files) {
     continue;
   }
 
-  copyFileSync(srcPath, dstPath);
-  results.copied.push(dstName);
+  // copyFileSync를 try/catch로 감싸 실패 파일 리포트
+  try {
+    copyFileSync(srcPath, dstPath);
+    results.copied.push(dstName);
+  } catch (e) {
+    results.failed.push({ file: dstName, error: e.message });
+  }
 }
 
-console.log(JSON.stringify({ status: 'ok', dstDir, ...results }));
+const status = results.failed.length > 0 ? 'partial' : 'ok';
+console.log(JSON.stringify({ status, dstDir, ...results }));

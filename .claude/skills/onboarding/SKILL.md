@@ -116,7 +116,11 @@ node .claude/skills/onboarding/scripts/write-env.mjs \
 - ~/.jarvis/.env 생성 (primary, 권한 600)
 - ~/.local/share/jarvis/.env 생성 (sync)
 - BOT_HOME=~/.local/share/jarvis 자동 포함
-- 데이터 디렉토리 8개 자동 생성: logs/ state/ context/ inbox/ results/ rag/ data/ config/
+- 디렉토리 자동 생성:
+  - ~/.jarvis/
+  - ~/.jarvis/config/
+  - ~/.local/share/jarvis/ (BOT_HOME)
+  - 데이터 서브디렉토리 8개: logs/ state/ context/ inbox/ results/ rag/ data/ config/
 
 출력 예시:
 ```json
@@ -220,7 +224,8 @@ node .claude/skills/onboarding/scripts/save-update-policy.mjs --mode <auto|manua
 
 ```bash
 export $(grep -v '^#' ~/.jarvis/.env | grep -v '^$' | xargs)
-node .claude/skills/onboarding/scripts/create-update-channel.mjs
+RESULT=$(node .claude/skills/onboarding/scripts/create-update-channel.mjs)
+CHANNEL_ID=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['channelId'])")
 ```
 
 이 스크립트는:
@@ -240,7 +245,7 @@ node .claude/skills/onboarding/scripts/create-update-channel.mjs
 
 **macOS:**
 ```bash
-CHANNEL_ID=<Step 9에서 얻은 channelId>
+# CHANNEL_ID는 Step 10에서 파싱한 변수를 그대로 사용
 node .claude/skills/onboarding/scripts/install-launch-agents.mjs --channel-id "$CHANNEL_ID"
 ```
 
@@ -255,8 +260,8 @@ npm install -g pm2
 pm2 start infra/ecosystem.config.cjs
 pm2 startup && pm2 save
 
-# 릴리즈 체커는 crontab에 등록
-CHANNEL_ID=<channelId> node .claude/skills/onboarding/scripts/install-linux-cron.mjs --channel-id "$CHANNEL_ID"
+# 릴리즈 체커는 crontab에 직접 등록 (CHANNEL_ID는 Step 10에서 파싱한 변수)
+(crontab -l 2>/dev/null; echo "0 3 * * * node /path/to/infra/scripts/release-checker.mjs --channel-id $CHANNEL_ID") | crontab -
 ```
 
 ---

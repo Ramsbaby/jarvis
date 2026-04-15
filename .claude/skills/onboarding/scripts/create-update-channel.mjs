@@ -86,7 +86,23 @@ function updatePlistChannelIds(plistPath, newChannelId) {
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
+// 타임아웃: 60초 후에도 ready 이벤트 없으면 에러 종료
+const timeout = setTimeout(() => {
+  console.error(JSON.stringify({ error: 'Timeout: ready event not received within 60 seconds' }));
+  client.destroy();
+  process.exit(1);
+}, 60000);
+
+// 에러 핸들러: 토큰/네트워크 오류 시 hang 방지
+client.on('error', (err) => {
+  clearTimeout(timeout);
+  console.error(JSON.stringify({ error: err.message }));
+  client.destroy();
+  process.exit(1);
+});
+
 client.once('ready', async () => {
+  clearTimeout(timeout);
   try {
     const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId);
 
@@ -99,6 +115,7 @@ client.once('ready', async () => {
         status: 'already_exists',
       }));
       client.destroy();
+      process.exit(0);
       return;
     }
 
