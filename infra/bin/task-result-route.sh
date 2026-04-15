@@ -19,8 +19,10 @@ CHANNEL="${4:-}"  # optional: channel name from tasks.json discordChannel field
 # --- Marker extraction (before clean_message) ---
 # CHART_DATA:<json>  → QuickChart 이미지 embed
 # EMBED_DATA:<json>  → Discord rich embed (color card)
+# CV2_DATA:<json>    → Discord Components V2 container card
 CHART_JSON=""
 EMBED_JSON=""
+CV2_JSON=""
 if printf '%s' "$MESSAGE" | grep -q '^CHART_DATA:'; then
     CHART_JSON=$(printf '%s' "$MESSAGE" | grep '^CHART_DATA:' | head -1 | sed 's/^CHART_DATA://')
     MESSAGE=$(printf '%s' "$MESSAGE" | grep -v '^CHART_DATA:' || true)
@@ -28,6 +30,10 @@ fi
 if printf '%s' "$MESSAGE" | grep -q '^EMBED_DATA:'; then
     EMBED_JSON=$(printf '%s' "$MESSAGE" | grep '^EMBED_DATA:' | head -1 | sed 's/^EMBED_DATA://')
     MESSAGE=$(printf '%s' "$MESSAGE" | grep -v '^EMBED_DATA:' || true)
+fi
+if printf '%s' "$MESSAGE" | grep -q 'CV2_DATA:'; then
+    CV2_JSON=$(printf '%s' "$MESSAGE" | grep 'CV2_DATA:' | head -1 | sed 's/.*CV2_DATA://')
+    MESSAGE=$(printf '%s' "$MESSAGE" | grep -v 'CV2_DATA:' || true)
 fi
 
 # --- Message quality filter (central pre-send hook) ---
@@ -94,6 +100,36 @@ send_embed() {
     fi
 }
 
+# --- CV2 sender (Discord Components V2 container card) ---
+send_cv2() {
+    local cv2_json="$1"
+    local webhook_url
+    webhook_url=$(get_webhook_url)
+
+    local payload
+    payload=$(node -e "
+const cv2 = JSON.parse(process.argv[1]);
+const { color = 5763719, blocks = [] } = cv2;
+const comps = blocks.map(b => ({
+  type: 10,
+  content: (b && typeof b === 'object' && b.content) ? b.content : String(b)
+})).filter(b => b.content && b.content.trim());
+if (!comps.length) process.exit(0);
+const container = { type: 17, accent_color: color, components: comps };
+console.log(JSON.stringify({ flags: 32768, components: [container] }));
+" "$cv2_json" 2>/dev/null) || return 0
+
+    if [[ -z "$payload" ]]; then return 0; fi
+
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
+        -H "Content-Type: application/json" \
+        -d "$payload") || true
+    if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
+        echo "WARN: cv2 webhook returned HTTP $http_code" >&2
+    fi
+}
+
 # --- Chart embed sender (QuickChart.io → Discord image embed) ---
 send_chart_embed() {
     local chart_json="$1"
@@ -144,6 +180,12 @@ send_discord() {
     if [[ -n "$EMBED_JSON" ]]; then
         sleep 0.3
         send_embed "$EMBED_JSON"
+    fi
+
+    # --- CV2 card (if CV2_DATA present, send as Components V2 container) ---
+    if [[ -n "$CV2_JSON" ]]; then
+        sleep 0.3
+        send_cv2 "$CV2_JSON"
     fi
 
     # --- Chart embed (append after text/embed if CHART_JSON present) ---

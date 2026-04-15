@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.109",
     "puppeteer-core": "^24.40.0"
   }
 }
