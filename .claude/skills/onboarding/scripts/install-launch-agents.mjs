@@ -28,9 +28,10 @@ if (process.platform !== 'darwin') {
 const args = process.argv.slice(2);
 const cidIdx = args.indexOf('--channel-id');
 const channelId = cidIdx !== -1 ? args[cidIdx + 1] : null;
+const skipIfLoaded = args.includes('--skip-if-loaded');
 
 if (!channelId) {
-  console.error(JSON.stringify({ error: 'Usage: --channel-id CHANNEL_ID' }));
+  console.error(JSON.stringify({ error: 'Usage: --channel-id CHANNEL_ID [--skip-if-loaded]' }));
   process.exit(1);
 }
 
@@ -174,6 +175,18 @@ const results = [];
 
 for (const [label, content] of Object.entries(plists)) {
   const plistPath = join(agentsDir, `${label}.plist`);
+
+  // --skip-if-loaded: 이미 launchd에 등록된 경우 재설치 생략
+  if (skipIfLoaded) {
+    try {
+      execSync(`launchctl list ${label} 2>/dev/null`, { stdio: 'pipe' });
+      // exit 0 → 이미 로드됨
+      results.push({ label, status: 'already_loaded', path: plistPath });
+      continue;
+    } catch {
+      // exit non-0 → 미등록, 신규 설치 진행
+    }
+  }
 
   // 기존 언로드
   try {
