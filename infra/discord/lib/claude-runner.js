@@ -26,6 +26,7 @@ import {
   buildOwnerPreferencesSection, buildOwnerPersonaSection, buildFamilyBriefingContext,
   buildWikiContextSection,
 } from './prompt-sections.js';
+import { buildChannelFeedSection } from './channel-feed.js';
 
 // LLM Wiki 실시간 기록 — 대화 종료 시 facts를 위키에도 저장
 let _addFactToWiki = null;
@@ -484,8 +485,8 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
   }
   _extractCooldown.set(userId, now);
 
-  const FAMILY_CHANNEL_ID = process.env.FAMILY_CHANNEL_ID || '';
-  const isFamilyChannel = channelId === FAMILY_CHANNEL_ID;
+  const FAMILY_CHANNEL_IDS = (process.env.FAMILY_CHANNEL_IDS || process.env.FAMILY_CHANNEL_ID || '').split(',').filter(Boolean);
+  const isFamilyChannel = !!channelId && FAMILY_CHANNEL_IDS.includes(channelId);
 
   // family 채널 전용 추출 프롬프트 — Owner/시스템 데이터 오염 방지
   const prompt = isFamilyChannel ? [
@@ -569,7 +570,7 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
           se2 = ob - 1;
         }
         if (facts2) {
-          const FAMILY_JUNK_RE = /userid.*family|userid.*owner|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조|\[20\d\d-\d\d-\d\d \d\d:\d\d:\d\d\]/i;
+          const FAMILY_JUNK_RE = /userid.*family|userid.*owner|userid.*boram|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조|\[20\d\d-\d\d-\d\d \d\d:\d\d:\d\d\]/i;
           let saved2 = 0;
           for (const f of facts2) {
             if (typeof f === 'string' && f.length > 5 && f.length < 160 && !(isFamilyChannel && FAMILY_JUNK_RE.test(f))) {
@@ -623,7 +624,7 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
       return;
     }
 
-    const FAMILY_JUNK_RE2 = /userid.*family|userid.*owner|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조|\[20\d\d-\d\d-\d\d \d\d:\d\d:\d\d\]/i;
+    const FAMILY_JUNK_RE2 = /userid.*family|userid.*owner|userid.*boram|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조|\[20\d\d-\d\d-\d\d \d\d:\d\d:\d\d\]/i;
     let saved = 0;
     for (const fact of facts) {
       if (typeof fact === 'string' && fact.length > 5 && fact.length < 160 && !(isFamilyChannel && FAMILY_JUNK_RE2.test(fact))) {
@@ -664,7 +665,7 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
 // ---------------------------------------------------------------------------
 
 export async function* createClaudeSession(prompt, {
-  sessionId, threadId, channelId, ragContext, attachments = [],
+  sessionId, threadId, channelId, channelName, ragContext, attachments = [],
   contextBudget, userId, signal,
   injectedSummary = '',
 } = {}) {
@@ -808,8 +809,7 @@ export async function* createClaudeSession(prompt, {
       const rawMemStr = JSON.stringify(rawMemData);
       const currentHash = createHash('md5').update(rawMemStr).digest('hex');
       const cached = memoryHashCache.get(userId);
-      const stableSystemLen = stableSystemPrompt.length;
-      if (cached && cached.hash === currentHash && stableSystemLen < 40000) {
+      if (cached && cached.hash === currentHash) {
         memSnippet = cached.snippet;
       } else {
         if (prompt) {
@@ -823,6 +823,13 @@ export async function* createClaudeSession(prompt, {
       memSnippet = userMemory.getPromptSnippet(userId);
     }
     if (memSnippet) systemParts.push('', '--- 사용자 기억 (User Memory) ---', memSnippet);
+  }
+
+  // Channel feed context (dynamic — 채널에 최근 전송된 봇/크론/알람 메시지)
+  // 사용자가 "방금 크론이 보낸 거 뭐야?" 등 채널 컨텍스트를 참조할 때 재질문 방지
+  if (channelName) {
+    const feedCtx = buildChannelFeedSection(channelName, 15);
+    if (feedCtx) systemParts.push('', feedCtx);
   }
 
   // LLM Wiki context (dynamic — 세션 해시 영향 없음)
@@ -874,6 +881,12 @@ export async function* createClaudeSession(prompt, {
       ? '게스트(미등록 사용자)'
       : `${activeUserProfile.name}(${activeUserProfile.title})`;
     ctxParts.push(`[대화 상대] ${senderLabel}`);
+    // Channel feed: resume 시에도 최신 채널 활동 주입 (세션 연속성과 무관하게 매턴 갱신)
+    // limit=5 — 토큰 절약. cron/alert만 의미 있는 컨텍스트이므로 최근 5개로 충분
+    if (channelName) {
+      const feedCtx = buildChannelFeedSection(channelName, 5);
+      if (feedCtx) ctxParts.push(feedCtx);
+    }
     // Phase 2: 이전 세션 요약 주입 (resume 성공 시에도 DYNAMIC 섹션에 삽입)
     // 조건: injectedSummary 존재 (handlers.js가 30분+ 경과 시에만 전달)
     if (injectedSummary) {
@@ -922,7 +935,7 @@ export async function* createClaudeSession(prompt, {
   const model = contextBudget === 'small' ? MODELS.small : 'opusplan';
 
   // 7. Load MCP server config (same servers, now as SDK mcpServers object)
-  // 우선순위: discord-mcp.json > ~/.mcp.json (nexus, serena만 필터)
+  // 우선순위: discord-mcp.json > ~/.mcp.json (nexus, serena, serena-board 필터)
   // ${ENV_VAR} 형식의 env var를 실제 값으로 치환 지원 (GITHUB_TOKEN 등)
   let mcpServers = {};
   try {
@@ -931,7 +944,7 @@ export async function* createClaudeSession(prompt, {
     mcpServers = (JSON.parse(rawMcp)).mcpServers ?? {};
   } catch {
     // discord-mcp.json 없으면 ~/.mcp.json에서 봇에 필요한 서버만 필터링
-    const BOT_MCP_ALLOWLIST = ['nexus', 'serena'];
+    const BOT_MCP_ALLOWLIST = ['nexus', 'serena', 'serena-board'];
     try {
       const globalMcp = JSON.parse(readFileSync(join(HOME, '.mcp.json'), 'utf-8'));
       const allServers = globalMcp.mcpServers ?? {};
@@ -971,6 +984,13 @@ export async function* createClaudeSession(prompt, {
       'mcp__serena__read_memory', 'mcp__serena__write_memory', 'mcp__serena__find_file',
       'mcp__serena__replace_symbol_body', 'mcp__serena__insert_after_symbol',
       'mcp__serena__insert_before_symbol',
+      // serena-board: jarvis-board 워크스페이스 (자비스맵 등 코드 접근)
+      'mcp__serena-board__check_onboarding_performed',
+      'mcp__serena-board__find_symbol', 'mcp__serena-board__get_symbols_overview',
+      'mcp__serena-board__search_for_pattern', 'mcp__serena-board__find_referencing_symbols',
+      'mcp__serena-board__read_memory', 'mcp__serena-board__write_memory', 'mcp__serena-board__find_file',
+      'mcp__serena-board__replace_symbol_body', 'mcp__serena-board__insert_after_symbol',
+      'mcp__serena-board__insert_before_symbol',
     ],
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
