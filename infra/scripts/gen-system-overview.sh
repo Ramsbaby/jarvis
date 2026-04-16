@@ -13,7 +13,7 @@ if [[ -z "${BOT_HOME:-}" ]]; then
   if [[ -d "${HOME}/.jarvis" ]]; then
     BOT_HOME="${HOME}/.jarvis"
   else
-    BOT_HOME="${HOME}/.local/share/jarvis"
+    BOT_HOME="${HOME}/.jarvis"
   fi
 fi
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {

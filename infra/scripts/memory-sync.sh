@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 MEMORY_FILE="$HOME/.claude/projects/$(echo "${HOME}" | tr "/" "-")/memory/MEMORY.md"
 ADR_INDEX="$BOT_HOME/adr/ADR-INDEX.md"
 MCP_CONFIG="$HOME/.mcp.json"

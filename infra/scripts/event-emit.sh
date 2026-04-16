@@ -13,7 +13,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 EVENTS_DIR="${BOT_HOME}/state/events"
 LOG="${BOT_HOME}/logs/event-watcher.log"
 

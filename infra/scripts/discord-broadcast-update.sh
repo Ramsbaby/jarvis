@@ -10,7 +10,7 @@ export HOME="${HOME:-/Users/$(id -un)}"
 # Prevent nested claude
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 STATE_FILE="$BOT_HOME/state/triggers/update-broadcast.last-sha"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 LOG="$BOT_HOME/logs/update-broadcast.log"

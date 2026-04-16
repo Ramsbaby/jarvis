@@ -16,7 +16,7 @@
 # set -e 제거 — 개별 실패는 || true / 명시적 분기로 처리
 set -uo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; case "$(uname -s)" in Darwin) IS_MACOS=true ;; esac
 }

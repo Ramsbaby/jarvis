@@ -12,7 +12,7 @@ export HOME="${HOME:-/Users/$(id -un)}"
 if [[ -d "${HOME}/.jarvis" ]]; then
     BOT_HOME="${HOME}/.jarvis"
 else
-    BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+    BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 fi
 
 CRON_LOG="$BOT_HOME/logs/cron.log"

@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 TEST_DIR="/tmp/quick-compress-test-$$"
 OUTPUT_DIR="${BOT_HOME}/tmp/compress-loss-analysis"
 

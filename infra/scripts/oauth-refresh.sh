@@ -4,7 +4,7 @@
 # cron 환경에서 node/claude 경로 확보
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
 #
 # 역할: credentials.json의 refreshToken으로 새 accessToken을 발급받아
 #       credentials.json을 갱신하고, 만료 임박 시 봇을 재시작.

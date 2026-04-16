@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 AGENT="${BOT_HOME}/discord/lib/company-agent.mjs"
 LOG_DIR="${BOT_HOME}/logs"
 LOG_FILE="${LOG_DIR}/parallel-teams.log"

@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 DB_PATH="${BOT_HOME}/state/messages.db"
 SQLITE="/usr/bin/sqlite3"
 

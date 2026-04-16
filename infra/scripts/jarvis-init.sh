@@ -15,7 +15,7 @@
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/.local/share/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 
 ok()   { echo "  ✅  $*"; }

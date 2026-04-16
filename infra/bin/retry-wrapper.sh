@@ -12,8 +12,8 @@ source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 RETRY_LOG="${BOT_HOME}/logs/retry.jsonl"
 
 # Load .env for BOARD_URL and AGENT_API_KEY
-if [[ -z "${BOARD_URL:-}" && -f "${JARVIS_HOME:-${HOME}/.local/share/jarvis}/.env" ]]; then
-    set -a; source "${JARVIS_HOME:-${HOME}/.local/share/jarvis}/.env"; set +a
+if [[ -z "${BOARD_URL:-}" && -f "${JARVIS_HOME:-${HOME}/.jarvis}/.env" ]]; then
+    set -a; source "${JARVIS_HOME:-${HOME}/.jarvis}/.env"; set +a
 fi
 
 # --- Arguments ---

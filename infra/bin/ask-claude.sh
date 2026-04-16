@@ -4,7 +4,7 @@
 _EARLY_LOG="${BOT_HOME:-${HOME}/.jarvis}/logs/ask-claude-invocations.log"
 printf '[%s] PID=%d TASK=%s\n' "$(date -u +%FT%TZ 2>/dev/null || echo unknown)" "$$" "${1:-?}" >> "$_EARLY_LOG" 2>/dev/null || true
 unset _EARLY_LOG
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
 set -euo pipefail
 
 # ask-claude.sh - Core wrapper around `claude -p` for AI task execution

@@ -16,7 +16,7 @@ if (( USAGE >= 90 )); then
     echo "사용: $DISK_USED / 전체: $DISK_TOTAL / 여유: $DISK_FREE"
 
     # 시각화 카드 Discord 전송
-    BOT_HOME_LOCAL="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+    BOT_HOME_LOCAL="${BOT_HOME:-${HOME}/.jarvis}"
     VISUAL_SCRIPT="$BOT_HOME_LOCAL/scripts/discord-visual.mjs"
     if command -v node >/dev/null 2>&1 && [[ -f "$VISUAL_SCRIPT" ]]; then
         DISK_JSON="{\"pct\":${USAGE},\"used\":\"${DISK_USED}\",\"total\":\"${DISK_TOTAL}\",\"free\":\"${DISK_FREE}\",\"timestamp\":\"$(date '+%Y-%m-%d %H:%M')\"}"

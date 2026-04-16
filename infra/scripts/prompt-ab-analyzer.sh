@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 MESSAGES_DB="${BOT_HOME}/state/messages.db"
 DAYS=7
 FILTER_TASK=""

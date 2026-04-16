@@ -15,7 +15,7 @@
 set -euo pipefail
 trap 'rm -f "$TMP_DATA" "$TMP_PROMPT" "$TMP_OUTPUT" 2>/dev/null' EXIT
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 TMP_DATA=$(mktemp /tmp/perf-agent-data-XXXXXX.json)
 TMP_PROMPT=$(mktemp /tmp/perf-agent-prompt-XXXXXX.txt)
 TMP_OUTPUT=$(mktemp /tmp/perf-agent-output-XXXXXX.json)
