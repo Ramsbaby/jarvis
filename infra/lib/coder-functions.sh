@@ -38,8 +38,14 @@ _discord_alert() {
 }
 
 # --- Discord #jarvis-ceo 채널 알림 ---
+# debug-cron-* 태스크는 CEO 알림 스킵 (노이즈 방지)
 _discord_ceo_notify() {
     local msg="$1"
+    # debug-cron-* 태스크 ID 패턴이면 스킵
+    if [[ "${TASK_ID:-}" == debug-cron-* ]]; then
+        _coder_log "CEO_NOTIFY_SKIP(debug): ${msg:0:100}"
+        return 0
+    fi
     local monitoring_config="${BOT_HOME}/config/monitoring.json"
     local ceo_webhook
     ceo_webhook=$(jq -r '(.webhooks["jarvis-ceo"] // .webhooks["jarvis"] // empty)' "$monitoring_config" 2>/dev/null || true)
@@ -736,7 +742,7 @@ ${_syntax_err:0:500}
                 fi
 
                 update_queue "$TASK_ID" "queued" "{\"lastError\": \"sprint_contract_partial\", \"retries\": ${RETRIES}}"
-                _discord_ceo_notify "🔄 **Jarvis Coder**: \`${TASK_ID}\` Sprint Contract iteration #${_sc_iter_num} — 미검증 ${_remaining}건 남음"
+                _coder_log "SPRINT_CONTRACT: 재큐잉 → iteration #${_sc_iter_num}, 미검증 ${_remaining}건 (task=${TASK_ID})"
             fi
         fi
         return 0
