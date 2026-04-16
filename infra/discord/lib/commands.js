@@ -57,7 +57,7 @@ export async function handleInteraction(interaction, deps) {
     const key = interaction.customId.replace('cancel_', '');
     const proc = activeProcesses.get(key);
     if (proc?.proc) {
-      proc.proc.kill('SIGTERM');
+      proc.proc.kill('manual'); // 'manual': 사용자 수동 중단 — auto-resume 차단용
       await interaction.reply({ content: t('cmd.cancel.stopped'), flags: MessageFlags.Ephemeral });
     } else {
       await interaction.reply({ content: t('cmd.cancel.noProcess'), flags: MessageFlags.Ephemeral });
