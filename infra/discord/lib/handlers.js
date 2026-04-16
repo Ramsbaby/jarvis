@@ -12,7 +12,7 @@
  */
 
 import { BoundedMap } from './bounded-map.js';
-import { writeFileSync, rmSync, readFileSync, existsSync, renameSync } from 'node:fs';
+import { writeFileSync, rmSync, readFileSync, existsSync, renameSync, appendFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
@@ -180,10 +180,23 @@ function _isSessionIdle(sessions, sessionKey) {
  * 명시적 종료 신호 또는 비활동 타임아웃 감지 시 백그라운드 요약 트리거.
  * 메인 흐름을 차단하지 않음 (fire-and-forget).
  */
+import { saveHandoff } from './session-handoff.js';
+
 function _triggerSessionEndSummary(sessionKey, reason) {
   compactSessionWithAI(sessionKey).catch((e) =>
     log('debug', `_triggerSessionEndSummary: compaction failed (${reason})`, { sessionKey, error: e?.message }),
   );
+  // Handoff 저장: 다음 세션이 구조화된 상태를 받을 수 있도록
+  try {
+    const summaryPath = join(_BOT_HOME, 'state', 'session-summaries', `${sessionKey}.md`);
+    if (existsSync(summaryPath)) {
+      const raw = readFileSync(summaryPath, 'utf-8');
+      // 마지막 주제 추출 (가장 마지막 [YYYY-MM-DD HH:MM] 이후 user 텍스트)
+      const userTurns = raw.match(/\[user\]\s*(.+)/g) || [];
+      const lastTopic = userTurns.length ? userTurns[userTurns.length - 1].replace(/\[user\]\s*/, '').slice(0, 100) : '';
+      saveHandoff(sessionKey, { lastTopic, keyDecisions: [], pendingTasks: [] });
+    }
+  } catch { /* handoff 저장 실패는 비차단 */ }
   log('info', `Session end summary triggered (${reason})`, { sessionKey });
 }
 
@@ -1161,6 +1174,11 @@ ${extracted}
             if (toolName && !toolName.includes('secret') && completedTools.length < 20) {
               completedTools.push(toolName);
             }
+            // Tool Call Audit: 도구 호출 ledger에 기록 (Anthropic Verification 패턴)
+            try {
+              const toolEntry = JSON.stringify({ ts: new Date().toISOString(), session: sessionKey, tool: toolName }) + '\n';
+              appendFileSync(join(_BOT_HOME, 'state', 'tool-call-ledger.jsonl'), toolEntry);
+            } catch { /* ledger 기록 실패는 비차단 */ }
             log('info', `Tool: ${se.content_block.name}`, { threadId: thread.id });
           }
         } else if (event.type === 'assistant') {

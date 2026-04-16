@@ -97,6 +97,21 @@ print()
 print("📋 `~/.jarvis/logs/cron.log` 에서 상세 확인")
 PYEOF
 
+# Failure Rule Engine 연동: 매칭 규칙이 있으면 자동 해결 제안 추가
+RULE_ENGINE="${HOME}/jarvis/infra/scripts/failure-rule-engine.mjs"
+if [[ -f "$RULE_ENGINE" ]]; then
+    for _fail_line in $(echo "$FAILURES" | grep -oP '\[([a-zA-Z0-9_-]+)\]' | tr -d '[]' | sort -u); do
+        _match=$(node "$RULE_ENGINE" match "$_fail_line" 2>/dev/null || echo '{"match":null}')
+        _resolution=$(echo "$_match" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('resolution',''))" 2>/dev/null || true)
+        _confidence=$(echo "$_match" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('confidence',0))" 2>/dev/null || true)
+        if [[ -n "$_resolution" && "$_confidence" != "0" ]]; then
+            echo ""
+            echo "🔧 **자동 해결 제안** (\`${_fail_line}\`, 신뢰도 ${_confidence}):"
+            echo "> ${_resolution}"
+        fi
+    done
+fi
+
 _fsm_done=true
 trap - ERR EXIT
 node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" transition "auto-diagnose" "done" "auto-diagnose" >/dev/null 2>&1 || true

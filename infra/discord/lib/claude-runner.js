@@ -28,6 +28,7 @@ import {
   buildWikiContextSection,
 } from './prompt-sections.js';
 import { getPromptHarness, Tier } from './prompt-harness.js';
+import { loadHandoff, formatHandoffForPrompt } from './session-handoff.js';
 import { buildChannelFeedSection } from './channel-feed.js';
 
 import { recordSilentError } from './error-ledger.js';
@@ -843,6 +844,15 @@ export async function* createClaudeSession(prompt, {
   if (channelName) {
     const feedCtx = buildChannelFeedSection(channelName, 15);
     if (feedCtx) systemParts.push('', feedCtx);
+  }
+
+  // Session Handoff (dynamic — 이전 세션의 구조화된 상태 전달)
+  // Anthropic Sensors 패턴: compacted summary보다 정확한 토픽/결정/미완료 전달
+  {
+    const sessionKey = `${channelId}-${userId}`;
+    const handoff = loadHandoff(sessionKey);
+    const handoffText = formatHandoffForPrompt(handoff);
+    if (handoffText) systemParts.push('', handoffText);
   }
 
   // LLM Wiki context (dynamic — 세션 해시 영향 없음)
