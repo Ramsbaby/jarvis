@@ -321,7 +321,8 @@ async function main() {
   log('info', `BOT_HOME: ${BOT_HOME}`);
 
   // Dynamically import message-queue.mjs (relative to this file)
-  const mqPath = new URL('../../../.jarvis/lib/message-queue.mjs', import.meta.url);
+  // NOTE: 2026-04-16 심링크 정합화 이후 `~/jarvis/.jarvis/` 제거됨 → SSoT 상대 경로(infra/lib)로 교체
+  const mqPath = new URL('../../lib/message-queue.mjs', import.meta.url);
   let mq;
   try {
     mq = await import(mqPath.href);
