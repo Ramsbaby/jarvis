@@ -37,9 +37,14 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
 
 send_alert() {
     local message="$1"
+    local severity="${2:-warning}"  # warning | critical
     log "ALERT: $message"
     if [[ -x "$ROUTE_RESULT" ]]; then
         "$ROUTE_RESULT" discord "watchdog" "$message" "jarvis-system" 2>/dev/null || true
+        # CRITICAL은 오너 채널(jarvis-ceo)에도 전송 — jarvis-system만으로는 놓침
+        if [[ "$severity" == "critical" ]]; then
+            "$ROUTE_RESULT" discord "watchdog" "🚨 $message" "jarvis-ceo" 2>/dev/null || true
+        fi
     fi
     # ntfy 직접 전송 — Discord 봇 다운·크래시 루프 중에도 폰 알림 도달
     local _ntfy_topic
@@ -83,7 +88,7 @@ detect_crash_loop() {
                 | grep -iE "Error:|TypeError|SyntaxError|Cannot find|ENOENT|FATAL" \
                 | tail -1 || echo "로그 없음")
             # 에러 유무 무관 알림 + bot-heal.sh 트리거
-            send_alert "[Bot Watchdog] CRASH LOOP: ${restart_count}회 재시작 (30분 내). 에러: ${last_error}"
+            send_alert "[Bot Watchdog] CRASH LOOP: ${restart_count}회 재시작 (30분 내). 에러: ${last_error}" "critical"
             # 자가치유 시도 (heal-in-progress 락이 없을 때만)
             if [[ ! -f "$BOT_HOME/state/heal-in-progress" ]]; then
                 log "CRASH LOOP: bot-heal.sh 트리거"
@@ -514,7 +519,7 @@ run_one_check() {
 
                     # 에러율 100% → 코드 버그 확정, 자동 heal + 재시작
                     if (( _total_c > 0 && _err_c == _total_c )); then
-                        send_alert "[Bot Watchdog] FATAL: handleMessage 에러율 100% (${_err_c}/${_total_c}). 코드 버그 — 자동 heal 후 재시작"
+                        send_alert "[Bot Watchdog] FATAL: handleMessage 에러율 100% (${_err_c}/${_total_c}). 코드 버그 — 자동 heal 후 재시작" "critical"
                         echo "$_now_ts" > "$_alert_last"
                         # bot-heal.sh로 자동 수정 시도
                         local _last_err
@@ -593,11 +598,11 @@ for l in sys.stdin:
                             | grep -iE "Error:|TypeError|SyntaxError|Cannot find|ENOENT|FATAL" \
                             | tail -1 || echo "로그 없음")
                         log "FATAL: MAX_RETRIES 도달 → bot-heal.sh 트리거 (에러: ${bot_err_last})"
-                        send_alert "[Bot Watchdog] FATAL: Discord bot crashed ${crash_count} times. 자동복구 시도 중..."
+                        send_alert "[Bot Watchdog] FATAL: Discord bot crashed ${crash_count} times. 자동복구 시도 중..." "critical"
                         nohup bash "$BOT_HOME/scripts/bot-heal.sh" "MAX_RETRIES ${crash_count}회: ${bot_err_last}" \
                             >> "$BOT_HOME/logs/bot-heal.log" 2>&1 &
                     else
-                        send_alert "[Bot Watchdog] FATAL: Discord bot crashed ${crash_count} times. (heal 진행 중)"
+                        send_alert "[Bot Watchdog] FATAL: Discord bot crashed ${crash_count} times. (heal 진행 중)" "critical"
                     fi
                     echo "$now_ts" > "$fatal_last"
                 else

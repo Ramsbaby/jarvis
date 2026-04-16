@@ -104,9 +104,12 @@ fail_and_heal() {
 
 log "=== preflight 검증 시작 ==="
 
-# ── node 바이너리 확인 (가장 먼저) ────────────────────────────────────────────
+# ── node 바이너리 확인 + smoke test ──────────────────────────────────────────
 if [[ ! -x "$NODE_BIN" ]]; then
     fail_and_heal "node 없음: $NODE_BIN"
+fi
+if ! "$NODE_BIN" -e "process.exit(0)" 2>/dev/null; then
+    fail_and_heal "node smoke test 실패: $NODE_BIN (바이너리 있지만 실행 불가 — dylib/permission 문제 가능)"
 fi
 
 # ── 봇 스크립트 확인 ──────────────────────────────────────────────────────────
@@ -178,8 +181,11 @@ fi
 # exec 대신 직접 실행: 종료 후 빠른 크래시 여부 판단 가능
 # (launchd는 bash PID를 추적 → node 종료 후 bash도 종료 → launchd가 재시작)
 _start_ts=$(date +%s)
-cd "$BOT_HOME/discord" && \
-NODE_PATH="${BOT_HOME}/discord/node_modules${NODE_PATH:-}" \
+cd "$BOT_HOME/discord" || fail_and_heal "디렉토리 이동 실패: $BOT_HOME/discord"
+# NODE_PATH 명시 설정: Node.js가 node_modules를 자동으로 찾도록 보장 (절대 경로)
+# set -u 모드에서도 안전하게 처리 (초기값이 없으면 기본값으로 설정)
+NODE_PATH="${NODE_PATH:-}"
+export NODE_PATH="/Users/ramsbaby/.jarvis/discord/node_modules${NODE_PATH:+:${NODE_PATH}}"
 "$NODE_BIN" discord-bot.js
 _exit_code=$?
 _runtime=$(( $(date +%s) - _start_ts ))

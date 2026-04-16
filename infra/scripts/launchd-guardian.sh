@@ -91,9 +91,16 @@ for service in "${KEEPALIVE_SERVICES[@]}"; do
 
             if [[ "$fail_count" -ge 3 && "$service" == "ai.jarvis.discord-bot" ]]; then
                 log "RECOVERY: $service failed ${fail_count}x — running npm install to repair"
-                # cron/launchd 환경에서 npm PATH 명시 (command not found 방지)
-                NPM_BIN="${NPM_BIN:-$(command -v npm 2>/dev/null || echo /opt/homebrew/bin/npm)}"
-                "$NPM_BIN" install --prefix "$BOT_HOME/discord" --silent 2>>"$LOG_FILE" || true
+                # launchd 환경은 PATH 미상속 → node/npm 절대경로 + PATH export 필수
+                local NODE_BIN="${NODE_BIN:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
+                local NPM_BIN="${NPM_BIN:-$(command -v npm 2>/dev/null || echo /opt/homebrew/bin/npm)}"
+                if [[ -x "$NODE_BIN" && -x "$NPM_BIN" ]]; then
+                    # npm 내부에서 `env node` 호출 → PATH에 node 디렉토리 필요
+                    export PATH="$(dirname "$NODE_BIN"):${PATH:-/usr/bin:/bin}"
+                    "$NPM_BIN" install --prefix "$BOT_HOME/discord" --silent 2>>"$LOG_FILE" || true
+                else
+                    log "ERROR: node($NODE_BIN) 또는 npm($NPM_BIN) 바이너리 없음 — npm install 불가"
+                fi
                 echo "0" > "$FAIL_FILE"
                 log "RECOVERY: npm install done, kickstarting"
             fi
