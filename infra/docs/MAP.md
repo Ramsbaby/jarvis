@@ -171,3 +171,4 @@ Then read the specific script with Serena (`find_symbol`, `get_symbols_overview`
 - Don't Read 1,500+ line files without trying Serena first (`find_symbol` / `get_symbols_overview`)
 - Don't commit `.env`, `jira.env`, `tutoring.env`, `google-calendar-token.json`, or anything under `~/.jarvis/config/secrets/`
 - Don't add a new team by creating a keyword list here — edit `~/jarvis-board/lib/map/team-registry.ts` first
+
