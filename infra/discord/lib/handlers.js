@@ -201,9 +201,14 @@ const TEXT_DOC_EXTS = /\.(txt|md|html|htm|css|js|mjs|ts|java|py|json|xml|csv|yam
 // Dedup: prevent same message from being processed twice (shard resume / race condition)
 const processingMsgIds = new Set();
 
-// Session compaction: 토큰 기반 컨텍스트 관리
-// Sonnet 200k 컨텍스트의 ~40% 지점에서 선제적 compaction
-const COMPACT_THRESHOLD_TOKENS = 80_000;
+// Session compaction: Progressive Compaction (업계 권고 — Anthropic, OpenAI)
+// 단일 80K 한방 대신 3단계: 40K(Tier 1 제거) → 60K(요약 축소) → 80K(전면 리셋)
+const COMPACT_LEVELS = [
+  { threshold: 40_000, action: 'lean' },           // Tier 1 섹션 미로드 (format-detail 등)
+  { threshold: 60_000, action: 'compress_history' }, // 대화 요약 축소
+  { threshold: 80_000, action: 'full_compact' },     // 전면 compaction + 세션 리셋
+];
+const COMPACT_THRESHOLD_TOKENS = 80_000; // 하위 호환
 const sessionTokenCounts = new BoundedMap(1000, 60 * 60_000); // 1000 items, 60min TTL
 // 재시작 시 in-memory 카운트는 sessions.getTokenCount()으로 복구
 
@@ -716,21 +721,37 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       return;
     }
 
-    // Auto-compact: 토큰 임계치 초과 시 자동 세션 리셋 + haiku 요약
+    // Progressive Compaction: 3단계 (업계 권고 — Anthropic, OpenAI, LangChain)
+    // 40K: Tier 1 섹션 미로드 (budgetMode=lean)
+    // 60K: 대화 요약 축소 (compaction + 계속 유지)
+    // 80K: 전면 세션 리셋
+    let _budgetMode = 'normal';
     if (sessionId) {
       const tokens = sessionTokenCounts.get(sessionKey) ?? sessions.getTokenCount(sessionKey);
-      if (tokens >= COMPACT_THRESHOLD_TOKENS) {
-        const reason = `토큰 임계치 초과 (${tokens.toLocaleString()} >= ${COMPACT_THRESHOLD_TOKENS.toLocaleString()})`;
-        log('info', 'Auto-compact triggered', { reason, sessionKey, tokens });
-        // 1. JSONL 삭제 — resume 시 메모리 재폭증 차단
-        _deleteSessionJsonl(sessionId, thread.id);
-        // 2. AI 시맨틱 요약 백그라운드 실행 (agent SDK 사용, @anthropic-ai/sdk 불필요)
-        compactSessionWithAI(sessionKey).catch(
-          (e) => log('warn', 'Auto-compact AI summary failed', { error: e.message }),
-        );
-        sessions.delete(sessionKey);
-        sessionId = null;
-        sessionTokenCounts.delete(sessionKey);
+      if (Number.isFinite(tokens)) {
+        if (tokens >= COMPACT_LEVELS[2].threshold) {
+          // 80K: 전면 compaction + 세션 리셋
+          const reason = `토큰 ${tokens.toLocaleString()} >= ${COMPACT_LEVELS[2].threshold.toLocaleString()} (full compact)`;
+          log('info', 'Progressive compact L3: full reset', { reason, sessionKey, tokens });
+          _deleteSessionJsonl(sessionId, thread.id);
+          compactSessionWithAI(sessionKey).catch(
+            (e) => log('warn', 'Auto-compact AI summary failed', { error: e.message }),
+          );
+          sessions.delete(sessionKey);
+          sessionId = null;
+          sessionTokenCounts.delete(sessionKey);
+        } else if (tokens >= COMPACT_LEVELS[1].threshold) {
+          // 60K: 축소 요약 + 세션 유지
+          log('info', 'Progressive compact L2: compress history', { sessionKey, tokens });
+          compactSessionWithAI(sessionKey).catch(
+            (e) => log('warn', 'L2 compact failed', { error: e.message }),
+          );
+          _budgetMode = 'lean';
+        } else if (tokens >= COMPACT_LEVELS[0].threshold) {
+          // 40K: Tier 1 미로드만
+          log('info', 'Progressive compact L1: lean mode', { sessionKey, tokens });
+          _budgetMode = 'lean';
+        }
       }
     }
 
@@ -1094,6 +1115,7 @@ ${extracted}
         contextBudget,
         signal: abortController.signal,
         injectedSummary: _injectedSummary,
+        _budgetMode,
       })) {
         if (event.type === 'system') {
           if (event.session_reset) {

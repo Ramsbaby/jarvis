@@ -21,11 +21,13 @@ import { homedir } from 'node:os';
 import { userMemory } from './user-memory.js';
 import {
   buildIdentitySection, buildLanguageSection, buildPersonaSection,
-  buildPrinciplesSection, buildFormatSection, buildToolsSection,
+  buildPrinciplesSection, buildFormatCoreSection, buildFormatDetailSection,
+  buildFormatSection, buildToolsSection,
   buildSafetySection, buildUserContextSection,
   buildOwnerPreferencesSection, buildOwnerPersonaSection, buildFamilyBriefingContext,
   buildWikiContextSection,
 } from './prompt-sections.js';
+import { getPromptHarness, Tier } from './prompt-harness.js';
 import { buildChannelFeedSection } from './channel-feed.js';
 
 import { recordSilentError } from './error-ledger.js';
@@ -672,6 +674,7 @@ export async function* createClaudeSession(prompt, {
   sessionId, threadId, channelId, channelName, ragContext, attachments = [],
   contextBudget, userId, signal,
   injectedSummary = '',
+  _budgetMode = 'normal',  // Progressive Compaction: 'normal' | 'lean'
 } = {}) {
   // 1. Setup stable workDir — same 4-layer token isolation as before
   const stableDir = join('/tmp', 'claude-discord', String(threadId));
@@ -728,25 +731,30 @@ export async function* createClaudeSession(prompt, {
 
   const BOT_HOME = process.env.BOT_HOME || `${homedir()}/.jarvis`;
 
-  // 5. Build system prompt — stable sections contribute to session hash
+  // 5. Build system prompt — Prompt Harness (Tiered Lazy Loading)
+  //    Tier 0: 항상 로드 (<3KB) — identity, language, persona, principles, format-core, tools, safety
+  //    Tier 1: 키워드 매칭 시만 — format-detail (비교/차트/표 관련 쿼리)
+  const harness = getPromptHarness();
+  if (harness.listSections().length === 0) {
+    // 첫 세션: 섹션 등록 (싱글톤이므로 1회만)
+    harness.register('identity', Tier.CORE, () => buildIdentitySection({ botName: process.env.BOT_NAME, ownerName }));
+    harness.register('language', Tier.CORE, () => buildLanguageSection());
+    harness.register('persona', Tier.CORE, () => buildPersonaSection({ ownerName }));
+    harness.register('principles', Tier.CORE, () => buildPrinciplesSection());
+    harness.register('format-core', Tier.CORE, () => buildFormatCoreSection());
+    harness.register('tools', Tier.CORE, () => buildToolsSection({ botHome: BOT_HOME }));
+    harness.register('safety', Tier.CORE, () => buildSafetySection({ botHome: BOT_HOME }));
+    // Tier 1: 포맷 상세 — 비교/차트/표/마커 관련 쿼리 시만 로드
+    harness.register('format-detail', Tier.CONTEXTUAL, () => buildFormatDetailSection(),
+      /비교|vs|차이점|장단점|표|차트|그래프|추이|트렌드|TABLE|CHART|CV2|Mermaid|다이어그램|플로우/i);
+  }
+
+  // 토큰 예산 모드: Progressive Compaction에서 전달
+  const _tokenBudgetMode = _budgetMode || 'normal';
+  const { prompt: harnessPrompt, loadedSections } = harness.assemble(prompt, { budgetMode: _tokenBudgetMode });
+
   const systemParts = [
-    // ── 정체성 ──────────────────────────────────────────────────────────────
-    buildIdentitySection({ botName: process.env.BOT_NAME, ownerName }),
-    buildLanguageSection(),
-
-    // ── 페르소나 ─────────────────────────────────────────────────────────────
-    buildPersonaSection({ ownerName }),
-
-    // ── 실행 원칙 + 포맷 금지 ────────────────────────────────────────────────
-    buildPrinciplesSection(),
-    buildFormatSection(),
-
-    // ── 도구 선택 ────────────────────────────────────────────────────────────
-    buildToolsSection({ botHome: BOT_HOME }),
-
-    // ── 안전 ─────────────────────────────────────────────────────────────────
-    buildSafetySection({ botHome: BOT_HOME }),
-
+    harnessPrompt,
     // ── 사용자 컨텍스트 ──────────────────────────────────────────────────────
     ...userContextParts,
   ];
@@ -789,7 +797,8 @@ export async function* createClaudeSession(prompt, {
   // memSnippet and usageSummary are intentionally excluded:
   //   - memSnippet changes on every memory addition → would force new session every turn
   //   - usageSummary contains time-varying data ("리셋 Xm 후") → same issue
-  const stableSystemPrompt = systemParts.join('\n');
+  // Session hash: Tier 0(Core) 섹션만으로 계산 — Tier 1은 쿼리마다 달라지므로 제외
+  const stableSystemPrompt = harness.assembleCoreOnly();
   const promptVersion = createHash('md5').update(stableSystemPrompt).digest('hex').slice(0, 8);
 
   // Dynamic sections: injected after hash (don't affect session continuity)
