@@ -37,8 +37,61 @@ infra/config/user_profiles.json
 infra/config/discord-channels.json
 infra/config/discord-mcp.json
 
+# ═══════════════════════════════════════════════════════════════════════
+# Runtime home (통합 후 개인 데이터 보호 — 절대 git에 올라가면 안 됨)
+# ═══════════════════════════════════════════════════════════════════════
+
+# State (세션, 토큰 레저, 에러 로그, 포트폴리오, 봇 PID 등)
+state/
+# Logs (모든 실행 로그)
+logs/
+# Wiki (개인 지식 베이스 — career, family, health, ops 등)
+wiki/
+# Context (대화 이력, 사용자 메모리, Claude 세션)
+context/
+# Docker (Langfuse + 크레덴셜)
+docker/
+# Board (Jarvis Board 로컬 인스턴스)
+board/
+# Results (크론 태스크 결과물)
+results/
+# Reports (생성된 리포트)
+reports/
+# Backup (시스템 백업)
+backup/
+# Watchdog (워치독 상태)
+watchdog/
+# Inbox (수신 항목)
+inbox/
+# Teams (팀 상태)
+teams/
+# Experiments
+experiments/
+# Vault
+vault-starter/
+# Tmp
+tmp/
+# Data (런타임 데이터)
+data/
+
+# 개인 설정 (webhook URL, 토큰, API 키)
+*.env
+!*.env.example
+!*.env.test
+infra/config/monitoring.json
+infra/config/models.json
+config/*.bak*
+*.backup
+
+# JSONL 원장 (토큰, 에러, 커밋먼트 등)
+*.jsonl
+!*.example.jsonl
+
 # Runtime
 .jarvis.pid
 jarvis.log
 infra/office/node_modules
 infra/office/dist
+
+# Claude Code worktrees
+.claude/worktrees/
