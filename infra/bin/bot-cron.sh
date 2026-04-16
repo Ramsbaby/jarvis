@@ -41,6 +41,45 @@ _fsm_discord_alert() {
             -d "$payload" > /dev/null 2>&1 || true
     fi
 }
+
+# 구조적 실패(script-not-found/not-executable) 감지 시 tasks.json auto-disable.
+# jarvis-cron.sh 의 동일 헬퍼와 DRY 유지. 공통 lib 추출은 후속 리팩터.
+_permanent_disable_task() {
+    local tid="$1" reason="$2" detail="${3:-}"
+    local tasks_file="${BOT_HOME}/config/tasks.json"
+    local ledger_dir="${BOT_HOME}/ledger"
+    local ledger_file="${ledger_dir}/auto-disable.jsonl"
+    local now_iso now_ts
+    now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    now_ts=$(date +%s)
+    mkdir -p "$ledger_dir"
+
+    python3 - "$tasks_file" "$tid" "$reason" "$detail" "$now_iso" <<'PYEOF' 2>/dev/null || return 1
+import json, sys, os
+path, tid, reason, detail, now = sys.argv[1:6]
+with open(path) as f: d = json.load(f)
+updated = False
+for t in d.get('tasks', []):
+    if t.get('id') == tid:
+        t['enabled'] = False
+        t['_auto_disabled'] = True
+        t['_disabled_reason'] = f'{reason}: {detail} — auto-disabled at {now}'
+        updated = True
+        break
+if updated:
+    tmp = path + '.autodisable.tmp'
+    with open(tmp, 'w') as f: json.dump(d, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
+PYEOF
+
+    printf '{"ts":"%s","ts_unix":%d,"task_id":"%s","reason":"%s","detail":"%s","source":"bot-cron"}\n' \
+        "$now_iso" "$now_ts" "$tid" "$reason" "$detail" >> "$ledger_file" 2>/dev/null || true
+
+    _fsm_discord_alert "🚨 **태스크 auto-disable (bot-cron)** — \`${tid}\`
+사유: ${reason}
+상세: \`${detail}\`
+복원: 원인 해결 후 \`tasks.json\`에서 해당 태스크의 \`enabled: true\` + \`_auto_disabled: false\`"
+}
 # ADR-007: Plugin system — regenerate effective-tasks.json, then use it
 if [[ -x "${BOT_HOME}/bin/plugin-loader.sh" ]]; then
     "${BOT_HOME}/bin/plugin-loader.sh" 2>/dev/null || true
@@ -428,8 +467,14 @@ EXIT_CODE=0
 if [[ -n "$SCRIPT" ]]; then
     # script 경로의 ~ 확장
     SCRIPT_PATH="${SCRIPT/#\~/$HOME}"
+    if command -v envsubst >/dev/null 2>&1; then
+        SCRIPT_PATH=$(printf '%s' "$SCRIPT_PATH" | envsubst)
+    fi
     if [[ ! -f "$SCRIPT_PATH" ]]; then
         log "ERROR: script not found: $SCRIPT_PATH"
+        _permanent_disable_task "$TASK_ID" "script_not_found" "$SCRIPT_PATH" || true
+        _fsm_transition "$TASK_ID" "failed" \
+            "{\"exitCode\":127,\"reason\":\"script_not_found\",\"autoDisabled\":true,\"script\":\"$SCRIPT_PATH\"}"
         _TASK_DONE=true
         exit 1
     fi
@@ -450,6 +495,9 @@ if [[ -n "$SCRIPT" ]]; then
     else
         if [[ ! -x "$SCRIPT_PATH" ]]; then
             log "ERROR: script not executable: $SCRIPT_PATH"
+            _permanent_disable_task "$TASK_ID" "script_not_executable" "$SCRIPT_PATH" || true
+            _fsm_transition "$TASK_ID" "failed" \
+                "{\"exitCode\":126,\"reason\":\"script_not_executable\",\"autoDisabled\":true,\"script\":\"$SCRIPT_PATH\"}"
             [[ -n "$_SCRIPT_SLOT" ]] && release_slot "$_SCRIPT_SLOT" 2>/dev/null || true
             _TASK_DONE=true
             exit 1
