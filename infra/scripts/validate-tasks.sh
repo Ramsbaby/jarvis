@@ -155,7 +155,7 @@ while IFS=$'\t' read -r tid script_path; do
     fi
     pass
   fi
-done < <(jq -r '.tasks[] | select(.script != null and .script != "") | [.id, .script] | @tsv' "$TASKS_FILE")
+done < <(jq -r '.tasks[] | select(.script != null and .script != "") | select(.enabled != false) | [.id, .script] | @tsv' "$TASKS_FILE")
 
 if [[ "$SCRIPT_ERRORS" -eq 0 && "$TILDE_WARNS" -eq 0 ]]; then
   pass

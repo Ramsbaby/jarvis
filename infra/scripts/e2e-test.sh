@@ -78,9 +78,10 @@ ci_check "Discord bot running" bash -c 'pgrep -f "discord-bot.js|orchestrator.mj
 # --- File Structure Tests ---
 echo ""
 echo "▶ File Structure"
-check "RAG engine exists" test -f "$BOT_HOME/lib/rag-engine.mjs"
-check "RAG query script exists" test -f "$BOT_HOME/lib/rag-query.mjs"
-check "RAG indexer exists" test -f "$BOT_HOME/bin/rag-index.mjs"
+JARVIS_RAG_HOME="${JARVIS_RAG_HOME:-$HOME/jarvis/rag}"
+check "RAG engine exists" test -f "$JARVIS_RAG_HOME/lib/rag-engine.mjs"
+check "RAG query script exists" test -f "$JARVIS_RAG_HOME/lib/rag-query.mjs"
+check "RAG indexer exists" test -f "$JARVIS_RAG_HOME/bin/rag-index.mjs"
 check "ask-claude.sh exists" test -f "$BOT_HOME/bin/ask-claude.sh"
 check "discord-bot.js exists" test -f "$BOT_HOME/discord/discord-bot.js"
 check "tasks.json exists" test -f "$BOT_HOME/config/tasks.json"
