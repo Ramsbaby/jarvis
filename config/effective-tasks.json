@@ -1,0 +1,1738 @@
+{
+  "tasks": [
+    {
+      "id": "morning-standup",
+      "name": "모닝 스탠드업",
+      "schedule": "10 6 * * *",
+      "timeout": 300,
+      "prompt": "ultrathink\n\n오늘의 아침 브리핑을 작성해줘. 공용 게시판(시스템 프롬프트의 📌 공용 게시판 섹션)을 먼저 확인해 CEO 인계사항이 있으면 맨 위에 표시. 1) Google Calendar 오늘 일정: gog calendar list --from today --to today --account ${GOOGLE_ACCOUNT} 2) Google Tasks 미완료: gog tasks list \"${GOOGLE_TASKS_LIST_ID}\" 3) 시스템 상태: df -h / && uptime (이상 없으면 '정상' 한 줄) 4) TQQQ/SOXL/NVDA 시세 (WebSearch, 개장일만, 손절선 $37 접근 시 강조). 한국어로 간결하게.",
+      "allowedTools": "Read,Bash,WebSearch",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis",
+      "retry": {
+        "max": 3,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "critical",
+      "depends": [],
+      "contextFile": "morning-standup.md",
+      "resultRetention": 7,
+      "resultMaxChars": 4000,
+      "oncePerDay": true,
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "tqqq-monitor",
+      "name": "시장 모니터링",
+      "requiresMarket": true,
+      "schedule": "*/15 22-23 * * 1-5",
+      "script": "~/.jarvis/scripts/tqqq-monitor.sh",
+      "timeout": 30,
+      "prompt": "ultrathink\n\nTQQQ, SOXL, NVDA 현재 시세와 전일 대비 변동률을 확인하고 아래 형식으로 출력해줘.\n\n📊 시세 현황 [HH:MM 기준]\n• TQQQ: $XX.XX (▲/▼X.XX%, 어제보다 X달러 오름/내림)\n• SOXL: $XX.XX (▲/▼X.XX%, 어제보다 X달러 오름/내림)\n• NVDA: $XX.XX (▲/▼X.XX%, 어제보다 X달러 오름/내림)\n\n📝 오늘 시장 분위기 (2~3줄)\n지금 시장이 왜 이런 흐름인지 이유를 쉽게 설명해줘. 전문 용어 쓸 때는 괄호 안에 쉬운 말로 반드시 풀어쓸 것. 예: VIX(시장 공포 지수), 금리 인상(돈 빌리는 비용이 올라가는 것). 거창한 분석 말고 '오늘은 ~때문에 전체적으로 약세/강세' 수준으로 간결하게.\n\n⚠️ 주의사항 (있으면만)\n5% 이상 급변 종목 있거나 TQQQ 손절선($37) 근접 시 한 줄 추가. 없으면 생략.",
+      "allowedTools": "WebSearch",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-market",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "tqqq-monitor.md",
+      "resultRetention": 3,
+      "resultMaxChars": 2000,
+      "event_trigger": "market.emergency",
+      "event_trigger_debounce_s": 900,
+      "event_trigger_note": "event-watcher 구현 완료 — emit-event.sh market.emergency 으로 트리거",
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "schedule-coherence",
+      "name": "일정 정합성 점검",
+      "schedule": "0 4 * * 1",
+      "timeout": 180,
+      "allowedTools": "Read,Bash",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "retry": {
+        "max": 2,
+        "backoff": "linear"
+      },
+      "maxBudget": "0.30",
+      "priority": "weekly",
+      "depends": [],
+      "contextFile": "schedule-coherence.md",
+      "resultRetention": 4,
+      "resultMaxChars": 800,
+      "model": "claude-haiku-4-5-20251001",
+      "prompt_file": "schedule-coherence.md"
+    },
+    {
+      "id": "daily-summary",
+      "name": "일일 요약",
+      "schedule": "0 20 * * *",
+      "timeout": 300,
+      "prompt": "ultrathink\n\n오늘 하루를 요약해줘. 1) 실행된 크론 태스크 결과 요약 2) 시스템 이슈 여부 3) 내일 예정 사항. 한국어로 간결하게.",
+      "allowedTools": "Read,Bash",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis",
+      "retry": {
+        "max": 3,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [
+        "council-insight",
+        "infra-daily"
+      ],
+      "contextFile": "daily-summary.md",
+      "resultRetention": 7,
+      "resultMaxChars": 4000,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "system-health",
+      "skipDuringRagRebuild": true,
+      "model": "claude-haiku-4-5-20251001",
+      "name": "시스템 헬스체크",
+      "schedule": "*/60 * * * *",
+      "timeout": 300,
+      "allowedTools": "Bash",
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 1,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "system-health.md",
+      "contextBudget": "small",
+      "resultRetention": 1,
+      "resultMaxChars": 500,
+      "event_trigger": "system.alert",
+      "event_trigger_debounce_s": 300,
+      "event_trigger_note": "event-watcher 구현 완료 — emit-event.sh system.alert 으로 트리거",
+      "discordChannel": "jarvis-system",
+      "prompt_file": "system-health.md"
+    },
+    {
+      "id": "github-monitor",
+      "name": "GitHub 알림 모니터",
+      "schedule": "0 * * * *",
+      "timeout": 720,
+      "prompt": "GitHub 알림 확인: gh api notifications --jq '.[] | .subject.title' 실행 후 새 알림 요약. 없으면 'GitHub: 알림 없음'.",
+      "allowedTools": "Bash",
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "github-monitor.md",
+      "resultRetention": 1,
+      "resultMaxChars": 500,
+      "event_trigger": "github.push",
+      "event_trigger_debounce_s": 300,
+      "event_trigger_note": "event-watcher 구현 완료 — emit-event.sh github.push 으로 트리거",
+      "model": "claude-haiku-4-5-20251001",
+      "discordChannel": "jarvis-system",
+      "circuitBreakerCooldown": 1800
+    },
+    {
+      "id": "market-alert",
+      "name": "시장 급변 알림",
+      "requiresMarket": true,
+      "schedule": "5 9,13,16 * * 1-5",
+      "timeout": 90,
+      "prompt": "다음 명령을 실행해서 그 출력 결과를 그대로 반환해라. 분석하거나 요약하지 마라.\n\nbash $BOT_HOME/scripts/tqqq-monitor.sh",
+      "allowedTools": "Bash",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-market",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "critical",
+      "depends": [],
+      "contextFile": "market-alert.md",
+      "resultRetention": 3,
+      "resultMaxChars": 300,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "macro-briefing",
+      "name": "시장 매크로 브리핑",
+      "requiresMarket": false,
+      "schedule": "30 23 * * 0-4",
+      "timeout": 240,
+      "prompt": "당신은 TQQQ/SOXL 레버리지 ETF 투자 어드바이저입니다. 오늘의 시장 3개 변수를 분석하고 포지션 권고를 내립니다.\n\n## STEP 1: 이전 분석 로드\n$BOT_HOME/logs/macro-briefing-result.json 파일이 있으면 읽어서 어제 스코어와 비교할 준비를 합니다. 없으면 신규 분석으로 진행합니다.\n\n## STEP 2: 3개 변수 WebSearch 조사 (각 1회씩)\n1. \"US China tariff trade war latest 2026\" — 미-중 관세 현황\n2. \"Iran war Hormuz strait oil price latest 2026\" — 이란 전쟁·호르무즈 현황\n3. \"NASDAQ tech AI semiconductor market today 2026\" — 테크/AI/반도체 현황\n\n## STEP 3: 각 변수 스코어링\n아래 기준으로 각 변수를 Green / Yellow / Red 평가:\n\n관세 변수:\n- Green: 협상 진전, 관세 완화, 유예 유지\n- Yellow: 불확실, 협상 교착\n- Red: 관세 인상, 보복 조치, 90일 유예 취소\n\n이란·호르무즈 변수:\n- Green: 완전 휴전, 호르무즈 개방, 유가 $70 이하\n- Yellow: 불안정 휴전, 교전 산발, 유가 $70~85\n- Red: 전면전 확대, 호르무즈 봉쇄, 유가 $85+\n\n테크 시장 변수:\n- Green: 빅테크 실적 호조, AI CapEx 증가, VIX < 20\n- Yellow: 실적 혼조, VIX 20~25\n- Red: 빅테크 실적 부진, 관세 타격, VIX > 25\n\n## STEP 4: 종합 판단 매트릭스\n\n| 스코어 조합 | 권고 |\n|---|---|\n| Green 3개 | 🟢 진입 적극 검토 — $47.5 지정가 실행 |\n| Green 2개 + Yellow 1개 | 🟡 분할 진입 가능 — 1/3 포지션만 |\n| Green 1개 이하 또는 Red 1개+ | 🔴 현금 유지 — 관망 |\n| Red 2개+ | 🚨 기존 포지션도 재검토 |\n\n## STEP 5: 이전 대비 변화 감지\n이전 스코어와 비교해서 등급이 바뀐 변수가 있으면 \"⚡ 변화 감지\" 표시.\n\n## STEP 6: 결과 저장\n아래 JSON을 $BOT_HOME/logs/macro-briefing-result.json 에 저장:\n{\"date\": \"오늘날짜\", \"tariff\": \"Green/Yellow/Red\", \"iran\": \"G/Y/R\", \"tech\": \"G/Y/R\", \"recommendation\": \"권고문구\"}\n\n## 출력 형식 (Discord CV2_DATA)\nCV2_DATA:{\"color\":색상코드,\"blocks\":[{\"type\":\"text\",\"content\":\"**🌐 매크로 브리핑 [날짜]**\\n- 관세 · 🟢/🟡/🔴 + 핵심 팩트 1줄\\n- 이란 · 🟢/🟡/🔴 + 핵심 팩트 1줄\\n- 테크 · 🟢/🟡/🔴 + 핵심 팩트 1줄\"},{\"type\":\"text\",\"content\":\"**📊 포지션 권고**\\n🟢/🟡/🔴 권고문\\n\\n어제 대비 변화: 있음/없음\"}]}\n\n색상: Green 권고=5763719, Yellow=16705372, Red=15548997",
+      "allowedTools": "WebSearch,Bash,Read,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-market",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "macro-briefing.md",
+      "resultRetention": 7,
+      "resultMaxChars": 2000,
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "weekly-report",
+      "name": "주간 리포트",
+      "schedule": "5 20 * * 0",
+      "timeout": 300,
+      "prompt": "ultrathink\n\n이번 주 시스템 요약: 1) ~/.jarvis/logs/cron.log에서 태스크별 성공/실패 집계 2) ~/.jarvis/logs/watchdog.log 이슈 3) 다음 주 개선 제안. 한국어로 간결하게.\n\n분석 완료 후 결과를 ~/.jarvis/rag/teams/reports/weekly-report-$(date +%Y-W%V).md 에 마크다운으로 저장해줘.",
+      "allowedTools": "Bash,Read,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [
+        "council-insight",
+        "doc-supervisor"
+      ],
+      "contextFile": "weekly-report.md",
+      "resultRetention": 30,
+      "resultMaxChars": 2000,
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "news-briefing",
+      "name": "뉴스 브리핑",
+      "schedule": "0 6 * * *",
+      "timeout": 120,
+      "prompt": "오늘 AI/Tech 주요 뉴스 3가지를 한 줄씩 요약하라. 투자 관련 뉴스 있으면 포함.\n\n추가로: 수집한 뉴스 중 Jarvis 봇 프로젝트에 적용할 수 있는 기술적 인사이트가 있다면 (예: 새로운 AI API, 더 나은 임베딩 모델, Claude 새 기능 등), 마지막에 별도 섹션으로 작성하라:\n\n**💡 Jarvis 적용 가능 인사이트:**\n- {기술명}: {적용 방법 1줄} → dev-queue 적재 여부: Yes/No\n\n적재 기준: Jarvis 품질/성능/비용에 실질적 영향이 있는 항목만. 적재가 Yes이면:\nnode ~/.jarvis/lib/task-store.mjs ensure \"tech-{기술명}-도입\" \"기술 도입 검토: {기술명}\" \"news-briefing\"",
+      "allowedTools": "WebSearch",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "news-briefing.md",
+      "resultRetention": 7,
+      "resultMaxChars": 3800,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "disk-alert",
+      "name": "디스크 사용량 경고",
+      "schedule": "10 * * * *",
+      "allowEmptyResult": true,
+      "script": "~/.jarvis/scripts/disk-alert.sh",
+      "timeout": 10,
+      "prompt": "df -h / 실행 후 사용률 확인. 90% 초과 시 '⚠️ 디스크 경고: XX% 사용 중' 출력. 정상이면 아무 출력 없이 종료.",
+      "allowedTools": "Bash",
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "disk-alert.md",
+      "contextBudget": "small",
+      "resultRetention": 1,
+      "resultMaxChars": 200,
+      "event_trigger": "disk.threshold_exceeded",
+      "event_trigger_debounce_s": 1800,
+      "event_trigger_note": "event-watcher 구현 완료 — emit-event.sh disk.threshold_exceeded 으로 트리거",
+      "model": "claude-haiku-4-5-20251001",
+      "discordChannel": "jarvis-system"
+    },
+    {
+      "id": "memory-cleanup",
+      "name": "메모리 정리",
+      "schedule": "0 2 * * *",
+      "timeout": 180,
+      "prompt": "~/.jarvis/results/ 각 서브디렉토리에서 7일 이상 된 파일 삭제. ~/.jarvis/state/sessions.json에서 7일 이상 된 세션 항목 제거. ~/.jarvis/state/events/ 에서 7일 이상 된 .json 파일 삭제 (처리되지 않은 stale 이벤트 정리). ~/.jarvis/state/active-tasks/ 에서 1시간 이상 된 sentinel 파일 삭제 (비정상 종료 잔여 파일 정리). 정리된 파일 수 요약.",
+      "allowedTools": "Bash",
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "memory-cleanup.md",
+      "resultRetention": 7,
+      "resultMaxChars": 300,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "rate-limit-check",
+      "name": "Rate Limit 체크",
+      "schedule": "*/30 * * * *",
+      "script": "~/.jarvis/scripts/rate-limit-check.sh",
+      "timeout": 15,
+      "prompt": "~/.jarvis/state/rate-tracker.json 읽어서 최근 5시간 이내 타임스탬프 개수 세기. 한도는 900개(Max 20x Sonnet 기준, Discord+cron 합산). 현재 개수와 비율을 계산해서: 80% 이상이면 '⚠️ Rate limit 경고: N/900 (XX%)', 정상이면 'Rate limit: 정상 N/900 (XX%)'으로 한 줄 출력.",
+      "allowedTools": "Read",
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "rate-limit-check.md",
+      "contextBudget": "small",
+      "resultRetention": 1,
+      "resultMaxChars": 200,
+      "event_trigger": "claude.rate_limit_warning",
+      "event_trigger_debounce_s": 900,
+      "event_trigger_note": "event-watcher 구현 완료 — emit-event.sh claude.rate_limit_warning 으로 트리거",
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "update-usage-cache",
+      "name": "Claude usage 캐시 갱신",
+      "schedule": "*/30 * * * *",
+      "script": "~/.jarvis/scripts/update-usage-cache.sh",
+      "timeout": 15,
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0",
+      "priority": "daily",
+      "depends": [],
+      "resultRetention": 1,
+      "resultMaxChars": 200,
+      "description": "/usage 명령 stale 방지 — 30분마다 ~/.claude/usage-cache.json 갱신"
+    },
+    {
+      "id": "token-sync",
+      "name": "토큰 동기화",
+      "schedule": "0 1 * * *",
+      "timeout": 180,
+      "prompt": "python3 ~/openclaw/scripts/claude-token-sync.py 실행해서 Claude Max 토큰 동기화. 성공/실패 결과 한 줄로.",
+      "allowedTools": "Bash",
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "token-sync.md",
+      "resultRetention": 3,
+      "resultMaxChars": 300,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "weekly-kpi",
+      "name": "주간 KPI 리포트",
+      "schedule": "30 8 * * 1",
+      "timeout": 300,
+      "allowedTools": "Bash,Read,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "weekly-kpi.md",
+      "resultRetention": 30,
+      "resultMaxChars": 2000,
+      "model": "claude-sonnet-4-6",
+      "prompt_file": "weekly-kpi.md"
+    },
+    {
+      "id": "weekly-roi",
+      "name": "주간 ROI 집계",
+      "schedule": "55 23 * * 0",
+      "script": "~/.jarvis/bin/weekly-roi.sh",
+      "timeout": 300,
+      "prompt": "",
+      "allowedTools": "Bash",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "weekly",
+      "depends": [],
+      "contextFile": "weekly-roi.md",
+      "resultRetention": 30,
+      "resultMaxChars": 1000,
+      "model": "claude-haiku-4-5-20251001",
+      "description": "매주 일요일 23:55 지난주 태스크들의 ROI 집계 및 리포트 생성"
+    },
+    {
+      "id": "connections-weekly-insight",
+      "name": "Connections 주간 인사이트",
+      "schedule": "45 9 * * 1",
+      "timeout": 240,
+      "prompt": "ultrathink\n\n지난 7일간 ~/.jarvis/state/connections.jsonl 데이터를 분석해 크로스팀 패턴과 반복 신호를 #jarvis-ceo에 보고해. 컨텍스트 파일의 Step 순서를 따를 것.",
+      "allowedTools": "Bash,Read,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.80",
+      "priority": "daily",
+      "depends": [
+        "weekly-kpi"
+      ],
+      "contextFile": "connections-weekly-insight.md",
+      "resultRetention": 30,
+      "resultMaxChars": 1800,
+      "model": "claude-opus-4-6",
+      "bypassRag": true
+    },
+    {
+      "id": "monthly-review",
+      "name": "월간 회고",
+      "schedule": "0 9 1 * *",
+      "timeout": 300,
+      "prompt": "ultrathink\n\n지난 달 Jarvis 운영 회고: 1) 크론 태스크 성공률 목표(90%) vs 달성 2) OpenAI API 비용 현황 (~/.jarvis/logs/rag-index.log 기반 임베딩 건수 추정) 3) 시스템 안정성 (watchdog 로그 크래시 횟수) 4) 가장 많이 실행된 태스크 Top 3 5) 다음 달 개선 목표 3가지. 한국어로 간결하게.\n\n분석 완료 후 결과를 ~/.jarvis/rag/teams/reports/monthly-review-$(date +%Y-%m).md 에 마크다운으로 저장해줘.",
+      "allowedTools": "Bash,Read,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "monthly-review.md",
+      "resultRetention": 365,
+      "resultMaxChars": 2000,
+      "model": "claude-opus-4-6",
+      "bypassRag": true
+    },
+    {
+      "id": "security-scan",
+      "name": "보안 스캔",
+      "schedule": "30 2 * * *",
+      "timeout": 180,
+      "prompt": "보안 점검 실행: 1) find ~/.jarvis \\( -name '*.env' -o -name '*.key' \\) 2>/dev/null — 예상 외 위치의 시크릿 파일 여부 (.jarvis/discord/.env는 정상) 2) ls -la ~/.jarvis/config/ — 설정 파일 권한 확인 (600/640 권장) 3) tail -50 ~/.jarvis/logs/discord-bot.jsonl 2>/dev/null — 비정상 접근 패턴 4) df -h / — 디스크 여유 확인. 이상 없으면 '보안: 정상'. 이상 발견 시 항목별 경고.",
+      "allowedTools": "Bash",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "retry": {
+        "max": 1,
+        "backoff": "fixed"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "security-scan.md",
+      "resultRetention": 30,
+      "resultMaxChars": 1000,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "rag-health",
+      "name": "RAG 건강 체크",
+      "schedule": "0 3 * * *",
+      "timeout": 180,
+      "prompt": "RAG 시스템 점검: 1) tail -3 ~/.jarvis/logs/rag-index.log — 최근 인덱싱 상태 확인 (에러 여부, chunk 수 증가 추세) 2) du -sh ~/.jarvis/rag/lancedb/ 2>/dev/null — LanceDB 크기 3) wc -l ~/.jarvis/rag/index-state.json — 추적 파일 수. 에러 있으면 경고, 정상이면 'RAG: 정상 (XXXX chunks)'.",
+      "allowedTools": "Bash,Read",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "retry": {
+        "max": 1,
+        "backoff": "fixed"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "rag-health.md",
+      "resultRetention": 7,
+      "resultMaxChars": 500,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "cost-monitor",
+      "name": "비용 모니터링",
+      "schedule": "0 9 * * 0",
+      "timeout": 180,
+      "prompt": "Jarvis 시스템 비용 현황 집계: 1) RAG 임베딩: tail -7 ~/.jarvis/logs/rag-index.log | grep -oE '[0-9]+ new' | awk '{s+=$1}END{printf \"%.4f\", s*3*500/1000000*0.02}' (달러 추정) 2) 이번 달 크론 실행 횟수: grep -c 'SUCCESS' ~/.jarvis/logs/cron.log 3) OpenAI 비용 추정 합산. 월 $10 초과 예상 시 '⚠️ 비용 경고' 출력. 간결하게 한국어로.",
+      "allowedTools": "Bash",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 1,
+        "backoff": "fixed"
+      },
+      "maxBudget": "0.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "cost-monitor.md",
+      "resultRetention": 90,
+      "resultMaxChars": 500,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "career-weekly",
+      "name": "커리어 주간 리포트",
+      "schedule": "0 18 * * 5",
+      "timeout": 300,
+      "prompt": "ultrathink\n\n자비스 컴퍼니 성장팀 주간 커리어 리포트를 작성해. 1) ls -t ~/.jarvis/results/career-weekly/ | head -2 로 지난주 결과 파일 확인 후 Read → 이번 주와 비교해 진행률 측정 2) 국내 백엔드/Java/Spring Boot 채용 시장 동향 (WebSearch, 대기업/중견 타겟) 3) 이번 주 이직 준비 액션 아이템 3가지 구체적으로 제시 (막연한 '공부하세요' 금지) 4) 이직 타이밍 신호: 긍정/중립/부정 + 구체적 근거. 1500자 이내 한국어로. #jarvis-dev 채널에 전송.\n\n분석 완료 후 결과를 ~/.jarvis/rag/teams/reports/career-weekly-$(date +%Y-W%V).md 에 마크다운으로 저장해줘.",
+      "allowedTools": "Read,WebSearch,Bash,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-dev",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "career-weekly.md",
+      "resultRetention": 30,
+      "resultMaxChars": 1500,
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "council-insight",
+      "name": "감사팀 일일 점검 (Council)",
+      "model": "claude-sonnet-4-6",
+      "schedule": "5 23 * * *",
+      "timeout": 360,
+      "prompt": "ultrathink\n\n자비스 CEO(비서실장)로서 일일 종합 경영 점검을 수행해. 컨텍스트 파일의 실행 순서(Step 1→2→3)를 반드시 따를 것. 핵심: 데이터 수집 후 공용 게시판(~/.jarvis/state/context-bus.md)과 모닝스탠드업 인계사항을 갱신하고, Discord #jarvis-ceo에 임원 보고서를 전송.\n\n## 외부 에이전트 동향 (Workgroup 게시판)\n오늘 board 인사이트 파일이 있으면 참조해서 보고서에 '외부 에이전트 동향' 섹션을 추가하라.\n```bash\ncat ~/Jarvis-Vault/02-daily/board/$(date '+%Y-%m-%d').md 2>/dev/null | head -100\n```\n주목할 것: 다른 에이전트들이 논의한 기술 주제, 자비스에 대한 언급/반응, 벤치마킹할 만한 아이디어.",
+      "allowedTools": "Bash,Read,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.50",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "council-insight.md",
+      "resultRetention": 30,
+      "resultMaxChars": 1800,
+      "successPattern": "sent id="
+    },
+    {
+      "id": "academy-support",
+      "name": "학습팀 주간 보고 (Academy)",
+      "schedule": "0 20 * * 0",
+      "timeout": 300,
+      "prompt": "자비스 컴퍼니 학습팀 주간 보고를 작성해.\n1) ls ~/.jarvis/rag/teams/shared-inbox/ 으로 academy팀 수신 메시지 확인\n2) ~/.jarvis/results/career-weekly/ 최근 결과 읽어 이직 준비 진행 상황 요약\n3) Google Tasks에서 학습 관련 미완료 항목 확인 (gog tasks list ${GOOGLE_TASKS_LIST_ID})\n4) 보람님 관련 이번 주 특이 사항 (있으면 기록, 없으면 생략)\n5) 다음 주 커리어/학습 목표 3가지 제안\n보고서를 ~/.jarvis/rag/teams/reports/academy-$(date +%F).md 에 저장. Discord #jarvis-ceo 채널에 요약 전송.",
+      "allowedTools": "Bash,Read,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [
+        "career-weekly"
+      ],
+      "contextFile": "academy-support.md",
+      "resultRetention": 30,
+      "resultMaxChars": 1500,
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "record-daily",
+      "name": "기록팀 일일 마감 (Record)",
+      "schedule": "30 22 * * *",
+      "timeout": 240,
+      "prompt": "ultrathink\n\n자비스 컴퍼니 기록팀 일일 마감 작업:\n1) ls ~/.jarvis/rag/teams/shared-inbox/ 으로 record팀 수신 메시지 확인\n2) ls -t ~/.jarvis/results/ 로 오늘 생성된 결과물 확인 후 주요 내용 3줄 요약\n3) tail -20 ~/.jarvis/logs/task-runner.jsonl 로 오늘 완료 태스크 목록 취합\n4) ~/.jarvis/rag/memory.md 에 오늘 주요 사항 1~2줄 추가 (날짜 헤더 포함)\n5) ~/.jarvis/rag/teams/reports/record-$(date +%F).md 에 오늘 기록 보고서 저장",
+      "allowedTools": "Bash,Read,Write",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [
+        "infra-daily"
+      ],
+      "contextFile": "record-daily.md",
+      "resultRetention": 30,
+      "resultMaxChars": 1000,
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "brand-weekly",
+      "name": "브랜드팀 주간 보고 (Brand)",
+      "schedule": "0 8 * * 2",
+      "timeout": 300,
+      "prompt": "ultrathink\n\n자비스 컴퍼니 브랜드팀 주간 보고를 작성해.\n1) ls ~/.jarvis/rag/teams/shared-inbox/ 으로 brand팀 수신 메시지 확인\n2) gh api user/repos --jq '.[] | select(.name==\"openclaw\" or .name==\"jarvis\") | {name,stargazers_count,forks_count,open_issues_count}' 2>/dev/null 으로 GitHub 저장소 현황\n3) WebSearch로 '${PERSONAL_SITE_URL} blog' 검색해 블로그 최근 포스팅 확인\n4) 이번 주 오픈소스 성장 액션 아이템 2~3개 제안 (블로그 글 주제, README 개선 등)\n5) 다음 주 브랜드 활동 계획 1가지\n보고서를 ~/.jarvis/rag/teams/reports/brand-$(date +%Y-W%V).md 에 저장. Discord #jarvis-ceo 채널에 요약 전송.",
+      "allowedTools": "Bash,WebSearch,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "brand-weekly.md",
+      "resultRetention": 30,
+      "resultMaxChars": 1500,
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "infra-daily",
+      "name": "인프라팀 일일 점검 (Infra)",
+      "schedule": "0 9 * * *",
+      "timeout": 240,
+      "allowedTools": "Bash,Write",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "infra-daily.md",
+      "resultRetention": 7,
+      "resultMaxChars": 1000,
+      "model": "claude-haiku-4-5-20251001",
+      "prompt_file": "infra-daily.md"
+    },
+    {
+      "id": "calendar-alert",
+      "name": "일정 선제 알림",
+      "schedule": "*/5 * * * *",
+      "script": "~/.jarvis/scripts/calendar-alert.sh",
+      "prompt": "",
+      "allowedTools": "Bash",
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis",
+      "timeout": 30,
+      "maxBudget": "0.10",
+      "depends": [],
+      "allowEmptyResult": true,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "code-auditor",
+      "name": "코드 품질 감사",
+      "schedule": "45 4 * * *",
+      "script": "~/.jarvis/scripts/jarvis-auditor.sh",
+      "prompt": "",
+      "allowedTools": "Bash",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "timeout": 120,
+      "maxBudget": "0.50",
+      "depends": [],
+      "resultRetention": 30,
+      "resultMaxChars": 2000
+    },
+    {
+      "id": "doc-supervisor",
+      "name": "문서화 시스템 감독 (Doc Supervisor)",
+      "schedule": "0 5 * * *",
+      "timeout": 300,
+      "prompt": "문서화 시스템 감독관으로서 일일 점검을 수행해. 컨텍스트 파일의 점검 항목을 순서대로 실행하고, 결과를 테이블 형식으로 정리해. 이상 발견 시 상세 설명 포함. 보고서를 ~/.jarvis/rag/teams/reports/doc-supervisor-$(date +%F).md 에 저장해.",
+      "allowedTools": "Bash,Read,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "contextFile": "doc-supervisor.md",
+      "depends": [
+        "record-daily",
+        "council-insight"
+      ],
+      "resultRetention": 30,
+      "resultMaxChars": 1500,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "doc-sync-auditor",
+      "name": "문서-코드 정합성 감사 + 자동 적용",
+      "schedule": "20 23 * * *",
+      "timeout": 300,
+      "allowedTools": "Bash,Read,Write",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "retry": {
+        "max": 1,
+        "backoff": "fixed"
+      },
+      "maxBudget": "0.80",
+      "priority": "daily",
+      "resultRetention": 14,
+      "resultMaxChars": 1500,
+      "model": "claude-sonnet-4-6",
+      "prompt_file": "doc-sync-auditor.md"
+    },
+    {
+      "id": "board-meeting-am",
+      "name": "Board Meeting (아침)",
+      "schedule": "5 6 * * *",
+      "timeout": 660,
+      "script": "~/.jarvis/bin/parallel-board-meeting.sh",
+      "prompt": "",
+      "allowedTools": "Read,Bash,Write",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 1,
+        "backoff": "fixed"
+      },
+      "maxBudget": "1.20",
+      "priority": "critical",
+      "depends": [
+        "news-briefing"
+      ],
+      "contextFile": null,
+      "resultRetention": 30,
+      "resultMaxChars": 2000,
+      "scriptArgs": "am",
+      "channel": "jarvis-ceo",
+      "disabled": true,
+      "_disabled_reason": "보드 비활성화 기간 — 면접 준비 집중 (2026-04-04)"
+    },
+    {
+      "id": "board-meeting-pm",
+      "name": "Board Meeting (저녁)",
+      "schedule": "55 21 * * *",
+      "timeout": 660,
+      "script": "~/.jarvis/bin/parallel-board-meeting.sh",
+      "prompt": "",
+      "allowedTools": "Read,Bash,Write",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 1,
+        "backoff": "fixed"
+      },
+      "maxBudget": "1.20",
+      "priority": "critical",
+      "depends": [],
+      "contextFile": null,
+      "resultRetention": 30,
+      "resultMaxChars": 2000,
+      "scriptArgs": "pm",
+      "channel": "jarvis-ceo",
+      "disabled": true,
+      "_disabled_reason": "보드 비활성화 기간 — 면접 준비 집중 (2026-04-04)"
+    },
+    {
+      "id": "agent-batch-commit",
+      "name": "에이전트 산출물 일괄 커밋",
+      "schedule": "30 8 * * *",
+      "timeout": 60,
+      "script": "~/.jarvis/scripts/agent-batch-commit.sh",
+      "prompt": "",
+      "allowedTools": "",
+      "output": [],
+      "discordChannel": "",
+      "retry": {
+        "max": 1,
+        "backoff": "fixed"
+      },
+      "maxBudget": "0",
+      "priority": "low",
+      "depends": [
+        "board-meeting-am",
+        "board-meeting-pm"
+      ],
+      "contextFile": null,
+      "resultRetention": 7,
+      "resultMaxChars": 500,
+      "allowEmptyResult": true
+    },
+    {
+      "id": "weekly-code-review",
+      "name": "주간 LLM 코드 리뷰",
+      "schedule": "0 5 * * 0",
+      "script": "~/.jarvis/scripts/weekly-code-review.sh",
+      "prompt": "",
+      "allowedTools": "Bash,Read",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "timeout": 240,
+      "maxBudget": "1.00",
+      "priority": "weekly",
+      "depends": [
+        "code-auditor"
+      ],
+      "resultRetention": 90,
+      "resultMaxChars": 3000
+    },
+    {
+      "id": "memory-sync",
+      "name": "메모리 자동 동기화",
+      "schedule": "30 4 * * 1",
+      "script": "~/.jarvis/scripts/memory-sync.sh",
+      "prompt": "",
+      "allowedTools": "",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "timeout": 240,
+      "maxBudget": "0.00",
+      "priority": "weekly",
+      "depends": [],
+      "resultRetention": 30,
+      "resultMaxChars": 500,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "dev-runner",
+      "aliases": [
+        "dev-run-async"
+      ],
+      "name": "자율 개발 큐 러너",
+      "schedule": "55 22 * * *",
+      "script": "~/.jarvis/bin/jarvis-coder.sh",
+      "timeout": 600,
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "maxBudget": "0",
+      "priority": "normal",
+      "resultRetention": 30,
+      "resultMaxChars": 1500,
+      "depends": [],
+      "allowEmptyResult": true
+    },
+    {
+      "id": "jarvis-coder",
+      "name": "자비스 코더 (온디맨드)",
+      "script": "~/.jarvis/bin/jarvis-coder.sh",
+      "event_trigger": "dev.task.queued",
+      "event_trigger_debounce_s": 60,
+      "timeout": 600,
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "maxBudget": "0",
+      "priority": "normal",
+      "resultRetention": 30,
+      "resultMaxChars": 1500,
+      "depends": [],
+      "allowEmptyResult": true
+    },
+    {
+      "id": "bot-quality-check",
+      "name": "봇 응답 품질 분석",
+      "schedule": "30 2 * * *",
+      "script": "~/.jarvis/scripts/bot-quality-analyzer.sh",
+      "timeout": 60,
+      "output": [],
+      "maxBudget": "0",
+      "priority": "normal",
+      "resultRetention": 7,
+      "resultMaxChars": 500,
+      "depends": [],
+      "model": "claude-haiku-4-5-20251001",
+      "discordChannel": "jarvis-system"
+    },
+    {
+      "id": "auto-diagnose",
+      "name": "자동 실패 진단",
+      "event_trigger": "task.failed",
+      "event_trigger_debounce_s": 120,
+      "timeout": 30,
+      "script": "~/.jarvis/scripts/auto-diagnose.sh",
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis-system",
+      "maxBudget": "0",
+      "resultRetention": 3,
+      "resultMaxChars": 800,
+      "depends": [],
+      "event_trigger_note": "실패 있을 때만 출력 — 빈 출력 시 Discord 전송 안 함",
+      "allowEmptyResult": true
+    },
+    {
+      "id": "weekly-usage-stats",
+      "name": "Discord 주간 활용도 통계",
+      "schedule": "0 9 * * 1",
+      "timeout": 30,
+      "script": "~/.jarvis/scripts/usage-stats.sh",
+      "scriptArgs": "7",
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis-system",
+      "maxBudget": "0",
+      "priority": "weekly",
+      "resultRetention": 7,
+      "resultMaxChars": 800,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "session-sync",
+      "name": "세션 동기화",
+      "schedule": "*/15 * * * *",
+      "script": "~/.jarvis/scripts/session-sync.sh",
+      "prompt": "",
+      "allowedTools": "Bash",
+      "output": [],
+      "allowEmptyResult": true,
+      "timeout": 90,
+      "description": "최근 30분 내 대화 활동 감지 시 context-bus 즉시 갱신",
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "recon-weekly",
+      "name": "정보탐험대 주간 리포트 (Recon)",
+      "schedule": "0 9 * * 1",
+      "timeout": 900,
+      "script": "~/.jarvis/scripts/recon-run.sh",
+      "prompt": "",
+      "allowedTools": "Read,Write,Bash,WebSearch,Glob,Grep",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 1,
+        "backoff": "fixed"
+      },
+      "maxBudget": "3.00",
+      "priority": "weekly",
+      "depends": [],
+      "resultRetention": 7,
+      "resultMaxChars": 2000,
+      "description": "매주 월요일 AI/기술/시장 정보탐험. recon/team.yml 기반으로 실행."
+    },
+    {
+      "id": "finance-monitor",
+      "name": "파이낸스팀 일일 모니터링 (Finance)",
+      "schedule": "0 8 * * 1-5",
+      "timeout": 300,
+      "script": "~/.jarvis/scripts/finance-run.sh",
+      "prompt": "",
+      "allowedTools": "Read,Write,Bash,WebSearch",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.50",
+      "priority": "daily",
+      "depends": [],
+      "resultRetention": 7,
+      "resultMaxChars": 1500,
+      "description": "평일 08:00 재무/시장 모니터링. finance/team.yml 기반으로 실행.",
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "github-pr-handler",
+      "name": "GitHub PR 오픈 즉시 처리",
+      "schedule": "",
+      "timeout": 180,
+      "script": "~/.jarvis/bin/ask-claude.sh",
+      "prompt": "새 GitHub Pull Request가 열렸습니다. PR 내용을 검토하고 핵심 사항을 한국어로 요약하세요.",
+      "allowedTools": "Read,WebSearch",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-dev",
+      "event_trigger": "github.pr_opened",
+      "event_trigger_debounce_s": 60,
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "event",
+      "depends": [],
+      "resultRetention": 3,
+      "resultMaxChars": 1000,
+      "description": "github.pr_opened 이벤트 발생 시 PR 요약 및 Discord 알림 전송.",
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "discord-mention-handler",
+      "name": "Discord 멘션 알림 처리",
+      "schedule": "",
+      "timeout": 120,
+      "script": "~/.jarvis/bin/ask-claude.sh",
+      "prompt": "Discord 멘션이 감지됐습니다. 내용을 확인하고 적절한 핸들러로 라우팅하세요.",
+      "allowedTools": "Read",
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis-alerts",
+      "event_trigger": "discord.mention",
+      "event_trigger_debounce_s": 30,
+      "retry": {
+        "max": 1,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.20",
+      "priority": "event",
+      "depends": [],
+      "resultRetention": 1,
+      "resultMaxChars": 500,
+      "description": "discord.mention 이벤트 발생 시 즉시 Discord 알림 채널에 응답.",
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "cost-alert-handler",
+      "name": "API 비용 초과 경보 처리",
+      "schedule": "",
+      "timeout": 60,
+      "script": "~/.jarvis/bin/route-result.sh",
+      "prompt": "시스템 비용 알림이 발생했습니다. 현재 API 사용량을 보고하고 비용 절감 방안을 한국어로 제안하세요.",
+      "allowedTools": "Read",
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis-alerts",
+      "event_trigger": "system.cost_alert",
+      "event_trigger_debounce_s": 300,
+      "retry": {
+        "max": 1,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.10",
+      "priority": "event",
+      "depends": [],
+      "resultRetention": 7,
+      "resultMaxChars": 800,
+      "description": "system.cost_alert 이벤트 발생 시 비용 초과 경보를 Discord로 즉시 전송.",
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "id": "ceo-daily-digest",
+      "name": "일일 CEO 다이제스트",
+      "schedule": "15 23 * * *",
+      "timeout": 180,
+      "prompt": "ceo-digest-data.sh를 실행하여 데이터를 수집하고, 오늘의 CEO 다이제스트 보고서를 한국어로 작성하세요.\n\n1. 데이터 수집:\n   bash ~/.jarvis/scripts/ceo-digest-data.sh\n\n2. 아래 구조로 간결한 보고서 작성 (모든 내용 한국어):\n   - 요약 (1문장)\n   - 크론 실행 현황 (성공/실패, 성공률, 주요 오류)\n   - 시스템 상태\n   - Discord 활동 건수\n   - 내일 핵심 과제\n\n3. 보고서 저장: ~/.jarvis/rag/teams/reports/ceo-digest-$(date +%Y-%m-%d).md\n\n4. 300자 이내 요약을 Discord #jarvis-ceo에 한국어로 전송.\n\n간결하고 실행 가능한 내용만. CEO가 주목해야 할 사항을 중심으로.",
+      "allowedTools": "Read,Write,Bash",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.30",
+      "priority": "daily",
+      "depends": [
+        "council-insight"
+      ],
+      "resultRetention": 90,
+      "resultMaxChars": 2000,
+      "model": "claude-haiku-4-5-20251001",
+      "bypassRag": true
+    },
+    {
+      "id": "personal-schedule-daily",
+      "name": "개인 일정 브리핑",
+      "schedule": "30 7 * * *",
+      "timeout": 180,
+      "prompt": "오늘의 Preply 수업 일정과 수입을 조회해서 전송해줘.\n\n1단계 — 수업 데이터 조회:\nbash ~/.jarvis/scripts/preply-today.sh $(date +%F)\n응답 JSON에서 scheduledLessons(startAt, student, amount)과 totalsByCurrency.USD를 추출.\n\n2단계 — 환율 조회:\nbash ~/.jarvis/scripts/get-exchange-rate.sh\n출력은 숫자(예: 1450). 이 값으로 각 수업 금액과 총합을 원화 환산.\n\n출력 형식 (코드블록 없이 일반 텍스트로):\n오늘(M/D 요일) 수업 브리핑 📅✨\n총 N개 수업 · 총 수입 $XXX.XX (~₩XXX,XXX) 💰\n\n🕐 HH:MM · 학생이름 · $XX.XX (~₩XX,XXX)\n🕐 HH:MM · 학생이름 · $XX.XX (~₩XX,XXX)\n...\n\n환율: ₩X,XXX/$\n\nscheduledCount가 0이면: 오늘은 수업이 없어요! 😊\ncancelledCount가 0보다 크면 취소 건수도 표시.",
+      "allowedTools": "Bash",
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis-boram",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.10",
+      "priority": "normal",
+      "depends": [],
+      "resultRetention": 7,
+      "resultMaxChars": 1000,
+      "description": "매일 07:30 KST Preply 수업 일정을 #jarvis-boram 채널로 자동 전송.",
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "bot-self-critique",
+      "name": "봇 자가 품질 점검",
+      "schedule": "45 2 * * *",
+      "timeout": 180,
+      "model": "claude-haiku-4-5-20251001",
+      "allowedTools": [
+        "Bash",
+        "mcp__github__create_issue",
+        "mcp__github__list_issues",
+        "mcp__github__get_issue",
+        "mcp__github__create_pull_request",
+        "mcp__github__create_branch",
+        "mcp__github__create_or_update_file",
+        "mcp__github__get_file_contents"
+      ],
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis-system",
+      "depends": [
+        "bot-quality-check"
+      ],
+      "retry": {
+        "max": 1,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.15",
+      "priority": "normal",
+      "resultRetention": 7,
+      "resultMaxChars": 800,
+      "prompt_file": "bot-self-critique.md"
+    },
+    {
+      "id": "memory-expire",
+      "name": "기억 만료 아카이브",
+      "schedule": "0 3 * * 1",
+      "timeout": 180,
+      "model": "claude-haiku-4-5-20251001",
+      "allowedTools": "Bash",
+      "output": [],
+      "maxBudget": "0.05",
+      "priority": "normal",
+      "resultRetention": 7,
+      "resultMaxChars": 200,
+      "prompt_file": "memory-expire.md"
+    },
+    {
+      "id": "vault-sync",
+      "name": "Obsidian Vault 동기화",
+      "schedule": "0 */6 * * *",
+      "script": "~/.jarvis/scripts/vault-sync.sh",
+      "timeout": 120,
+      "enabled": true,
+      "channel": "jarvis"
+    },
+    {
+      "id": "vault-auto-link",
+      "name": "Vault 자동 링크 생성",
+      "schedule": "30 6 * * *",
+      "script": "~/.jarvis/scripts/vault-auto-link.sh",
+      "timeout": 120,
+      "enabled": true,
+      "channel": "jarvis"
+    },
+    {
+      "id": "jira-sync",
+      "name": "JIRA 커리어 히스토리 동기화",
+      "schedule": "0 9 * * 1",
+      "script": "~/.jarvis/scripts/jira-sync.sh",
+      "timeout": 180,
+      "enabled": true,
+      "channel": "jarvis-ceo"
+    },
+    {
+      "id": "dev-event-bus",
+      "disabled": true,
+      "schedule": "50 22 * * *",
+      "prompt": "disabled — crontab 잔재"
+    },
+    {
+      "id": "dev-event-watcher",
+      "disabled": true,
+      "schedule": "0 23 * * *",
+      "prompt": "disabled — crontab 잔재"
+    },
+    {
+      "id": "skill-eval",
+      "name": "스킬 자동 평가",
+      "schedule": "30 4 * * 0",
+      "timeout": 600,
+      "script": "~/.jarvis/scripts/skill-eval.sh",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 1,
+        "backoff": "exponential"
+      },
+      "priority": "weekly",
+      "resultRetention": 90,
+      "resultMaxChars": 2000
+    },
+    {
+      "id": "stale-task-watcher",
+      "name": "Stale 태스크 감지 및 자동 전이",
+      "schedule": "*/30 * * * *",
+      "script": "~/.jarvis/scripts/stale-task-watcher.sh",
+      "timeout": 60,
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 1
+      },
+      "enabled": true
+    },
+    {
+      "id": "career-extractor",
+      "name": "커리어 인사이트 자동 추출",
+      "schedule": "30 0 * * *",
+      "script": "~/.jarvis/scripts/career-extractor.mjs",
+      "timeout": 120,
+      "output": [
+        "file"
+      ],
+      "retry": {
+        "max": 2
+      }
+    },
+    {
+      "id": "cron-auditor",
+      "name": "크론 전체 점검",
+      "schedule": "30 5 * * *",
+      "timeout": 120,
+      "allowedTools": "Bash,Read",
+      "discordChannel": "jarvis-system",
+      "prompt": "cron-auditor.md 지침에 따라 모든 Jarvis 크론 동작 상태를 점검하고 리포트를 Discord에 전송하라."
+    },
+    {
+      "id": "system-doctor",
+      "schedule": "0 6 * * *",
+      "enabled": true,
+      "timeout": 300,
+      "discordChannel": "jarvis-system",
+      "description": "Jarvis 자동 시스템 점검 (LaunchAgent, Discord봇, RAG, 크론, E2E, Glances, 디스크)",
+      "script": "/Users/ramsbaby/.jarvis/scripts/system-doctor.sh"
+    },
+    {
+      "id": "oss-recon",
+      "name": "OSS 경쟁자 주간 분석",
+      "schedule": "30 10 * * 1",
+      "enabled": true,
+      "timeout": 600,
+      "discordChannel": "jarvis-blog",
+      "script": "/Users/ramsbaby/.jarvis/scripts/oss-recon.sh"
+    },
+    {
+      "id": "oss-maintenance",
+      "name": "OSS 이슈/PR 일간 트리아지",
+      "schedule": "15 9 * * *",
+      "enabled": true,
+      "timeout": 300,
+      "discordChannel": "jarvis-blog",
+      "script": "/Users/ramsbaby/.jarvis/scripts/oss-maintenance.sh"
+    },
+    {
+      "id": "oss-promo",
+      "name": "OSS 주간 홍보 초안 생성",
+      "schedule": "0 17 * * 5",
+      "enabled": true,
+      "timeout": 600,
+      "discordChannel": "jarvis-blog",
+      "script": "/Users/ramsbaby/.jarvis/scripts/oss-promo.sh"
+    },
+    {
+      "id": "gen-system-overview",
+      "schedule": "5 4 * * *",
+      "enabled": true,
+      "timeout": 60,
+      "output": [
+        "file"
+      ],
+      "description": "시스템 개요 문서 자동 재생성 (SYSTEM-OVERVIEW.md)",
+      "script": "~/.jarvis/scripts/gen-system-overview.sh",
+      "name": "시스템 개요 자동 재생성"
+    },
+    {
+      "id": "oss-docs",
+      "name": "OSS README 갱신 제안",
+      "schedule": "0 11 * * 3",
+      "enabled": true,
+      "timeout": 600,
+      "discordChannel": "jarvis-blog",
+      "script": "/Users/ramsbaby/.jarvis/scripts/oss-docs.sh"
+    },
+    {
+      "id": "bot-crash-classifier",
+      "name": "봇 크래시 원인 분류 및 Discord 알림",
+      "event_trigger": "bot.crashed",
+      "event_trigger_debounce_s": 300,
+      "event_trigger_note": "watchdog.sh에서 bot.crashed emit 시 즉시 실행",
+      "timeout": 180,
+      "prompt": "Discord 봇이 크래시했습니다. 즉각 원인을 분류하고 Discord에 알림을 보내세요.\n\n에러 로그를 확인하고 (tail ~/.jarvis/logs/discord-bot.err.log), 크래시 패턴을 분류하세요:\n- SyntaxError: 코드 문법 오류\n- ENOENT + env: env 파일 소멸\n- ActionRowBuilder: ESM/CJS 충돌\n- Cannot find module: node_modules 손상\n\nDiscord jarvis-system 채널에 전송:\n🔴 봇 크래시 감지 / 분류: [패턴] / 에러: [1줄] / 자동복구: [heal-in-progress 여부]",
+      "allowedTools": "Bash",
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis-system",
+      "maxBudget": "0.20",
+      "priority": "event",
+      "depends": [],
+      "resultRetention": 7,
+      "resultMaxChars": 500,
+      "model": "claude-haiku-4-5-20251001",
+      "allowEmptyResult": false
+    },
+    {
+      "id": "env-restore-notifier",
+      "name": ".env 소멸 감지 알림",
+      "event_trigger": "env.missing",
+      "event_trigger_debounce_s": 1800,
+      "event_trigger_note": "bot-preflight.sh에서 env 없음 감지 시 emit",
+      "timeout": 120,
+      "prompt": "Discord 봇의 env 파일이 소멸됐거나 복원됐습니다. 현재 상태를 확인:\nbash: ls -la ~/.jarvis/discord/.env && echo EXISTS || echo MISSING\n\nDiscord jarvis-system 채널 알림:\n- 파일 있으면: \"✅ .env 자동 복원 완료 (preflight 백업에서 복구)\"\n- 파일 없으면: \"🔴 .env 소멸 + 백업 없음 — 수동 개입 필요\"",
+      "allowedTools": "Bash",
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis-system",
+      "maxBudget": "0.10",
+      "priority": "event",
+      "depends": [],
+      "resultRetention": 7,
+      "resultMaxChars": 300,
+      "model": "claude-haiku-4-5-20251001",
+      "allowEmptyResult": false
+    },
+    {
+      "id": "log-cleanup",
+      "name": "디스크 임계치 초과 시 로그 자동 정리",
+      "event_trigger": "disk.threshold_exceeded",
+      "event_trigger_debounce_s": 3600,
+      "event_trigger_note": "disk-alert.sh에서 90% 초과 감지 시 emit",
+      "timeout": 240,
+      "prompt": "디스크 사용률이 임계치를 초과했습니다. 로그를 정리하여 공간을 확보하세요.\n\n1. df -h / 로 현재 상태 확인\n2. find ~/.jarvis/logs -name \"*.gz\" -mtime +14 -delete\n3. find ~/.jarvis/results/system-health -mtime +7 -name \"*.md\" -delete 2>/dev/null || true\n4. bash ~/.jarvis/scripts/log-rotate.sh 2>/dev/null || true\n5. df -h / 로 정리 후 상태 확인\n\nDiscord jarvis-system 채널에 정리 전후 사용률 알림. 예: \"🧹 로그 정리 완료: 91% → 87%\"",
+      "allowedTools": "Bash",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "maxBudget": "0.30",
+      "priority": "event",
+      "depends": [],
+      "resultRetention": 14,
+      "resultMaxChars": 500,
+      "model": "claude-haiku-4-5-20251001",
+      "allowEmptyResult": false
+    },
+    {
+      "id": "private-sync",
+      "name": "커밋 후 private 레포 동기화",
+      "event_trigger": "git.committed",
+      "event_trigger_debounce_s": 300,
+      "event_trigger_note": "post-commit hook에서 git.committed emit 시 실행",
+      "timeout": 400,
+      "prompt": "git commit 이후 private 레포 동기화를 실행하세요.\n\n1. deploy-private.sh가 이미 실행 중이면 건너뜀:\npgrep -f deploy-private.sh > /dev/null 2>&1 && echo \"SKIP: 이미 실행 중\" && exit 0\n\n2. 동기화 실행:\nbash ~/.jarvis/scripts/deploy-private.sh 2>&1 | tail -10\n\n3. 결과 출력 (한 줄):\n- 성공: \"완료\"\n- 실패: \"실패: [에러 메시지]\"\n\n주의: Discord 메시지 전송 금지. 파일 경로, 커밋 해시 출력 금지.",
+      "allowedTools": "Bash",
+      "output": [
+        "file"
+      ],
+      "maxBudget": "0.10",
+      "priority": "event",
+      "depends": [],
+      "resultRetention": 7,
+      "resultMaxChars": 300,
+      "model": "claude-haiku-4-5-20251001",
+      "allowEmptyResult": false
+    },
+    {
+      "id": "gen-gotchas",
+      "name": "Gotchas 자동 승격",
+      "schedule": "0 3 * * 1",
+      "timeout": 60,
+      "script": "$BOT_HOME/scripts/gen-gotchas.sh",
+      "output": [
+        "file"
+      ],
+      "allowEmptyResult": true,
+      "resultRetention": 7,
+      "resultMaxChars": 200,
+      "disabled": false,
+      "note": "recovery-learnings.md에서 3회↑ 반복 패턴을 gotchas.md에 자동 승격. 매주 월요일 03:00 KST."
+    },
+    {
+      "id": "board-conclude",
+      "name": "보드 토론 자동 결론",
+      "schedule": "*/5 * * * *",
+      "script": "~/.jarvis/scripts/board-conclude.sh",
+      "timeout": 300,
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "allowEmptyResult": true,
+      "resultRetention": 7,
+      "resultMaxChars": 1000,
+      "priority": "system",
+      "depends": [],
+      "note": "30분 만료된 open/in-progress 토론을 Claude로 요약해 결론 댓글 포스팅 + resolved 처리",
+      "channel": "jarvis-ceo",
+      "disabled": true,
+      "_disabled_reason": "보드 비활성화 기간 — 면접 준비 집중 (2026-04-04)"
+    },
+    {
+      "id": "board-topic-proposer",
+      "name": "보드 토론 주제 자동 제안",
+      "schedule": "0 8-21 * * *",
+      "script": "~/.jarvis/scripts/board-topic-proposer.sh",
+      "timeout": 120,
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "allowEmptyResult": true,
+      "resultRetention": 7,
+      "resultMaxChars": 500,
+      "priority": "normal",
+      "depends": [],
+      "note": "08:00~21:00 매시 정각 1회. 하루 최대 14슬롯 (실제 게시는 board-topic-proposer.sh 내 일일 상한 5개로 제한)",
+      "enabled": false,
+      "disabled": true,
+      "_disabled_reason": "보드 비활성화 기간 — 면접 준비 집중 (2026-04-04)"
+    },
+    {
+      "id": "board-perf-review",
+      "name": "에이전트 일일 성과 평가 및 승격/강등 처리",
+      "schedule": "0 18 * * *",
+      "script": "~/.jarvis/scripts/board-perf-review.sh",
+      "timeout": 120,
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "allowEmptyResult": true,
+      "resultRetention": 30,
+      "resultMaxChars": 500,
+      "priority": "system",
+      "team": "council",
+      "depends": [],
+      "enabled": true,
+      "note": "30일 성과점수 기반 승격(150% 이상)/강등(40% 미만, -5 이하) 처리. 쿨다운: 승격 45일, 강등 30일.",
+      "disabled": true,
+      "_disabled_reason": "보드 비활성화 기간 — 면접 준비 집중 (2026-04-04)"
+    },
+    {
+      "id": "daily-usage-check",
+      "name": "매일 아침 사용량 체크",
+      "schedule": "55 5 * * *",
+      "timeout": 20,
+      "script": "~/.jarvis/bin/daily-usage-report.sh",
+      "scriptArgs": "daily",
+      "output": [
+        "discord"
+      ],
+      "discordChannel": "jarvis-lite",
+      "priority": "daily",
+      "depends": [],
+      "resultRetention": 1,
+      "resultMaxChars": 800,
+      "allowEmptyResult": false
+    },
+    {
+      "id": "boram-daily-schedule",
+      "name": "보람 일정 브리핑 (비활성 — personal-schedule-daily로 대체됨)",
+      "disabled": true,
+      "schedule": "30 7 * * *",
+      "prompt": "deprecated",
+      "note": "2026-03-19 tasks.json에서 제거됨. plist가 잔존하여 ABORTED 방지용 stub."
+    },
+    {
+      "id": "rag-bench",
+      "name": "RAG 품질 측정",
+      "schedule": "0 3 * * 0",
+      "script": "~/.jarvis/bin/memorybench.mjs",
+      "timeout": 180,
+      "output": [
+        "file"
+      ],
+      "env": {
+        "BENCH_SAVE": "1",
+        "BENCH_VERBOSE": "0"
+      }
+    },
+    {
+      "id": "weekly-perf-agent",
+      "name": "주간 성과 분석 에이전트",
+      "schedule": "0 21 * * 0",
+      "script": "~/.jarvis/bin/weekly-perf-agent.sh",
+      "timeout": 300,
+      "prompt": "",
+      "allowedTools": "Bash",
+      "output": [
+        "discord",
+        "board",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "weekly",
+      "depends": [
+        "weekly-roi"
+      ],
+      "contextFile": "weekly-perf-agent.md",
+      "resultRetention": 30,
+      "resultMaxChars": 2000,
+      "model": "claude-sonnet-4-6",
+      "description": "매주 일요일 21:00 FSM/Langfuse/RAG/Board 데이터 종합 분석 → Board 포스트 + Discord 알림"
+    },
+    {
+      "id": "brand-visibility-check",
+      "name": "브랜드 외부 노출 자동 감지",
+      "schedule": "0 */6 * * *",
+      "script": "~/.jarvis/scripts/brand-visibility-check.sh",
+      "timeout": 60,
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "priority": "normal",
+      "depends": [],
+      "resultRetention": 30,
+      "resultMaxChars": 1000,
+      "allowEmptyResult": false,
+      "note": "6시간 주기(0, 6, 12, 18시) GitHub 검색 순위 + 블로그 최신 게시일 자동 감지. RED 임계값 초과 시 DEV_TASK 자동 생성. context-bus.md Brand Metrics 섹션 자동 갱신",
+      "enabled": true
+    },
+    {
+      "id": "geeknews-bench-crawl",
+      "name": "GeekNews 벤치마크 크롤",
+      "schedule": "30 10 * * *",
+      "script": "~/jarvis/infra/scripts/geeknews-bench-crawl.sh",
+      "timeout": 600,
+      "prompt": "GeekNews RSS 채널 크롤링 → LLM 분류 → 유용 기사 위키 주입",
+      "allowedTools": "",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": null,
+      "resultRetention": 7,
+      "resultMaxChars": 2000,
+      "oncePerDay": true,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "geeknews-bench-report",
+      "name": "GeekNews 주간 벤치마크 리포트",
+      "schedule": "0 9 * * 1",
+      "script": "~/jarvis/infra/scripts/geeknews-bench-report.sh",
+      "timeout": 120,
+      "prompt": "주간 GeekNews 벤치마크 리포트 생성 → #jarvis-ceo 전송",
+      "allowedTools": "",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-ceo",
+      "retry": {
+        "max": 1,
+        "backoff": "exponential"
+      },
+      "maxBudget": "0.50",
+      "priority": "weekly",
+      "depends": [],
+      "contextFile": null,
+      "resultRetention": 30,
+      "resultMaxChars": 3000,
+      "oncePerDay": true,
+      "model": "claude-haiku-4-5-20251001"
+    },
+    {
+      "id": "self-healing-digest",
+      "name": "Self-Healing 주간 감사",
+      "schedule": "0 21 * * 0",
+      "script": "~/jarvis/infra/scripts/self-healing-digest.sh",
+      "timeout": 60,
+      "prompt": "Self-healing 주간 감사 리포트 생성",
+      "allowedTools": "",
+      "output": [
+        "discord",
+        "file"
+      ],
+      "discordChannel": "jarvis-system",
+      "retry": {
+        "max": 1,
+        "backoff": "exponential"
+      },
+      "maxBudget": null,
+      "priority": "weekly",
+      "depends": [],
+      "contextFile": null,
+      "resultRetention": 30,
+      "resultMaxChars": 3000,
+      "oncePerDay": true,
+      "model": null
+    },
+    {
+      "id": "job-alert",
+      "name": "채용 공고 크롤링 & 매칭",
+      "schedule": "0 9 * * *",
+      "script": "~/.jarvis/scripts/job-alert.sh",
+      "allowEmptyResult": true,
+      "timeout": 300,
+      "prompt": "job-crawl.mjs로 채용공고 수집 후 job-match.mjs로 이력서 매칭. 신규 공고만 Discord jarvis-career 채널로 전송.",
+      "allowedTools": "Bash",
+      "output": [
+        "file"
+      ],
+      "discordChannel": "jarvis-career",
+      "retry": {
+        "max": 2,
+        "backoff": "exponential"
+      },
+      "maxBudget": "1.00",
+      "priority": "daily",
+      "depends": [],
+      "contextFile": "job-alert.md",
+      "resultRetention": 7,
+      "resultMaxChars": 2000,
+      "oncePerDay": true,
+      "model": "claude-haiku-4-5-20251001"
+    }
+  ]
+}
