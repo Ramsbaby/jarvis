@@ -509,11 +509,14 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
     '- [2026-xx-xx] User: ... Jarvis: ... 형태의 대화 스니펫은 추출 금지.',
     '- 150자 이상 되는 사실은 추출 금지 (요약이 아닌 원문 복붙 방지).',
     '',
+    '⭐ 중요도 점수 (1-5): 5=핵심 선호/제약, 4=구체적 계획/사람, 3=유용하지만 맥락적, 2=일시적, 1=자명.',
+    '→ score 3 이상만 추출.',
+    '',
     `<<가족 멤버 메시지>>\n${userMsg.slice(0, 400)}`,
     `<<자비스 응답>>\n${botMsg.slice(0, 600)}`,
     '',
     '출력 형식 (JSON 배열만, 다른 텍스트 없이 마지막 줄에):',
-    '["사실1", "사실2"]',
+    '[{"fact":"사실1","score":4}, {"fact":"사실2","score":5}]',
   ].join('\n') : [
     '다음 대화에서 미래 대화에 도움될 구체적 사실을 추출해줘.',
     '기준: 사람 이름/일정/장소/선호/계획/결정 같은 구체적 정보. 일반 상식이나 자명한 사실 제외.',
@@ -525,11 +528,19 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
     '- the user의 직접 발언인지 불명확하면 추출하지 않는다.',
     '- "오너의 계정명은 X다", "오너는 X를 선호한다" 형태는 오너가 직접 말한 경우에만 기록.',
     '',
+    '⭐ 중요도 점수 (1-5, Mem0 패턴):',
+    '- 5: 핵심 결정/선호/제약 (반복 참조 예상)',
+    '- 4: 구체적 계획/일정/사람 정보',
+    '- 3: 유용하지만 맥락 의존적',
+    '- 2: 일시적 사실 (며칠 후 무의미)',
+    '- 1: 자명하거나 일반적',
+    '→ score 3 이상만 추출. 2 이하는 버린다.',
+    '',
     `<<사용자>>\n${userMsg.slice(0, 500)}`,
     `<<봇>>\n${botMsg.slice(0, 800)}`,
     '',
     '출력 형식 (JSON 배열만, 다른 텍스트 없이 마지막 줄에):',
-    '["사실1", "사실2"]',
+    '[{"fact":"사실1","score":4}, {"fact":"사실2","score":5}]',
   ].join('\n');
 
   try {
@@ -578,13 +589,22 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
         }
         if (facts2) {
           const FAMILY_JUNK_RE = /userid.*family|userid.*owner|userid.*boram|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조|\[20\d\d-\d\d-\d\d \d\d:\d\d:\d\d\]/i;
+          const IMPORTANCE_THRESHOLD = 3; // Mem0 패턴: score 3 이상만 저장
           let saved2 = 0;
-          for (const f of facts2) {
-            if (typeof f === 'string' && f.length > 5 && f.length < 160 && !(isFamilyChannel && FAMILY_JUNK_RE.test(f))) {
-              userMemory.addFact(userId, f); saved2++;
-              wikiAddFact(userId, f); // LLM Wiki 실시간 기록
-              log('info', 'Auto memory extracted (SDK)', { userId, fact: f.slice(0, 80) });
+          for (const item of facts2) {
+            // 호환: {"fact":"...", "score":N} 형식 또는 기존 "string" 형식 둘 다 처리
+            const f = typeof item === 'string' ? item : item?.fact;
+            const score = typeof item === 'object' ? (item?.score ?? 5) : 5; // 기존 형식은 점수 5 기본
+            if (!f || typeof f !== 'string') continue;
+            if (f.length <= 5 || f.length >= 160) continue;
+            if (isFamilyChannel && FAMILY_JUNK_RE.test(f)) continue;
+            if (score < IMPORTANCE_THRESHOLD) {
+              log('debug', 'Auto memory skipped (low importance)', { userId, fact: f.slice(0, 60), score });
+              continue;
             }
+            userMemory.addFact(userId, f); saved2++;
+            wikiAddFact(userId, f); // LLM Wiki 실시간 기록
+            log('info', 'Auto memory extracted (SDK)', { userId, fact: f.slice(0, 80), score });
           }
           if (saved2 > 0) {
             await _syncUserMemoryMarkdown(userId).catch(() => {});
@@ -620,11 +640,11 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
     const data = await response.json();
     const result = data?.content?.[0]?.text ?? '';
 
-    // Structured Outputs 보장으로 bracket-matching 불필요 — 직접 파싱
+    // Structured Outputs 또는 자유형 JSON 파싱 — [{fact, score}] 또는 ["string"] 호환
     let facts = null;
     try {
       const parsed = JSON.parse(result.trim());
-      if (Array.isArray(parsed) && parsed.every(x => typeof x === 'string')) facts = parsed;
+      if (Array.isArray(parsed)) facts = parsed;
     } catch { /* invalid JSON — skip */ }
     if (!facts) {
       log('debug', 'autoExtractMemory: no valid JSON array found', { userId, raw: result.slice(-150) });
@@ -632,14 +652,22 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
     }
 
     const FAMILY_JUNK_RE2 = /userid.*family|userid.*owner|userid.*boram|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조|\[20\d\d-\d\d-\d\d \d\d:\d\d:\d\d\]/i;
+    const IMPORTANCE_THRESHOLD2 = 3;
     let saved = 0;
-    for (const fact of facts) {
-      if (typeof fact === 'string' && fact.length > 5 && fact.length < 160 && !(isFamilyChannel && FAMILY_JUNK_RE2.test(fact))) {
-        userMemory.addFact(userId, fact);
-        wikiAddFact(userId, fact); // LLM Wiki 실시간 기록
-        saved++;
-        log('info', 'Auto memory extracted', { userId, fact: fact.slice(0, 80) });
+    for (const item of facts) {
+      const fact = typeof item === 'string' ? item : item?.fact;
+      const score = typeof item === 'object' ? (item?.score ?? 5) : 5;
+      if (!fact || typeof fact !== 'string') continue;
+      if (fact.length <= 5 || fact.length >= 160) continue;
+      if (isFamilyChannel && FAMILY_JUNK_RE2.test(fact)) continue;
+      if (score < IMPORTANCE_THRESHOLD2) {
+        log('debug', 'Auto memory skipped (low importance)', { userId, fact: fact.slice(0, 60), score });
+        continue;
       }
+      userMemory.addFact(userId, fact);
+      wikiAddFact(userId, fact);
+      saved++;
+      log('info', 'Auto memory extracted', { userId, fact: fact.slice(0, 80), score });
     }
 
     // RAG 즉시 반영: user-memory 마크다운을 discord-history에 기록 → rag-watch 자동 감지

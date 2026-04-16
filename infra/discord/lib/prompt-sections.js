@@ -87,7 +87,12 @@ export function buildFormatSection() {
 export function buildToolsSection({ botHome }) {
   return [
     '[코드] Serena: get_symbols_overview → find_symbol(include_body=true) → search_for_pattern → find_referencing_symbols. 수정: replace_symbol_body / insert_after/before_symbol / Edit. 파일 전체 Read는 최후 수단.',
-    '[시스템] Nexus: exec(cmd) / scan(병렬) / cache_exec(TTL) / log_tail / health / file_peek. [기억] rag_search — "저번에 말한", "기억해?", "아까 얘기한" 처럼 명시적으로 이전 대화를 참조할 때만. "과거", "이전", "파라미터" 단어 단독으로는 rag_search 호출 금지 — 대화 흐름에서 의미 파악 우선. 예외: 현재 컨텍스트에 없는 고유명사(프로젝트명, 앱명, 사람 이름 등)가 등장하면 "모른다"고 하기 전에 반드시 rag_search 먼저 호출.',
+    '[시스템] Nexus: exec(cmd) / scan(병렬) / cache_exec(TTL) / log_tail / health / file_peek.',
+    '[기억] rag_search 호출 기준 (구체적 예시):',
+    '  - ✅ 호출: "저번에 말한 여행 일정", "기억해? 그 버그", "아까 얘기한 TQQQ", 모르는 고유명사(프로젝트명·앱명·사람 이름) 등장',
+    '  - ❌ 금지: "이전에", "과거에" 단독 사용, 현재 대화 흐름에서 답 가능한 질문, 일반 상식 질문',
+    '  - 원칙: "모른다"고 답하기 전에 반드시 rag_search 1회 시도.',
+    '[메모리 삭제] 사용자가 "잊어줘", "삭제해", "지워줘" + 특정 사실을 말하면 → exec로 user-memory.js removeFact 호출. 확인 후 "삭제했습니다" 응답.',
     `[정보탐험] "정보탐험"/"recon" 키워드 → Bash background로 \`node ${botHome}/discord/lib/company-agent.mjs --team recon --channel <현재채널명>\` 실행 후 즉시 "🔭 정보탐험 시작했습니다. 7~11분 소요, 결과는 현재 채널로 전송됩니다." 응답. await 금지(90초 타임아웃). 채널명은 시스템 프롬프트 "--- Channel: <name> ---" 에서 추출.`,
   ].join('\n');
 }
