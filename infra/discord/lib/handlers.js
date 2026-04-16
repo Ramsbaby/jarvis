@@ -1361,7 +1361,10 @@ ${extracted}
 
       // Loop ended without result event
       if (!streamer.finalized && !retryNeeded && !needsContinuation) {
-        if (aborted && killReason !== 'restart') {
+        if (aborted && killReason === 'manual') {
+          // 사용자 수동 중단 — auto-resume 없이 즉시 finalize
+          await streamer.finalize();
+        } else if (aborted && killReason !== 'restart') {
           // 타임아웃: 2회까지 자동 재개, 이후에만 사용자에게 알림
           _savePendingTask(sessionKey, originalPrompt, completedTools);
           if (_autoResumeAttempts < 2) {
