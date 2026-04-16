@@ -141,19 +141,19 @@ Open the project in **Claude Code** and run:
 /onboarding
 ```
 
-The onboarding wizard guides you through 13 steps automatically:
+The onboarding wizard guides you through Steps 0–14 (idempotent — re-runnable safely):
 
 | Step | What it does |
 |------|-------------|
 | 0 | Checks Node.js 18+, git, Ollama (optional — RAG only) |
-| 1 | Detects existing `.env` — skips token steps if already configured |
-| 2–5 | Collects tokens interactively (Discord Token / Anthropic API Key / Guild ID / owner info) |
-| 6 | Creates `~/.jarvis/.env` + 8 data directories (`logs/state/context/inbox/results/rag/data/config`) |
-| 7 | Runs `npm install` + copies `*.example.json` config templates |
+| 1 | Detects installation state → **[V]** verify only / **[U]** update specific values / **[R]** full reinstall |
+| 2–5 | Collects tokens interactively — skips steps whose values are already configured |
+| 6 | Creates/updates `~/.jarvis/.env` + 8 data directories — preserves existing values with `--merge` |
+| 7 | Runs `npm install` + copies `*.example.json` config templates (skips existing files) |
 | 8 | **RAG setup** (optional) — if Ollama detected, runs `python3 scripts/setup_rag.py` (~400MB model) |
-| 9 | Asks: **Auto-update** or **Manual-update**? |
+| 9 | Asks: **Auto-update** or **Manual-update**? (skips if policy already set) |
 | 10 | Creates `🚀jarvis-update` Discord channel + registers system persona |
-| 11 | Installs LaunchAgents (macOS) or PM2 + cron (Linux) |
+| 11 | Installs LaunchAgents (macOS) or PM2 + cron (Linux) — skips already-running agents |
 | 12 | Runs full verification: node_modules · bot syntax · data dirs · `.env` keys |
 | 13 | Confirms bot startup via log output |
 | 14 | Prints completion summary |
