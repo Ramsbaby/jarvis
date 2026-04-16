@@ -707,6 +707,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
           join(ledgerDir, 'feedback-score.jsonl'),
           JSON.stringify({
             ts: new Date().toISOString(),
+            source: 'discord-bot',
             traceId: prevTraceId,
             userId: message.author.id,
             channelId: message.channel?.id ?? null,
@@ -729,6 +730,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
           join(ledgerDir, 'reask-tracker.jsonl'),
           JSON.stringify({
             ts: new Date().toISOString(),
+            source: 'discord-bot',
             userId: message.author.id,
             channelId: message.channel?.id ?? null,
             feedbackType: feedback.type,
@@ -1247,7 +1249,9 @@ ${extracted}
                 appendFileSync(
                   join(ledgerDir, 'tool-guard-trips.jsonl'),
                   JSON.stringify({
-                    ts: new Date().toISOString(), sessionKey, toolCount,
+                    ts: new Date().toISOString(),
+                    source: 'discord-bot',
+                    sessionKey, toolCount,
                     limit: MAX_TOOL_CALLS_PER_TURN,
                     userId: message.author.id,
                     channelId: effectiveChannelId,
@@ -1349,6 +1353,7 @@ ${extracted}
                 join(ledgerDir, 'response-ledger.jsonl'),
                 JSON.stringify({
                   ts: new Date().toISOString(),
+                  source: 'discord-bot',
                   traceId: localTraceId,
                   userId: message.author?.id ?? null,
                   channelId: effectiveChannelId,

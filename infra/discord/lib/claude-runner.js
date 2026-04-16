@@ -1062,7 +1062,10 @@ export async function* createClaudeSession(prompt, {
           appendFileSync(
             join(ledgerDir, 'permission-denied.jsonl'),
             JSON.stringify({
-              ts: new Date().toISOString(), tool: toolName, blocked: String(blocked).slice(0, 160),
+              ts: new Date().toISOString(),
+              source: 'discord-bot',
+              tool: toolName,
+              blocked: String(blocked).slice(0, 160),
             }) + '\n'
           );
         } catch { /* ledger best-effort */ }
