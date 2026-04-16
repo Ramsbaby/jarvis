@@ -72,7 +72,9 @@ import { pendingQueue, enqueue, processQueue } from './queue-processor.js';
 import { MessageDebouncer } from './message-debouncer.js';
 import { ProcessorContext, createPreProcessorRegistry } from './pre-processor.js';
 import { isTutoringQuery } from './prompt-sections.js';
-import { langfuse } from './langfuse-client.mjs';
+// langfuse 제거 (2026-04-17): Mac Mini 리소스 제약으로 로컬 JSONL 원장으로 교체.
+// 측정 파일: response-ledger.jsonl / feedback-score.jsonl / reask-tracker.jsonl
+//          / tool-guard-trips.jsonl / permission-denied.jsonl
 import { detectAndRecord as _trackCommitment } from './commitment-tracker.js';
 import { detectStatType, sendStatVisual } from './stat-visual.js';
 import { detectAnalyticalType, generateAndSendVisual } from './visual-gen.js';
@@ -84,6 +86,13 @@ import { detectAnalyticalType, generateAndSendVisual } from './visual-gen.js';
 const _msgDebouncer = new MessageDebouncer();
 /** cancel token restart 시 restartPrompt를 debounce 경유 후에도 보존 (messageId → prompt) */
 const _promptOverrides = new BoundedMap(500, 10 * 60_000); // 500 items, 10min TTL
+
+// Phase 0 Sensor: 유저별 직전 trace/prompt 캐시 — 피드백 도착 시 해당 trace에 score 부여
+const _lastTraceByUser = new BoundedMap(1000, 24 * 60 * 60_000); // 1000 items, 24h TTL
+const _lastPromptByUser = new BoundedMap(1000, 24 * 60 * 60_000);
+
+// Phase 0 Sensor: turn당 tool call 상한 — 무한 루프/낭비 방지
+const MAX_TOOL_CALLS_PER_TURN = Number(process.env.MAX_TOOL_CALLS_PER_TURN ?? 8);
 
 // Pre-processor registry (RAG context enrichment)
 const _preProcessorRegistry = createPreProcessorRegistry(searchRagForContext);
@@ -685,6 +694,53 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
   const feedback = processFeedback(message.author.id, userPrompt);
   if (feedback) {
     log('info', 'Feedback detected', { userId: message.author.id, type: feedback.type });
+
+    // Phase 0 Sensor: positive/negative/correction → feedback-score.jsonl 로컬 원장
+    // (Langfuse 의존 제거 — Mac Mini 리소스 절약, JSONL로 1주 집계 충분)
+    const prevTraceId = _lastTraceByUser.get(message.author.id);
+    const scoreMap = { positive: 1.0, negative: 0.0, correction: 0.3 };
+    if (prevTraceId && scoreMap[feedback.type] !== undefined) {
+      try {
+        const ledgerDir = join(_BOT_HOME, 'state');
+        mkdirSync(ledgerDir, { recursive: true });
+        appendFileSync(
+          join(ledgerDir, 'feedback-score.jsonl'),
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            traceId: prevTraceId,
+            userId: message.author.id,
+            channelId: message.channel?.id ?? null,
+            feedbackType: feedback.type,
+            score: scoreMap[feedback.type],
+            comment: String(userPrompt).slice(0, 200),
+          }) + '\n'
+        );
+      } catch (e) {
+        log('debug', 'feedback-score append failed (non-blocking)', { error: e?.message });
+      }
+    }
+
+    // Phase 0 Sensor: negative/correction → reask-tracker.jsonl 적재
+    if (feedback.type === 'negative' || feedback.type === 'correction') {
+      try {
+        const ledgerDir = join(_BOT_HOME, 'state');
+        mkdirSync(ledgerDir, { recursive: true });
+        appendFileSync(
+          join(ledgerDir, 'reask-tracker.jsonl'),
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            userId: message.author.id,
+            channelId: message.channel?.id ?? null,
+            feedbackType: feedback.type,
+            feedbackText: String(userPrompt).slice(0, 240),
+            prevPrompt: String(_lastPromptByUser.get(message.author.id) ?? '').slice(0, 240),
+            lastTraceId: prevTraceId ?? null,
+          }) + '\n'
+        );
+      } catch (e) {
+        log('debug', 'reask-tracker append failed (non-blocking)', { error: e?.message });
+      }
+    }
   }
 
   const reactions = new Set();
@@ -1180,6 +1236,28 @@ ${extracted}
             hasStreamEvents = true;
             lastStreamBlockWasTool = true;
             toolCount++;
+            // Phase 0 Sensor: tool-call guard — turn당 상한 초과 시 강제 중단
+            if (toolCount > MAX_TOOL_CALLS_PER_TURN) {
+              log('warn', 'Tool-call guard tripped', {
+                threadId: thread.id, toolCount, limit: MAX_TOOL_CALLS_PER_TURN,
+              });
+              try {
+                const ledgerDir = join(_BOT_HOME, 'state');
+                mkdirSync(ledgerDir, { recursive: true });
+                appendFileSync(
+                  join(ledgerDir, 'tool-guard-trips.jsonl'),
+                  JSON.stringify({
+                    ts: new Date().toISOString(), sessionKey, toolCount,
+                    limit: MAX_TOOL_CALLS_PER_TURN,
+                    userId: message.author.id,
+                    channelId: effectiveChannelId,
+                  }) + '\n'
+                );
+              } catch { /* ledger best-effort */ }
+              streamer.append('\n\n⛔ 도구 호출 한도(' + MAX_TOOL_CALLS_PER_TURN + '회) 초과 — 중단합니다.');
+              procShim.kill();
+              // 바깥 for-await가 abort 이벤트를 받아 자연 종료됨
+            }
             const display = getToolDisplay(se.content_block.name || '');
             streamer.updateStatus(display.desc);
             // ② 세션 연속성: 툴 호출 이름 기록 (최대 20개, 민감 툴 제외)
@@ -1260,25 +1338,38 @@ ${extracted}
           const cost = event.cost_usd ?? null;
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-          // Langfuse: trace this generation (fire-and-forget)
+          // Phase 0 Sensor: 로컬 response-ledger (Langfuse 의존 제거)
+          // feedback-score.jsonl과 traceId로 join 가능
           if (!event.is_error) {
-            const lfTraceId = langfuse.createTrace({
-              name: 'discord-response',
-              userId: message.author?.id,
-              sessionId: thread.id,
-              metadata: { channelId: effectiveChannelId, elapsed_s: parseFloat(elapsed) },
-              tags: ['discord'],
-            });
-            const gen = langfuse.startGeneration({
-              traceId: lfTraceId,
-              name: 'discord-response',
-              model: 'claude-sdk',
-              metadata: { cost_usd: cost, tool_count: toolCount },
-            });
-            gen.end({
-              output: lastAssistantText.slice(0, 500),
-              usage: event.usage ? { input: event.usage.input_tokens ?? 0, output: event.usage.output_tokens ?? 0 } : undefined,
-            });
+            const localTraceId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            try {
+              const ledgerDir = join(_BOT_HOME, 'state');
+              mkdirSync(ledgerDir, { recursive: true });
+              appendFileSync(
+                join(ledgerDir, 'response-ledger.jsonl'),
+                JSON.stringify({
+                  ts: new Date().toISOString(),
+                  traceId: localTraceId,
+                  userId: message.author?.id ?? null,
+                  channelId: effectiveChannelId,
+                  sessionId: thread.id,
+                  toolCount,
+                  cost_usd: cost,
+                  elapsed_s: parseFloat(elapsed),
+                  input_tokens: event.usage?.input_tokens ?? 0,
+                  output_tokens: event.usage?.output_tokens ?? 0,
+                  stop_reason: event.stop_reason ?? null,
+                  output_snippet: lastAssistantText.slice(0, 300),
+                }) + '\n'
+              );
+            } catch (e) {
+              log('debug', 'response-ledger append failed (non-blocking)', { error: e?.message });
+            }
+            // 유저별 직전 trace/prompt 캐시 — 다음 턴 피드백 도착 시 scoring 대상
+            if (message.author?.id) {
+              _lastTraceByUser.set(message.author.id, localTraceId);
+              _lastPromptByUser.set(message.author.id, String(originalPrompt).slice(0, 240));
+            }
           }
           const rateStatus = rateTracker.check();
 
