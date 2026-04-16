@@ -20,6 +20,12 @@ BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
 
+# --- Trajectory logger: 크론 실행 궤적 수집 ---
+_TRAJECTORY_LIB="$(cd "$(dirname "$0")/../lib" && pwd)/trajectory-logger.sh"
+if [[ -f "$_TRAJECTORY_LIB" ]]; then
+    source "$_TRAJECTORY_LIB"
+fi
+
 # --- FSM 헬퍼 ---
 _fsm_ensure() {
     # cron 태스크를 FSM DB에 등록/리셋 (failed/done → queued 재시작)
@@ -59,6 +65,11 @@ mkdir -p "$(dirname "$CRON_LOG")"
 log() {
     echo "[$(date '+%F %T')] [${TASK_ID}] $1" >> "$CRON_LOG"
 }
+
+# --- Continue Sites: 다단계 에러 복구 라이브러리 로드 ---
+if [[ -f "${BOT_HOME}/lib/continue-sites.sh" ]]; then
+    source "${BOT_HOME}/lib/continue-sites.sh"
+fi
 
 # --- Completion trap: 비정상 종료 시에도 반드시 로그 기록 ---
 _TASK_DONE=false
@@ -179,6 +190,9 @@ ALLOW_EMPTY_RESULT=$(echo "$TASK_CONFIG" | jq -r '.allowEmptyResult // false')
 SUCCESS_PATTERN=$(echo "$TASK_CONFIG" | jq -r '.successPattern // empty')
 SCRIPT=$(echo "$TASK_CONFIG" | jq -r '.script // empty')
 SCRIPT_ARGS=$(echo "$TASK_CONFIG" | jq -r '.scriptArgs // "daily"')
+# Continue Sites: opt-out 플래그 (기본값 true = 활성화)
+# tasks.json에 "continueSites": false 설정 시 기존 방식 유지
+CONTINUE_SITES=$(echo "$TASK_CONFIG" | jq -r '.continueSites // true')
 # output is a JSON array like ["discord","file"]
 OUTPUT_MODES=$(echo "$TASK_CONFIG" | jq -r '.output[]? // empty')
 
@@ -245,10 +259,9 @@ unset _cur_md5
 
 # --- Market holiday guard (tasks with requiresMarket: true) ---
 if [[ "$REQUIRES_MARKET" == "true" ]]; then
-        log "SKIPPED — market closed today (holiday or weekend)"
-        _TASK_DONE=true
-        exit 0
-    fi
+    log "SKIPPED — market closed today (holiday or weekend)"
+    _TASK_DONE=true
+    exit 0
 fi
 
 # --- Duplicate run guard (atomic mkdir lock) ---
@@ -360,6 +373,10 @@ _fsm_transition "$TASK_ID" "running" "{\"name\":\"${TASK_NAME_FSM}\"}"
 _FSM_RUNNING=true
 
 log "START"
+# Trajectory: 시작 이벤트 기록
+if type trajectory_log &>/dev/null; then
+    trajectory_log start "$TASK_ID" "${MODEL:-unknown}"
+fi
 
 # --- Lounge announce: task started ---
 
@@ -376,7 +393,17 @@ if [[ -n "$SCRIPT" ]]; then
     fi
     RESULT=$("$SCRIPT_PATH" "$SCRIPT_ARGS" 2>>"${BOT_HOME}/logs/cron.log") || EXIT_CODE=$?
 else
-    RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+    # Continue Sites: LLM 태스크에 다단계 복구 적용
+    # - continueSites != false 이고, continue-sites.sh가 로드되어 있으면 run_with_recovery 사용
+    # - 그 외: 기존 retry-wrapper 직접 호출
+    if [[ "$CONTINUE_SITES" != "false" ]] && type run_with_recovery &>/dev/null; then
+        log "CONTINUE_SITES: enabled — 다단계 복구 모드"
+        RESULT=$(run_with_recovery "$TASK_ID" "$BOT_HOME/bin/retry-wrapper.sh" \
+            "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" \
+            "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+    else
+        RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+    fi
 fi
 
 if [[ $EXIT_CODE -ne 0 ]]; then
@@ -387,7 +414,11 @@ if [[ $EXIT_CODE -ne 0 ]]; then
     fi
 fi
 if [[ $EXIT_CODE -ne 0 ]]; then
-    log "FAILED (exit: $EXIT_CODE)"
+    if [[ -n "${JARVIS_RECOVERY_STAGE:-}" ]]; then
+        log "FAILED (exit: $EXIT_CODE) — Continue Sites: 전 단계(1~5) 복구 실패"
+    else
+        log "FAILED (exit: $EXIT_CODE)"
+    fi
     # AUTH_ERROR 즉시 감지: 첫 실패에서 ntfy 발송 (Circuit Breaker 3회 대기 없이)
     if echo "$RESULT" | grep -qE '"is_error":true.*"duration_api_ms":0|AUTH_ERROR|Not logged in'; then
         _auth_cooldown="${BOT_HOME}/state/auth-alerted-expired.ts"
@@ -437,11 +468,24 @@ if [[ $EXIT_CODE -ne 0 ]]; then
         unset _CB_AUTO_FIX _EXTRA_DETAIL
     fi
     unset _cb_new
+    # Trajectory: 실패 종료 이벤트 기록
+    if type trajectory_log &>/dev/null; then
+        trajectory_log end "$TASK_ID" "$EXIT_CODE"
+    fi
     _TASK_DONE=true
     exit "$EXIT_CODE"
 fi
 
-log "SUCCESS"
+# Continue Sites: 복구 단계에서 성공한 경우 로그 보강
+if [[ "${JARVIS_RECOVERY_STAGE:-1}" -gt 1 ]]; then
+    log "SUCCESS (recovered at stage ${JARVIS_RECOVERY_STAGE})"
+else
+    log "SUCCESS"
+fi
+# Trajectory: 성공 종료 이벤트 기록
+if type trajectory_log &>/dev/null; then
+    trajectory_log end "$TASK_ID" 0
+fi
 # circuit breaker: 성공 시 초기화
 if [[ -f "$_CB_FILE" ]]; then rm -f "$_CB_FILE" 2>/dev/null || true; fi
 # FSM: running → done 전이
