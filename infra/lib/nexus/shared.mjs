@@ -3,14 +3,35 @@
  * 압축 엔진, 명령 실행, 구조화 출력, 텔레메트리
  */
 
-import { spawn, execFile } from 'node:child_process';
-import { appendFileSync } from 'node:fs';
+import { spawn, execFile, execSync } from 'node:child_process';
+import { appendFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 export const BOT_HOME = join(process.env.BOT_HOME || join(homedir(), '.jarvis'));
 export const LOGS_DIR = join(BOT_HOME, 'logs');
+export const STATE_DIR = join(BOT_HOME, 'state');
 export const TELEMETRY_FILE = join(LOGS_DIR, 'nexus-telemetry.jsonl');
+// Phase 0 Sensor: 표면 통합 측정 ledger (Discord 봇·CLI 훅과 동일 경로)
+export const MCP_SENSOR_FILE = join(STATE_DIR, 'mcp-tool-call.jsonl');
+
+// MCP stdio 서버는 클라이언트(CLI/app)의 subprocess로 뜬다.
+// 부모 프로세스 정보를 1회 캐싱해서 source 추정 (Claude Code CLI vs 앱 vs 기타).
+let _cachedSource = null;
+function detectMcpSource() {
+  if (_cachedSource) return _cachedSource;
+  try {
+    const ppid = process.ppid;
+    const cmd = execSync(`ps -p ${ppid} -o command= 2>/dev/null || true`, { encoding: 'utf-8' }).trim();
+    if (/Claude\s*\.app|Anthropic/i.test(cmd)) _cachedSource = 'mcp-claude-app';
+    else if (/claude[\/ ]|claude-code|\.local\/bin\/claude/i.test(cmd)) _cachedSource = 'mcp-claude-code-cli';
+    else if (/node.*discord-bot/i.test(cmd)) _cachedSource = 'mcp-discord-bot';
+    else _cachedSource = 'mcp-unknown';
+  } catch {
+    _cachedSource = 'mcp-unknown';
+  }
+  return _cachedSource;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -34,10 +55,21 @@ export function mkError(data, meta = {}) {
 // Telemetry
 // ---------------------------------------------------------------------------
 export function logTelemetry(tool, durationMs, meta = {}) {
+  const ts = new Date().toISOString();
   try {
-    const entry = JSON.stringify({ ts: new Date().toISOString(), tool, duration_ms: durationMs, ...meta }) + '\n';
-    appendFileSync(TELEMETRY_FILE, entry);
+    appendFileSync(
+      TELEMETRY_FILE,
+      JSON.stringify({ ts, tool, duration_ms: durationMs, ...meta }) + '\n'
+    );
   } catch { /* never block on telemetry */ }
+  // Phase 0 Sensor: 표면 통합 ledger (Discord/CLI/MCP 합본 분석용)
+  try {
+    mkdirSync(STATE_DIR, { recursive: true });
+    appendFileSync(
+      MCP_SENSOR_FILE,
+      JSON.stringify({ ts, source: detectMcpSource(), tool, duration_ms: durationMs, ...meta }) + '\n'
+    );
+  } catch { /* sensor는 텔레메트리보다 엄격히 비차단 */ }
 }
 
 // ---------------------------------------------------------------------------
