@@ -18,6 +18,19 @@ LOG="$BOT_HOME/logs/update-broadcast.log"
 mkdir -p "$(dirname "$STATE_FILE")" "$(dirname "$LOG")"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 
+# 중복 실행 방지 — mkdir은 atomic (macOS에 flock 없음)
+LOCK_DIR="$BOT_HOME/state/triggers/update-broadcast.lockdir"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$LOCK_DIR" 2>/dev/null || echo 0) ))
+    if (( LOCK_AGE > 300 )); then
+        rm -rf "$LOCK_DIR" && mkdir "$LOCK_DIR"
+    else
+        log "이미 실행 중 (lock age: ${LOCK_AGE}s) — 스킵"
+        exit 0
+    fi
+fi
+trap 'rm -rf "$LOCK_DIR"' EXIT
+
 # 디버깅: 크론 실행 확인
 log "=== 스크립트 실행 시작 (PID: $$) ==="
 
@@ -92,6 +105,9 @@ auto_deploy() {
             local _ts; _ts=$(date +%s)
             cp "$BOT_HOME/config/tasks.json" "$BOT_HOME/config/tasks.json.pre-rollback-${_ts}" 2>/dev/null || true
             git -C "$BOT_HOME" reset --hard HEAD~1 >> "$LOG" 2>&1 || true
+            # 롤백 후 STATE_FILE을 실제 HEAD(롤백된 버전)로 재동기화
+            # 미동기화 시: 다음 크론이 역방향 diff 감지 → 불필요한 재배포 루프 발생 가능
+            git -C "$BOT_HOME" rev-parse HEAD > "$STATE_FILE" 2>/dev/null || true
             send_embed "🚨 자동 배포 실패" "smoke test 실패 — 이전 버전으로 롤백됨" 15158332 "jarvis-system" || true
             return 1
         fi
@@ -202,18 +218,27 @@ dir_summary=$(echo "$changed_files" | awk -F/ 'NF>1{print $1}' | sort | uniq -c 
 meta_line="📦 커밋 ${commit_count}건 · 파일 ${file_count}개 · ${dir_summary}"
 description="${korean_summary}"$'\n'"${meta_line}"$'\n'"${action_line}"
 
+# Discord embed description 한도: 4096자
+# 초과 시 뒷부분 자르고 "…(생략)" 표기
+if [[ ${#description} -gt 4000 ]]; then
+    description="${description:0:4000}"$'\n'"…(커밋 많아 일부 생략)"
+fi
+
 # 봇 재시작 필요하면 노랑, 아니면 파랑
 color=3447003
 if echo "$action_line" | grep -q "재시작"; then
     color=16776960
 fi
 
+# SHA 업데이트는 broadcast 성공 여부와 무관하게 항상 선행 기록
+# (실패해도 다음 5분에 같은 커밋을 재처리해 무한 배포 루프 방지)
+echo "$current_sha" > "$STATE_FILE"
+
 # 업데이트 알림은 jarvis-system 채널로
 if send_embed "$title" "$description" "$color" "jarvis-system"; then
-    echo "$current_sha" > "$STATE_FILE"
     log "브로드캐스트 완료 (${commit_count}건): ${korean_summary}"
 else
-    log "브로드캐스트 실패"
+    log "브로드캐스트 실패 (알림 미전송 — SHA는 이미 기록됨, 재처리 없음)"
 fi
 
 # --- 자동 배포 (알림 전송 성공 여부와 무관하게 실행) ---

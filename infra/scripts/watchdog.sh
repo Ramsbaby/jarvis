@@ -70,6 +70,18 @@ detect_crash_loop() {
     echo "$current_pid" > "$pid_file"
 
     if [[ -n "$prev_pid" && "$current_pid" != "$prev_pid" ]]; then
+        # ▶ FIX: "모니터링 모드" 재시작은 정상이므로 크래시 루프로 판단하지 않음
+        local preflight_log="$BOT_HOME/logs/preflight.log"
+        if [[ -f "$preflight_log" ]]; then
+            # 최근 로그에 "모니터링 모드" 로그가 있는지 확인
+            if tail -100 "$preflight_log" 2>/dev/null | grep -q "봇 시작 (모니터링 모드)"; then
+                log "정상 재시작 감지: preflight 모니터링 모드 — 크래시 루프 판정 제외"
+                # restart-times 초기화하여 다음 주기에 다시 카운트 시작
+                true > "$restart_log"
+                return
+            fi
+        fi
+
         # PID 바뀜 → 재시작 이벤트 기록
         date +%s >> "$restart_log"
         # 오래된 항목 제거 (30분 초과)
