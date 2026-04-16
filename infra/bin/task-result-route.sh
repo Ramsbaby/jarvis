@@ -152,6 +152,60 @@ send_chart_embed() {
     fi
 }
 
+# --- Noise gate: 순수 성공/무변경 메시지 → 전송 안 함 (로그만) ---
+_is_noise() {
+    local msg="$1"
+    local trimmed
+    trimmed=$(echo "$msg" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr -d '\n')
+    # 20자 미만 단순 완료
+    if [[ ${#trimmed} -lt 20 ]]; then
+        case "$trimmed" in
+            *정상*|*완료*|*성공*|*ok*|*OK*|*변경*없*|*no*change*|*No*output*) return 0 ;;
+        esac
+    fi
+    # 순수 성공 패턴 (전체가 이 패턴이면 노이즈)
+    local cleaned
+    cleaned=$(echo "$msg" | grep -viE '^[[:space:]]*$|^정상|^변경.*없|^no (changes|output|new)|^완료|^성공|^ok$|^all (good|clear|pass)' || true)
+    if [[ -z "$cleaned" ]]; then return 0; fi
+    return 1
+}
+
+# --- Severity detection: 메시지 내용으로 심각도 판별 ---
+_detect_severity() {
+    local msg="$1"
+    if echo "$msg" | grep -qiE '실패|FAIL|error|critical|장애|급락|OOM|exit [1-9]|ABORTED|crash'; then
+        echo "error"
+    elif echo "$msg" | grep -qiE '경고|WARN|주의|임계|timeout|stale|degraded|CB.*임박'; then
+        echo "warning"
+    else
+        echo "info"
+    fi
+}
+
+# --- Standard header: 태스크명 + 시각 + 상태 이모지 자동 삽입 ---
+_build_header() {
+    local task_id="$1"
+    local severity="$2"
+    local emoji
+    case "$severity" in
+        error)   emoji="🔴" ;;
+        warning) emoji="🟡" ;;
+        *)       emoji="🟢" ;;
+    esac
+    local kst_time
+    kst_time=$(TZ=Asia/Seoul date '+%H:%M' 2>/dev/null || date '+%H:%M')
+    echo "> ${emoji} **${task_id}** · ${kst_time} KST"
+}
+
+# --- Embed color by severity (Uptime Kuma 패턴) ---
+_severity_embed_color() {
+    case "$1" in
+        error)   echo "15548997" ;;  # red
+        warning) echo "16705372" ;;  # yellow
+        *)       echo "5763719"  ;;  # green
+    esac
+}
+
 # --- Discord: 2000-char chunking ---
 send_discord() {
     local message="$1"
@@ -213,7 +267,29 @@ send_ntfy() {
 # --- Route by mode ---
 case "$MODE" in
     discord)
-        send_discord "$MESSAGE"
+        # Noise gate: 순수 성공 메시지는 Discord 전송 생략
+        if [[ -z "$EMBED_JSON" && -z "$CV2_JSON" && -z "$CHART_JSON" ]] && _is_noise "$MESSAGE"; then
+            echo "NOISE_GATE: $TASK_ID — 순수 성공, Discord 전송 생략" >&2
+        else
+            # Severity 판별 + 표준 헤더 삽입
+            _SEVERITY=$(_detect_severity "$MESSAGE")
+            _HEADER=$(_build_header "$TASK_ID" "$_SEVERITY")
+            MESSAGE="${_HEADER}
+${MESSAGE}"
+            # error/warning → 자동 embed 래핑 (EMBED_DATA가 없는 경우만)
+            if [[ -z "$EMBED_JSON" && "$_SEVERITY" != "info" ]]; then
+                _COLOR=$(_severity_embed_color "$_SEVERITY")
+                # 메시지 길이가 4096(embed description 한도) 이내면 embed로
+                if [[ ${#MESSAGE} -le 4000 ]]; then
+                    EMBED_JSON="{\"description\":$(printf '%s' "$MESSAGE" | jq -Rs .),\"color\":${_COLOR}}"
+                    send_discord ""  # 빈 텍스트 + embed
+                else
+                    send_discord "$MESSAGE"
+                fi
+            else
+                send_discord "$MESSAGE"
+            fi
+        fi
         ;;
     ntfy)
         send_ntfy "${BOT_NAME:-Bot}: $TASK_ID" "$MESSAGE"
