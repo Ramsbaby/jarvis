@@ -6,7 +6,7 @@ set -euo pipefail
 
 source "$(dirname "$0")/../discord/.env" 2>/dev/null || true
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 WEBHOOK_URL="${DISCORD_WEBHOOK_JARVIS:-}"
 LOG="$BOT_HOME/logs/cron.log"
 

@@ -7,7 +7,7 @@ set -euo pipefail
 # --- Configuration ---
 BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 STATE_DIR="$BOT_HOME/watchdog"
 LOG_FILE="$BOT_HOME/logs/watchdog.log"
@@ -560,6 +560,17 @@ for l in sys.stdin:
             health_status="down:$bot_status"
             increment_crash
             crash_count=$(get_crash_count)
+
+            # 자가 복구 방해 요인 진단: preflight/symlink 건전성 검증
+            local _diag_issues=""
+            [[ ! -f "$BOT_HOME/scripts/bot-preflight.sh" ]] && _diag_issues="${_diag_issues}\n- bot-preflight.sh 없음"
+            [[ ! -f "$BOT_HOME/discord/discord-bot.js" ]] && _diag_issues="${_diag_issues}\n- discord-bot.js 없음"
+            [[ ! -f "$BOT_HOME/discord/.env" ]] && _diag_issues="${_diag_issues}\n- discord/.env 없음"
+            [[ ! -f "$BOT_HOME/bin/cron-safe-wrapper.sh" ]] && _diag_issues="${_diag_issues}\n- cron-safe-wrapper.sh 없음"
+            if [[ -n "$_diag_issues" ]]; then
+                log "CRITICAL: 자가 복구 방해 요인 감지:${_diag_issues}"
+                send_alert "🚨 **봇 자가 복구 불가** — 필수 파일/symlink 누락:${_diag_issues}\n수동 복구 필요: symlink 재생성 또는 deploy 실행"
+            fi
 
             # [ON-DEMAND HOOK] bot.crashed 이벤트 발행 → bot-crash-classifier 태스크 트리거 (debounce 300s)
             "$BOT_HOME/scripts/emit-event.sh" "bot.crashed" \

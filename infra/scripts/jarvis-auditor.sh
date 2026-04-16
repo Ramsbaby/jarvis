@@ -15,7 +15,7 @@ set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 CONFIG_DIR="$BOT_HOME/config"
 STATE_DIR="$BOT_HOME/state"
 RESULTS_DIR="$BOT_HOME/results/auditor"

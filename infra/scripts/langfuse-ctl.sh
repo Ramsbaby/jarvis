@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-LANGFUSE_DIR="${BOT_HOME:-${HOME}/.local/share/jarvis}/docker/langfuse"
-LOG_FILE="${BOT_HOME:-${HOME}/.local/share/jarvis}/logs/langfuse-ctl.log"
+LANGFUSE_DIR="${BOT_HOME:-${HOME}/.jarvis}/docker/langfuse"
+LOG_FILE="${BOT_HOME:-${HOME}/.jarvis}/logs/langfuse-ctl.log"
 HEALTH_URL="http://localhost:3200/api/public/health"
 DOCKER_SOCK="/var/run/docker.sock"
 MAX_WAIT_DOCKER=60   # seconds to wait for Docker Desktop

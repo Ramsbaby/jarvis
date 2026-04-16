@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 LOG_DIR="$BOT_HOME/logs"
 
 if [ ! -d "$LOG_DIR" ]; then

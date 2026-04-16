@@ -3,7 +3,7 @@
 # LaunchAgent에 의해 정기 실행 (1시간 간격 권장)
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 COMMIT_FILE="$BOT_HOME/state/commitments.jsonl"
 WEBHOOK_FILE="$BOT_HOME/config/monitoring.json"
 

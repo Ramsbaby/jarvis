@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 BOT_SCRIPT="$BOT_HOME/discord/discord-bot.js"
 ENV_FILE="$BOT_HOME/discord/.env"
 NODE_BIN="${NODE_BIN:-/opt/homebrew/bin/node}"

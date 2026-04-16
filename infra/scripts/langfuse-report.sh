@@ -12,7 +12,7 @@
 set -euo pipefail
 trap 'rm -f "$TMP_DATA" 2>/dev/null' EXIT
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 TMP_DATA=$(mktemp /tmp/langfuse-report-XXXXXX.json)
 DAYS=7
 

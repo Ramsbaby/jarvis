@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: usage-stats.sh [DAYS]
 # DAYS 기본값: 7
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 JSONL="$BOT_HOME/logs/discord-bot.jsonl"
 DAYS="${1:-7}"
 

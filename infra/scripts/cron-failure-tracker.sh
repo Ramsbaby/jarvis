@@ -12,7 +12,7 @@
 
 set -uo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 LOG="${BOT_HOME}/logs/cron-failure-tracker.log"
 TASK_STORE="${BOT_HOME}/lib/task-store.mjs"
 mkdir -p "$(dirname "$LOG")"

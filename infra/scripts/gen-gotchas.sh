@@ -3,7 +3,7 @@
 # 사용: bash ~/.jarvis/scripts/gen-gotchas.sh
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 LEARNINGS_FILE="$BOT_HOME/state/recovery-learnings.md"
 GOTCHAS_FILE="$BOT_HOME/state/gotchas.md"
 MIN_COUNT=3

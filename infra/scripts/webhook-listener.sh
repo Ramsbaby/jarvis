@@ -29,7 +29,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 EMIT_EVENT="${BOT_HOME}/scripts/emit-event.sh"
 LOG="${BOT_HOME}/logs/webhook-listener.log"
 WEBHOOK_PORT="${WEBHOOK_PORT:-9000}"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.local/share/jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
 set -euo pipefail
 
 # sync-discord-token.sh — Discord 봇 토큰 업데이트 후 재시작
@@ -8,7 +8,7 @@ set -euo pipefail
 
 SCRIPT_NAME="sync-discord-token"
 NEW_TOKEN="${1:?사용법: $0 <새Discord봇토큰>}"
-BOT_HOME="${BOT_HOME:-${HOME}/.local/share/jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 BOT_ENV="$BOT_HOME/discord/.env"
 LOG="$BOT_HOME/logs/sync-discord-token.log"
 
