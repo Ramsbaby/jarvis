@@ -735,9 +735,11 @@ export async function* createClaudeSession(prompt, {
   // 5. Build system prompt — Prompt Harness (Tiered Lazy Loading)
   //    Tier 0: 항상 로드 (<3KB) — identity, language, persona, principles, format-core, tools, safety
   //    Tier 1: 키워드 매칭 시만 — format-detail (비교/차트/표 관련 쿼리)
+  // Harness 섹션 등록 (싱글톤 + 등록 완료 플래그로 레이스 컨디션 방지)
   const harness = getPromptHarness();
-  if (harness.listSections().length === 0) {
-    // 첫 세션: 섹션 등록 (싱글톤이므로 1회만)
+  if (!createClaudeSession._harnessRegistered) {
+    createClaudeSession._harnessRegistered = true; // 원자적 플래그 — 동시 호출에서 중복 등록 방지
+    // Tier 0 — 항상 로드 (등록 순서가 session hash에 영향 — 변경 금지)
     harness.register('identity', Tier.CORE, () => buildIdentitySection({ botName: process.env.BOT_NAME, ownerName }));
     harness.register('language', Tier.CORE, () => buildLanguageSection());
     harness.register('persona', Tier.CORE, () => buildPersonaSection({ ownerName }));
@@ -745,7 +747,7 @@ export async function* createClaudeSession(prompt, {
     harness.register('format-core', Tier.CORE, () => buildFormatCoreSection());
     harness.register('tools', Tier.CORE, () => buildToolsSection({ botHome: BOT_HOME }));
     harness.register('safety', Tier.CORE, () => buildSafetySection({ botHome: BOT_HOME }));
-    // Tier 1: 포맷 상세 — 비교/차트/표/마커 관련 쿼리 시만 로드
+    // Tier 1 — 키워드 매칭 시만 로드
     harness.register('format-detail', Tier.CONTEXTUAL, () => buildFormatDetailSection(),
       /비교|vs|차이점|장단점|표|차트|그래프|추이|트렌드|TABLE|CHART|CV2|Mermaid|다이어그램|플로우/i);
   }
@@ -848,9 +850,10 @@ export async function* createClaudeSession(prompt, {
 
   // Session Handoff (dynamic — 이전 세션의 구조화된 상태 전달)
   // Anthropic Sensors 패턴: compacted summary보다 정확한 토픽/결정/미완료 전달
+  // sessionKey는 handlers.js와 동일 구성: threadId-userId (thread 기반) 또는 channelId-userId
   {
-    const sessionKey = `${channelId}-${userId}`;
-    const handoff = loadHandoff(sessionKey);
+    const handoffKey = `${threadId}-${userId}`;
+    const handoff = loadHandoff(handoffKey);
     const handoffText = formatHandoffForPrompt(handoff);
     if (handoffText) systemParts.push('', handoffText);
   }

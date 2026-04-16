@@ -12,7 +12,7 @@
  */
 
 import { BoundedMap } from './bounded-map.js';
-import { writeFileSync, rmSync, readFileSync, existsSync, renameSync, appendFileSync } from 'node:fs';
+import { writeFileSync, rmSync, readFileSync, existsSync, renameSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
@@ -191,9 +191,12 @@ function _triggerSessionEndSummary(sessionKey, reason) {
     const summaryPath = join(_BOT_HOME, 'state', 'session-summaries', `${sessionKey}.md`);
     if (existsSync(summaryPath)) {
       const raw = readFileSync(summaryPath, 'utf-8');
-      // 마지막 주제 추출 (가장 마지막 [YYYY-MM-DD HH:MM] 이후 user 텍스트)
-      const userTurns = raw.match(/\[user\]\s*(.+)/g) || [];
-      const lastTopic = userTurns.length ? userTurns[userTurns.length - 1].replace(/\[user\]\s*/, '').slice(0, 100) : '';
+      // 마지막 주제 추출 — session-summary.js 포맷: "[YYYY-MM-DD HH:MM] User: 텍스트"
+      const userTurns = raw.match(/\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]\s+User:\s*(.+)/g) || [];
+      const lastTopic = userTurns.length
+        ? userTurns[userTurns.length - 1].replace(/\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]\s+User:\s*/, '').slice(0, 100)
+        : '';
+      if (!userTurns.length) log('debug', '_triggerSessionEndSummary: no user turns in summary', { summaryPath });
       saveHandoff(sessionKey, { lastTopic, keyDecisions: [], pendingTasks: [] });
     }
   } catch { /* handoff 저장 실패는 비차단 */ }
@@ -1176,8 +1179,11 @@ ${extracted}
             }
             // Tool Call Audit: 도구 호출 ledger에 기록 (Anthropic Verification 패턴)
             try {
-              const toolEntry = JSON.stringify({ ts: new Date().toISOString(), session: sessionKey, tool: toolName }) + '\n';
-              appendFileSync(join(_BOT_HOME, 'state', 'tool-call-ledger.jsonl'), toolEntry);
+              const safeTool = (toolName || '').replace(/[\n\r]/g, '_').slice(0, 100);
+              const ledgerDir = join(_BOT_HOME, 'state');
+              mkdirSync(ledgerDir, { recursive: true });
+              const toolEntry = JSON.stringify({ ts: new Date().toISOString(), session: sessionKey, tool: safeTool }) + '\n';
+              appendFileSync(join(ledgerDir, 'tool-call-ledger.jsonl'), toolEntry);
             } catch { /* ledger 기록 실패는 비차단 */ }
             log('info', `Tool: ${se.content_block.name}`, { threadId: thread.id });
           }

@@ -16,8 +16,9 @@
  *   owner-profile, detailed docs, cron config
  */
 
-// Rough chars-to-tokens ratio for Korean+English mixed content
-const CHARS_PER_TOKEN = 3.5;
+// 한국어+영어 혼합 텍스트의 토큰 추정: 한국어 ~0.7토큰/자, 영어 ~0.25토큰/자
+// 70% 한국어 기준 가중 평균 → ~1.5자/토큰 (보수적 추정, 과소평가보다 과대평가가 안전)
+const CHARS_PER_TOKEN = 1.5;
 
 export const Tier = Object.freeze({
   CORE: 0,        // 항상 로드
