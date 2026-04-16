@@ -740,16 +740,30 @@ export class StreamingMessage {
       } catch (err) { recordSilentError('streaming.finalize.editClean', err); }
     }
     // 안전망: rate limit 등으로 마지막 edit가 실패했을 경우 커서 잔류 방지
-    // _flush()/_sendOrEdit에서 retry 했어도 실패했다면 여기서 한 번 더 시도
+    // _flush()/_sendOrEdit에서 retry 했어도 실패했다면 여기서 여러 번 재시도 (말짤림 방지)
     if (this.currentMessage) {
-      try {
-        const finalContent = (this.currentMessage.content || '').replace(/ ▌$/, '');
-        if ((this.currentMessage.content || '').endsWith(' ▌')) {
-          log('warn', 'finalize: cursor still present after flush — force removing');
-          await new Promise(r => setTimeout(r, 500)); // rate limit 해소 대기
-          await this.currentMessage.edit({ content: finalContent, components: [] });
+      const finalContent = (this.currentMessage.content || '').replace(/ ▌$/, '');
+      if ((this.currentMessage.content || '').endsWith(' ▌')) {
+        log('warn', 'finalize: cursor still present after flush — force removing with retry');
+        // Exponential backoff retry: rate limit 심각해도 최종적으로 반영
+        const delays = [500, 1500, 3000];
+        let success = false;
+        for (const delay of delays) {
+          try {
+            await new Promise(r => setTimeout(r, delay));
+            await this.currentMessage.edit({ content: finalContent, components: [] });
+            success = true;
+            break;
+          } catch (err) {
+            recordSilentError('streaming.finalize.cursorRemovalRetry', err);
+          }
         }
-      } catch (err) { recordSilentError('streaming.finalize.cursorRemoval', err); }
+        if (!success) {
+          log('error', 'finalize: all cursor removal retries failed — 응답 말짤림 가능성', {
+            messageId: this.currentMessage.id, contentLen: finalContent.length,
+          });
+        }
+      }
     }
     if (this.currentMessage) {
       _unregisterPlaceholder(this.currentMessage.id);
