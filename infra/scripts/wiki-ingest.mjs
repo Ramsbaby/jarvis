@@ -130,10 +130,12 @@ function synthesizeSummary(domain, facts, existingSummary) {
     '## 규칙',
     '- 핵심 사실만 남기고 중복/구식 정보 제거',
     '- 마크다운 제목(##)으로 토픽별 정리',
-    '- YAML frontmatter 포함: title, domain, type: summary, updated',
+    '- YAML frontmatter 필수: ---\\ntitle: "제목"\\ndomain: 도메인명\\ntype: summary\\nupdated: "날짜"\\n---',
     '- 3,000자 이내',
     '- 날짜별 나열이 아닌, 토픽별 그룹핑 (시간 순서 무시)',
     '- 확정된 사실만 포함 (추측, "~할 예정" 같은 미래형 배제)',
+    '- ⚠️ 코드 펜스(```markdown 등) 절대 금지 — 마크다운을 직접 출력',
+    '- ⚠️ "검토했습니다", "확인합니다" 같은 내러티브/작업 보고 금지 — 사실만',
     existingSummary ? '- 기존 요약이 있으면 구조를 존중하되 새 facts 반영' : '',
     '',
     '## Facts 원본',
@@ -273,11 +275,16 @@ async function main() {
     } catch { /* ignore */ }
 
     try {
-      const summary = synthesizeSummary(d.domain, d.facts, existingSummary);
+      let summary = synthesizeSummary(d.domain, d.facts, existingSummary);
       if (!summary || summary.length < 50) {
         log(`${d.domain}: LLM 응답 너무 짧음 (${summary?.length || 0}자) — 스킵`);
         continue;
       }
+
+      // 후처리: LLM이 코드 펜스로 감싸는 경우 제거
+      summary = summary.replace(/^```(?:markdown|md|yaml)?\s*\n/gm, '').replace(/\n```\s*$/gm, '');
+      // 후처리: "검토했습니다" 류 내러티브 첫 줄 제거
+      summary = summary.replace(/^(?:.*검토.*|.*확인.*|.*작성합니다.*|.*정리합니다.*)\n+/m, '');
 
       mkdirSync(dirname(d.summaryPath), { recursive: true });
       writeFileSync(d.summaryPath, summary, 'utf-8');
