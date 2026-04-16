@@ -26,6 +26,16 @@ load_context() {
     SYSTEM_PROMPT=""
     CTX_SECTION_SIZES=""
 
+    # -- Continue Sites: JARVIS_CONTEXT_MODE에 따른 컨텍스트 레벨 제어 --
+    # none    = 시스템 프롬프트 전체 생략 (Stage 4: 프롬프트 단순화)
+    # minimal = RAG, insight-report, context-bus, cross-team 생략 (Stage 2: 컨텍스트 축소)
+    # (빈값)  = 전체 로드 (기본)
+    local _ctx_mode="${JARVIS_CONTEXT_MODE:-}"
+    if [[ "$_ctx_mode" == "none" ]]; then
+        # Stage 4: 컨텍스트 전부 제거, 핵심 지시만
+        return 0
+    fi
+
     # -- Helper: append section with size tracking --
     _ctx_append() {
         local name="$1" stability="$2" content="$3"
@@ -55,12 +65,15 @@ ${content}
     # ===================================================================
 
     # --- [SEMI] Insight report (daily auto-generated behavioural metrics) ---
-    local insight_file="${BOT_HOME}/context/insight-report.md"
-    local _ins_content=""
-    if [[ -f "$insight_file" ]]; then
-        _ins_content="$(cat "$insight_file")"
+    # Continue Sites: minimal 모드에서 생략 (Stage 2 복구 시 컨텍스트 축소)
+    if [[ "$_ctx_mode" != "minimal" ]]; then
+        local insight_file="${BOT_HOME}/context/insight-report.md"
+        local _ins_content=""
+        if [[ -f "$insight_file" ]]; then
+            _ins_content="$(cat "$insight_file")"
+        fi
+        _ctx_append "insight-report" "SEMI" "$_ins_content"
     fi
-    _ctx_append "insight-report" "SEMI" "$_ins_content"
 
     # --- [SEMI] Task-specific context file ---
     local _task_content=""
@@ -74,58 +87,67 @@ ${content}
     # ===================================================================
 
     # --- [DYNAMIC] RAG context (semantic search -> static file fallback) ---
-    local rag_context=""
-    local _loader_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local _rag_query="${_loader_dir}/../../rag/lib/rag-query.mjs"
-    if command -v node >/dev/null 2>&1 && [[ -f "$_rag_query" ]]; then
-        rag_context=$(node "$_rag_query" "$PROMPT" 2>/dev/null || echo "")
-    fi
-    if [[ -z "$rag_context" ]] && [[ -f "$BOT_HOME/rag/memory.md" ]]; then
-        rag_context=$(head -c 2000 "$BOT_HOME/rag/memory.md")
-    fi
-    if [[ -n "$rag_context" ]]; then
-        _ctx_append "rag" "DYNAMIC" "## Long-term Memory (RAG)
+    # Continue Sites: minimal 모드에서 생략
+    if [[ "$_ctx_mode" != "minimal" ]]; then
+        local rag_context=""
+        local _loader_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        local _rag_query="${_loader_dir}/../../rag/lib/rag-query.mjs"
+        if command -v node >/dev/null 2>&1 && [[ -f "$_rag_query" ]]; then
+            rag_context=$(node "$_rag_query" "$PROMPT" 2>/dev/null || echo "")
+        fi
+        if [[ -z "$rag_context" ]] && [[ -f "$BOT_HOME/rag/memory.md" ]]; then
+            rag_context=$(head -c 2000 "$BOT_HOME/rag/memory.md")
+        fi
+        if [[ -n "$rag_context" ]]; then
+            _ctx_append "rag" "DYNAMIC" "## Long-term Memory (RAG)
 ${rag_context}"
+        fi
     fi
 
     # --- [DYNAMIC] Context bus (cross-channel signal from council-insight) ---
-    local context_bus="${BOT_HOME}/state/context-bus.md"
-    if [[ -f "$context_bus" ]]; then
-        _ctx_append "context-bus" "DYNAMIC" "## 📌 공용 게시판 (모든 팀 공유)
+    # Continue Sites: minimal 모드에서 생략
+    if [[ "$_ctx_mode" != "minimal" ]]; then
+        local context_bus="${BOT_HOME}/state/context-bus.md"
+        if [[ -f "$context_bus" ]]; then
+            _ctx_append "context-bus" "DYNAMIC" "## 📌 공용 게시판 (모든 팀 공유)
 $(cat "$context_bus")"
+        fi
     fi
 
     # --- [DYNAMIC] Cross-team context: depends tasks' latest results ---
-    local cross_context="" cross_total=0
-    local depends_json
-    depends_json=$(jq -r --arg id "$TASK_ID" '.tasks[] | select(.id == $id) | .depends // [] | .[]' "${BOT_HOME}/config/tasks.json" 2>/dev/null || true)
-    if [[ -n "$depends_json" ]]; then
-        while IFS= read -r dep_id; do
-            [[ -n "$dep_id" ]] || continue
-            local dep_dir="${BOT_HOME}/results/${dep_id}"
-            if [[ -d "$dep_dir" ]]; then
-                local dep_file
-                dep_file=$(find "$dep_dir" -maxdepth 1 -name '*.md' -type f -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1)
-                if [[ -n "$dep_file" ]] && [[ -f "$dep_file" ]]; then
-                    local dep_snippet
-                    dep_snippet=$(head -c 1500 "$dep_file")
-                    local dep_len=${#dep_snippet}
-                    if (( cross_total + dep_len > 4500 )); then
-                        break
-                    fi
-                    cross_context="${cross_context}
+    # Continue Sites: minimal 모드에서 생략
+    if [[ "$_ctx_mode" != "minimal" ]]; then
+        local cross_context="" cross_total=0
+        local depends_json
+        depends_json=$(jq -r --arg id "$TASK_ID" '.tasks[] | select(.id == $id) | .depends // [] | .[]' "${BOT_HOME}/config/tasks.json" 2>/dev/null || true)
+        if [[ -n "$depends_json" ]]; then
+            while IFS= read -r dep_id; do
+                [[ -n "$dep_id" ]] || continue
+                local dep_dir="${BOT_HOME}/results/${dep_id}"
+                if [[ -d "$dep_dir" ]]; then
+                    local dep_file
+                    dep_file=$(find "$dep_dir" -maxdepth 1 -name '*.md' -type f -print0 2>/dev/null | xargs -0 ls -t 2>/dev/null | head -1)
+                    if [[ -n "$dep_file" ]] && [[ -f "$dep_file" ]]; then
+                        local dep_snippet
+                        dep_snippet=$(head -c 1500 "$dep_file")
+                        local dep_len=${#dep_snippet}
+                        if (( cross_total + dep_len > 4500 )); then
+                            break
+                        fi
+                        cross_context="${cross_context}
 --- ${dep_id} ($(basename "$dep_file")) ---
 ${dep_snippet}
 "
-                    cross_total=$(( cross_total + dep_len ))
+                        cross_total=$(( cross_total + dep_len ))
+                    fi
                 fi
-            fi
-        done <<< "$depends_json"
-    fi
+            done <<< "$depends_json"
+        fi
 
-    if [[ -n "$cross_context" ]]; then
-        _ctx_append "cross-team" "DYNAMIC" "## Cross-team Context
+        if [[ -n "$cross_context" ]]; then
+            _ctx_append "cross-team" "DYNAMIC" "## Cross-team Context
 ${cross_context}"
+        fi
     fi
 
     # --- [DYNAMIC] History: last 3 results, max 2000 chars each, max 6000 total ---
