@@ -1,24 +1,24 @@
 {
-  "generatedAt": "2026-04-14T06:55:26.115Z",
+  "generatedAt": "2026-04-16T05:43:00.981Z",
   "source": "~/.jarvis/config/tasks.json",
-  "totalTasks": 83,
+  "totalTasks": 82,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
     "infra-lead": 16,
     "finance": 8,
-    "trend-lead": 6,
+    "trend-lead": 8,
     "record-lead": 5,
     "library": 1,
-    "growth-lead": 4,
+    "growth-lead": 3,
     "brand-lead": 5,
-    "audit-lead": 13,
+    "audit-lead": 11,
     "secretary": 10,
     "uncategorized": 1
   },
   "typeDistribution": {
-    "prompt": 33,
-    "script": 50
+    "prompt": 37,
+    "script": 45
   },
   "groups": [
     {
@@ -232,8 +232,8 @@
           "name": "일일 CEO 다이제스트",
           "schedule": "15 23 * * *",
           "scheduleHuman": "매일 23:15",
-          "type": "script",
-          "handler": "ceo-daily-digest-3-agent.sh",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
           "team": {
             "id": "president",
             "name": "대표실 (CEO·이사회·KPI)"
@@ -296,8 +296,8 @@
           "name": "감사팀 일일 점검 (Council)",
           "schedule": "5 23 * * *",
           "scheduleHuman": "매일 23:05",
-          "type": "script",
-          "handler": "council-insight-3-agent.sh",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
           "team": {
             "id": "president",
             "name": "대표실 (CEO·이사회·KPI)"
@@ -360,8 +360,8 @@
           "name": "월간 회고",
           "schedule": "0 9 1 * *",
           "scheduleHuman": "매월 1일 09:00",
-          "type": "script",
-          "handler": "monthly-review-3-agent.sh",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
           "team": {
             "id": "president",
             "name": "대표실 (CEO·이사회·KPI)"
@@ -519,7 +519,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-bot-crash-classifier-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },
@@ -1182,12 +1182,12 @@
             "id": "finance",
             "name": "재무실 (AI 비용·시장·수입)"
           },
-          "discordChannel": "jarvis-family",
+          "discordChannel": "jarvis-boram",
           "model": "claude-haiku-4-5-20251001",
           "priority": "normal",
           "maxBudget": "0.10",
           "disabled": false,
-          "description": "매일 07:30 KST tutoring 수업 일정을 #jarvis-family 채널로 자동 전송.",
+          "description": "매일 07:30 KST Preply 수업 일정을 #jarvis-boram 채널로 자동 전송.",
           "logs": {
             "stdout": {
               "path": "~/.jarvis/logs/personal-schedule-daily.log",
@@ -1308,12 +1308,76 @@
           }
         },
         {
+          "id": "geeknews-bench-crawl",
+          "name": "GeekNews 벤치마크 크롤",
+          "schedule": "30 10 * * *",
+          "scheduleHuman": "매일 10:30",
+          "type": "script",
+          "handler": "geeknews-bench-crawl.sh",
+          "team": {
+            "id": "trend-lead",
+            "name": "전략기획실 (트렌드·뉴스)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/geeknews-bench-crawl.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/geeknews-bench-crawl-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-geeknews-bench-crawl-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "geeknews-bench-report",
+          "name": "GeekNews 주간 벤치마크 리포트",
+          "schedule": "0 9 * * 1",
+          "scheduleHuman": "월요일 09:00",
+          "type": "script",
+          "handler": "geeknews-bench-report.sh",
+          "team": {
+            "id": "trend-lead",
+            "name": "전략기획실 (트렌드·뉴스)"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "weekly",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/.jarvis/logs/geeknews-bench-report.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/.jarvis/logs/geeknews-bench-report-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-geeknews-bench-report-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "github-monitor",
           "name": "GitHub 알림 모니터",
           "schedule": "0 * * * *",
           "scheduleHuman": "매일 *:0",
-          "type": "script",
-          "handler": "github-monitor-gate.sh",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
           "team": {
             "id": "trend-lead",
             "name": "전략기획실 (트렌드·뉴스)"
@@ -1711,38 +1775,6 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-academy-support-*.log",
-              "exists": false
-            }
-          }
-        },
-        {
-          "id": "family-daily-schedule",
-          "name": "가족 일정 브리핑 (비활성 — personal-schedule-daily로 대체됨)",
-          "schedule": "30 7 * * *",
-          "scheduleHuman": "매일 07:30",
-          "type": "prompt",
-          "handler": "ask-claude.sh (LLM)",
-          "team": {
-            "id": "growth-lead",
-            "name": "인재개발실 (커리어·학습)"
-          },
-          "discordChannel": null,
-          "model": null,
-          "priority": null,
-          "maxBudget": null,
-          "disabled": true,
-          "description": "2026-03-19 tasks.json에서 제거됨. plist가 잔존하여 ABORTED 방지용 stub.",
-          "logs": {
-            "stdout": {
-              "path": "~/.jarvis/logs/family-daily-schedule.log",
-              "exists": true
-            },
-            "stderr": {
-              "path": "~/.jarvis/logs/family-daily-schedule-err.log",
-              "exists": true
-            },
-            "claudeStderr": {
-              "pattern": "claude-stderr-family-daily-schedule-*.log",
               "exists": false
             }
           }
@@ -2222,7 +2254,7 @@
             "id": "audit-lead",
             "name": "QA실 (품질·감사·E2E)"
           },
-          "discordChannel": "jarvis",
+          "discordChannel": "jarvis-system",
           "model": "claude-haiku-4-5-20251001",
           "priority": "weekly",
           "maxBudget": "0.30",
@@ -2272,70 +2304,6 @@
             "claudeStderr": {
               "pattern": "claude-stderr-security-scan-*.log",
               "exists": true
-            }
-          }
-        },
-        {
-          "id": "token-ledger-audit",
-          "name": "토큰 원장 주간 감사",
-          "schedule": "30 8 * * 0",
-          "scheduleHuman": "일요일 08:30",
-          "type": "script",
-          "handler": "token-ledger-audit.sh",
-          "team": {
-            "id": "audit-lead",
-            "name": "QA실 (품질·감사·E2E)"
-          },
-          "discordChannel": "jarvis-system",
-          "model": null,
-          "priority": "weekly",
-          "maxBudget": null,
-          "disabled": false,
-          "description": "토큰 낭비 패턴 주간 자동 감사 — dedup 후보·예산 압박·캐시 효율·서킷브레이커·Tier 로드맵 권장사항을 리포트로 생성하고 유의미한 발견 시 Discord 알림.",
-          "logs": {
-            "stdout": {
-              "path": "~/.jarvis/logs/token-ledger-audit.log",
-              "exists": false
-            },
-            "stderr": {
-              "path": "~/.jarvis/logs/token-ledger-audit-err.log",
-              "exists": false
-            },
-            "claudeStderr": {
-              "pattern": "claude-stderr-token-ledger-audit-*.log",
-              "exists": false
-            }
-          }
-        },
-        {
-          "id": "tune-task-params",
-          "name": "태스크 파라미터 자동 튜닝 제안",
-          "schedule": "35 8 * * 0",
-          "scheduleHuman": "일요일 08:35",
-          "type": "script",
-          "handler": "tune-task-params.sh",
-          "team": {
-            "id": "audit-lead",
-            "name": "QA실 (품질·감사·E2E)"
-          },
-          "discordChannel": "jarvis-system",
-          "model": null,
-          "priority": "weekly",
-          "maxBudget": null,
-          "disabled": false,
-          "description": "token-ledger 7일 데이터 기반으로 각 태스크의 timeout/budget/retry 조정을 제안. **제안만 생성**, tasks.json 자동 수정 금지. 매주 일요일 08:35 KST (token-ledger-audit 직후).",
-          "logs": {
-            "stdout": {
-              "path": "~/.jarvis/logs/tune-task-params.log",
-              "exists": false
-            },
-            "stderr": {
-              "path": "~/.jarvis/logs/tune-task-params-err.log",
-              "exists": false
-            },
-            "claudeStderr": {
-              "pattern": "claude-stderr-tune-task-params-*.log",
-              "exists": false
             }
           }
         },
@@ -2535,7 +2503,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-bot-self-critique-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },
@@ -2740,33 +2708,33 @@
       },
       "tasks": [
         {
-          "id": "gen-indexes",
-          "name": "AI 네비게이션 인덱스 자동 생성",
-          "schedule": "17 6 * * *",
-          "scheduleHuman": "매일 06:17",
-          "type": "script",
-          "handler": "gen-indexes.sh",
+          "id": "boram-daily-schedule",
+          "name": "보람 일정 브리핑 (비활성 — personal-schedule-daily로 대체됨)",
+          "schedule": "30 7 * * *",
+          "scheduleHuman": "매일 07:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
           "team": {
             "id": "uncategorized",
             "name": "미분류"
           },
           "discordChannel": null,
           "model": null,
-          "priority": "daily",
-          "maxBudget": "0",
-          "disabled": false,
-          "description": "TASKS-INDEX.md + API-INDEX.md 일일 갱신. 맥도날드식 AI 네비게이션의 인덱스 드리프트 방지.",
+          "priority": null,
+          "maxBudget": null,
+          "disabled": true,
+          "description": "2026-03-19 tasks.json에서 제거됨. plist가 잔존하여 ABORTED 방지용 stub.",
           "logs": {
             "stdout": {
-              "path": "~/.jarvis/logs/gen-indexes.log",
-              "exists": false
+              "path": "~/.jarvis/logs/boram-daily-schedule.log",
+              "exists": true
             },
             "stderr": {
-              "path": "~/.jarvis/logs/gen-indexes-err.log",
-              "exists": false
+              "path": "~/.jarvis/logs/boram-daily-schedule-err.log",
+              "exists": true
             },
             "claudeStderr": {
-              "pattern": "claude-stderr-gen-indexes-*.log",
+              "pattern": "claude-stderr-boram-daily-schedule-*.log",
               "exists": false
             }
           }
