@@ -1,0 +1,89 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 최신 태그 조회
+        id: last_tag
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "tag=$LAST_TAG" >> $GITHUB_OUTPUT
+          echo "Last tag: $LAST_TAG"
+
+      - name: 버전 범프 유형 결정
+        id: bump
+        run: |
+          LAST_TAG="${{ steps.last_tag.outputs.tag }}"
+
+          # 마지막 태그 이후 커밋 메시지 수집
+          COMMITS=$(git log "${LAST_TAG}..HEAD" --format="%s" 2>/dev/null || git log --format="%s")
+
+          echo "Commits since $LAST_TAG:"
+          echo "$COMMITS"
+
+          # BREAKING CHANGE / feat! / fix! → major
+          if echo "$COMMITS" | grep -qE '(BREAKING CHANGE|^(feat|fix|refactor)!:)'; then
+            BUMP="major"
+          # feat: → minor
+          elif echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
+            BUMP="minor"
+          else
+            BUMP="patch"
+          fi
+
+          echo "bump=$BUMP" >> $GITHUB_OUTPUT
+          echo "Bump type: $BUMP"
+
+      - name: 새 버전 계산
+        id: version
+        run: |
+          LAST_TAG="${{ steps.last_tag.outputs.tag }}"
+          BUMP="${{ steps.bump.outputs.bump }}"
+
+          # v1.2.3 → 1 2 3
+          VERSION="${LAST_TAG#v}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "New tag: $NEW_TAG"
+
+      - name: 릴리즈 생성
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_TAG="${{ steps.version.outputs.new_tag }}"
+          LAST_TAG="${{ steps.last_tag.outputs.tag }}"
+          BUMP="${{ steps.bump.outputs.bump }}"
+
+          # 커밋 수 계산
+          COMMIT_COUNT=$(git log "${LAST_TAG}..HEAD" --oneline | wc -l | tr -d ' ')
+
+          gh release create "$NEW_TAG" \
+            --title "$NEW_TAG" \
+            --generate-notes \
+            --notes-start-tag "$LAST_TAG" \
+            --target main
+
+          echo "✅ Released: $NEW_TAG ($COMMIT_COUNT commits since $LAST_TAG, bump=$BUMP)"
