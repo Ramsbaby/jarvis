@@ -66,31 +66,37 @@ if os.path.isdir(plist_dir):
         if n.startswith('ai.jarvis.') and n.endswith('.plist'):
             expected.append(n.replace('.plist', ''))
 
-loaded = set()
+# launchctl list: PID / Status / Label 순. Status>0 은 마지막 실행이 exit!=0 (실패).
+# Status<=0 은 정상 종료/시그널 종료/아직 미실행. PID 유무와 함께 판정.
+status_map = {}  # label -> (pid_str, status_int)
 try:
     out = subprocess.check_output(['launchctl', 'list'], text=True, timeout=10)
     for line in out.splitlines():
         parts = line.split('\t')
         if len(parts) >= 3 and parts[2].startswith('ai.jarvis.'):
-            loaded.add(parts[2])
+            pid_str, status_str, label = parts[0], parts[1], parts[2]
+            try: s = int(status_str)
+            except: s = 0
+            status_map[label] = (pid_str, s)
 except Exception:
     pass
 
-# 스크립트 실체 없는 plist는 "레거시"로 분류
-plist_unloaded = []
-for label in expected:
-    if label in loaded:
-        continue
-    # 레거시 여부: label에서 스크립트 파일명 매핑 못하므로, 일단 전부 보고
-    plist_unloaded.append(label)
+loaded = set(status_map.keys())
+plist_unloaded = [l for l in expected if l not in loaded]
+# 진짜 실패: loaded 상태인데 마지막 exit code > 0 (script not found=127 등)
+plist_failing = [
+    {'label': l, 'last_exit': status_map[l][1]}
+    for l in expected if l in loaded and status_map[l][1] > 0
+]
 
 report = {
     'enabled_total': total_enabled,
     'missing_scripts': missing_scripts,
     'auto_disabled_still_bad': auto_disabled_still_bad,
     'plist_unloaded': plist_unloaded,
+    'plist_failing': plist_failing,
     'plist_expected_total': len(expected),
-    'plist_loaded_total': len([l for l in expected if l in loaded]),
+    'plist_loaded_total': len(loaded & set(expected)),
 }
 print(json.dumps(report, ensure_ascii=False))
 PYEOF
@@ -106,25 +112,30 @@ SUMMARY=$(echo "$AUDIT_JSON" | python3 -c '
 import json, sys
 a = json.load(sys.stdin)
 miss = a["missing_scripts"]
-plist = a["plist_unloaded"]
+plist_un = a["plist_unloaded"]
+plist_fail = a["plist_failing"]
 still_bad = a["auto_disabled_still_bad"]
 
 lines = []
 lines.append("📋 **tasks-integrity-audit**")
 lines.append("enabled 태스크 {}건 / 누락 스크립트 {}건".format(a["enabled_total"], len(miss)))
-lines.append("LaunchAgent {}/{} 로드됨".format(a["plist_loaded_total"], a["plist_expected_total"]))
+lines.append("LaunchAgent {}/{} 로드 / 실패 {}건".format(a["plist_loaded_total"], a["plist_expected_total"], len(plist_fail)))
 if miss:
     lines.append("\n**🔴 누락 스크립트 (즉시 auto-disable 대상):**")
     for m in miss[:10]:
         lines.append("  • `{}` → `{}`".format(m["id"], m["script"]))
+if plist_fail:
+    lines.append("\n**🔴 LaunchAgent 실행 실패 (last exit > 0):**")
+    for f in plist_fail[:10]:
+        lines.append("  • `{}` (exit={})".format(f["label"], f["last_exit"]))
 if still_bad:
     lines.append("\n⚪ 이전에 auto-disable된 채 미복원: {}건".format(len(still_bad)))
-if plist:
-    more = "..." if len(plist) > 5 else ""
-    lines.append("\n⚠️ LaunchAgent 미로드: {}건 — {}{}".format(len(plist), ", ".join(plist[:5]), more))
+if plist_un:
+    more = "..." if len(plist_un) > 5 else ""
+    lines.append("\n⚠️ LaunchAgent 미로드: {}건 — {}{}".format(len(plist_un), ", ".join(plist_un[:5]), more))
 
 print("\n".join(lines))
-print("---HAS_ISSUE---" if (miss or plist) else "---OK---")
+print("---HAS_ISSUE---" if (miss or plist_un or plist_fail) else "---OK---")
 ')
 
 HAS_ISSUE=$(echo "$SUMMARY" | grep -q "HAS_ISSUE" && echo yes || echo no)
