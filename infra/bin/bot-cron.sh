@@ -54,19 +54,24 @@ _permanent_disable_task() {
     now_ts=$(date +%s)
     mkdir -p "$ledger_dir"
 
-    python3 - "$tasks_file" "$tid" "$reason" "$detail" "$now_iso" <<'PYEOF' 2>/dev/null || return 1
-import json, sys, os
+    python3 - "$tasks_file" "$tid" "$reason" "$detail" "$now_iso" <<'PYEOF' || return 1
+import json, sys, os, fcntl
 path, tid, reason, detail, now = sys.argv[1:6]
-with open(path) as f: d = json.load(f)
-updated = False
-for t in d.get('tasks', []):
-    if t.get('id') == tid:
-        t['enabled'] = False
-        t['_auto_disabled'] = True
-        t['_disabled_reason'] = f'{reason}: {detail} — auto-disabled at {now}'
-        updated = True
-        break
-if updated:
+lock_path = path + '.lock'
+with open(lock_path, 'w') as lockf:
+    fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
+    with open(path) as f: d = json.load(f)
+    updated = False
+    for t in d.get('tasks', []):
+        if t.get('id') == tid:
+            t['enabled'] = False
+            t['_auto_disabled'] = True
+            t['_disabled_reason'] = f'{reason}: {detail} — auto-disabled at {now}'
+            updated = True
+            break
+    if not updated:
+        sys.stderr.write(f'WARN: task id {tid} not found in {path}\n')
+        sys.exit(2)
     tmp = path + '.autodisable.tmp'
     with open(tmp, 'w') as f: json.dump(d, f, indent=2, ensure_ascii=False)
     os.replace(tmp, path)
@@ -467,12 +472,19 @@ EXIT_CODE=0
 if [[ -n "$SCRIPT" ]]; then
     # script 경로의 ~ 확장
     SCRIPT_PATH="${SCRIPT/#\~/$HOME}"
-    if command -v envsubst >/dev/null 2>&1; then
-        SCRIPT_PATH=$(printf '%s' "$SCRIPT_PATH" | envsubst)
+    SCRIPT_PATH="${SCRIPT_PATH//\$BOT_HOME/$BOT_HOME}"
+    SCRIPT_PATH="${SCRIPT_PATH//\$\{BOT_HOME\}/$BOT_HOME}"
+    SCRIPT_PATH="${SCRIPT_PATH//\$HOME/$HOME}"
+    if [[ "$SCRIPT_PATH" == *'$'* ]]; then
+        log "ERROR: unsupported env var in script path: $SCRIPT_PATH (지원: \$BOT_HOME, \$HOME)"
+        _TASK_DONE=true
+        exit 1
     fi
     if [[ ! -f "$SCRIPT_PATH" ]]; then
         log "ERROR: script not found: $SCRIPT_PATH"
-        _permanent_disable_task "$TASK_ID" "script_not_found" "$SCRIPT_PATH" || true
+        if ! _permanent_disable_task "$TASK_ID" "script_not_found" "$SCRIPT_PATH"; then
+            log "ERROR: _permanent_disable_task failed for $TASK_ID — manual intervention required"
+        fi
         _fsm_transition "$TASK_ID" "failed" \
             "{\"exitCode\":127,\"reason\":\"script_not_found\",\"autoDisabled\":true,\"script\":\"$SCRIPT_PATH\"}"
         _TASK_DONE=true
@@ -495,7 +507,9 @@ if [[ -n "$SCRIPT" ]]; then
     else
         if [[ ! -x "$SCRIPT_PATH" ]]; then
             log "ERROR: script not executable: $SCRIPT_PATH"
-            _permanent_disable_task "$TASK_ID" "script_not_executable" "$SCRIPT_PATH" || true
+            if ! _permanent_disable_task "$TASK_ID" "script_not_executable" "$SCRIPT_PATH"; then
+                log "ERROR: _permanent_disable_task failed for $TASK_ID — manual intervention required"
+            fi
             _fsm_transition "$TASK_ID" "failed" \
                 "{\"exitCode\":126,\"reason\":\"script_not_executable\",\"autoDisabled\":true,\"script\":\"$SCRIPT_PATH\"}"
             [[ -n "$_SCRIPT_SLOT" ]] && release_slot "$_SCRIPT_SLOT" 2>/dev/null || true
