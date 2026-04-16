@@ -598,3 +598,114 @@ BOT_HOME=~/.jarvis ~/jarvis/infra/scripts/token-ledger-audit.sh
 ```
 
 **설계 의도**: 이전에 사람이 수동으로 했던 "토큰 낭비 5팀 감사"를 매주 자동으로 수행. 원장이 1~2주 쌓이면 Tier 1~4 활성화 우선순위를 데이터 기반으로 결정할 수 있다. 땜질식 대응이 아닌 지속 가능한 waste prevention 루프를 구성.
+
+---
+
+## Auto-Disable Recovery (태스크 자동 비활성화 복구 절차)
+
+`jarvis-cron.sh` / `bot-cron.sh` 의 `_permanent_disable_task` 헬퍼가 script-not-found
+등 구조적 실패 감지 시 태스크를 `enabled: false` + `_auto_disabled: true` 로 전환하고
+`~/.jarvis/ledger/auto-disable.jsonl` 에 기록한다. Discord `jarvis-system` 에 알림 도착.
+
+### 복구 체크리스트
+
+1. **원장 확인** — 어떤 태스크가 왜 비활성화됐나
+   ```bash
+   tail -20 ~/.jarvis/ledger/auto-disable.jsonl | jq .
+   ```
+
+2. **원인 분류**
+   - `script_not_found`: script 파일이 정말 없음 → git/백업에서 복원 필요
+   - `script_not_executable`: 권한만 문제 → `chmod +x <path>`
+   - 그 외: cron.log 해당 태스크 구간 확인
+
+3. **git history 에서 복원 가능성 조사**
+   ```bash
+   cd ~/jarvis
+   git log --all --follow --oneline -- "**/<script-name>.sh" | head -5
+   git show <ref>:<path> > infra/scripts/<script-name>.sh
+   chmod +x infra/scripts/<script-name>.sh
+   ```
+
+4. **수동 실행 스모크 테스트** — 재활성화 전 반드시 확인
+   ```bash
+   BOT_HOME=~/.jarvis bash ~/.jarvis/scripts/<script-name>.sh
+   # exit 0 이고 기대 출력 있어야 통과
+   ```
+
+5. **tasks.json 재활성화**
+   ```bash
+   python3 -c '
+   import json, os
+   p="/Users/ramsbaby/.jarvis/config/tasks.json"
+   d=json.load(open(p))
+   for t in d["tasks"]:
+       if t["id"]=="<TASK_ID>":
+           t["enabled"]=True
+           t.pop("_auto_disabled", None)
+           t.pop("_disabled_reason", None)
+   tmp=p+".tmp"; json.dump(d, open(tmp,"w"), indent=2, ensure_ascii=False)
+   os.replace(tmp, p)'
+   ```
+
+6. **cron 1회 실행으로 최종 검증**
+   ```bash
+   BOT_HOME=~/.jarvis ~/.jarvis/bin/jarvis-cron.sh <TASK_ID>
+   grep "\[<TASK_ID>\]" ~/.jarvis/logs/cron.log | tail -3
+   # START → SUCCESS → DONE 이어야 정상
+   ```
+
+7. **audit 재실행으로 누락 0 확인**
+   ```bash
+   BOT_HOME=~/.jarvis bash ~/.jarvis/scripts/tasks-integrity-audit.sh
+   # "누락 스크립트 0건" 확인
+   ```
+
+### 재발 방지
+
+- `tasks-integrity-audit` 는 일 1회 실행하며 누락 태스크를 자동으로 리포트.
+- 복구 불가능한 태스크는 `tasks.json` 에서 제거 후 백업 디렉토리 정리.
+
+---
+
+## LaunchAgent 정비 절차
+
+`~/Library/LaunchAgents/` 의 plist 는 `ai.jarvis.*` (코어 데몬) 과 `com.jarvis.*`
+(과거 단발 스케줄러, 정리 대상) 두 네임스페이스.
+
+**정책 (CLAUDE.md)**: 단발 스케줄링 SSoT는 Nexus `tasks.json`, LaunchAgent 는
+코어 데몬(Discord bot, RAG watcher, orchestrator 등)만.
+
+### audit 리포트 분류별 대응
+
+| 분류 | 의미 | 조치 |
+|---|---|---|
+| `ghost` | plist 참조 `.sh`/`.mjs` 없음 | `launchctl bootout` + plist 백업 후 삭제 (안전) |
+| `policy_duplicate` | `com.jarvis.X` + `tasks.json` 의 enabled X | `com.jarvis` plist 제거 (Nexus SSoT) |
+| `policy_orphan_plist` | `com.jarvis.Y` 단독, Nexus 미등록 | tasks.json 이관 후 plist 제거 (schedule/script 정확히 변환) |
+| `ai_plist_failing` | PID 없음 + `last_exit > 0` (signal exit 제외) | 로그 확인 → script 수정 → `kickstart` |
+| `ai_plist_unloaded` | plist 파일은 있는데 `launchctl list` 부재 | 의도적이면 `.disabled` 리네임, 아니면 `bootstrap` |
+
+### 일괄 정리 명령
+
+```bash
+BACKUP_DIR=~/backup/jarvis-topology/launchagents-removed-$(date +%Y%m%d-%H%M%S)
+mkdir -p "$BACKUP_DIR"
+# audit 리포트에서 대상 label 추출 후
+for label in <labels>; do
+    plist=~/Library/LaunchAgents/$label.plist
+    launchctl bootout gui/$(id -u)/$label 2>/dev/null || true
+    cp "$plist" "$BACKUP_DIR/" && rm -f "$plist"
+done
+# 결과 검증
+BOT_HOME=~/.jarvis bash ~/.jarvis/scripts/tasks-integrity-audit.sh
+```
+
+### 재발 방지
+
+- 신규 태스크 추가 시 `com.jarvis.*` plist 생성 금지 — 반드시 `tasks.json` 엔트리.
+- `cron-helpers.sh` 의 `_permanent_disable_task` 가 script 유실 시 자동으로 tasks.json
+  수정 → audit 이 다음 실행 때 0 리포트.
+- plist 백업 디렉토리(`~/backup/jarvis-topology/`) 는 **복구용 원장**. 정리한 plist 는
+  절대 즉시 삭제하지 말고 이 경로에 보관.
+

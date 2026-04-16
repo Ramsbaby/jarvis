@@ -35,65 +35,12 @@ _fsm_transition() {
     local task_id="$1" to_status="$2" extra="${3:-{}}"
     ${NODE_SQLITE} "${FSM_STORE}" transition "$task_id" "$to_status" "bot-cron" "$extra" 2>/dev/null || true
 }
-_fsm_discord_alert() {
-    # 태스크 실패 시 Discord jarvis-system 채널에 직접 알림 (webhook)
-    local msg="$1"
-    local webhook_url
-    webhook_url=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
-    if [[ -n "${webhook_url:-}" ]]; then
-        local payload; payload=$(jq -n --arg m "$msg" '{content: $m}')
-        curl -sS -X POST "$webhook_url" \
-            -H "Content-Type: application/json" \
-            -d "$payload" > /dev/null 2>&1 || true
-    fi
-}
-
-# 구조적 실패(script-not-found 등) 감지 시 즉시 tasks.json에서 auto-disable.
-# Why: 재발 방지 — transient 실패가 아닌 영구 실패는 서킷브레이커 3회 대기 무의미.
-#      cron.log 오염 방지 + Discord 알림 + append-only 원장 기록.
-_permanent_disable_task() {
-    local tid="$1" reason="$2" detail="${3:-}"
-    local tasks_file="${BOT_HOME}/config/tasks.json"
-    local ledger_dir="${BOT_HOME}/ledger"
-    local ledger_file="${ledger_dir}/auto-disable.jsonl"
-    local now_iso now_ts
-    now_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    now_ts=$(date +%s)
-    mkdir -p "$ledger_dir"
-
-    # flock 으로 tasks.json 동시 수정 보호 (별도 lock file).
-    # 실패 시 조용히 넘기지 않고 return 1 → 호출부에서 반드시 로그로 남김.
-    python3 - "$tasks_file" "$tid" "$reason" "$detail" "$now_iso" <<'PYEOF' || return 1
-import json, sys, os, fcntl
-path, tid, reason, detail, now = sys.argv[1:6]
-lock_path = path + '.lock'
-with open(lock_path, 'w') as lockf:
-    fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
-    with open(path) as f: d = json.load(f)
-    updated = False
-    for t in d.get('tasks', []):
-        if t.get('id') == tid:
-            t['enabled'] = False
-            t['_auto_disabled'] = True
-            t['_disabled_reason'] = f'{reason}: {detail} — auto-disabled at {now}'
-            updated = True
-            break
-    if not updated:
-        sys.stderr.write(f'WARN: task id {tid} not found in {path}\n')
-        sys.exit(2)
-    tmp = path + '.autodisable.tmp'
-    with open(tmp, 'w') as f: json.dump(d, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, path)
-PYEOF
-
-    printf '{"ts":"%s","ts_unix":%d,"task_id":"%s","reason":"%s","detail":"%s"}\n' \
-        "$now_iso" "$now_ts" "$tid" "$reason" "$detail" >> "$ledger_file" 2>/dev/null || true
-
-    _fsm_discord_alert "🚨 **태스크 auto-disable** — \`${tid}\`
-사유: ${reason}
-상세: \`${detail}\`
-복원: 원인 해결 후 \`tasks.json\`에서 해당 태스크의 \`enabled: true\` + \`_auto_disabled: false\`"
-}
+# 공용 헬퍼 로드 — DRY (_fsm_discord_alert, _permanent_disable_task, _ledger_append).
+# SSoT: infra/lib/cron-helpers.sh. 새 크론 wrapper 추가 시에도 이 source 한 줄만 필요.
+if [[ -f "${BOT_HOME}/lib/cron-helpers.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "${BOT_HOME}/lib/cron-helpers.sh"
+fi
 # ADR-007: Plugin system — regenerate effective-tasks.json, then use it
 if [[ -x "${BOT_HOME}/bin/plugin-loader.sh" ]]; then
     "${BOT_HOME}/bin/plugin-loader.sh" 2>/dev/null || true
