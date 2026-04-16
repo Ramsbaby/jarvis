@@ -42,7 +42,9 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 |:---:|------|------|
 | **Interface** | Discord (text + voice) | 24/7 conversational UI. 16+ slash commands, buttons, voice recognition |
 | **Brain** | Claude + 8 AI agent teams | Chat, analysis, code generation, decision-making |
-| **Memory** | RAG (LanceDB) + **LLM Wiki** + Insight Layer | 10,000+ doc search + Stateful wiki knowledge base + daily behavioural metrics analysis |
+| **Harness** | Prompt Harness + Progressive Compaction + Session Handoff | Tiered prompt loading (77% token savings), 3-stage context management (40K/60K/80K), structured state transfer between sessions |
+| **Memory** | RAG (LanceDB) + **LLM Wiki** + Insight Layer + **Importance Gate** | 10,000+ doc search + Stateful wiki + behavioural metrics + Mem0-style scoring (score ≥ 3 only stored) |
+| **Defense** | BoundedMap + Error Ledger + API Semaphore + Failure Rule Engine | Memory leak prevention, silent error tracking, concurrent API protection, auto pattern matching for known failures |
 | **Automation** | 99 scripts + 40+ crons (LaunchAgents on macOS, PM2 on Linux) | Self-healing, dawn audits, news briefing, auto code execution |
 | **Integration** | MCP + Google Calendar + GitHub | External service connectivity |
 
@@ -58,6 +60,9 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 | 📋 | **Dev-Queue** | AI-extracted action items auto-queued, then auto-executed by `jarvis-coder.sh` — hands-free development |
 | 🤖 | **8 AI Teams** | Council, Infra, Record, Brand, Career, Academy, Trend, Recon — each with specialised agents |
 | 🔧 | **Self-Healing** | Watchdog auto-restart, LaunchAgent guardian (3min), dawn code audits, cron failure tracking |
+| 🏗️ | **Prompt Harness** | [Anthropic harness engineering](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) — Tier 0 (core, always <3KB) / Tier 1 (contextual, keyword-triggered). Progressive Compaction at 40K/60K/80K tokens. 77% system prompt reduction |
+| 🛡️ | **Defense Layers** | BoundedMap (memory leak prevention), Error Ledger (JSONL audit trail), API Semaphore (concurrent call protection), Failure Rule Engine (auto pattern learning), Symlink Health Check (hourly validation) |
+| 📢 | **Notification Formatter** | Cron messages get auto-headers (`> 🟢/🟡/🔴 taskname · HH:MM KST`), noise gate (suppress pure-success), severity-based Discord Embeds (Uptime Kuma pattern) |
 | 🔒 | **100% Local** | No cloud. No subscriptions. All data stays on your machine |
 | 🔌 | **MCP Integration** | Home Assistant, GitHub, Slack, Notion via [MCP ecosystem](https://github.com/topics/mcp-server) |
 
@@ -236,9 +241,11 @@ Discord voice messages are automatically transcribed via **OpenAI Whisper** (Kor
 
 Drop a file in Discord and it's automatically indexed into RAG. Your knowledge base grows as you chat.
 
-### Auto Memory Extraction
+### Auto Memory Extraction with Importance Gate
 
 Jarvis detects important information in conversations and auto-extracts it to long-term memory — preferences, facts, corrections. No manual `/remember` needed.
+
+Each extracted fact is scored 1-5 by the LLM ([Mem0 pattern](https://arxiv.org/abs/2504.19413)). **Only score ≥ 3 is stored** — reduces memory bloat by 40-60%. Say "잊어줘" (forget this) to delete specific facts.
 
 ### Interactive Buttons
 
@@ -354,7 +361,13 @@ Jarvis doesn't just chat — it **writes code**.
 </p>
 <p align="center"><em>Automated system health check: 10 services monitored every 6 hours</em></p>
 
-Jarvis doesn't just run — it **heals itself**. 99 automation scripts, 11 LaunchAgents, 40+ cron jobs, 4-layer self-recovery (`bot-heal` → `process-recovery` → `cron-auditor` → `auto-diagnose`):
+Jarvis doesn't just run — it **heals itself**. 99 automation scripts, 11 LaunchAgents, 40+ cron jobs. Multi-layer self-recovery + systemic defense:
+
+**Harness (Anthropic 4-function pattern)**:
+- **Guides**: Tiered prompt loading — Tier 0 (always, <3KB) / Tier 1 (keyword-triggered)
+- **Sensors**: Session Handoff (structured state transfer) + Progressive Compaction (40K/60K/80K)
+- **Verification**: Tool Call Ledger (per-invocation JSONL audit) + Error Ledger (silent error tracking)
+- **Correction**: Failure Rule Engine (auto pattern learning + Bayesian confidence scoring)
 
 | | What it does | When |
 |---|---|---|

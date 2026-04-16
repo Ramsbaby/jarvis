@@ -41,7 +41,9 @@ API 과금 없이 Claude 구독만으로 돌아갑니다. 데이터는 100% 내 
 |:---:|------|------|
 | **접점** | Discord (텍스트 + 음성) | 24/7 대화 인터페이스. 16+ 슬래시 커맨드, 버튼, 음성 인식 |
 | **두뇌** | Claude + 8개 AI 에이전트 팀 | 대화, 분석, 코드 작성, 의사결정 |
-| **기억** | RAG (LanceDB) + **LLM Wiki** + 인사이트 레이어 | 10,000+ 문서 검색 + Stateful 위키 지식 베이스 + 매일 행동 메트릭 자동 분석 |
+| **하네스** | Prompt Harness + Progressive Compaction + Session Handoff | 계층형 프롬프트 로딩 (토큰 77% 절약), 3단계 컨텍스트 관리 (40K/60K/80K), 세션 간 구조화된 상태 전달 |
+| **기억** | RAG (LanceDB) + **LLM Wiki** + 인사이트 레이어 + **중요도 게이트** | 10,000+ 문서 검색 + Stateful 위키 + 행동 메트릭 + Mem0 패턴 점수 기반 필터링 (score ≥ 3만 저장) |
+| **방어** | BoundedMap + Error Ledger + API Semaphore + Failure Rule Engine | 메모리 누수 방지, 에러 원장, API 동시 호출 보호, 실패 패턴 자동 학습 |
 | **자동화** | 99 스크립트 + 40+ 크론 (macOS: LaunchAgent, Linux: PM2) | 자가 복구, 새벽 감사, 뉴스 브리핑, 코드 자동 실행 |
 | **연동** | MCP + Google Calendar + GitHub | 외부 서비스 통합 |
 
@@ -57,6 +59,9 @@ API 과금 없이 Claude 구독만으로 돌아갑니다. 데이터는 100% 내 
 | 📋 | **Dev-Queue** | AI가 추출한 작업 항목을 자동 큐잉 → `jarvis-coder.sh`가 자동 실행 — 손 안 대고 개발 |
 | 🤖 | **8개 AI 팀** | Council, Infra, Record, Brand, Career, Academy, Trend, Recon — 전문 에이전트 |
 | 🔧 | **자가 복구** | 워치독 자동 재시작, LaunchAgent 가디언(3분), 새벽 코드 감사, 크론 실패 추적 |
+| 🏗️ | **프롬프트 하네스** | [Anthropic 하네스 엔지니어링](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) — Tier 0(핵심, 항상 <3KB) / Tier 1(맥락적, 키워드 트리거). Progressive Compaction 40K/60K/80K 3단계. 시스템 프롬프트 77% 감소 |
+| 🛡️ | **방어 레이어** | BoundedMap(메모리 누수 방지), Error Ledger(JSONL 에러 원장), API Semaphore(동시 호출 보호), Failure Rule Engine(실패 패턴 자동 학습), Symlink Health Check(매시간 검증) |
+| 📢 | **알림 포맷터** | 크론 메시지에 자동 헤더(`> 🟢/🟡/🔴 태스크명 · HH:MM KST`), 노이즈 게이트(순수 성공 전송 생략), 심각도 기반 Discord Embed(Uptime Kuma 패턴) |
 | 🔒 | **100% 로컬** | 클라우드 없음. 구독 없음. 모든 데이터가 내 컴퓨터에 |
 | 🔌 | **MCP 연동** | Home Assistant, GitHub, Slack, Notion 등 [MCP 생태계](https://github.com/topics/mcp-server) |
 
