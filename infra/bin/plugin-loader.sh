@@ -88,6 +88,14 @@ fi
 
 # --- Merge: tasks.json + plugins (plugins override on id collision) ---
 if [[ ! -f "$TASKS_FILE" ]]; then
+    # tasks.json이 없으면 기존 effective-tasks.json 보존 (빈 파일로 덮어쓰기 방지)
+    if [[ -f "$EFFECTIVE_FILE" ]]; then
+        _existing_count=$(jq '.tasks | length' "$EFFECTIVE_FILE" 2>/dev/null || echo "0")
+        if (( _existing_count > 0 )); then
+            log "WARNING: $TASKS_FILE not found, preserving existing $EFFECTIVE_FILE ($_existing_count tasks)"
+            exit 0
+        fi
+    fi
     log "WARNING: $TASKS_FILE not found, using plugins only"
     BASE_TASKS="[]"
 else
