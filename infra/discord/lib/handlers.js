@@ -11,6 +11,7 @@
  *   ./queue-processor.js — pending message queue
  */
 
+import { BoundedMap } from './bounded-map.js';
 import { writeFileSync, rmSync, readFileSync, existsSync, renameSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { homedir } from 'node:os';
@@ -82,7 +83,7 @@ import { detectAnalyticalType, generateAndSendVisual } from './visual-gen.js';
 // ---------------------------------------------------------------------------
 const _msgDebouncer = new MessageDebouncer();
 /** cancel token restart 시 restartPrompt를 debounce 경유 후에도 보존 (messageId → prompt) */
-const _promptOverrides = new Map();
+const _promptOverrides = new BoundedMap(500, 10 * 60_000); // 500 items, 10min TTL
 
 // Pre-processor registry (RAG context enrichment)
 const _preProcessorRegistry = createPreProcessorRegistry(searchRagForContext);
@@ -203,7 +204,7 @@ const processingMsgIds = new Set();
 // Session compaction: 토큰 기반 컨텍스트 관리
 // Sonnet 200k 컨텍스트의 ~40% 지점에서 선제적 compaction
 const COMPACT_THRESHOLD_TOKENS = 80_000;
-const sessionTokenCounts = new Map(); // sessionKey → 누적 input_tokens (인메모리)
+const sessionTokenCounts = new BoundedMap(1000, 60 * 60_000); // 1000 items, 60min TTL
 // 재시작 시 in-memory 카운트는 sessions.getTokenCount()으로 복구
 
 

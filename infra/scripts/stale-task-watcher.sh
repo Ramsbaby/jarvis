@@ -176,4 +176,82 @@ else
     log "정상: 태스크별 동적 stale 임계 초과 running 태스크 없음 (기본값 timeout×2)"
 fi
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 2: Never-Run Reaper — 로그 0건인 active 태스크 감지
+# ══════════════════════════════════════════════════════════════════════════════
+CRON_LOG="${BOT_HOME}/logs/cron.log"
+NEVER_RUN_IDS=""
+NEVER_RUN_COUNT=0
+
+if [[ -f "$TASKS_CONFIG" && -f "$CRON_LOG" ]]; then
+    ACTIVE_IDS=$(python3 -c "
+import json
+try:
+    data = json.load(open('$TASKS_CONFIG'))
+    tasks = data.get('tasks', data) if isinstance(data, dict) else data
+    for t in tasks:
+        if isinstance(t, dict) and not t.get('disabled', False):
+            print(t.get('id',''))
+except Exception:
+    pass
+" 2>/dev/null) || true
+
+    for tid in $ACTIVE_IDS; do
+        [[ -z "$tid" ]] && continue
+        HIT=$(grep -c "\[${tid}\]" "$CRON_LOG" 2>/dev/null || echo "0")
+        if [[ "$HIT" -eq 0 ]]; then
+            NEVER_RUN_IDS="${NEVER_RUN_IDS}\n- \`${tid}\`"
+            NEVER_RUN_COUNT=$((NEVER_RUN_COUNT + 1))
+        fi
+    done
+
+    if (( NEVER_RUN_COUNT > 0 )); then
+        discord_alert "👻 **Never-Run Reaper**: ${NEVER_RUN_COUNT}개 태스크 로그 0건 (active인데 미실행)${NEVER_RUN_IDS}
+tasks.json disable 또는 삭제 권장."
+        log "Never-Run: ${NEVER_RUN_COUNT}개 감지"
+    else
+        log "Never-Run: 모든 active 태스크 실행 이력 정상"
+    fi
+fi
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 3: Ghost Detector — 로그에 있지만 tasks.json에 없는 task_id
+# ══════════════════════════════════════════════════════════════════════════════
+GHOST_IDS=""
+GHOST_COUNT=0
+
+if [[ -f "$TASKS_CONFIG" && -f "$CRON_LOG" ]]; then
+    ALL_CONFIG_IDS=$(python3 -c "
+import json
+try:
+    data = json.load(open('$TASKS_CONFIG'))
+    tasks = data.get('tasks', data) if isinstance(data, dict) else data
+    for t in tasks:
+        if isinstance(t, dict): print(t.get('id',''))
+except Exception:
+    pass
+" 2>/dev/null) || true
+
+    LOG_IDS=$(grep -oP '\[([a-zA-Z0-9_-]+)\]' "$CRON_LOG" 2>/dev/null | tr -d '[]' | sort -u) || true
+
+    for lid in $LOG_IDS; do
+        [[ -z "$lid" ]] && continue
+        case "$lid" in
+            FAILED*|SUCCESS*|START*|DONE*|WARN*|ERROR*|INFO*|DEBUG*|cb-recovery*|log-utils*) continue ;;
+        esac
+        if ! echo "$ALL_CONFIG_IDS" | grep -qxF "$lid"; then
+            GHOST_IDS="${GHOST_IDS}\n- \`${lid}\`"
+            GHOST_COUNT=$((GHOST_COUNT + 1))
+        fi
+    done
+
+    if (( GHOST_COUNT > 0 )); then
+        discord_alert "🔍 **Ghost Detector**: ${GHOST_COUNT}개 고스트 태스크 (로그에 있지만 tasks.json 미등록)${GHOST_IDS}
+등록하거나 발생원 제거 권장."
+        log "Ghost: ${GHOST_COUNT}개 감지"
+    else
+        log "Ghost: 고스트 태스크 없음"
+    fi
+fi
+
 exit 0

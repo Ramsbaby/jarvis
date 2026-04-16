@@ -425,17 +425,31 @@ if [[ -n "$SCRIPT" ]]; then
         _TASK_DONE=true
         exit 1
     fi
+    # Layer 1: script-path도 글로벌 세마포어 보호 (retry-wrapper 경유 태스크와 동일 보호)
+    _SCRIPT_SLOT=""
+    if [[ -f "${INFRA_DIR}/bin/system-semaphore.sh" ]]; then
+        source "${INFRA_DIR}/bin/system-semaphore.sh"
+        _SCRIPT_SLOT=$(acquire_slot 2>/dev/null || true)
+        if [[ -z "$_SCRIPT_SLOT" ]]; then
+            log "WARN: semaphore full — script-path 대기 불가, 직접 실행 (동시 호출 제한 초과 가능)"
+        else
+            log "semaphore acquired: slot ${_SCRIPT_SLOT} for script-path"
+        fi
+    fi
     # .mjs/.js 파일은 node로 명시적 실행, 아니면 shebang에 의존
     if [[ "$SCRIPT_PATH" == *.mjs || "$SCRIPT_PATH" == *.js ]]; then
         RESULT=$(node "$SCRIPT_PATH" "$SCRIPT_ARGS" 2>>"${BOT_HOME}/logs/cron.log") || EXIT_CODE=$?
     else
         if [[ ! -x "$SCRIPT_PATH" ]]; then
             log "ERROR: script not executable: $SCRIPT_PATH"
+            [[ -n "$_SCRIPT_SLOT" ]] && release_slot "$_SCRIPT_SLOT" 2>/dev/null || true
             _TASK_DONE=true
             exit 1
         fi
         RESULT=$("$SCRIPT_PATH" "$SCRIPT_ARGS" 2>>"${BOT_HOME}/logs/cron.log") || EXIT_CODE=$?
     fi
+    # 세마포어 해제
+    [[ -n "$_SCRIPT_SLOT" ]] && release_slot "$_SCRIPT_SLOT" 2>/dev/null || true
 else
     RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
 fi

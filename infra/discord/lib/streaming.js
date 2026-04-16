@@ -38,7 +38,9 @@ function _cacheKey(data) {
 // lastQueryStore — sessionKey → 마지막 사용자 쿼리 (재생성/요약 버튼용)
 // handlers.js에서 import해서 set, commands.js에서 regen 시 get
 // ---------------------------------------------------------------------------
-export const lastQueryStore = new Map();
+import { BoundedMap } from './bounded-map.js';
+import { recordSilentError } from './error-ledger.js';
+export const lastQueryStore = new BoundedMap(1000, 30 * 60_000); // 1000 items, 30min TTL
 
 // ---------------------------------------------------------------------------
 // chartjs-node-canvas 싱글톤 — CHART_DATA 렌더링 (Chrome 없이 순수 Node.js)
@@ -63,6 +65,15 @@ function _getChartNodeCanvas() {
 // ---------------------------------------------------------------------------
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 let _chromeBrowser = null;
+
+// Chrome orphan 방지: 프로세스 종료 시 브라우저 정리
+process.on('exit', () => {
+  if (_chromeBrowser) { try { _chromeBrowser.process()?.kill(); } catch {} }
+});
+process.on('SIGTERM', () => {
+  if (_chromeBrowser) { try { _chromeBrowser.process()?.kill(); } catch {} }
+  process.exit(0);
+});
 
 async function _getChromeBrowser() {
   if (_chromeBrowser) {
@@ -704,7 +715,7 @@ export class StreamingMessage {
     if (this._isPlaceholder && !this.hasRealContent) {
       if (this.currentMessage) {
         _unregisterPlaceholder(this.currentMessage.id);
-        try { await this.currentMessage.delete(); } catch { /* ignore */ }
+        try { await this.currentMessage.delete(); } catch (err) { recordSilentError('streaming.finalize.deletePlaceholder', err); }
       }
       return;
     }
@@ -721,7 +732,7 @@ export class StreamingMessage {
         // 커서 ▌ 잔류 방지: content에서도 커서 제거
         const cleaned = (this.currentMessage.content || '').replace(/ ▌$/, '');
         await this.currentMessage.edit({ content: cleaned, components: [] });
-      } catch { /* ignore */ }
+      } catch (err) { recordSilentError('streaming.finalize.editClean', err); }
     }
     // 안전망: rate limit 등으로 마지막 edit가 실패했을 경우 커서 잔류 방지
     // _flush()/_sendOrEdit에서 retry 했어도 실패했다면 여기서 한 번 더 시도
@@ -733,7 +744,7 @@ export class StreamingMessage {
           await new Promise(r => setTimeout(r, 500)); // rate limit 해소 대기
           await this.currentMessage.edit({ content: finalContent, components: [] });
         }
-      } catch { /* ignore */ }
+      } catch (err) { recordSilentError('streaming.finalize.cursorRemoval', err); }
     }
     if (this.currentMessage) {
       _unregisterPlaceholder(this.currentMessage.id);

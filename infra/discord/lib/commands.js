@@ -258,10 +258,14 @@ export async function handleInteraction(interaction, deps) {
   } else if (commandName === 'tasks') {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
-      const { execSync } = await import('node:child_process');
+      const { execFileSync } = await import('node:child_process');
       const logPath = join(BOT_HOME, 'logs', 'cron.log');
       const today = new Date().toISOString().slice(0, 10);
-      const raw = execSync(`grep "${today}" "${logPath}" 2>/dev/null | tail -100`, { encoding: 'utf-8' });
+      let raw = '';
+      try {
+        const grepOut = execFileSync('grep', [today, logPath], { encoding: 'utf-8', maxBuffer: 512 * 1024 });
+        raw = grepOut.split('\n').slice(-100).join('\n');
+      } catch { /* grep exit 1 = no match */ }
       const taskStats = {};
       for (const line of raw.split('\n')) {
         const m = line.match(/\[([^\]]+)\] (SUCCESS|FAIL)/);

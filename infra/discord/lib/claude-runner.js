@@ -28,6 +28,8 @@ import {
 } from './prompt-sections.js';
 import { buildChannelFeedSection } from './channel-feed.js';
 
+import { recordSilentError } from './error-ledger.js';
+
 // LLM Wiki 실시간 기록 — 대화 종료 시 facts를 위키에도 저장
 let _addFactToWiki = null;
 async function wikiAddFact(userId, fact, opts = {}) {
@@ -36,8 +38,10 @@ async function wikiAddFact(userId, fact, opts = {}) {
       const mod = await import('./wiki-engine.mjs');
       _addFactToWiki = mod.addFactToWiki;
     }
-    _addFactToWiki(userId, fact, { source: 'discord', ...opts });
-  } catch {}
+    if (_addFactToWiki) {
+      _addFactToWiki(userId, fact, { source: 'discord', ...opts });
+    }
+  } catch (err) { recordSilentError('claude-runner.wikiAddFact', err); }
 }
 
 // ---------------------------------------------------------------------------
