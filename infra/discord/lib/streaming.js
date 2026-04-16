@@ -251,7 +251,7 @@ export async function cleanupOrphanPlaceholders(client) {
 }
 
 const STREAM_EDIT_INTERVAL_MS = 2000;
-const STREAM_MAX_CHARS = 1900;
+const STREAM_MAX_CHARS = 1700; // 포맷팅 확장(URL 래핑, 테이블→리스트) 여유 확보
 const CODE_FILE_MIN_LINES = 30;
 const LANG_EXT = {
   javascript: 'js', typescript: 'ts', python: 'py', py: 'py',
@@ -519,6 +519,9 @@ export class StreamingMessage {
   }
 
   async _flushInner() {
+    // 스트리밍 버퍼 전체에 narration filter 적용 (라인 단위 regex가 전체 텍스트에서 매칭)
+    // _sendOrEdit의 formatForDiscord는 청크 단위라 분할된 내러티브를 못 잡음
+    this.buffer = formatForDiscord(this.buffer, { channelId: this.channelId });
 
     while (this.buffer.length > STREAM_MAX_CHARS) {
       const splitAt = this._findSplitPoint(this.buffer, STREAM_MAX_CHARS);
