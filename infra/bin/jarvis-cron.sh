@@ -61,19 +61,26 @@ _permanent_disable_task() {
     now_ts=$(date +%s)
     mkdir -p "$ledger_dir"
 
-    python3 - "$tasks_file" "$tid" "$reason" "$detail" "$now_iso" <<'PYEOF' 2>/dev/null || return 1
-import json, sys, os
+    # flock 으로 tasks.json 동시 수정 보호 (별도 lock file).
+    # 실패 시 조용히 넘기지 않고 return 1 → 호출부에서 반드시 로그로 남김.
+    python3 - "$tasks_file" "$tid" "$reason" "$detail" "$now_iso" <<'PYEOF' || return 1
+import json, sys, os, fcntl
 path, tid, reason, detail, now = sys.argv[1:6]
-with open(path) as f: d = json.load(f)
-updated = False
-for t in d.get('tasks', []):
-    if t.get('id') == tid:
-        t['enabled'] = False
-        t['_auto_disabled'] = True
-        t['_disabled_reason'] = f'{reason}: {detail} — auto-disabled at {now}'
-        updated = True
-        break
-if updated:
+lock_path = path + '.lock'
+with open(lock_path, 'w') as lockf:
+    fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
+    with open(path) as f: d = json.load(f)
+    updated = False
+    for t in d.get('tasks', []):
+        if t.get('id') == tid:
+            t['enabled'] = False
+            t['_auto_disabled'] = True
+            t['_disabled_reason'] = f'{reason}: {detail} — auto-disabled at {now}'
+            updated = True
+            break
+    if not updated:
+        sys.stderr.write(f'WARN: task id {tid} not found in {path}\n')
+        sys.exit(2)
     tmp = path + '.autodisable.tmp'
     with open(tmp, 'w') as f: json.dump(d, f, indent=2, ensure_ascii=False)
     os.replace(tmp, path)
@@ -428,12 +435,23 @@ EXIT_CODE=0
 if [[ -n "$SCRIPT" ]]; then
     # script 경로의 ~ 확장
     SCRIPT_PATH="${SCRIPT/#\~/$HOME}"
-    if command -v envsubst >/dev/null 2>&1; then
-        SCRIPT_PATH=$(printf '%s' "$SCRIPT_PATH" | envsubst)
+    # 명시적 env var 치환만 수행 — envsubst는 undefined 변수를 빈 문자열로 삼켜서
+    # 멀쩡한 경로를 auto-disable시키는 위험이 있음. 지원 변수만 나열.
+    SCRIPT_PATH="${SCRIPT_PATH//\$BOT_HOME/$BOT_HOME}"
+    SCRIPT_PATH="${SCRIPT_PATH//\$\{BOT_HOME\}/$BOT_HOME}"
+    SCRIPT_PATH="${SCRIPT_PATH//\$HOME/$HOME}"
+    # 치환 후에도 `$` 가 남아 있으면 지원하지 않는 env var — auto-disable 전에 경고.
+    if [[ "$SCRIPT_PATH" == *'$'* ]]; then
+        log "ERROR: unsupported env var in script path: $SCRIPT_PATH (지원: \$BOT_HOME, \$HOME)"
+        _TASK_DONE=true
+        exit 1
     fi
     if [[ ! -x "$SCRIPT_PATH" ]]; then
         log "ERROR: script not found or not executable: $SCRIPT_PATH"
-        _permanent_disable_task "$TASK_ID" "script_not_found" "$SCRIPT_PATH" || true
+        # auto-disable 자체가 실패하면(권한/원장 문제) 눈에 보이게 남긴다.
+        if ! _permanent_disable_task "$TASK_ID" "script_not_found" "$SCRIPT_PATH"; then
+            log "ERROR: _permanent_disable_task failed for $TASK_ID — manual intervention required"
+        fi
         _fsm_transition "$TASK_ID" "failed" \
             "{\"exitCode\":127,\"reason\":\"script_not_found\",\"autoDisabled\":true,\"script\":\"$SCRIPT_PATH\"}"
         _TASK_DONE=true
