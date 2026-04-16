@@ -30,6 +30,7 @@ import {
 import { getPromptHarness, Tier } from './prompt-harness.js';
 import { loadHandoff, formatHandoffForPrompt } from './session-handoff.js';
 import { buildChannelFeedSection } from './channel-feed.js';
+import { checkSensitivePath } from './security-guard.js';
 
 import { recordSilentError } from './error-ledger.js';
 
@@ -1046,8 +1047,29 @@ export async function* createClaudeSession(prompt, {
       'mcp__serena-board__replace_symbol_body', 'mcp__serena-board__insert_after_symbol',
       'mcp__serena-board__insert_before_symbol',
     ],
-    permissionMode: 'bypassPermissions',
-    allowDangerouslySkipPermissions: true,
+    // Phase 0 Sensor: bypassPermissions → default 전환 + canUseTool 게이트
+    // 민감 경로(.env / secrets/* / SSH key / credentials)는 차단, 그 외 auto-allow.
+    permissionMode: 'default',
+    canUseTool: async (toolName, input) => {
+      const blocked = checkSensitivePath(toolName, input);
+      if (blocked) {
+        log('warn', 'canUseTool: denied (sensitive path)', {
+          tool: toolName, blocked: String(blocked).slice(0, 160),
+        });
+        try {
+          const ledgerDir = join(HOME, '.jarvis', 'state');
+          mkdirSync(ledgerDir, { recursive: true });
+          appendFileSync(
+            join(ledgerDir, 'permission-denied.jsonl'),
+            JSON.stringify({
+              ts: new Date().toISOString(), tool: toolName, blocked: String(blocked).slice(0, 160),
+            }) + '\n'
+          );
+        } catch { /* ledger best-effort */ }
+        return { behavior: 'deny', message: `민감 경로 차단: ${String(blocked).slice(0, 120)}` };
+      }
+      return { behavior: 'allow' };
+    },
     mcpServers,
     maxTurns,
     model,
