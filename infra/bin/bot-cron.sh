@@ -127,7 +127,8 @@ if [[ "$(echo "$TASK_CONFIG" | jq -r '.disabled // false')" == "true" ]]; then
     exit 0
 fi
 # enabled: false 태스크 조용히 건너뜀 (기본값 true)
-if [[ "$(echo "$TASK_CONFIG" | jq -r '.enabled // true')" == "false" ]]; then
+# NOTE: jq `//` 연산자는 null+false 둘 다 fallback → has() 명시 검사로 교정.
+if [[ "$(echo "$TASK_CONFIG" | jq -r 'if has("enabled") then .enabled else true end')" == "false" ]]; then
     log "SKIPPED (enabled: false)"
     _TASK_DONE=true
     exit 0
