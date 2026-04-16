@@ -189,7 +189,9 @@ fi
 # exec 대신 직접 실행: 종료 후 빠른 크래시 여부 판단 가능
 # (launchd는 bash PID를 추적 → node 종료 후 bash도 종료 → launchd가 재시작)
 _start_ts=$(date +%s)
-"$NODE_BIN" "$BOT_SCRIPT"
+cd "$BOT_HOME/discord" && \
+NODE_PATH="${BOT_HOME}/discord/node_modules:$NODE_PATH" \
+"$NODE_BIN" discord-bot.js
 _exit_code=$?
 _runtime=$(( $(date +%s) - _start_ts ))
 
