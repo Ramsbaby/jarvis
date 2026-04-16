@@ -100,8 +100,9 @@ PYEOF
 # Failure Rule Engine 연동: 매칭 규칙이 있으면 자동 해결 제안 추가
 RULE_ENGINE="${HOME}/jarvis/infra/scripts/failure-rule-engine.mjs"
 if [[ -f "$RULE_ENGINE" ]]; then
-    for _fail_line in $(echo "$FAILURES" | grep -oP '\[([a-zA-Z0-9_-]+)\]' | tr -d '[]' | sort -u); do
-        _match=$(node "$RULE_ENGINE" match "$_fail_line" 2>/dev/null || echo '{"match":null}')
+    # macOS 호환: grep -P 대신 sed + tr 사용 (BSD grep은 -P 미지원)
+    for _fail_line in $(echo "$FAILURES" | sed -nE 's/.*\[([a-zA-Z0-9_-]+)\].*/\1/p' | sort -u); do
+        _match=$(/opt/homebrew/bin/node "$RULE_ENGINE" match "$_fail_line" 2>/dev/null || echo '{"match":null}')
         _resolution=$(echo "$_match" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('resolution',''))" 2>/dev/null || true)
         _confidence=$(echo "$_match" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('confidence',0))" 2>/dev/null || true)
         if [[ -n "$_resolution" && "$_confidence" != "0" ]]; then

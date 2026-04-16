@@ -90,9 +90,14 @@ export function formatHandoffForPrompt(data) {
     lines.push(`미완료: ${data.pendingTasks.join('; ')}`);
   }
 
-  // 최대 500자 (프롬프트 예산 보호)
+  // 최대 500자 (프롬프트 예산 보호, 서로게이트 페어 안전 처리)
   let result = lines.join('\n');
-  if (result.length > 500) result = result.slice(0, 497) + '...';
+  if (result.length > 500) {
+    result = result.slice(0, 497);
+    // lone surrogate 제거 (UTF-16 안전)
+    result = result.replace(/[\uD800-\uDBFF]$/g, '');
+    result += '...';
+  }
   return result;
 }
 

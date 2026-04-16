@@ -80,12 +80,14 @@ function matchRule(errorMessage) {
 
   for (const rule of rules) {
     try {
-      const re = new RegExp(rule.pattern, 'i');
+      // regex 메타문자 이스케이프 — 사용자 입력 패턴 안전 처리
+      const escaped = rule.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
       if (re.test(errorMessage)) {
         matches.push(rule);
       }
     } catch {
-      // 패턴이 정규식으로 유효하지 않으면 substring match
+      // 이스케이프 후에도 실패하면 substring match
       if (errorMessage.toLowerCase().includes(rule.pattern.toLowerCase())) {
         matches.push(rule);
       }
@@ -148,14 +150,19 @@ function seedFromRecoveryLearnings() {
       const resolution = fixMatch[1].trim().slice(0, 200);
       if (pattern.length > 10 && !rules.some(r => r.pattern === pattern)) {
         const rule = addRule(pattern, resolution, 'recovery-seed');
-        if (rule) { rule.confidence = 0.8; added++; } // 실제 복구 이력이므로 초기 신뢰도 높음
+        if (rule) added++;
       }
     }
   }
 
   if (added > 0) {
-    saveRules(loadRules()); // confidence 갱신 반영
-    log(`SEED: ${added}건 규칙 추출 완료`);
+    // recovery-seed 규칙은 실제 복구 이력이므로 초기 신뢰도 0.8으로 상향
+    const allRules = loadRules();
+    for (const r of allRules) {
+      if (r.category === 'recovery-seed' && r.confidence === 0.7) r.confidence = 0.8;
+    }
+    saveRules(allRules);
+    log(`SEED: ${added}건 규칙 추출 완료 (confidence 0.8)`);
   }
   return added;
 }
