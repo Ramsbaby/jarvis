@@ -235,12 +235,14 @@ export async function cleanupOrphanPlaceholders(client) {
       const channel = await client.channels.fetch(channelId);
       if (channel) {
         const message = await channel.messages.fetch(messageId);
-        await message.delete();
-        log('info', 'cleanupOrphanPlaceholders: deleted stale placeholder', { channelId, messageId });
+        // 버튼(components) + 커서(▌) 제거만 — 메시지 내용은 유지 (삭제 금지)
+        const cleaned = (message.content || '').replace(/ ▌$/, '');
+        await message.edit({ content: cleaned || '...', components: [], embeds: [] });
+        log('info', 'cleanupOrphanPlaceholders: removed stale components from message', { channelId, messageId });
       }
     } catch (err) {
       // Message already deleted or channel inaccessible — treat as cleaned up
-      log('debug', 'cleanupOrphanPlaceholders: could not delete (already gone?)', {
+      log('debug', 'cleanupOrphanPlaceholders: could not clean (already gone?)', {
         channelId, messageId, error: err.message,
       });
     }
@@ -616,7 +618,7 @@ export class StreamingMessage {
         const partDisplay = (!isLast || (!this.finalized && !isFinal)) ? part : part;
         const payload = { content: partDisplay, embeds: [], components: [], flags: MessageFlags.SuppressEmbeds };
         if (pi === 0 && this._isPlaceholder && this.currentMessage) {
-          _unregisterPlaceholder(this.currentMessage.id);
+          // _unregisterPlaceholder는 finalize() 완료 시점에만 호출 (orphan cleanup이 버튼 제거할 수 있도록)
           this._isPlaceholder = false;
           await this.currentMessage.edit({ content: partDisplay, embeds: [], components: [], flags: MessageFlags.SuppressEmbeds });
           this.sentLength = part.length;
@@ -641,8 +643,8 @@ export class StreamingMessage {
 
     try {
       // Placeholder → edit in place (delete+resend causes message disappearing flash)
+      // _unregisterPlaceholder는 finalize() 완료 시점에만 호출 (orphan cleanup이 버튼 제거할 수 있도록)
       if (this._isPlaceholder && this.currentMessage) {
-        _unregisterPlaceholder(this.currentMessage.id);
         this._isPlaceholder = false;
         await this.currentMessage.edit({ content: displayContent, embeds: [], components, flags: MessageFlags.SuppressEmbeds });
         this.sentLength = content.length;
