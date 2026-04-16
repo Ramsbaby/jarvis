@@ -258,6 +258,80 @@ else
   ci_check "cron-catalog matches tasks.json count" false
 fi
 
+# --- LLM Output Quality Tests ---
+echo ""
+echo "▶ LLM Output Quality"
+
+# 1. 최근 24시간 내 크론 결과물 존재 확인
+check "cron results exist (last 24h)" bash -c "
+  find '$BOT_HOME/results' -type f -name '*.md' -mmin -1440 2>/dev/null | grep -q .
+"
+
+# 2. 결과물 최소 크기 (10바이트 미만 = 빈 출력 = LLM 실패 가능성)
+check "cron results min size (>=10B)" bash -c "
+  tiny=0
+  while IFS= read -r f; do
+    sz=\$(wc -c < \"\$f\" 2>/dev/null || echo 0)
+    if [[ \$sz -lt 10 ]]; then ((tiny++)); fi
+  done < <(find '$BOT_HOME/results' -type f -name '*.md' -mmin -1440 2>/dev/null)
+  [[ \$tiny -eq 0 ]]
+"
+
+# 3. 위키 팩트 중복 검사 (동일 문장 2회 이상 = 추출기 버그)
+warn_check "wiki facts no duplicates" bash -c "
+  dupes=0
+  for f in '$BOT_HOME/wiki/'*/_facts.md; do
+    [[ -f \"\$f\" ]] || continue
+    # 빈 줄·헤더·메타 제외, 실제 팩트 행만 추출
+    dup_count=\$(grep -E '^- ' \"\$f\" | sort | uniq -d | wc -l)
+    dupes=\$((dupes + dup_count))
+  done
+  [[ \$dupes -eq 0 ]]
+"
+
+# 4. 위키 팩트 source 태그 존재 ([source:*] 없으면 감사 추적 불가)
+warn_check "wiki facts have source tags" bash -c "
+  missing=0
+  for f in '$BOT_HOME/wiki/'*/_facts.md; do
+    [[ -f \"\$f\" ]] || continue
+    no_tag=\$(grep -E '^- ' \"\$f\" | grep -cv '\[source:' || true)
+    missing=\$((missing + no_tag))
+  done
+  [[ \$missing -eq 0 ]]
+"
+
+# 5. bot-quality-check 최근 실행 (24시간 내 로그 갱신 확인)
+warn_check "bot-quality-check ran (last 24h)" bash -c "
+  log='$BOT_HOME/logs/bot-quality-check.log'
+  [[ -f \"\$log\" ]] && find \"\$log\" -mmin -1440 | grep -q .
+"
+
+# 6. 크론 결과물 환각 키워드 검사 (LLM 자기반성 패턴 과다 = 품질 문제)
+warn_check "cron results no hallucination patterns" bash -c "
+  hits=0
+  total=0
+  while IFS= read -r f; do
+    ((total++))
+    if grep -qiE '죄송합니다|제가 잘못|오류가 있었습니다|실수했습니다|잘못된 정보|혼동을 드려|I apologize|my mistake' \"\$f\" 2>/dev/null; then
+      ((hits++))
+    fi
+  done < <(find '$BOT_HOME/results' -type f -name '*.md' -mmin -1440 2>/dev/null)
+  # 전체의 30% 이상이면 경고 (소수는 정상 범위)
+  if [[ \$total -eq 0 ]]; then exit 0; fi
+  threshold=\$(( (total * 30 + 99) / 100 ))
+  [[ \$hits -lt \$threshold ]]
+"
+
+# --- Tasks Schema Validation ---
+echo ""
+echo "▶ Tasks Schema Validation"
+VALIDATE_SCRIPT="${BOT_HOME}/infra/scripts/validate-tasks.sh"
+if [[ -x "$VALIDATE_SCRIPT" ]]; then
+  check "tasks.json schema lint" bash -c "'$VALIDATE_SCRIPT' 2>&1 | tail -1 | grep -q '✅'"
+else
+  skip "validate-tasks.sh not found"
+fi
+
 # --- ntfy Test (optional) ---
 echo ""
 echo "▶ ntfy Push Notification"
