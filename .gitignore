@@ -87,6 +87,15 @@ config/*.bak*
 *.jsonl
 !*.example.jsonl
 
+# Personal scripts (가족 멤버 전용, 개인 설정)
+infra/scripts/boram-*.sh
+infra/scripts/_boram_*.py
+infra/scripts/board-auto-deploy.sh
+infra/scripts/relay-to-owner.sh
+infra/scripts/opensync.py
+infra/scripts/setup_infra.py
+infra/scripts/setup_rag.py
+
 # Runtime
 .jarvis.pid
 jarvis.log
