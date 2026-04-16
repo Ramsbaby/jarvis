@@ -168,8 +168,6 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
   ],
-  // reply 시 @mention 핑 억제 → 갈색(amber) 배경 하이라이트 제거
-  allowedMentions: { repliedUser: false },
 });
 
 let lastMessageAt = Date.now();
@@ -234,7 +232,7 @@ client.once('clientReady', async () => {
         reason = data.reason || 'unknown';
         if (data.requestedRestart) reason = 'requested';
         // 재시작 알림은 jarvis 메인 채널로만
-        notifyChannels = [process.env.OWNER_ALERT_CHANNEL_ID || ''];
+        notifyChannels = [process.env.OWNER_ALERT_CHANNEL_ID || '1468386844621144065'];
       }
     } catch {
       // restart-notify.json 없음 → heartbeat로 비정상 종료 추정
@@ -286,7 +284,7 @@ client.once('clientReady', async () => {
       // 비정상 종료(크래시/watchdog kill)이고 활성 채널이 없을 때 → 메인채널에 알림
       if (!isGraceful && notifyChannels.length === 0 && !suppressApology) {
         try {
-          const ownerAlertId = process.env.OWNER_ALERT_CHANNEL_ID || '';
+          const ownerAlertId = process.env.OWNER_ALERT_CHANNEL_ID || '1468386844621144065';
           const ch = client.channels.cache.get(ownerAlertId) || await client.channels.fetch(ownerAlertId).catch(() => null);
           if (ch?.isTextBased()) {
             await ch.send(`-# 🔄 재시작됨 — 이전 대화 맥락은 세션 요약으로 복구됩니다. (${reasonLabel})`).catch(() => {});

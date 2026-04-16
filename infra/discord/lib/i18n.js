@@ -6,7 +6,7 @@
  *   t('cmd.clear.done')              // "Session cleared."
  *   t('cmd.stop.stopping', { botName: 'Jarvis' })  // "Stopping Jarvis process..."
  *
- * Set BOT_LOCALE env var to switch language (default: 'en').
+ * Set BOT_LOCALE env var to switch language (default: 'ko').
  * Locale files live in discord/locales/{locale}.json.
  */
 
