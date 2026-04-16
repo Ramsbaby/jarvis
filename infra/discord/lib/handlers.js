@@ -181,6 +181,7 @@ function _isSessionIdle(sessions, sessionKey) {
  * 메인 흐름을 차단하지 않음 (fire-and-forget).
  */
 import { saveHandoff } from './session-handoff.js';
+import { recordSilentError } from './error-ledger.js';
 
 function _triggerSessionEndSummary(sessionKey, reason) {
   compactSessionWithAI(sessionKey).catch((e) =>
@@ -191,15 +192,24 @@ function _triggerSessionEndSummary(sessionKey, reason) {
     const summaryPath = join(_BOT_HOME, 'state', 'session-summaries', `${sessionKey}.md`);
     if (existsSync(summaryPath)) {
       const raw = readFileSync(summaryPath, 'utf-8');
-      // 마지막 주제 추출 — session-summary.js 포맷: "[YYYY-MM-DD HH:MM] User: 텍스트"
+      let lastTopic = '';
+      // 1차: 원본 형식 "[YYYY-MM-DD HH:MM] User: 텍스트"
       const userTurns = raw.match(/\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]\s+User:\s*(.+)/g) || [];
-      const lastTopic = userTurns.length
-        ? userTurns[userTurns.length - 1].replace(/\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]\s+User:\s*/, '').slice(0, 100)
-        : '';
-      if (!userTurns.length) log('debug', '_triggerSessionEndSummary: no user turns in summary', { summaryPath });
-      saveHandoff(sessionKey, { lastTopic, keyDecisions: [], pendingTasks: [] });
+      if (userTurns.length) {
+        lastTopic = userTurns[userTurns.length - 1].replace(/\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]\s+User:\s*/, '').slice(0, 100);
+      } else {
+        // 2차: compaction 형식 — "### 마지막 진행 주제" 또는 "### 사용자 의도" 섹션
+        const topicMatch = raw.match(/###\s*(?:마지막 진행 주제|사용자 의도)\s*\n([\s\S]*?)(?=\n###|\n---|\Z)/);
+        if (topicMatch) lastTopic = topicMatch[1].trim().split('\n')[0].slice(0, 100);
+      }
+      // 3차: compaction에서 "### 미완 작업" 추출
+      const pendingMatch = raw.match(/###\s*미완\s*작업\s*\n([\s\S]*?)(?=\n###|\n---|\Z)/);
+      const pendingTasks = pendingMatch
+        ? pendingMatch[1].trim().split('\n').filter(l => l.startsWith('-')).map(l => l.replace(/^-\s*/, '').slice(0, 80)).slice(0, 5)
+        : [];
+      saveHandoff(sessionKey, { lastTopic, keyDecisions: [], pendingTasks });
     }
-  } catch { /* handoff 저장 실패는 비차단 */ }
+  } catch (err) { recordSilentError('handlers.saveHandoff', err); }
   log('info', `Session end summary triggered (${reason})`, { sessionKey });
 }
 
