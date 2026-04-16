@@ -60,6 +60,11 @@ log() {
     echo "[$(date '+%F %T')] [${TASK_ID}] $1" >> "$CRON_LOG"
 }
 
+# --- Continue Sites: 다단계 에러 복구 라이브러리 로드 ---
+if [[ -f "${BOT_HOME}/lib/continue-sites.sh" ]]; then
+    source "${BOT_HOME}/lib/continue-sites.sh"
+fi
+
 # --- Completion trap: 비정상 종료 시에도 반드시 로그 기록 ---
 _TASK_DONE=false
 _SENTINEL_FILE=""
@@ -212,6 +217,8 @@ ALLOW_EMPTY_RESULT=$(echo "$TASK_CONFIG" | jq -r '.allowEmptyResult // false')
 SUCCESS_PATTERN=$(echo "$TASK_CONFIG" | jq -r '.successPattern // empty')
 SCRIPT=$(echo "$TASK_CONFIG" | jq -r '.script // empty')
 SCRIPT_ARGS=$(echo "$TASK_CONFIG" | jq -r '.scriptArgs // "daily"')
+# Continue Sites: opt-out 플래그 (기본값 true = 활성화)
+CONTINUE_SITES=$(echo "$TASK_CONFIG" | jq -r '.continueSites // true')
 # output is a JSON array like ["discord","file"]
 OUTPUT_MODES=$(echo "$TASK_CONFIG" | jq -r '.output[]? // empty')
 
@@ -451,7 +458,15 @@ if [[ -n "$SCRIPT" ]]; then
     # 세마포어 해제
     [[ -n "$_SCRIPT_SLOT" ]] && release_slot "$_SCRIPT_SLOT" 2>/dev/null || true
 else
-    RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+    # Continue Sites: LLM 태스크에 다단계 복구 적용
+    if [[ "$CONTINUE_SITES" != "false" ]] && type run_with_recovery &>/dev/null; then
+        log "CONTINUE_SITES: enabled — 다단계 복구 모드"
+        RESULT=$(run_with_recovery "$TASK_ID" "$BOT_HOME/bin/retry-wrapper.sh" \
+            "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" \
+            "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+    else
+        RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+    fi
 fi
 
 # --- 실행 시간 측정 + timeout 80% 초과 시 경고 ---
@@ -471,7 +486,11 @@ if [[ $EXIT_CODE -ne 0 ]]; then
     fi
 fi
 if [[ $EXIT_CODE -ne 0 ]]; then
-    log "FAILED (exit: $EXIT_CODE)"
+    if [[ -n "${JARVIS_RECOVERY_STAGE:-}" ]]; then
+        log "FAILED (exit: $EXIT_CODE) — Continue Sites: 전 단계(1~5) 복구 실패"
+    else
+        log "FAILED (exit: $EXIT_CODE)"
+    fi
     # AUTH_ERROR 즉시 감지: 첫 실패에서 ntfy 발송 (Circuit Breaker 3회 대기 없이)
     if echo "$RESULT" | grep -qE '"is_error":true.*"duration_api_ms":0|AUTH_ERROR|Not logged in'; then
         _auth_cooldown="${BOT_HOME}/state/auth-alerted-expired.ts"
@@ -526,7 +545,12 @@ if [[ $EXIT_CODE -ne 0 ]]; then
 fi
 
 _PHASE="post-execute"
-log "SUCCESS (duration=${_ACTUAL_DURATION}s)"
+# Continue Sites: 복구 단계에서 성공한 경우 로그 보강
+if [[ "${JARVIS_RECOVERY_STAGE:-1}" -gt 1 ]]; then
+    log "SUCCESS (duration=${_ACTUAL_DURATION}s, recovered at stage ${JARVIS_RECOVERY_STAGE})"
+else
+    log "SUCCESS (duration=${_ACTUAL_DURATION}s)"
+fi
 unset _ACTUAL_DURATION
 # circuit breaker: 성공 시 초기화
 if [[ -f "$_CB_FILE" ]]; then rm -f "$_CB_FILE" 2>/dev/null || true; fi
