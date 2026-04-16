@@ -207,6 +207,16 @@ changed_files=$(git -C "$BOT_HOME" diff --name-only "$last_sha..HEAD" 2>/dev/nul
 commit_count=$(git -C "$BOT_HOME" rev-list --count "$last_sha..HEAD" 2>/dev/null || echo "0")
 commit_msgs=$(git -C "$BOT_HOME" log --format='%s' "$last_sha..HEAD" 2>/dev/null || echo "")
 
+# --- jarvis-coder 자동 커밋 필터 ---
+# jarvis-coder가 만든 snapshot/iteration 커밋은 오너가 직접 푸시한 변경이 아님.
+# 모든 커밋이 jarvis-coder 것이면 브로드캐스트 스킵 (토큰 낭비 + 노이즈 방지).
+non_coder_msgs=$(echo "$commit_msgs" | grep -vE "^(jarvis-coder:|snapshot: jarvis-coder)" || echo "")
+if [[ -z "$non_coder_msgs" ]] && [[ -n "$commit_msgs" ]]; then
+    log "스킵: 모든 커밋이 jarvis-coder 자동 생성 (${commit_count}건) — 브로드캐스트/LLM 호출 생략"
+    echo "$current_sha" > "$STATE_FILE"
+    exit 0
+fi
+
 # --- 한글 요약 생성 ---
 korean_summary=$(summarize_commits_kr "$commit_msgs" "$changed_files")
 action_line=$(detect_action "$changed_files")
