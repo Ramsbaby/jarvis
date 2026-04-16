@@ -10,6 +10,10 @@ CONFIG="${BOT_HOME}/config/monitoring.json"
 # --- Config check ---
 [[ -f "$CONFIG" ]] || { echo "ERROR: $CONFIG not found" >&2; exit 1; }
 
+# --- Shared libraries ---
+source "${BOT_HOME}/lib/ntfy-notify.sh"
+source "${BOT_HOME}/lib/discord-notify-bash.sh"
+
 # --- Arguments ---
 MODE="${1:?Usage: route-result.sh <discord|ntfy|alert|file|all> TASK_ID MESSAGE [CHANNEL]}"
 TASK_ID="${2:?Usage: route-result.sh MODE TASK_ID MESSAGE}"
@@ -206,8 +210,8 @@ _severity_embed_color() {
     esac
 }
 
-# --- Discord: 2000-char chunking ---
-send_discord() {
+# --- Discord: 2000-char chunking (task-specific; simple sends use lib/discord-notify-bash.sh) ---
+route_to_discord() {
     local message="$1"
     local webhook_url
     webhook_url=$(get_webhook_url)
@@ -249,20 +253,6 @@ send_discord() {
     fi
 }
 
-# --- ntfy push ---
-send_ntfy() {
-    local title="$1"
-    local message="$2"
-    local server
-    local topic
-    server=$(jq -r '.ntfy.server' "$CONFIG")
-    topic=$(jq -r '.ntfy.topic' "$CONFIG")
-    curl -s -m 5 \
-        -H "Title: $title" \
-        -H "Priority: default" \
-        -d "$message" \
-        "${server}/${topic}" > /dev/null 2>&1
-}
 
 # --- Route by mode ---
 case "$MODE" in
@@ -282,12 +272,12 @@ ${MESSAGE}"
                 # 메시지 길이가 4096(embed description 한도) 이내면 embed로
                 if [[ ${#MESSAGE} -le 4000 ]]; then
                     EMBED_JSON="{\"description\":$(printf '%s' "$MESSAGE" | jq -Rs .),\"color\":${_COLOR}}"
-                    send_discord ""  # 빈 텍스트 + embed
+                    route_to_discord ""  # 빈 텍스트 + embed
                 else
-                    send_discord "$MESSAGE"
+                    route_to_discord "$MESSAGE"
                 fi
             else
-                send_discord "$MESSAGE"
+                route_to_discord "$MESSAGE"
             fi
         fi
         ;;
@@ -302,7 +292,7 @@ ${MESSAGE}"
         echo "Result for $TASK_ID saved to results directory."
         ;;
     all)
-        send_discord "$MESSAGE"
+        route_to_discord "$MESSAGE"
         send_ntfy "${BOT_NAME:-Bot}: $TASK_ID" "$MESSAGE"
         echo "Result for $TASK_ID saved to results directory."
         ;;

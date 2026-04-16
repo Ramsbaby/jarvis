@@ -11,28 +11,10 @@ MONITORING_CONFIG="${BOT_HOME}/config/monitoring.json"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
 
-# ntfy 알림
-send_ntfy() {
-    local title="$1" msg="$2" priority="${3:-high}"
-    local topic
-    topic=$(jq -r '.ntfy.topic // empty' "$MONITORING_CONFIG" 2>/dev/null || echo "")
-    if [[ -z "$topic" ]]; then return; fi
-    curl -s --max-time 10 \
-        -H "Title: $title" -H "Priority: $priority" -H "Tags: warning" \
-        -d "$msg" "https://ntfy.sh/${topic}" >/dev/null 2>&1 || true
-}
-
-# Discord 웹훅 알림
-send_discord() {
-    local msg="$1"
-    local webhook payload
-    webhook=$(jq -r '.webhooks["jarvis-system"] // empty' "$MONITORING_CONFIG" 2>/dev/null || echo "")
-    if [[ -z "$webhook" ]]; then return; fi
-    # jq로 직렬화 — msg에 ", \, 개행 포함돼도 안전
-    payload=$(jq -cn --arg content "$msg" '{"content":$content}' 2>/dev/null) || return
-    curl -s --max-time 10 -H "Content-Type: application/json" \
-        -d "$payload" "$webhook" >/dev/null 2>&1 || true
-}
+# Shared libraries
+source "${BOT_HOME}/lib/ntfy-notify.sh"
+WEBHOOK="jarvis-system"
+source "${BOT_HOME}/lib/discord-notify-bash.sh"
 
 # 현재 로그인 계정 tier 확인
 get_account_info() {

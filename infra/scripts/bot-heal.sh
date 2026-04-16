@@ -17,19 +17,8 @@ RECOVERY_LEARNINGS_FILE="$BOT_HOME/state/recovery-learnings.md"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [heal] $*" | tee -a "$LOG_FILE"; }
 
-send_ntfy() {
-    local title="$1" msg="$2" priority="${3:-default}"
-    local topic
-    topic=$(python3 -c "import json; d=json.load(open('$MONITORING')); print(d.get('ntfy',{}).get('topic',''))" 2>/dev/null || echo "")
-    if [[ -n "$topic" ]]; then
-        curl -sf --max-time 5 \
-            -H "Title: $title" \
-            -H "Priority: $priority" \
-            -H "Tags: robot" \
-            -d "$msg" \
-            "https://ntfy.sh/${topic}" >/dev/null 2>&1 || true
-    fi
-}
+# Shared ntfy function
+source "${BOT_HOME}/lib/ntfy-notify.sh"
 
 # 중복 복구 방지
 if [[ -f "$HEAL_LOCK" ]]; then

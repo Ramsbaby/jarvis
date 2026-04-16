@@ -19,31 +19,19 @@ TODAY=$(date '+%Y-%m-%d')
 REPORT_FILE="$RESULTS_DIR/$TODAY.md"
 
 # ============================================================================
-# Discord 웹훅 URL 로드
+# Shared libraries
 # ============================================================================
 if [[ ! -f "$MONITORING_CONFIG" ]]; then
     echo "ERROR: monitoring.json not found at $MONITORING_CONFIG" >&2
     exit 1
 fi
 
-WEBHOOK_URL=$(CFG_PATH="$MONITORING_CONFIG" python3 -c "import json,os; print(json.load(open(os.environ['CFG_PATH']))['webhooks']['jarvis-system'])")
+WEBHOOK="jarvis-system"
+source "${BOT_HOME}/lib/discord-notify-bash.sh"
 
 # ============================================================================
 # 함수
 # ============================================================================
-
-send_discord() {
-    local message="$1"
-    local payload
-    payload=$(python3 -c "import json,sys; print(json.dumps({'content': sys.stdin.read()}))" <<< "$message" 2>/dev/null)
-    if [[ -z "$payload" ]]; then
-        payload='{"content":"RAG bug detector alert (message encoding error)"}'
-    fi
-    curl -s -m 10 -X POST "$WEBHOOK_URL" \
-        -H "Content-Type: application/json" \
-        -d "$payload" \
-        > /dev/null 2>&1 || echo "WARN: Discord webhook send failed" >&2
-}
 
 is_in_cooldown() {
     if [[ ! -f "$COOLDOWN_FILE" ]]; then

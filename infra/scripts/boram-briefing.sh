@@ -13,15 +13,7 @@ LOGFILE="$BOT_HOME/logs/cron.log"
 
 log() { echo "[$(TZ=Asia/Seoul date '+%F %T')] boram-briefing: $*" >> "$LOGFILE"; }
 
-send_discord() {
-  local msg="$1"
-  local payload
-  payload=$(python3 -c "import json, sys; print(json.dumps({'content': sys.argv[1]}))" "$msg")
-  curl -sS -X POST "$WEBHOOK" \
-    -H "Content-Type: application/json" \
-    -d "$payload" \
-    -o /dev/null
-}
+source "${BOT_HOME}/lib/discord-notify-bash.sh"
 
 # Preply API 조회 (금액 포함 실시간 데이터)
 RAW=$(bash "$BOT_HOME/scripts/preply-today.sh" "$TARGET_DATE" 2>/dev/null \

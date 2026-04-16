@@ -13,15 +13,7 @@ LOGFILE="$BOT_HOME/logs/boram-meds.log"
 
 log() { echo "[$(TZ=Asia/Seoul date '+%F %T')] boram-meds-reminder($TIMING): $*" >> "$LOGFILE"; }
 
-send_discord() {
-  local msg="$1"
-  local payload
-  payload=$(python3 -c "import json, sys; print(json.dumps({'content': sys.argv[1]}))" "$msg")
-  curl -sS -X POST "$WEBHOOK" \
-    -H "Content-Type: application/json" \
-    -d "$payload" \
-    -o /dev/null
-}
+source "${BOT_HOME}/lib/discord-notify-bash.sh"
 
 case "$TIMING" in
   아침)
