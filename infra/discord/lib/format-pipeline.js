@@ -32,6 +32,30 @@ const CHANNEL_OVERRIDES = Object.fromEntries(
 );  // jarvis-market: set MARKET_CHANNEL_ID env var to enable tableToList skip
 
 // ---------------------------------------------------------------------------
+// Narration filter — tool-use 중간과정 제거 (P0 가독성 개선)
+// ---------------------------------------------------------------------------
+
+/**
+ * Claude가 출력하는 tool-use 내러티브("이제 ~합니다", "확인합니다" 등)를
+ * Discord 전송 전에 제거. 코드 블록 내부는 보호.
+ */
+const filterNarration = withCodeFenceGuard((text) => {
+  const patterns = [
+    // "이제/먼저/다음으로 ~합니다/하겠습니다" 류 진행 선언
+    /^.{0,5}(?:이제|먼저|다음으로|그럼|우선|그러면).{0,40}(?:합니다|하겠습니다|봅니다|살펴봅니다|확인합니다|수정합니다|진행합니다|처리합니다|추가합니다|변경합니다|작성합니다|삭제합니다|설정합니다|적용합니다).*$/gm,
+    // "완료/확인/수정했습니다." 단독 완료 보고 (요약 아닌 단순 보고)
+    /^.{0,10}(?:완료|확인|수정|삭제|추가|변경|적용|업데이트|저장|생성|등록)(?:했습니다|됐습니다|되었습니다|완료입니다)\.?\s*$/gm,
+    // "line 42", "Lines 60-61" 등 코드 행번호 참조
+    /^.{0,10}(?:line|Lines?|라인)\s*\d+(?:\s*[-–~]\s*\d+)?.*(?:제거|삭제|수정|추가|변경).*$/gm,
+  ];
+  let result = text;
+  for (const p of patterns) {
+    result = result.replace(p, '');
+  }
+  return result;
+});
+
+// ---------------------------------------------------------------------------
 // Transforms
 // ---------------------------------------------------------------------------
 
@@ -118,6 +142,7 @@ const discordTimestamp = withCodeFenceGuard((text) =>
 // ---------------------------------------------------------------------------
 
 const TRANSFORMS = [
+  { name: 'filterNarration', fn: filterNarration },
   { name: 'tableToList', fn: tableToList },
   { name: 'normalizeHeadings', fn: normalizeHeadings },
   { name: 'collapseBlankLines', fn: collapseBlankLines },

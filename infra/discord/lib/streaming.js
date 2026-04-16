@@ -542,10 +542,31 @@ export class StreamingMessage {
   }
 
   _findSplitPoint(text, maxLen) {
+    // 우선순위 1: ### 헤딩 경계 (섹션 단위 분할)
+    const headingRe = /\n(?=###? )/g;
+    let bestHeading = -1;
+    let m;
+    while ((m = headingRe.exec(text)) !== null) {
+      if (m.index > 0 && m.index <= maxLen) bestHeading = m.index;
+    }
+    if (bestHeading > maxLen * 0.4) return bestHeading + 1;
+
+    // 우선순위 2: --- 구분선
+    const hrIdx = text.lastIndexOf('\n---', maxLen);
+    if (hrIdx > maxLen * 0.4) return hrIdx + 1;
+
+    // 우선순위 3: 빈 줄 (단락 경계)
+    const blankIdx = text.lastIndexOf('\n\n', maxLen);
+    if (blankIdx > maxLen * 0.5) return blankIdx + 1;
+
+    // 우선순위 4: 일반 줄바꿈
     const candidate = text.lastIndexOf('\n', maxLen);
     if (candidate > maxLen * 0.6) return candidate + 1;
+
+    // 우선순위 5: 공백
     const lastSpace = text.lastIndexOf(' ', maxLen);
     if (lastSpace > maxLen * 0.6) return lastSpace + 1;
+
     return maxLen;
   }
 
