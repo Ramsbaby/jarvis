@@ -35,7 +35,7 @@ _fsm_discord_alert() {
     local webhook_url
     webhook_url=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
     if [[ -n "${webhook_url:-}" ]]; then
-        local payload; payload=$(jq -n --arg m "$msg" '{content: $m}')
+        local payload; payload=$(jq -n --arg m "$msg" '{content: $m, allowed_mentions: {parse: []}}')
         curl -sS -X POST "$webhook_url" \
             -H "Content-Type: application/json" \
             -d "$payload" > /dev/null 2>&1 || true
@@ -634,7 +634,7 @@ case "$TASK_ID" in
             _ceo_webhook=$(jq -r '.webhooks["jarvis-ceo"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
             if [[ -n "${_ceo_webhook:-}" ]]; then
                 _ceo_msg="📥 **뉴스 브리핑 인사이트 인계** ($(date '+%Y-%m-%d'))\n${_insight_raw}"
-                _payload=$(jq -n --arg m "$_ceo_msg" '{content: $m}')
+                _payload=$(jq -n --arg m "$_ceo_msg" '{content: $m, allowed_mentions: {parse: []}}')
                 curl -sS -X POST "$_ceo_webhook" \
                     -H "Content-Type: application/json" \
                     -d "$_payload" > /dev/null 2>&1 || true
@@ -652,7 +652,7 @@ case "$TASK_ID" in
         if [[ -n "$_fsm_summary" ]]; then
             _webhook=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
             if [[ -n "${_webhook:-}" ]]; then
-                _payload=$(jq -n --arg m "$_fsm_summary" '{content: $m}')
+                _payload=$(jq -n --arg m "$_fsm_summary" '{content: $m, allowed_mentions: {parse: []}}')
                 curl -sS -X POST "$_webhook" \
                     -H "Content-Type: application/json" \
                     -d "$_payload" > /dev/null 2>&1 || true

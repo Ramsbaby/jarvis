@@ -90,7 +90,7 @@ send_embed() {
     local webhook_url
     webhook_url=$(get_webhook_url)
     local payload
-    payload=$(jq -n --argjson embed "$embed_json" '{"embeds":[$embed]}')
+    payload=$(jq -n --argjson embed "$embed_json" '{"embeds":[$embed], "allowed_mentions": {"parse": []}}')
     local http_code
     http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
         -H "Content-Type: application/json" \
@@ -116,7 +116,7 @@ const comps = blocks.map(b => ({
 })).filter(b => b.content && b.content.trim());
 if (!comps.length) process.exit(0);
 const container = { type: 17, accent_color: color, components: comps };
-console.log(JSON.stringify({ flags: 32768, components: [container] }));
+console.log(JSON.stringify({ flags: 32768, components: [container], allowed_mentions: { parse: [] } }));
 " "$cv2_json" 2>/dev/null) || return 0
 
     if [[ -z "$payload" ]]; then return 0; fi
@@ -142,7 +142,7 @@ send_chart_embed() {
     if [[ -z "$chart_url" ]]; then return 0; fi
 
     local payload
-    payload=$(jq -n --arg url "$chart_url" '{"embeds":[{"image":{"url":$url},"color":3447003}]}')
+    payload=$(jq -n --arg url "$chart_url" '{"embeds":[{"image":{"url":$url},"color":3447003}], "allowed_mentions": {"parse": []}}')
     local http_code
     http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
         -H "Content-Type: application/json" \
@@ -217,7 +217,7 @@ send_discord() {
     while [[ $offset -lt $total ]]; do
         local chunk="${message:$offset:1990}"
         local payload
-        payload=$(jq -n --arg content "$chunk" '{"content": $content, "flags": 4}')
+        payload=$(jq -n --arg content "$chunk" '{"content": $content, "flags": 4, "allowed_mentions": {"parse": []}}')
         local http_code
         http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
             -H "Content-Type: application/json" \
