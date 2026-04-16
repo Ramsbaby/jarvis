@@ -1,12 +1,11 @@
-// stat-visual.js — 수치 질문 감지 → Discord embed 카드 전송 (discord.js native)
-// execSync 없음 — 모든 수집은 비동기. EmbedBuilder 직접 사용, 추가 프로세스 없음.
+// stat-visual.js — 수치 질문 감지 → Discord 평문 카드 전송
+// EmbedBuilder 제거 → formatters.js 평문 포맷터 사용 (모바일/데스크톱 동일 렌더)
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import discordPkg from 'discord.js';
-const { EmbedBuilder } = discordPkg;
 import { join } from 'path';
 import { homedir } from 'os';
+import { alertFormat, reportFormat, kstFooter } from './formatters.js';
 
 const execAsync = promisify(exec);
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
@@ -31,33 +30,28 @@ async function safeExec(cmd) {
   catch { return null; }
 }
 
-// ── 색상 / UI 헬퍼 ────────────────────────────────────────────────────────
-const C = { GREEN: 0x22c55e, YELLOW: 0xf59e0b, RED: 0xef4444 };
-const pctColor = (p) => p > 90 ? C.RED : p > 75 ? C.YELLOW : C.GREEN;
+// ── UI 헬퍼 ────────────────────────────────────────────────────────────────
 const diskBar  = (p) => '█'.repeat(Math.round(p / 10)) + '░'.repeat(10 - Math.round(p / 10)) + ` ${p}%`;
 const minStr   = (m) => m > 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분 전` : `${m}분 전`;
+const pctState = (p) => p > 90 ? 'error' : p > 75 ? 'warn' : 'ok';
 
-// ── 데이터 수집 ────────────────────────────────────────────────────────────
-async function getDiskEmbed() {
+// ── 데이터 수집 → 평문 ────────────────────────────────────────────────────
+async function getDiskText() {
   const out = await safeExec('df -h /');
   if (!out) return null;
   const p = out.split('\n')[1]?.trim().split(/\s+/);
   if (!p || p.length < 5) return null;
   const pct = parseInt(p[4], 10);
-  const icon = pct > 90 ? '🔴' : pct > 75 ? '⚠️' : '✅';
-  return new EmbedBuilder()
-    .setTitle(`${icon} 디스크 사용률`)
-    .setColor(pctColor(pct))
-    .setDescription(diskBar(pct))
-    .addFields(
-      { name: '사용됨', value: p[2], inline: true },
-      { name: '전체',   value: p[1], inline: true },
-      { name: '여유',   value: p[3], inline: true },
-    )
-    .setFooter({ text: new Date().toLocaleString('ko-KR') });
+  return alertFormat({
+    title: '디스크 사용률',
+    state: pctState(pct),
+    summary: diskBar(pct),
+    detail: `💾 사용: **${p[2]}** / 전체: **${p[1]}** / 여유: **${p[3]}**`,
+    footer: kstFooter(),
+  });
 }
 
-async function getRagEmbed() {
+async function getRagText() {
   const [lastLine, sizeOut, sentinel] = await Promise.all([
     safeExec(`grep -E 'total chunks' "${BOT_HOME}/logs/rag-index.log" 2>/dev/null | tail -1`),
     safeExec(`du -sm "${BOT_HOME}/rag/lancedb" 2>/dev/null`),
@@ -73,24 +67,24 @@ async function getRagEmbed() {
   }
   const dbMB = sizeOut ? parseInt(sizeOut.split('\t')[0], 10) || 0 : 0;
   const isBuilding = sentinel?.includes('yes');
-  const color = isBuilding ? C.YELLOW : elapsedMin > 90 ? C.YELLOW : C.GREEN;
-  const icon  = isBuilding ? '🔨' : elapsedMin > 90 ? '⚠️' : '✅';
+  const ragState = isBuilding ? 'warn' : elapsedMin > 90 ? 'warn' : 'ok';
 
-  const fields = [
-    { name: '청크 수',       value: chunks.toLocaleString() + '개', inline: true },
-    { name: '마지막 인덱싱', value: elapsedMin > 0 ? minStr(elapsedMin) : '진행 중', inline: true },
-    { name: 'DB 크기',       value: `${dbMB} MB`, inline: true },
+  const items = [
+    { state: 'info', label: '📦 청크 수', value: chunks.toLocaleString() + '개' },
+    { state: elapsedMin > 90 ? 'warn' : 'ok', label: '🕐 마지막 인덱싱', value: elapsedMin > 0 ? minStr(elapsedMin) : '진행 중' },
+    { state: 'info', label: '🗄️ DB 크기', value: `${dbMB} MB` },
   ];
-  if (isBuilding) fields.push({ name: '상태', value: '🔨 리빌드 진행 중', inline: true });
+  if (isBuilding) items.push({ state: 'warn', label: '🔨 상태', value: '리빌드 진행 중' });
 
-  return new EmbedBuilder()
-    .setTitle(`${icon} RAG 인덱서 상태`)
-    .setColor(color)
-    .addFields(...fields)
-    .setFooter({ text: new Date().toLocaleString('ko-KR') });
+  return reportFormat({
+    title: '🧠 RAG 인덱서 상태',
+    state: ragState,
+    items,
+    footer: kstFooter(),
+  });
 }
 
-async function getSystemEmbed() {
+async function getSystemText() {
   const [diskOut, sizeOut, ragLine, pidOut] = await Promise.all([
     safeExec('df -h /'),
     safeExec(`du -sm "${BOT_HOME}/rag/lancedb" 2>/dev/null`),
@@ -114,22 +108,33 @@ async function getSystemEmbed() {
   const dbMB = sizeOut ? parseInt(sizeOut.split('\t')[0], 10) || 0 : 0;
   const botOk = pidOut && /^\d+$/.test(pidOut);
 
-  const worstColor = diskPct > 90 || !botOk ? C.RED
-    : diskPct > 75 || elapsedMin > 90        ? C.YELLOW
-    : C.GREEN;
-
-  return new EmbedBuilder()
-    .setTitle('📊 Jarvis 시스템 현황')
-    .setColor(worstColor)
-    .addFields(
-      { name: '디스크',       value: diskBar(diskPct), inline: false },
-      { name: '여유 공간',    value: diskFree,         inline: true },
-      { name: 'RAG 청크',    value: chunks.toLocaleString() + '개', inline: true },
-      { name: 'RAG 인덱싱',  value: elapsedMin > 0 ? minStr(elapsedMin) : '진행 중', inline: true },
-      { name: 'RAG DB',      value: `${dbMB} MB`,     inline: true },
-      { name: 'Discord 봇',  value: botOk ? `✅ PID ${pidOut}` : '❌ 오프라인', inline: true },
-    )
-    .setFooter({ text: new Date().toLocaleString('ko-KR') });
+  return reportFormat({
+    title: '📊 Jarvis 시스템 현황',
+    sections: [
+      {
+        heading: '💾 디스크',
+        items: [
+          { state: pctState(diskPct), label: '사용률', value: diskBar(diskPct) },
+          { state: 'info', label: '여유 공간', value: diskFree },
+        ],
+      },
+      {
+        heading: '🧠 RAG',
+        items: [
+          { state: 'info', label: '청크 수', value: chunks.toLocaleString() + '개' },
+          { state: elapsedMin > 90 ? 'warn' : 'ok', label: '인덱싱', value: elapsedMin > 0 ? minStr(elapsedMin) : '진행 중' },
+          { state: 'info', label: 'DB 크기', value: `${dbMB} MB` },
+        ],
+      },
+      {
+        heading: '⚙️ 프로세스',
+        items: [
+          { state: botOk ? 'ok' : 'error', label: 'Discord 봇', value: botOk ? `PID ${pidOut}` : '오프라인' },
+        ],
+      },
+    ],
+    footer: kstFooter(),
+  });
 }
 
 // ── 메인 export ───────────────────────────────────────────────────────────
@@ -137,13 +142,13 @@ export async function sendStatVisual(queryText, thread) {
   const type = detectStatType(queryText);
   if (!type || !thread) return;
   try {
-    let embed;
+    let text;
     switch (type) {
-      case 'disk':   embed = await getDiskEmbed();   break;
-      case 'rag':    embed = await getRagEmbed();    break;
-      case 'system': embed = await getSystemEmbed(); break;
+      case 'disk':   text = await getDiskText();   break;
+      case 'rag':    text = await getRagText();    break;
+      case 'system': text = await getSystemText(); break;
       default: return;
     }
-    if (embed) await thread.send({ embeds: [embed] });
+    if (text) await thread.send(text);
   } catch { /* silent — 시각화 실패가 봇 응답 차단 금지 */ }
 }
