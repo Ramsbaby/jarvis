@@ -22,10 +22,15 @@ UID_NUM=$(id -u)
 KEEPALIVE_SERVICES=(
     "ai.jarvis.discord-bot"
     "ai.jarvis.watchdog"
+    "ai.jarvis.cloudflared-tunnel"
+    "ai.jarvis.board"
 )
 
 # StartInterval services: run periodically, PID=- between runs is normal
-INTERVAL_SERVICES=()
+INTERVAL_SERVICES=(
+    "ai.jarvis.symlink-audit"
+    "ai.jarvis.board-watchdog"
+)
 
 PLIST_DIR="$HOME/Library/LaunchAgents"
 
@@ -92,8 +97,9 @@ for service in "${KEEPALIVE_SERVICES[@]}"; do
             if [[ "$fail_count" -ge 3 && "$service" == "ai.jarvis.discord-bot" ]]; then
                 log "RECOVERY: $service failed ${fail_count}x — running npm install to repair"
                 # launchd 환경은 PATH 미상속 → node/npm 절대경로 + PATH export 필수
-                local NODE_BIN="${NODE_BIN:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
-                local NPM_BIN="${NPM_BIN:-$(command -v npm 2>/dev/null || echo /opt/homebrew/bin/npm)}"
+                # (bash SC2168: 'local' 키워드는 함수 외부에서 쓰면 set -e와 충돌 → 일반 변수로)
+                NODE_BIN="${NODE_BIN:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
+                NPM_BIN="${NPM_BIN:-$(command -v npm 2>/dev/null || echo /opt/homebrew/bin/npm)}"
                 if [[ -x "$NODE_BIN" && -x "$NPM_BIN" ]]; then
                     # npm 내부에서 `env node` 호출 → PATH에 node 디렉토리 필요
                     export PATH="$(dirname "$NODE_BIN"):${PATH:-/usr/bin:/bin}"

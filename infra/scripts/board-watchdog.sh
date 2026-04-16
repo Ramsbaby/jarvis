@@ -55,15 +55,25 @@ kickstart() {
 failures=0
 recoveries=0
 
-# Layer 1: local server
-if ! curl -s -f -o /dev/null --max-time 5 "$LOCAL_URL" && ! curl -s -f -o /dev/null --max-time 5 "$FALLBACK_URL"; then
-  emit "local" "fail" "both $LOCAL_URL and $FALLBACK_URL unreachable"
-  alert_throttled "local" "Next.js :3100 not responding"
+# Layer 1: local server (고부하 재부팅 대비 retry with backoff)
+local_ok=false
+for attempt in 1 2 3; do
+  if curl -s -f -o /dev/null --max-time 5 "$LOCAL_URL" 2>/dev/null \
+     || curl -s -f -o /dev/null --max-time 5 "$FALLBACK_URL" 2>/dev/null; then
+    local_ok=true
+    break
+  fi
+  # 1차 실패 시 15초 grace (재부팅 직후 board 기동 지연 대응)
+  [[ $attempt -lt 3 ]] && sleep 15
+done
+if $local_ok; then
+  emit "local" "ok" ":3100 responding"
+else
+  emit "local" "fail" "3 attempts over 30s failed"
+  alert_throttled "local" "Next.js :3100 not responding after 3 retries"
   kickstart "ai.jarvis.board"
   failures=$((failures+1))
   recoveries=$((recoveries+1))
-else
-  emit "local" "ok" ":3100 responding"
 fi
 
 # Layer 2: tunnel connector
