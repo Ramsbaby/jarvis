@@ -18,7 +18,12 @@ import { appendFile, writeFile as writeFileAsync, rename as renameAsync } from '
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import { userMemory } from './user-memory.js';
+import { userMemory } from '../../lib/user-memory.mjs';
+import {
+  detectFeedback as _sharedDetectFeedback,
+  processFeedback as _sharedProcessFeedback,
+  sanitizeUnicode as _sharedSanitizeUnicode,
+} from '../../lib/feedback-loop.mjs';
 import {
   buildIdentitySection, buildLanguageSection, buildPersonaSection,
   buildPrinciplesSection, buildFormatCoreSection, buildFormatDetailSection,
@@ -52,87 +57,29 @@ async function wikiAddFact(userId, fact, opts = {}) {
 // Feedback detection — recognize user signals for learning loop
 // ---------------------------------------------------------------------------
 
-/** Lone surrogate 제거 — JSON 직렬화 시 invalid high/low surrogate 방지. handlers.js와 동일 구현. */
-export function sanitizeUnicode(str) {
-  if (typeof str !== 'string') return str;
-  return str.replace(/[\uD800-\uDFFF]/g, (match, offset, string) => {
-    const code = match.charCodeAt(0);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      const next = string.charCodeAt(offset + 1);
-      if (next >= 0xDC00 && next <= 0xDFFF) return match;
-      return '';
-    }
-    const prev = offset > 0 ? string.charCodeAt(offset - 1) : NaN;
-    if (prev >= 0xD800 && prev <= 0xDBFF) return match;
-    return '';
-  });
-}
+// Phase 0.5: detect/process/sanitize 로직은 infra/lib/feedback-loop.mjs 로 추출 (표면 통합 SSoT).
+// 여기서는 Discord 전용 부수효과(RAG sync) 주입하는 래퍼만 유지 — 외부 호출자(handlers.js 등) 하위호환 보장.
+
+export const sanitizeUnicode = _sharedSanitizeUnicode;
+export const detectFeedback = _sharedDetectFeedback;
 
 /**
- * Detect user feedback signals from message text.
- * Returns { type, fact? } or null if no feedback detected.
- */
-export function detectFeedback(text) {
-  const t = text.trim().toLowerCase();
-
-  // 명시적 기억 명령: "기억해:", "/remember", "기억해줘", "메모해줘", "저장해줘", "알아둬"
-  const rememberPrefixMatch = text.match(/^(기억해:|\/remember\s+|기억해줘[,:]?\s*|메모해줘[,:]?\s*|저장해줘[,:]?\s*|알아둬[,:]?\s*)/i);
-  if (rememberPrefixMatch) {
-    const fact = text.slice(rememberPrefixMatch[0].length).trim();
-    return fact ? { type: 'remember', fact } : null;
-  }
-
-  // 긍정 피드백: 15자 이하 짧은 메시지에서만 (긴 대화 오인 방지)
-  // "맞아", "아니" 같은 모호한 단어 제외 — "이게 맞아", "아니야"처럼 명확한 패턴만
-  if (t.length <= 15 && /좋아|잘했어|이게 맞아|완벽|ㄱㅌ|굿|정확해|완벽해|고마워|감사해|도움됐어|덕분에|최고|ㄳ|땡큐/.test(t)) {
-    return { type: 'positive' };
-  }
-
-  // 부정 피드백: 15자 이하 짧은 메시지에서만
-  // "아니", "틀려" 단독 제외 — "아니야", "틀렸어" 등 명확한 패턴만
-  if (t.length <= 15 && /별로야|틀렸어|다시 해|아니야|이건 아닌|잘못됐어|별로|틀림/.test(t)) {
-    return { type: 'negative' };
-  }
-
-  // 교정 패턴: "앞으로는", "다음부터는", "이제부터는", "다음엔", "이다음엔", "그냥 ~해줘"
-  const corrMatch = text.match(/^(앞으로는|다음부터는|이제부터는|다음엔|이다음엔)\s+(.+)/);
-  if (corrMatch) {
-    return { type: 'correction', fact: corrMatch[2] };
-  }
-
-  return null;
-}
-
-/**
- * Process detected feedback and persist to user memory.
+ * Discord용 processFeedback — RAG 마크다운 동기화 콜백을 묶어서 공통 모듈에 위임.
+ * 외부 시그니처 (userId, text) 유지하여 기존 호출부 변경 없음.
  */
 export function processFeedback(userId, text) {
-  const fb = detectFeedback(text);
-  if (!fb) return null;
-
-  if (fb.type === 'remember' && fb.fact) {
-    userMemory.addFact(userId, fb.fact);
-    log('info', 'Feedback: remember', { userId, fact: fb.fact.slice(0, 100) });
-    // RAG 즉시 반영 (fire-and-forget)
-    _syncUserMemoryMarkdown(userId).catch((e) => log('warn', 'processFeedback: RAG sync failed', { userId, error: e.message }));
-  } else if (fb.type === 'correction' && fb.fact) {
-    const data = userMemory.get(userId);
-    // corrections는 string(레거시) 또는 {text, addedAt} 혼용 허용 (하위 호환)
-    const normalizeCorr = (c) => (typeof c === 'string' ? c : c?.text ?? '');
-    if (!data.corrections.some(c => normalizeCorr(c) === fb.fact)) {
-      data.corrections.push({ text: sanitizeUnicode(fb.fact), addedAt: new Date().toISOString() });
-      data.updatedAt = new Date().toISOString();
-      const usersDir = join(process.env.BOT_HOME || join(homedir(), '.jarvis'), 'state', 'users');
-      mkdirSync(usersDir, { recursive: true });
-      writeFileSync(join(usersDir, `${userId}.json`), JSON.stringify(data, null, 2));
-    }
-    log('info', 'Feedback: correction', { userId, fact: fb.fact.slice(0, 100) });
-  } else if (fb.type === 'positive') {
-    log('info', 'Feedback: positive', { userId });
-  } else if (fb.type === 'negative') {
-    log('info', 'Feedback: negative', { userId });
+  const { fb } = _sharedProcessFeedback({
+    userId,
+    text,
+    source: 'discord-bot',
+    onFactSaved: (uid) => _syncUserMemoryMarkdown(uid),
+    onCorrectionSaved: () => { /* corrections는 RAG md에 포함 안 됨 — syncMarkdown 생략 */ },
+  });
+  if (fb) {
+    if (fb.type === 'remember') log('info', 'Feedback: remember', { userId, fact: fb.fact?.slice(0, 100) });
+    else if (fb.type === 'correction') log('info', 'Feedback: correction', { userId, fact: fb.fact?.slice(0, 100) });
+    else log('info', `Feedback: ${fb.type}`, { userId });
   }
-
   return fb;
 }
 
