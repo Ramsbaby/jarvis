@@ -5,7 +5,7 @@
 #      매시간 디렉토리 스냅샷 → 변경 감지 시 ledger append + Discord 알림.
 #
 # Usage: tasks.json에 등록 (schedule: "13 * * * *", 매시간 13분)
-# 산출물: ~/.jarvis/ledger/launchagents-audit.jsonl
+# 산출물: ~/jarvis/runtime/ledger/launchagents-audit.jsonl
 #
 # 추적 대상 변화:
 #   - 신규 .plist (정책 가드 트리거)
@@ -16,9 +16,9 @@
 set -euo pipefail
 
 LA_DIR="${HOME}/Library/LaunchAgents"
-LEDGER_DIR="${HOME}/.jarvis/ledger"
+LEDGER_DIR="${HOME}/jarvis/runtime/ledger"
 LEDGER="${LEDGER_DIR}/launchagents-audit.jsonl"
-SNAPSHOT_DIR="${HOME}/.jarvis/state/launchagents-snapshots"
+SNAPSHOT_DIR="${HOME}/jarvis/runtime/state/launchagents-snapshots"
 LATEST="${SNAPSHOT_DIR}/latest.txt"
 
 mkdir -p "$LEDGER_DIR" "$SNAPSHOT_DIR"
@@ -104,9 +104,9 @@ echo "[la-audit] changes: $CHANGES (total entries: $(wc -l < "$NOW" | tr -d ' ')
 
 # Discord 알림 (변경 있을 때만)
 if [[ ${#DISCORD_LINES[@]} -gt 0 ]]; then
-  WEBHOOK=$(jq -r '.webhooks["jarvis-system"] // empty' "${HOME}/.jarvis/config/monitoring.json" 2>/dev/null || true)
+  WEBHOOK=$(jq -r '.webhooks["jarvis-system"] // empty' "${HOME}/jarvis/runtime/config/monitoring.json" 2>/dev/null || true)
   if [[ -n "${WEBHOOK:-}" ]]; then
-    MSG="📡 **LaunchAgents 변경 감지**\n$(printf '%s\n' "${DISCORD_LINES[@]}")\n\n총 변경: ${CHANGES}건 / ledger: \`~/.jarvis/ledger/launchagents-audit.jsonl\`"
+    MSG="📡 **LaunchAgents 변경 감지**\n$(printf '%s\n' "${DISCORD_LINES[@]}")\n\n총 변경: ${CHANGES}건 / ledger: \`~/jarvis/runtime/ledger/launchagents-audit.jsonl\`"
     PAYLOAD=$(jq -n --arg m "$MSG" '{content: $m}')
     curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null 2>&1 || true
   fi

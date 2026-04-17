@@ -4,9 +4,9 @@ set -euo pipefail
 # health-check.sh - Quick health status for all bot components
 # Usage: health-check.sh [--json]
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 JSON_MODE="${1:-}"
 
 check() {

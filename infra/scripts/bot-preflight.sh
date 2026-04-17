@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 BOT_SCRIPT="$BOT_HOME/discord/discord-bot.js"
 ENV_FILE="$BOT_HOME/discord/.env"
 NODE_BIN="${NODE_BIN:-/opt/homebrew/bin/node}"
@@ -184,7 +184,7 @@ _start_ts=$(date +%s)
 cd "$BOT_HOME/discord" || fail_and_heal "디렉토리 이동 실패: $BOT_HOME/discord"
 # NODE_PATH 명시 설정: Node.js가 node_modules를 자동으로 찾도록 보장 (절대 경로)
 # set -u 모드 안전 처리: 단일 라인으로 원자적 처리
-export NODE_PATH="/Users/ramsbaby/.jarvis/discord/node_modules${NODE_PATH:+:$NODE_PATH}"
+export NODE_PATH="/Users/ramsbaby/jarvis/runtime/discord/node_modules${NODE_PATH:+:$NODE_PATH}"
 "$NODE_BIN" discord-bot.js
 _exit_code=$?
 _runtime=$(( $(date +%s) - _start_ts ))

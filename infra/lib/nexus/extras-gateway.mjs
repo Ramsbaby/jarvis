@@ -14,10 +14,10 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync, mkdirSync } fr
 import { addFactToWiki } from '../../discord/lib/wiki-engine.mjs';
 
 // ---------------------------------------------------------------------------
-// 채널 피드 기록 — discordSend 발신 시 ~/.jarvis/state/channel-feed/{name}.jsonl 에 append
+// 채널 피드 기록 — discordSend 발신 시 ~/jarvis/runtime/state/channel-feed/{name}.jsonl 에 append
 // discord-bot 프로세스와 분리된 nexus 프로세스이므로 독립 구현 (import 불가)
 // ---------------------------------------------------------------------------
-const _FEED_DIR = join(homedir(), '.jarvis', 'state', 'channel-feed');
+const _FEED_DIR = join(homedir(), 'jarvis/runtime', 'state', 'channel-feed');
 const _FEED_MAX = 30;
 
 function _appendChannelFeed(channelName, text) {

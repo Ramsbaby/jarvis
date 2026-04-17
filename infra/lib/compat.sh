@@ -6,10 +6,10 @@
 # On Linux/Docker: uses PM2 equivalents instead of launchctl.
 
 # macOS: ~/.jarvis, Linux/Docker: ~/.local/share/jarvis (하위 호환)
-if [[ -d "${HOME}/.jarvis" ]]; then
-  JARVIS_HOME="${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}"
+if [[ -d "${HOME}/jarvis/runtime" ]]; then
+  JARVIS_HOME="${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}"
 else
-  JARVIS_HOME="${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}"
+  JARVIS_HOME="${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}"
 fi
 IS_MACOS=false
 IS_LINUX=false

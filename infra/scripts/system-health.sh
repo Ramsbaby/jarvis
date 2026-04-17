@@ -4,7 +4,7 @@
 # schedule: */60 * * * *
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 STATE_DIR="${BOT_HOME}/state"
 LOGS_DIR="${BOT_HOME}/logs"
 HEALTH_FILE="${STATE_DIR}/health.json"

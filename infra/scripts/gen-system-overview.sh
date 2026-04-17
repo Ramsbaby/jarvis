@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # gen-system-overview.sh — Jarvis 시스템 개요 문서 자동 생성
 # 트리거: 매일 04:05 크론 (tasks.json) + git post-commit 훅
-# 출력:   ~/.jarvis/docs/SYSTEM-OVERVIEW.md
+# 출력:   ~/jarvis/runtime/docs/SYSTEM-OVERVIEW.md
 #
 # 수정 방법: 이 스크립트를 편집하고 저장 → 커밋 시 자동 재생성
 # 주의: docs/SYSTEM-OVERVIEW.md 는 자동 생성 파일 — 직접 편집 금지
@@ -10,10 +10,10 @@ set -euo pipefail
 
 # BOT_HOME 우선순위: 명시적 지정 > 실제 존재하는 경로 > 기본값
 if [[ -z "${BOT_HOME:-}" ]]; then
-  if [[ -d "${HOME}/.jarvis" ]]; then
-    BOT_HOME="${HOME}/.jarvis"
+  if [[ -d "${HOME}/jarvis/runtime" ]]; then
+    BOT_HOME="${HOME}/jarvis/runtime"
   else
-    BOT_HOME="${HOME}/.jarvis"
+    BOT_HOME="${HOME}/jarvis/runtime"
   fi
 fi
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
@@ -46,7 +46,7 @@ GIT_BRANCH=$(cd "$BOT_HOME" && git rev-parse --abbrev-ref HEAD 2>/dev/null || ec
 # 태스크 표 (tasks.json)
 TASK_TABLE=$(python3 - <<'PY' 2>/dev/null || echo "_(태스크 없음)_"
 import json, os
-B = os.environ.get('BOT_HOME', os.path.expanduser('~/.jarvis'))
+B = os.environ.get('BOT_HOME', os.path.expanduser('~/jarvis/runtime'))
 data = json.load(open(f'{B}/config/tasks.json'))
 tasks = data.get('tasks', data) if isinstance(data, dict) else data
 en  = [t for t in tasks if t.get('enabled', True)]
@@ -69,7 +69,7 @@ PY
 # Nexus 도구 표
 NEXUS_TABLE=$(python3 - <<'PY' 2>/dev/null || echo "_(도구 목록 없음)_"
 import re, os, glob
-B = os.environ.get('BOT_HOME', os.path.expanduser('~/.jarvis'))
+B = os.environ.get('BOT_HOME', os.path.expanduser('~/jarvis/runtime'))
 DESCS = {
     'exec':         '커스텀 bash — 전용 도구 없을 때만 (마지막 수단)',
     'scan':         '다중 명령 병렬 실행',
@@ -468,7 +468,7 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 
 **디렉토리 구조:**
 ```
-~/.jarvis/
+~/jarvis/runtime/
 ├── bin/           크론 진입점 (ask-claude.sh, jarvis-cron.sh, route-result.sh)
 ├── config/        tasks.json, monitoring.json, goals.json
 ├── discord/       봇 코드, personas.json, node_modules/

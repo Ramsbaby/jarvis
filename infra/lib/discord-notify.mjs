@@ -20,7 +20,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const DISCORD_CHAR_LIMIT = 1990; // 2000 - 여유 10자
 
 /**

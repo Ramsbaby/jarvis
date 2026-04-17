@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 set -euo pipefail
 
 # Cross-platform: macOS는 launchctl, Linux/WSL2는 PM2 사용
@@ -15,7 +15,7 @@ set -euo pipefail
 #   3. Send alerts via ntfy + Discord webhook
 
 # --- Configuration ---
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 BOT_LOG="$BOT_HOME/logs/discord-bot.jsonl"
 WATCHDOG_LOG="$BOT_HOME/logs/bot-watchdog.log"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"

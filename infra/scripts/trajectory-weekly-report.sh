@@ -3,10 +3,10 @@ set -euo pipefail
 
 # trajectory-weekly-report.sh — 주간 궤적 분석 리포트
 # 매주 일요일 수동 실행 (크론 미등록)
-# 입력: ~/.jarvis/logs/trajectory.jsonl
+# 입력: ~/jarvis/runtime/logs/trajectory.jsonl
 # 출력: 마크다운 (stdout, Discord 전송 가능)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 TRAJECTORY_FILE="${BOT_HOME}/logs/trajectory.jsonl"
 
 if [[ ! -f "$TRAJECTORY_FILE" ]]; then

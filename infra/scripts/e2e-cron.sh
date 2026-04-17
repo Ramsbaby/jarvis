@@ -4,7 +4,7 @@
 # Schedule: 30 3 * * * (매일 03:30, rag-health 03:00 이후 실행)
 set -uo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 
 # .env 로딩 — 크론 환경에 OPENAI_API_KEY 등 누락 방지
 if [[ -f "${BOT_HOME}/.env" ]]; then
@@ -39,7 +39,7 @@ RETRY_COUNT=0
 
 while [[ $RETRY_COUNT -le $MAX_RETRIES ]]; do
   OUTPUT=$("${BOT_HOME}/scripts/e2e-test.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g') || true
-  EXIT_CODE=$?
+  E2E_EXIT_CODE=$?
 
   # 실패한 항목에서 "Discord bot running" 만 있으면 봇 재시작 후 재시도
   FAIL_COUNT=$(echo "$OUTPUT" | grep -c "❌ FAIL" || true)
@@ -76,7 +76,11 @@ TOTAL=$((PASS_COUNT + FAIL_COUNT + WARN_COUNT + SKIP_COUNT))
 SUMMARY="${PASS_COUNT}/${TOTAL} passed"
 if [[ $FAIL_COUNT -gt 0 ]]; then SUMMARY="${SUMMARY}, ${FAIL_COUNT} FAILED"; fi
 
-log "RESULT: ${SUMMARY} (exit: ${EXIT_CODE})"
+# Determine exit code (0 if no failures, 1 if there are failures)
+FINAL_EXIT_CODE=0
+if [[ $FAIL_COUNT -gt 0 ]]; then FINAL_EXIT_CODE=1; fi
+
+log "RESULT: ${SUMMARY} (exit: ${FINAL_EXIT_CODE})"
 
 if [[ $FAIL_COUNT -gt 0 ]]; then
     # 실패 항목 추출
@@ -96,14 +100,10 @@ if [[ $FAIL_COUNT -gt 0 ]]; then
             -d "$ALERT_MSG" \
             "${NTFY_SERVER}/${NTFY_TOPIC}" > /dev/null 2>&1 || true
     fi
-
-    # 오래된 결과 정리 (30일 초과)
-    find "$(dirname "$RESULT_FILE")" -name "*.txt" -mtime +30 -delete 2>/dev/null || true
-    exit 1
+else
+    log "OK: ${SUMMARY}"
 fi
-
-log "OK: ${SUMMARY}"
 
 # 오래된 결과 정리 (30일 초과)
 find "$(dirname "$RESULT_FILE")" -name "*.txt" -mtime +30 -delete 2>/dev/null || true
-exit 0
+exit "$FINAL_EXIT_CODE"

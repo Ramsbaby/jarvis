@@ -28,7 +28,7 @@ const screen = blessed.screen({
 let teams = getOfficeSnapshot();
 
 if (teams.length === 0) {
-  console.error('팀 데이터를 찾을 수 없습니다. (~/.jarvis/teams/ 확인)');
+  console.error('팀 데이터를 찾을 수 없습니다. (~/jarvis/runtime/teams/ 확인)');
   process.exit(1);
 }
 

@@ -6,7 +6,7 @@
 set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_FILE="$BOT_HOME/logs/discord-bot.jsonl"
 RESULTS_DIR="$BOT_HOME/results/quality"
 REPORT_FILE="$RESULTS_DIR/$(date +%F).json"

@@ -502,7 +502,7 @@ run_one_task() {
     if [[ "$PATCH_ONLY" == "true" ]]; then
         PROMPT="${PROMPT}
 
-중요: 실제 파일을 수정하지 말 것. 패치 파일만 ~/.jarvis/state/dev-patches/${TASK_ID}.patch 에 unified diff 형식으로 생성하라."
+중요: 실제 파일을 수정하지 말 것. 패치 파일만 ~/jarvis/runtime/state/dev-patches/${TASK_ID}.patch 에 unified diff 형식으로 생성하라."
     fi
 
     # Step 4.5: Sprint Contract — 성공 기준 협상

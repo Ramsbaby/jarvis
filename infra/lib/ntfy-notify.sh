@@ -12,7 +12,7 @@ _NTFY_NOTIFY_LOADED=1
 send_ntfy() {
     local title="$1" msg="$2" priority="${3:-high}"
     local topic
-    topic=$(jq -r '.ntfy.topic // empty' "${BOT_HOME:-$HOME/.jarvis}/config/monitoring.json" 2>/dev/null || echo "")
+    topic=$(jq -r '.ntfy.topic // empty' "${BOT_HOME:-$HOME/jarvis/runtime}/config/monitoring.json" 2>/dev/null || echo "")
     [[ -z "$topic" ]] && return 1
     curl -s --max-time 10 \
         -H "Title: $title" -H "Priority: $priority" -H "Tags: warning" \

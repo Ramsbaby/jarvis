@@ -17,7 +17,7 @@ export const IS_LINUX   = os.platform() === 'linux'
  * 3. %USERPROFILE%\.jarvis (Windows native)
  */
 export const JARVIS_HOME = process.env.JARVIS_HOME
-  ?? path.join(os.homedir(), '.jarvis')
+  ?? path.join(os.homedir(), 'jarvis/runtime')
 
 export const LOGS_DIR    = path.join(JARVIS_HOME, 'logs')
 export const INBOX_DIR   = path.join(JARVIS_HOME, 'inbox')
@@ -37,7 +37,7 @@ export function getShell() {
 
 /**
  * Normalizes a legacy hard-coded path to use JARVIS_HOME.
- * e.g. ~/.jarvis/logs → <JARVIS_HOME>/logs
+ * e.g. ~/jarvis/runtime/logs → <JARVIS_HOME>/logs
  */
 export function normalizePath(legacyPath) {
   return legacyPath.replace(/\/Users\/[^/]+\/\.jarvis/, JARVIS_HOME)

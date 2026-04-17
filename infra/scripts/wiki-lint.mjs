@@ -16,8 +16,8 @@
  *
  * Phase 8 (선택): LLM 기반 모순 검출 (--deep 플래그)
  *
- * Log: ~/.jarvis/logs/wiki-lint.log
- * Report: ~/.jarvis/wiki/meta/lint-{date}.md
+ * Log: ~/jarvis/runtime/logs/wiki-lint.log
+ * Report: ~/jarvis/runtime/wiki/meta/lint-{date}.md
  */
 
 import {
@@ -29,7 +29,7 @@ import { homedir } from 'node:os';
 import { getSchema, WIKI_ROOT } from '../discord/lib/wiki-engine.mjs';
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
-const BOT_HOME  = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME  = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const LOG_FILE  = join(BOT_HOME, 'logs', 'wiki-lint.log');
 const META_DIR  = join(WIKI_ROOT, 'meta');
 const INDEX_FILE = join(WIKI_ROOT, 'index.md');

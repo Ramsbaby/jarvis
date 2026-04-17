@@ -10,7 +10,7 @@ set -euo pipefail
 #   token-ledger-query.sh task <task>    # 특정 태스크 최근 20건
 #   token-ledger-query.sh stats          # 전체 요약 (태스크 수, 총 지출, 평균)
 
-LEDGER="${BOT_HOME:-${HOME}/.jarvis}/state/token-ledger.jsonl"
+LEDGER="${BOT_HOME:-${HOME}/jarvis/runtime}/state/token-ledger.jsonl"
 
 if [[ ! -f "$LEDGER" ]]; then
     echo "[ERROR] ledger 파일 없음: $LEDGER" >&2

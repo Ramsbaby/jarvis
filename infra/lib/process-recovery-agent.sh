@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_FILE="$BOT_HOME/logs/process-recovery-agent.log"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [process-recovery-agent] $*" | tee -a "$LOG_FILE"; }

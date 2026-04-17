@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
+BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
 MSG="${1:-}"
 
 if [[ -z "$MSG" ]]; then
@@ -13,7 +13,7 @@ if [[ -z "$MSG" ]]; then
   exit 1
 fi
 
-WEBHOOK=$(jq -r '.webhooks["jarvis"] // empty' "${BOT_HOME:-$HOME/.jarvis}/config/monitoring.json" 2>/dev/null)
+WEBHOOK=$(jq -r '.webhooks["jarvis"] // empty' "${BOT_HOME:-$HOME/jarvis/runtime}/config/monitoring.json" 2>/dev/null)
 [[ -z "$WEBHOOK" ]] && { echo "ERROR: jarvis webhook not found" >&2; exit 1; }
 
 PAYLOAD=$(python3 -c "import json, sys; print(json.dumps({'content': sys.argv[1]}))" "📞 **[보람님 채널 → 정우님]**

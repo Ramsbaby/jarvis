@@ -20,16 +20,16 @@ set -euo pipefail
 #
 # 사용법:
 #   JARVIS_SMEE_URL=https://smee.io/xxx GITHUB_WEBHOOK_SECRET=mysecret \
-#     ~/.jarvis/scripts/webhook-listener.sh
+#     ~/jarvis/runtime/scripts/webhook-listener.sh
 #
 # 직접 HTTP 서버만 기동 (smee 없이):
 #   WEBHOOK_PORT=9000 GITHUB_WEBHOOK_SECRET=mysecret \
-#     ~/.jarvis/scripts/webhook-listener.sh --no-smee
+#     ~/jarvis/runtime/scripts/webhook-listener.sh --no-smee
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 EMIT_EVENT="${BOT_HOME}/scripts/emit-event.sh"
 LOG="${BOT_HOME}/logs/webhook-listener.log"
 WEBHOOK_PORT="${WEBHOOK_PORT:-9000}"
@@ -80,7 +80,7 @@ if [[ "$NO_SMEE" == false ]]; then
         log "     Content type: application/json"
         log "     Secret: (GITHUB_WEBHOOK_SECRET 값과 동일하게)"
         log "     Events: Pull requests, Pushes, Issues"
-        log "  4. ~/.jarvis/config/webhook.env 파일에 아래 내용 추가:"
+        log "  4. ~/jarvis/runtime/config/webhook.env 파일에 아래 내용 추가:"
         log "     JARVIS_SMEE_URL=https://smee.io/xxxxxxxxxx"
         log "     GITHUB_WEBHOOK_SECRET=your-secret-here"
         log "  5. LaunchAgent plist의 EnvironmentVariables 섹션에 위 두 항목 추가"

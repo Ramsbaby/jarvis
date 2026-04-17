@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_FILE="${BOT_HOME}/logs/pre-cron-auth-check.log"
 MONITORING_CONFIG="${BOT_HOME}/config/monitoring.json"
 

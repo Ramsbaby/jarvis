@@ -19,9 +19,9 @@ import { URL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
-const DISCORD_DIR = join(BOT_HOME, '..', '.jarvis', 'discord'); // normalizes fine via join
-const ENV_PATH = join(homedir(), '.jarvis', 'discord', '.env');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const DISCORD_DIR = join(BOT_HOME, 'discord'); // A2 2026-04-17: BOT_HOME/../.jarvis 패턴 제거 (심링크 제거 시 파괴됨)
+const ENV_PATH = join(homedir(), 'jarvis/runtime', 'discord', '.env');
 
 // Minimal dotenv parser — no external dep needed for key=value files
 function loadDotenv(path) {

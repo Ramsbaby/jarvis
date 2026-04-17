@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 RAG_LOG="$BOT_HOME/logs/rag-index.log"
 INDEX_STATE="$BOT_HOME/rag/index-state.json"

@@ -4,7 +4,7 @@
 # ~/.jarvis 하위 토폴로지 정합성 감사 + 자동 복구.
 #
 # Check:
-#   1. ~/.jarvis/{infra,bin,lib,scripts} 가 심링크인가 (실제 디렉토리로 변했으면 파괴)
+#   1. ~/jarvis/runtime/{infra,bin,lib,scripts} 가 심링크인가 (실제 디렉토리로 변했으면 파괴)
 #   2. 그 심링크들이 SSoT(~/jarvis/infra/*)를 가리키는가
 #   3. ~/.jarvis 하위 다른 절대 심링크가 SSoT 외부를 가리키는가
 #   4. .bak-* / .ghost-* 잔해
@@ -17,7 +17,7 @@
 # 2026-04-16 2차 장애 이후 auto-recovery + 스로틀 추가.
 set -euo pipefail
 
-DOT_JARVIS="${HOME}/.jarvis"
+DOT_JARVIS="${HOME}/jarvis/runtime"
 SSOT="${HOME}/jarvis/infra"
 LEDGER_DIR="${DOT_JARVIS}/state"
 LEDGER="${LEDGER_DIR}/symlink-audit.jsonl"
@@ -62,8 +62,8 @@ alert_throttled() {
       return 0
     fi
   fi
-  if [[ -x "${HOME}/.jarvis/scripts/discord-visual.mjs" || -f "${HOME}/.jarvis/scripts/discord-visual.mjs" ]]; then
-    /opt/homebrew/bin/node "${HOME}/.jarvis/scripts/discord-visual.mjs" \
+  if [[ -x "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" || -f "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" ]]; then
+    /opt/homebrew/bin/node "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" \
       --type stats \
       --data "{\"title\":\"${title}\",\"data\":{\"path\":\"${path}\",\"detail\":\"${detail}\",\"ledger\":\"${LEDGER}\"},\"timestamp\":\"${TS}\"}" \
       --channel jarvis-system 2>/dev/null || true

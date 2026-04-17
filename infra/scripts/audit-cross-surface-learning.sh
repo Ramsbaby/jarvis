@@ -6,12 +6,12 @@
 # → 파이프라인이 끊겨있거나 훅이 실종된 것. 즉시 오너에게 알림.
 #
 # 실행: 매주 월요일 07:00 (crontab 등록 필요)
-# 출력: ~/.jarvis/logs/cross-surface-audit.log + 이상 시 Discord 알림
+# 출력: ~/jarvis/runtime/logs/cross-surface-audit.log + 이상 시 Discord 알림
 
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG="${BOT_HOME}/logs/cross-surface-audit.log"
 USERS_DIR="${BOT_HOME}/state/users"
 OWNER_ID=$(python3 -c "import json; print(json.load(open('${BOT_HOME}/config/user_profiles.json'))['owner']['discordId'])" 2>/dev/null || echo "")

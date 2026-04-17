@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const DB_PATH = join(BOT_HOME, 'state', 'messages.db');
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, normal: 2 };

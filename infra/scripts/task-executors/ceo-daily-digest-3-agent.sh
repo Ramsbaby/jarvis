@@ -11,7 +11,7 @@ set -euo pipefail
 # 호출: bot-cron.sh가 tasks.json `script` 필드로 직접 실행
 # 단계별 실패는 ledger에 stage 태그로 기록 (ceo-daily-digest:plan / :execute / :verify)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 TASK_ID="ceo-daily-digest"
 LEDGER="${BOT_HOME}/state/token-ledger.jsonl"
 REPORTS_DIR="${BOT_HOME}/rag/teams/reports"
@@ -70,7 +70,7 @@ stage_execute() {
     local prompt="ceo-digest-data.sh를 실행하여 데이터를 수집하고, 오늘의 CEO 다이제스트 보고서를 한국어로 작성하세요.
 
 1. 데이터 수집:
-   bash ~/.jarvis/scripts/ceo-digest-data.sh
+   bash ~/jarvis/runtime/scripts/ceo-digest-data.sh
 
 2. 아래 구조로 간결한 보고서 작성 (모든 내용 한국어):
    - 요약 (1문장)

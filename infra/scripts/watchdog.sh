@@ -5,9 +5,9 @@ set -euo pipefail
 # KeepAlive launchd service with internal 180s loop. Monitors discord-bot, cleans stale claude -p.
 
 # --- Configuration ---
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 STATE_DIR="$BOT_HOME/watchdog"
 LOG_FILE="$BOT_HOME/logs/watchdog.log"

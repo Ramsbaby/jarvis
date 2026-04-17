@@ -3,7 +3,7 @@
 # LLM 없음. bash만. 즉시 실행.
 # Stop hook (async, 10s timeout)
 
-BOT_HOME="${HOME}/.jarvis"
+BOT_HOME="${HOME}/jarvis/runtime"
 SESSION_TS="${BOT_HOME}/state/.claude-session-start"
 CHANGELOG="${BOT_HOME}/docs/session-changelog.md"  # rag-index.mjs가 docs/ 인덱싱
 LOG="${BOT_HOME}/logs/session-changelog.log"

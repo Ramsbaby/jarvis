@@ -5,8 +5,8 @@
 # 사용법: source lint-gate.sh; lint_file "/path/to/file.sh"
 # 반환: 0=통과, 1=에러 (에러 내용은 stdout 출력)
 
-_LINT_ESLINT_CONFIG="${_LINT_ESLINT_CONFIG:-${BOT_HOME:-${HOME}/.jarvis}/config/eslint-gate.config.mjs}"
-_LINT_BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+_LINT_ESLINT_CONFIG="${_LINT_ESLINT_CONFIG:-${BOT_HOME:-${HOME}/jarvis/runtime}/config/eslint-gate.config.mjs}"
+_LINT_BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 
 lint_file() {
     local full_path="$1"

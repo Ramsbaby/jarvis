@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Cross-platform compat
-export JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"  # BOT_HOME 환경변수 오염 방지 (QW-14, 2026-04-13)
+export JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"  # BOT_HOME 환경변수 오염 방지 (QW-14, 2026-04-13)
 source "${JARVIS_HOME}/lib/compat.sh" || {
   echo "ERROR: Failed to source compat.sh from $JARVIS_HOME" >&2
   exit 1
@@ -15,7 +15,7 @@ set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 CONFIG_DIR="$BOT_HOME/config"
 STATE_DIR="$BOT_HOME/state"
 RESULTS_DIR="$BOT_HOME/results/auditor"

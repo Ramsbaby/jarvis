@@ -5,14 +5,14 @@
 # 오너가 온라인이면 즉시 company-agent.mjs --team standup 실행.
 #
 # Usage (crontab):
-#   5 8 * * * /bin/bash ~/.jarvis/scripts/smart-standup.sh >> ~/.jarvis/logs/company-agent.log 2>&1
+#   5 8 * * * /bin/bash ~/jarvis/runtime/scripts/smart-standup.sh >> ~/jarvis/runtime/logs/company-agent.log 2>&1
 
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 STATE_FILE="$BOT_HOME/state/smart-standup.json"

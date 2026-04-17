@@ -8,7 +8,7 @@ import { homedir } from 'os';
 import { alertFormat, reportFormat, kstFooter } from './formatters.js';
 
 const execAsync = promisify(exec);
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 
 // ── 질문 패턴 → 타입 ──────────────────────────────────────────────────────
 const TRIGGERS = [

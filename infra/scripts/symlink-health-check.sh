@@ -2,12 +2,12 @@
 set -euo pipefail
 # symlink-health-check.sh — 디렉토리 symlink 건전성 자동 검증
 #
-# ~/.jarvis/ 의 핵심 디렉토리 symlink이 깨졌는지 매시간 검증.
+# ~/jarvis/runtime/ 의 핵심 디렉토리 symlink이 깨졌는지 매시간 검증.
 # 깨지면 즉시 Discord + ntfy 알림 → 수동 복구 안내.
 #
 # 크론: 매시간 (e2e-test와 별도 — symlink은 e2e보다 빈번히 체크)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG="${BOT_HOME}/logs/symlink-health.log"
 ROUTE="${BOT_HOME}/bin/route-result.sh"
 

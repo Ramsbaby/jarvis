@@ -22,7 +22,7 @@ import { homedir } from 'node:os';
 import { userMemory } from './user-memory.mjs';
 
 const HOME = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
 
 // Unicode lone surrogate 제거 — JSON 직렬화 시 invalid high/low surrogate 방지
 export function sanitizeUnicode(str) {

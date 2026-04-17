@@ -1,13 +1,13 @@
 /**
  * UserMemory — per-user persistent long-term memory.
  * Stores facts, preferences, corrections per Discord userId.
- * File: ~/.jarvis/state/users/{userId}.json
+ * File: ~/jarvis/runtime/state/users/{userId}.json
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const USERS_DIR = join(BOT_HOME, 'state', 'users');
 
 // Family 채널용 노이즈 fact 필터 — 컴팩션 아티팩트·세션 메타 텍스트 제거

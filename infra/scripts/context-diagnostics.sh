@@ -14,7 +14,7 @@ set -euo pipefail
 #
 # Exit: 0 = 정상, 1 = 에러
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 TASK_ID="${1:-_diagnostics}"
 # shellcheck disable=SC2034  # PROMPT, CONTEXT_FILE, RESULTS_DIR are used by sourced context-loader.sh
 PROMPT="${2:-diagnostics health check}"

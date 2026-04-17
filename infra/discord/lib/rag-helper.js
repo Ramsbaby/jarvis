@@ -11,7 +11,7 @@ import { homedir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { log } from './claude-runner.js';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 
 // Past-reference patterns — detect when user mentions previous conversation
 export const PAST_REF_PATTERN = /저번에|아까|기억|지난번|전에 말한|예전에|그때|다시 한번|아까 말한|이전에|방금|위에서|위에꺼|앞에서/;

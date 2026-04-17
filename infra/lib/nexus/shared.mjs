@@ -8,7 +8,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-export const BOT_HOME = join(process.env.BOT_HOME || join(homedir(), '.jarvis'));
+export const BOT_HOME = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'));
 export const LOGS_DIR = join(BOT_HOME, 'logs');
 export const STATE_DIR = join(BOT_HOME, 'state');
 export const TELEMETRY_FILE = join(LOGS_DIR, 'nexus-telemetry.jsonl');

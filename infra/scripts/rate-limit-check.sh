@@ -3,7 +3,7 @@
 # Claude -p 불필요. 순수 bash + python3.
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 TRACKER="$BOT_HOME/state/rate-tracker.json"
 LIMIT=900
 
@@ -25,14 +25,16 @@ except Exception:
     print(f"Rate limit: 정상 (파싱 불가)")
     sys.exit(0)
 
-now = datetime.now(timezone.utc).replace(tzinfo=None)
-cutoff = now - timedelta(hours=5)
+now = datetime.now(timezone.utc)
+cutoff_ms = int((now - timedelta(hours=5)).timestamp() * 1000)
 
-# 타임스탬프 배열 형식
+# 밀리초 타임스탬프 배열 형식
 if isinstance(data, list):
-    count = sum(1 for ts in data if isinstance(ts, str) and datetime.fromisoformat(ts.replace('Z','')) > cutoff)
+    # data가 숫자 배열 (밀리초): [1776365862202, ...]
+    count = sum(1 for ts in data if isinstance(ts, int) and ts >= cutoff_ms)
 elif isinstance(data, dict) and 'timestamps' in data:
-    count = sum(1 for ts in data['timestamps'] if isinstance(ts, str) and datetime.fromisoformat(ts.replace('Z','')) > cutoff)
+    # data가 {timestamps: [1776365862202, ...]}
+    count = sum(1 for ts in data['timestamps'] if isinstance(ts, int) and ts >= cutoff_ms)
 else:
     print("Rate limit: 정상 (형식 불명)")
     sys.exit(0)

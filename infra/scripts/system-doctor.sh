@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; IS_LINUX=false
   case "$(uname -s)" in Darwin) IS_MACOS=true ;; Linux) IS_LINUX=true ;; esac
@@ -151,7 +151,7 @@ check_rag() {
   local node_script='
 const { createRequire } = await import("module");
 const require = createRequire("file:///");
-const BOT_HOME = process.env.BOT_HOME || (process.env.HOME + "/.jarvis");
+const BOT_HOME = process.env.BOT_HOME || (process.env.HOME + "/jarvis/runtime");
 const ldb = require(BOT_HOME + "/discord/node_modules/@lancedb/lancedb/dist/index.js");
 const db = await ldb.connect(BOT_HOME + "/rag/lancedb");
 try {

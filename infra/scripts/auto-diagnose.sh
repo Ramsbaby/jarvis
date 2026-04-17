@@ -3,7 +3,7 @@ set -euo pipefail
 # auto-diagnose.sh — 크론 실패 감지 후 요약 출력
 # 실패 없으면 아무 출력 없이 종료 → Discord 전송 안 됨
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
 
 # FSM 기록: 실행 추적 (stdout 억제 — Discord 출력 오염 방지)
@@ -94,7 +94,7 @@ for tid, reason in entries:
     else:
         print(f"- `{tid}` — {reason}")
 print()
-print("📋 `~/.jarvis/logs/cron.log` 에서 상세 확인")
+print("📋 `~/jarvis/runtime/logs/cron.log` 에서 상세 확인")
 PYEOF
 
 # Failure Rule Engine 연동: 매칭 규칙이 있으면 자동 해결 제안 추가

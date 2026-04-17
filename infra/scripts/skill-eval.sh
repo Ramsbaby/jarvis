@@ -6,7 +6,7 @@ set -euo pipefail
 # result-check: 최근 크론 실행 결과의 키워드/패턴/길이 검증 (비용 $0)
 # validate: 스킬 파일 구조 + 필수 섹션 검증 (비용 $0)
 
-BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
+BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
 EVAL_CONFIG="$BOT_HOME/config/skill-evals/functional.json"
 COMMANDS_DIR="$HOME/.claude/commands"
 RESULT_DIR="$BOT_HOME/state/skill-eval-results"

@@ -10,7 +10,7 @@ import { join } from 'path';
 
 const execAsync = promisify(exec);
 const HOME = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
 
 // ── 분석 질문 감지 ────────────────────────────────────────────────────────
 const ANALYTICAL_TRIGGERS = [

@@ -26,9 +26,9 @@ function getWeekString(date = new Date()) {
 
 const week = process.argv[2] || getWeekString();
 const homeDir = process.env.HOME;
-const roiDir = path.join(homeDir, '.jarvis/rag/roi-reports');
-const resultsDir = path.join(homeDir, '.jarvis/results');
-const logsDir = path.join(homeDir, '.jarvis/logs');
+const roiDir = path.join(homeDir, 'jarvis/runtime/rag/roi-reports');
+const resultsDir = path.join(homeDir, 'jarvis/runtime/results');
+const logsDir = path.join(homeDir, 'jarvis/runtime/logs');
 
 // 유틸리티: 파일 읽기 (에러 무시)
 function readFileIfExists(filePath) {
@@ -54,7 +54,7 @@ function collectInsightsByTask() {
   const taskInsights = new Map();
 
   try {
-    const insightsDir = path.join(homeDir, '.jarvis/rag/auto-insights');
+    const insightsDir = path.join(homeDir, 'jarvis/runtime/rag/auto-insights');
     if (!fs.existsSync(insightsDir)) return taskInsights;
 
     const files = fs.readdirSync(insightsDir);
@@ -96,7 +96,7 @@ function collectDecisionsByTask() {
   const taskDecisions = new Map();
 
   try {
-    const decisionsFile = path.join(homeDir, `.jarvis/rag/decisions-${week}.md`);
+    const decisionsFile = path.join(homeDir, `jarvis/runtime/rag/decisions-${week}.md`);
     if (!fs.existsSync(decisionsFile)) return taskDecisions;
 
     const content = readFileIfExists(decisionsFile);

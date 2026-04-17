@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 
-const JARVIS_HOME = process.env.JARVIS_HOME || process.env.BOT_HOME || path.join(process.env.HOME, '.jarvis');
+const JARVIS_HOME = process.env.JARVIS_HOME || process.env.BOT_HOME || path.join(process.env.HOME, 'jarvis/runtime');
 const TEAMS_DIR = path.join(JARVIS_HOME, 'teams');
 const LOUNGE_FILE = path.join(JARVIS_HOME, 'state', 'lounge.json');
 const BOARD_MINUTES_DIR = path.join(JARVIS_HOME, 'state', 'board-minutes');

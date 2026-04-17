@@ -17,7 +17,7 @@
 
 set -uo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG="${BOT_HOME}/logs/scorecard-enforcer.log"
 mkdir -p "$(dirname "$LOG")"
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # event-watcher.sh — 이벤트 트리거 파일 감지 → 태스크 즉시 실행
-# 30초마다 ~/.jarvis/state/events/*.trigger 파일 스캔
+# 30초마다 ~/jarvis/runtime/state/events/*.trigger 파일 스캔
 # LaunchAgent (ai.jarvis.event-watcher.plist) 또는 백그라운드 데몬으로 실행
 #
 # 이벤트 발생 방법:
@@ -12,7 +12,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 EVENTS_DIR="${BOT_HOME}/state/events"
 LOG="${BOT_HOME}/logs/event-watcher.log"
 TASKS_FILE=""

@@ -23,12 +23,12 @@ import { fileURLToPath } from 'node:url';
 
 const HOME = homedir();
 const BOT_HOME = process.env.BOT_HOME || join(HOME, '.local', 'share', 'jarvis');
-const ENV_PATH = process.env.ENV_PATH || join(HOME, '.jarvis', '.env');
+const ENV_PATH = process.env.ENV_PATH || join(HOME, 'jarvis/runtime', '.env');
 const UPDATE_CHANNEL_ID = process.env.UPDATE_CHANNEL_ID;
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const VERSION_FILE = join(BOT_HOME, 'config', 'installed-version.json');
-const POLICY_FILE  = join(HOME, '.jarvis', 'config', 'update-policy.json');
+const POLICY_FILE  = join(HOME, 'jarvis/runtime', 'config', 'update-policy.json');
 const LOG_FILE     = join(BOT_HOME, 'logs', 'release-checker.log');
 const UPSTREAM_REPO = 'Ramsbaby/jarvis';
 const GITHUB_API    = `https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest`;

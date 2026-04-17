@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 BOARD_DB="${BOARD_DIR:-${BOT_HOME}/board}/data/board.db"
 BOARD_BACKUP_DIR="${BOARD_DIR:-${BOT_HOME}/board}/data/backups"
 RAG_DIR="${BOT_HOME}/rag/lancedb"

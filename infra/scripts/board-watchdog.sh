@@ -8,13 +8,13 @@
 #   3) External — https://board.ramsbaby.com/ (2xx/3xx/4xx 응답)
 #
 # 실패 레이어 식별 후 해당 LaunchAgent만 kickstart. Discord 알림 24h 스로틀.
-# 원장: ~/.jarvis/state/board-watchdog.jsonl (10MB rotate).
+# 원장: ~/jarvis/runtime/state/board-watchdog.jsonl (10MB rotate).
 #
 # LaunchAgent ai.jarvis.board-watchdog (StartInterval 300)로 기동.
 set -euo pipefail
 
-LEDGER="${HOME}/.jarvis/state/board-watchdog.jsonl"
-THROTTLE_DIR="${HOME}/.jarvis/state/board-watchdog-throttle"
+LEDGER="${HOME}/jarvis/runtime/state/board-watchdog.jsonl"
+THROTTLE_DIR="${HOME}/jarvis/runtime/state/board-watchdog-throttle"
 LOCAL_URL="http://localhost:3100/api/health"
 FALLBACK_URL="http://localhost:3100/"
 EXT_URL="https://board.ramsbaby.com/"
@@ -38,8 +38,8 @@ alert_throttled() {
     last=$(cat "$marker" 2>/dev/null || echo 0)
     (( EPOCH - last < 86400 )) && return 0
   fi
-  if [[ -f "${HOME}/.jarvis/scripts/discord-visual.mjs" ]]; then
-    /opt/homebrew/bin/node "${HOME}/.jarvis/scripts/discord-visual.mjs" \
+  if [[ -f "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" ]]; then
+    /opt/homebrew/bin/node "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" \
       --type stats \
       --data "{\"title\":\"🚨 jarvis-board ${layer} down — auto-recovering\",\"data\":{\"layer\":\"${layer}\",\"detail\":\"${detail}\",\"ledger\":\"${LEDGER}\"},\"timestamp\":\"${TS}\"}" \
       --channel jarvis-system 2>/dev/null || true

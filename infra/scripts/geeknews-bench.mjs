@@ -26,7 +26,7 @@ import { addFactToWiki } from '../discord/lib/wiki-engine.mjs';
 import { discordSend } from '../lib/discord-notify.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const LEDGER_PATH = join(BOT_HOME, 'state', 'geeknews-ledger.jsonl');
 const CURSOR_PATH = join(BOT_HOME, 'state', 'geeknews-cursor.json');
 const LOG_PATH = join(BOT_HOME, 'logs', 'geeknews-bench.log');

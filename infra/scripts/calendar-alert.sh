@@ -5,7 +5,7 @@ set -euo pipefail
 # cron: */5 * * * *
 # 25~35분 사이 시작 이벤트를 감지하여 Discord 알림 전송
 
-BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
+BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
 STATE_DIR="$BOT_HOME/state"
 ALERTED_FILE="$STATE_DIR/alerted-events.json"
 WEBHOOK_CONFIG="$BOT_HOME/config/monitoring.json"
@@ -67,8 +67,9 @@ with urllib.request.urlopen(req, timeout=10) as resp:
     access_token = json.loads(resp.read())["access_token"]
 
 # 2) Fetch calendar events (timeMin/timeMax in RFC3339)
-time_min = urllib.parse.quote(window_from + "+09:00")
-time_max = urllib.parse.quote(window_to + "+09:00")
+# Note: RFC3339 requires %2B for + sign in URL params (e.g., 2026-04-17T10:30:00%2B09:00)
+time_min = urllib.parse.quote(window_from + "+09:00", safe=':')
+time_max = urllib.parse.quote(window_to + "+09:00", safe=':')
 cal_url = (
     f"https://www.googleapis.com/calendar/v3/calendars/primary/events"
     f"?timeMin={time_min}&timeMax={time_max}"
@@ -90,7 +91,7 @@ for item in cal_data.get("items", []):
 
 print(json.dumps({"events": events}, ensure_ascii=False))
 GCALEOF
-) 2>/dev/null || {
+) 2>&1 || {
     log "WARN: Google Calendar API 호출 실패, using empty events"
     CALENDAR_OUTPUT='{"events":[]}'
 }

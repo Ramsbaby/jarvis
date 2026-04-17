@@ -2,10 +2,10 @@
 set -uo pipefail
 
 # Jarvis E2E Test Suite
-# Usage: ~/.jarvis/scripts/e2e-test.sh [--ntfy] (--ntfy sends test push notification)
+# Usage: ~/jarvis/runtime/scripts/e2e-test.sh [--ntfy] (--ntfy sends test push notification)
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-export BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+export BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 PASS=0
 FAIL=0
 SKIP=0

@@ -27,7 +27,7 @@ try { DATA = JSON.parse(DATA_RAW); }
 catch (e) { console.error('ERROR: --data must be valid JSON:', e.message); process.exit(1); }
 
 // ── 웹훅 URL 로드 ─────────────────────────────────────────────────────────
-const CONFIG_PATH = join(homedir(), '.jarvis', 'config', 'monitoring.json');
+const CONFIG_PATH = join(homedir(), 'jarvis/runtime', 'config', 'monitoring.json');
 const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
 const WEBHOOK_URL = config.webhooks?.[CHANNEL] ?? config.webhook?.url;
 if (!WEBHOOK_URL) { console.error(`ERROR: No webhook for channel '${CHANNEL}'`); process.exit(1); }

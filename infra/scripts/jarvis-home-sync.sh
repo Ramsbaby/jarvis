@@ -4,7 +4,7 @@
 # 크론: 매일 새벽 4시 (서버 정비 후)
 
 set -euo pipefail
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG="$BOT_HOME/logs/jarvis-home-sync.log"
 ROUTE="$BOT_HOME/bin/route-result.sh"
 

@@ -24,7 +24,7 @@ MAX_TIMEOUT="${2:?Usage: cron-safe-wrapper.sh <lock-name> <timeout-sec> <cmd> [a
 shift 2
 # 나머지 $@ = 실행할 커맨드 전체 (bash/node/python 구분 없이 수용)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOCK_DIR="/tmp/jarvis-cron-${LOCK_NAME}.lock"
 WRAPPER_LOG="${BOT_HOME}/logs/cron-safe-wrapper.log"
 

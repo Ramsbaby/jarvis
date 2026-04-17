@@ -3,7 +3,7 @@
 # 스케줄: 주 2회 (일, 목 02:00) crontab 등록
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 DB_PATH="$BOT_HOME/state/messages.db"
 LOG_FILE="$BOT_HOME/logs/db-optimize.log"
 

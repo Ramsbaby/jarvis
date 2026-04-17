@@ -6,14 +6,14 @@
  * 기존 7500+ 청크의 importance/entities/topics를 재계산·갱신.
  * table.update() 사용 → vector(임베딩) 완전히 건드리지 않음.
  *
- * 실행: node ~/.jarvis/bin/enrich-migrate.mjs
+ * 실행: node ~/jarvis/runtime/bin/enrich-migrate.mjs
  */
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { RAGEngine } from '../lib/rag-engine.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const DB_PATH  = join(BOT_HOME, 'rag', 'lancedb');
 const BATCH    = 300; // 한 번에 읽을 레코드 수
 

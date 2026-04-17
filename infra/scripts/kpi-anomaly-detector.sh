@@ -5,7 +5,7 @@ set -euo pipefail
 # 매주 월요일 08:35 실행 (crontab)
 # 측정 -> 이상 감지 -> 행동 제안 -> 재측정 루프의 핵심
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 MONITORING="${BOT_HOME}/config/monitoring.json"
 DECISIONS_FILE="${BOT_HOME}/state/kpi-decisions.jsonl"
 RESULTS_DIR="${BOT_HOME}/results/kpi-weekly"
@@ -162,7 +162,7 @@ if data["decisions"]:
     for d in data["decisions"]:
         lines.append(f"  {d['task']} timeout: {d['current_timeout']}s -> {d['proposed_timeout']}s (+50%)")
     lines.append("")
-    lines.append("To approve: bash ~/.jarvis/scripts/apply-kpi-decisions.sh")
+    lines.append("To approve: bash ~/jarvis/runtime/scripts/apply-kpi-decisions.sh")
 overall = data["kpi"]["overall"]
 lines.append(f"Overall: {overall['rate']}% ({overall['success']}/{overall['total']})")
 print("\n".join(lines))

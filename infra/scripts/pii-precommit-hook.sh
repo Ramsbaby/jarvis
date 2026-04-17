@@ -23,6 +23,22 @@ STAGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
 
 FOUND=0
 
+# ═══════════════════════════════════════════════════════════════════════
+# A2 Path Guard: runtime/ 하위는 `.gitkeep`/`README.md` 외 어떤 파일도
+# 커밋 금지. `git add -f`로 강제 추가된 경우 대비한 2차 방어선.
+# ═══════════════════════════════════════════════════════════════════════
+while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    case "$file" in
+        runtime/.gitkeep|runtime/README.md) continue ;;
+        runtime/*)
+            echo "🚨 BLOCKED: runtime/ 하위 파일은 커밋 금지 ($file)"
+            echo "   이유: runtime/은 100% private. 강제 추가 감지."
+            FOUND=1
+            ;;
+    esac
+done <<< "$STAGED"
+
 while IFS= read -r file; do
     [[ -z "$file" ]] && continue
     # 바이너리/이미지/lock 파일 스킵

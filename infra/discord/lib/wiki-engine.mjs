@@ -5,7 +5,7 @@
  * devming 원본 설계 + 전역 도메인 통합 (SSoT).
  *
  * 저장 구조:
- *   ~/.jarvis/wiki/
+ *   ~/jarvis/runtime/wiki/
  *     schema.json              — 위키 스키마 (도메인 규칙)
  *     {domain}/
  *       _summary.md            — 야간 크론(wiki-ingest.mjs)이 합성하는 종합 요약
@@ -25,7 +25,7 @@ import {
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 export const WIKI_ROOT = join(BOT_HOME, 'wiki');
 const SCHEMA_PATH = join(WIKI_ROOT, 'schema.json');
 

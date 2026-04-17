@@ -3,7 +3,7 @@
  * context-extractor.mjs
  *
  * Discord + Claude Code 대화 기록에서 도메인별 컨텍스트를 추출해
- * ~/.jarvis/context/claude-memory/ 에 domain-full.md / domain-summary.md 저장.
+ * ~/jarvis/runtime/context/claude-memory/ 에 domain-full.md / domain-summary.md 저장.
  *
  * 실행: node context-extractor.mjs [YYYY-MM-DD] [--domain career|tech|jarvis|finance|personal|all]
  * 크론: launchd com.jarvis.context-extractor (매일 01:00)
@@ -25,9 +25,9 @@ import { homedir } from 'node:os';
 const HOME         = homedir();
 const VAULT_DIR    = process.env.VAULT_DIR || join(HOME, 'vault');
 const DISCORD_DIR  = join(VAULT_DIR, '02-daily', 'discord');
-const SESSIONS_DIR = join(HOME, '.jarvis', 'context', 'claude-code-sessions');
-const OUTPUT_DIR   = join(HOME, '.jarvis', 'context', 'claude-memory');
-const BOT_HOME     = join(HOME, '.jarvis');
+const SESSIONS_DIR = join(HOME, 'jarvis/runtime', 'context', 'claude-code-sessions');
+const OUTPUT_DIR   = join(HOME, 'jarvis/runtime', 'context', 'claude-memory');
+const BOT_HOME     = join(HOME, 'jarvis/runtime');
 const LOG_FILE     = join(BOT_HOME, 'logs', 'context-extractor.log');
 const MCP_CONFIG   = join(BOT_HOME, 'config', 'empty-mcp.json');
 

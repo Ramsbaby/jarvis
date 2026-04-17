@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # 조기 종료 진단: set -e 이전에 invocation 기록 (exit 0 + 빈 출력 재발 시 추적용)
 # task-runner.jsonl에 "start" 항목이 없는데 이 파일에 기록이 있으면 set -e 트리거 확인 필요
-_EARLY_LOG="${BOT_HOME:-${HOME}/.jarvis}/logs/ask-claude-invocations.log"
+_EARLY_LOG="${BOT_HOME:-${HOME}/jarvis/runtime}/logs/ask-claude-invocations.log"
 printf '[%s] PID=%d TASK=%s\n' "$(date -u +%FT%TZ 2>/dev/null || echo unknown)" "$$" "${1:-?}" >> "$_EARLY_LOG" 2>/dev/null || true
 unset _EARLY_LOG
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 set -euo pipefail
 
 # ask-claude.sh - Core wrapper around `claude -p` for AI task execution
 # Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET]
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_FILE="${BOT_HOME}/logs/task-runner.jsonl"
 
 # --- Arguments ---

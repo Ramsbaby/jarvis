@@ -5,9 +5,9 @@
 set -euo pipefail
 
 WEEK=$(date +%Y-W%V)
-ROI_DIR="$HOME/.jarvis/rag/roi-reports"
-LOG_FILE="$HOME/.jarvis/logs/weekly-roi.log"
-AGGREGATOR="$HOME/.jarvis/scripts/weekly-roi-aggregator.mjs"
+ROI_DIR="$HOME/jarvis/runtime/rag/roi-reports"
+LOG_FILE="$HOME/jarvis/runtime/logs/weekly-roi.log"
+AGGREGATOR="$HOME/jarvis/runtime/scripts/weekly-roi-aggregator.mjs"
 
 # 디렉토리 생성
 mkdir -p "$ROI_DIR"

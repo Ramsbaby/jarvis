@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
+BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
 TIMING="${1:-아침}"
 WEBHOOK=$(jq -r '.webhooks["jarvis-boram"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null)
 [[ -z "$WEBHOOK" ]] && { echo "ERROR: jarvis-boram webhook not found" >&2; exit 1; }

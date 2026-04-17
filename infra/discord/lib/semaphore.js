@@ -8,7 +8,7 @@ import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 
 const MAX_GLOBAL_CONCURRENT = 4;
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const GLOBAL_COUNT_FILE = join(BOT_HOME, 'state', 'claude-global.count');
 const GLOBAL_LOCK_FILE = join(BOT_HOME, 'state', 'claude-global.lock');
 const SLOT_LOCK_DIR = '/tmp/claude-discord-locks';

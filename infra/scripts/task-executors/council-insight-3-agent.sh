@@ -7,7 +7,7 @@ set -euo pipefail
 # Execute : ask-claude.sh 위임 (기존 Sonnet 기반 복합 보고)
 # Verify  : 4개 섹션(cron/system/market/action) + 숫자 일관성 + context-bus 갱신 확인
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 TASK_ID="council-insight"
 LEDGER="${BOT_HOME}/state/token-ledger.jsonl"
 CONTEXT_BUS="${BOT_HOME}/state/context-bus.md"
@@ -69,7 +69,7 @@ stage_execute() {
     fi
     local prompt="ultrathink
 
-자비스 CEO(비서실장)로서 일일 종합 경영 점검을 수행해. 컨텍스트 파일의 실행 순서(Step 1→2→3)를 반드시 따를 것. 핵심: 데이터 수집 후 공용 게시판(~/.jarvis/state/context-bus.md)과 모닝스탠드업 인계사항을 갱신하고, Discord #jarvis-ceo에 임원 보고서를 전송.
+자비스 CEO(비서실장)로서 일일 종합 경영 점검을 수행해. 컨텍스트 파일의 실행 순서(Step 1→2→3)를 반드시 따를 것. 핵심: 데이터 수집 후 공용 게시판(~/jarvis/runtime/state/context-bus.md)과 모닝스탠드업 인계사항을 갱신하고, Discord #jarvis-ceo에 임원 보고서를 전송.
 
 ## 외부 에이전트 동향 (Workgroup 게시판)
 오늘 board 인사이트 파일이 있으면 참조해서 보고서에 '외부 에이전트 동향' 섹션을 추가하라.

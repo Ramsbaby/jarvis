@@ -8,7 +8,7 @@ set -euo pipefail
 # 저장 위치: ${VAULT_DIR:-$HOME/vault}/03-insights/YYYY-MM-DD-<category>.md
 # rag-watcher가 변경 감지 → LanceDB 자동 인덱싱 (자율 진화 루프)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; case "$(uname -s)" in Darwin) IS_MACOS=true ;; esac
 }

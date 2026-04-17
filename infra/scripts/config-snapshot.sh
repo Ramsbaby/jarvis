@@ -11,7 +11,7 @@ set -euo pipefail
 #   config-snapshot.sh rollback <id>    — 지정 스냅샷으로 롤백
 #   config-snapshot.sh prune [keep]     — 오래된 스냅샷 정리 (기본 20개 유지)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 HISTORY_DIR="${BOT_HOME}/data/config-history"
 
 # 스냅샷 대상 파일들

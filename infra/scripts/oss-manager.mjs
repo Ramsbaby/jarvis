@@ -25,7 +25,7 @@ import { discordSend as _discordNotify } from '../lib/discord-notify.mjs';
 
 // ── 경로 상수 ──────────────────────────────────────────────────────────────────
 const HOME       = homedir();
-const BOT_HOME   = process.env.JARVIS_HOME ?? join(HOME, '.jarvis');
+const BOT_HOME   = process.env.JARVIS_HOME ?? join(HOME, 'jarvis/runtime');
 const LOG_DIR    = join(BOT_HOME, 'logs');
 const CONFIG     = JSON.parse(
   readFileSync(join(BOT_HOME, 'config', 'oss-targets.json'), 'utf8')
@@ -109,7 +109,7 @@ async function runRecon() {
     let myRepo;
     try {
       myRepo = ghJSON('repo', 'view', `${repo.owner}/${repo.name}`,
-        '--json', 'name,description,stargazerCount,forkCount,openIssueCount,updatedAt');
+        '--json', 'name,description,stargazerCount,forkCount,updatedAt');
     } catch (e) {
       log('error', `레포 조회 실패: ${e.message}`); continue;
     }
@@ -161,7 +161,7 @@ async function runRecon() {
 ## 내 프로젝트
 - 이름: ${repo.owner}/${repo.name}
 - 설명: ${myRepo.description ?? repo.description}
-- Stars: ${myRepo.stargazerCount}, Forks: ${myRepo.forkCount}, Issues: ${myRepo.openIssueCount}
+- Stars: ${myRepo.stargazerCount}, Forks: ${myRepo.forkCount}
 - 카테고리: ${repo.category}
 
 ## 직접 경쟁자 (${competitorData.length}개)

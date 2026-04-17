@@ -9,7 +9,7 @@ set -euo pipefail
 #                 + 오너 수동 검토 (OPERATIONS.md Auto-Disable Recovery).
 # 원장: ${BOT_HOME}/ledger/tasks-integrity-audit.jsonl (append-only)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 TASKS_FILE="${BOT_HOME}/config/tasks.json"
 LEDGER_DIR="${BOT_HOME}/ledger"
 LEDGER_FILE="${LEDGER_DIR}/tasks-integrity-audit.jsonl"
@@ -28,7 +28,7 @@ AUDIT_JSON=$(BOT_HOME="$BOT_HOME" python3 - "$TASKS_FILE" <<'PYEOF'
 import json, os, sys, subprocess, re
 
 path = sys.argv[1]
-bot_home = os.environ.get('BOT_HOME', os.path.expanduser('~/.jarvis'))
+bot_home = os.environ.get('BOT_HOME', os.path.expanduser('~/jarvis/runtime'))
 
 with open(path) as f:
     d = json.load(f)

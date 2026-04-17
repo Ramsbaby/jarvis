@@ -9,7 +9,7 @@ set -euo pipefail
 #
 # Safety:
 #   - tasks.json 절대 수정 금지 (growth-lead 팀장 권고: Meta Agent 자동 수정은 premature)
-#   - 제안 리포트만 ~/.jarvis/results/tune-suggestions/<date>.md 에 생성
+#   - 제안 리포트만 ~/jarvis/runtime/results/tune-suggestions/<date>.md 에 생성
 #   - 유의미한 제안 시 Discord 알림
 #
 # Schedule: token-ledger-audit.sh 직후 실행 (매주 일요일 08:35 KST)
@@ -21,7 +21,7 @@ set -euo pipefail
 #   D. 결과 size < 100 bytes → "thin output" 반복 플래그
 #   E. evaluator warn 10회+ → 태스크별 warn 누적 추세 알림
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LEDGER="${BOT_HOME}/state/token-ledger.jsonl"
 TASKS_JSON="${BOT_HOME}/config/tasks.json"
 REPORT_DIR="${BOT_HOME}/results/tune-suggestions"

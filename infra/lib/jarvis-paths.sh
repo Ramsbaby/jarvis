@@ -16,7 +16,7 @@
 #   3. ~/.jarvis   — macOS 기본값 (이 시스템의 실제 경로)
 
 # ── Root ─────────────────────────────────────────────────────────────────────
-export BOT_HOME="${BOT_HOME:-${JARVIS_HOME:-${HOME}/.jarvis}}"
+export BOT_HOME="${BOT_HOME:-${JARVIS_HOME:-${HOME}/jarvis/runtime}}"
 
 # ── Logs ─────────────────────────────────────────────────────────────────────
 export JARVIS_LOGS_DIR="${BOT_HOME}/logs"

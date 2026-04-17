@@ -1,4 +1,38 @@
 {
-  "repos": [],
-  "_comment": "Add your GitHub repos to monitor for OSS activity"
+  "repos": [
+    {
+      "owner": "anthropics",
+      "name": "anthropic-sdk-python",
+      "category": "AI/LLM",
+      "description": "Official Python SDK for Anthropic's Claude API",
+      "competitors": [
+        "openai/openai-python",
+        "mistralai/client-python"
+      ],
+      "searchTerms": [
+        "claude api python sdk",
+        "llm python client"
+      ]
+    },
+    {
+      "owner": "vercel",
+      "name": "next.js",
+      "category": "Web Framework",
+      "description": "Production-grade React framework with zero configuration",
+      "competitors": [
+        "nuxt/nuxt",
+        "remix-run/remix"
+      ],
+      "searchTerms": [
+        "react framework ssr",
+        "full-stack web framework"
+      ]
+    }
+  ],
+  "settings": {
+    "reportDir": "rag/oss-reports",
+    "discordChannel": "jarvis-market",
+    "maxIssuesPerRepo": 20,
+    "staleCommitDays": 7
+  }
 }

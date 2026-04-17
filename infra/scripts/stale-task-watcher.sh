@@ -14,7 +14,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"
 BOT_HOME="${BOT_HOME:-$JARVIS_HOME}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 LOG="${JARVIS_HOME}/logs/stale-task-watcher.log"
@@ -117,7 +117,7 @@ node --experimental-sqlite --no-warnings -e "
 const {DatabaseSync} = require('node:sqlite');
 const fs = require('fs');
 const path = require('path');
-const BOT_HOME = process.env.BOT_HOME || process.env.JARVIS_HOME || require('os').homedir() + '/.jarvis';
+const BOT_HOME = process.env.BOT_HOME || process.env.JARVIS_HOME || require('os').homedir() + '/jarvis/runtime';
 const DB_PATH = BOT_HOME + '/state/tasks.db';
 if (!fs.existsSync(DB_PATH)) { process.exit(0); }
 const db = new DatabaseSync(DB_PATH);
@@ -198,7 +198,7 @@ except Exception:
 
     for tid in $ACTIVE_IDS; do
         [[ -z "$tid" ]] && continue
-        HIT=$(grep -c "\[${tid}\]" "$CRON_LOG" 2>/dev/null || echo "0")
+        HIT=$(grep -c "\[${tid}\]" "$CRON_LOG" 2>/dev/null | tr -d '\n' || echo "0")
         if [[ "$HIT" -eq 0 ]]; then
             NEVER_RUN_IDS="${NEVER_RUN_IDS}\n- \`${tid}\`"
             NEVER_RUN_COUNT=$((NEVER_RUN_COUNT + 1))

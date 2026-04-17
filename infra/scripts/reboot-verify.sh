@@ -80,9 +80,9 @@ echo ""
 # ④ Discord bot 연결 로그 (최근 5분)
 echo "═══ ④ Discord bot 연결 ═══"
 since=$(date -v-5M '+%Y-%m-%d' 2>/dev/null || date -d '5 minutes ago' '+%Y-%m-%d' 2>/dev/null || echo "2026")
-if tail -100 ~/.jarvis/logs/discord-bot.log 2>/dev/null | grep -q "Logged in as"; then
+if tail -100 ~/jarvis/runtime/logs/discord-bot.log 2>/dev/null | grep -q "Logged in as"; then
   echo "✅ Discord 로그인 확인"
-  tail -5 ~/.jarvis/logs/discord-bot.log | sed 's/^/    /'
+  tail -5 ~/jarvis/runtime/logs/discord-bot.log | sed 's/^/    /'
 else
   echo "❌ 최근 로그인 기록 없음"
   fail=1
@@ -104,10 +104,10 @@ if [[ "$AUTO_MODE" == "1" ]]; then
   else
     MISSING_SUMMARY=$(comm -23 /tmp/labels.before /tmp/labels.after | head -5 | tr '\n' ',' | sed 's/,$//')
     TITLE="⚠️ 재부팅 복구 누락"
-    DATA="{\"title\":\"${TITLE}\",\"data\":{\"누락_LaunchAgent\":\"${MISSING_SUMMARY:-없음}\",\"로그\":\"~/.jarvis/logs/reboot-verify.log\",\"조치\":\"로그 확인 후 수동 bootstrap\"},\"timestamp\":\"${TS}\"}"
+    DATA="{\"title\":\"${TITLE}\",\"data\":{\"누락_LaunchAgent\":\"${MISSING_SUMMARY:-없음}\",\"로그\":\"~/jarvis/runtime/logs/reboot-verify.log\",\"조치\":\"로그 확인 후 수동 bootstrap\"},\"timestamp\":\"${TS}\"}"
   fi
-  if [[ -f "${HOME}/.jarvis/scripts/discord-visual.mjs" ]]; then
-    /opt/homebrew/bin/node "${HOME}/.jarvis/scripts/discord-visual.mjs" \
+  if [[ -f "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" ]]; then
+    /opt/homebrew/bin/node "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" \
       --type stats --data "$DATA" --channel jarvis-system 2>/dev/null || true
   fi
   # self-unload: 다음 부팅에서는 실행되지 않도록 제거

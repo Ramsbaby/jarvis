@@ -5,11 +5,11 @@ set -euo pipefail
 # Usage: vault-sync.sh (crontab에서 6시간마다 실행)
 #
 # 미러링 매핑:
-#   ~/.jarvis/rag/teams/reports/{team}-*.md  → ~/Jarvis-Vault/03-teams/{team}/
-#   ~/.jarvis/docs/*.md                      → ~/Jarvis-Vault/06-knowledge/architecture/
-#   ~/.jarvis/rag/teams/proposals-tracker.md → ~/Jarvis-Vault/03-teams/
+#   ~/jarvis/runtime/rag/teams/reports/{team}-*.md  → ~/Jarvis-Vault/03-teams/{team}/
+#   ~/jarvis/runtime/docs/*.md                      → ~/Jarvis-Vault/06-knowledge/architecture/
+#   ~/jarvis/runtime/rag/teams/proposals-tracker.md → ~/Jarvis-Vault/03-teams/
 
-BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
+BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
 VAULT_BASE="$HOME/Jarvis-Vault"
 MAX_REPORTS=7  # 각 팀 폴더에 최신 N개 보고서만 유지
 

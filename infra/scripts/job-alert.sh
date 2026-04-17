@@ -3,7 +3,7 @@
 # Nexus 크론으로 실행: 매일 09:00
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 NODE="/opt/homebrew/bin/node"
 LOG="${BOT_HOME}/logs/job-alert.log"
 STAMP=$(date '+%Y-%m-%d %H:%M:%S')

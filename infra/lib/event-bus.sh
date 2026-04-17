@@ -11,7 +11,7 @@
 # rag-watch.mjs (ai.jarvis.rag-watcher LaunchAgent)가 state/events/를 감시하여
 # whitelisted 이벤트에 대해 bot-cron.sh를 spawn함.
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 
 emit_event() {
     local event_name="${1:?emit_event requires event_name}"

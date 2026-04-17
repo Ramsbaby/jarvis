@@ -7,7 +7,7 @@
  *   2) 결정사항은 rag/decisions.md 에 append
  *   3) auto-insights 파일을 lancedb에 재인덱싱
  *
- * 실행: node ~/.jarvis/lib/insight-extractor.mjs [--days N]
+ * 실행: node ~/jarvis/runtime/lib/insight-extractor.mjs [--days N]
  * 크론: 30 3 * * * (session-summarizer 30분 후)
  */
 
@@ -21,7 +21,7 @@ import { addTask } from './task-store.mjs';
 delete process.env.CLAUDECODE;
 
 // ── 경로 설정 ──────────────────────────────────────────────────────────────
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const SESSION_SUMMARY_DIR = join(BOT_HOME, 'state', 'session-summaries');
 const AUTO_INSIGHTS_DIR   = join(BOT_HOME, 'rag', 'auto-insights');
 // decisions는 주간 파일로 분리 (decisions-YYYY-WXX.md)

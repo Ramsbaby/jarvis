@@ -14,7 +14,7 @@ set -euo pipefail
 # Output: Writes result to stdout (captured by bot-cron.sh as RESULT).
 # Exit codes: 0 success (cache hit or miss), non-zero on ask-claude.sh failure.
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 TASK_ID="github-monitor"
 HASH_FILE="${BOT_HOME}/state/github-monitor-last.hash"
 CACHE_RESULT_FILE="${BOT_HOME}/state/github-monitor-last-result.md"

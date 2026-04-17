@@ -10,12 +10,12 @@
 #
 # 사용법:
 #   JARVIS_HOME=/custom/path bash jarvis-init.sh
-#   bash ~/.jarvis/scripts/jarvis-init.sh
+#   bash ~/jarvis/runtime/scripts/jarvis-init.sh
 
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 
 ok()   { echo "  ✅  $*"; }

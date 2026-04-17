@@ -12,7 +12,7 @@ set -euo pipefail
 #   trace-db.sh anomaly       — 실행 시간 이상 감지 (CV > 0.3)
 #   trace-db.sh query "SQL"   — 직접 쿼리 실행
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 DB="${BOT_HOME}/data/traces.db"
 JSONL="${BOT_HOME}/logs/task-runner.jsonl"
 RETRY_JSONL="${BOT_HOME}/logs/retry.jsonl"

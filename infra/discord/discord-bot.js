@@ -38,7 +38,7 @@ import { closeRagEngine } from './lib/rag-helper.js';
 // ---------------------------------------------------------------------------
 
 const HOME = homedir();
-const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.jarvis'));
+const BOT_HOME = join(process.env.BOT_HOME || join(HOME, 'jarvis/runtime'));
 const SESSIONS_PATH = join(BOT_HOME, 'state', 'sessions.json');
 const RATE_TRACKER_PATH = join(BOT_HOME, 'state', 'rate-tracker.json');
 const MAX_CONCURRENT = 3;
@@ -168,6 +168,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions,
   ],
+  allowedMentions: { repliedUser: false },
 });
 
 let lastMessageAt = Date.now();

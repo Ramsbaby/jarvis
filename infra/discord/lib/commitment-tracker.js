@@ -48,7 +48,7 @@ function _extractCommitmentSentence(text) {
 export async function detectAndRecord(replyText, { source = 'discord', channelId = '', userId = '' } = {}) {
   if (!replyText || !COMMITMENT_PATTERN.test(replyText)) return null;
 
-  const botHome = process.env.BOT_HOME || `${homedir()}/.jarvis`;
+  const botHome = process.env.BOT_HOME || `${homedir()}/jarvis/runtime`;
   const commitFile = join(botHome, 'state', 'commitments.jsonl');
 
   const commitmentText = _extractCommitmentSentence(replyText);
@@ -77,7 +77,7 @@ export async function detectAndRecord(replyText, { source = 'discord', channelId
 // resolveCommitment — 특정 id 항목을 done으로 마킹
 // ---------------------------------------------------------------------------
 export function resolveCommitment(id) {
-  const botHome = process.env.BOT_HOME || `${homedir()}/.jarvis`;
+  const botHome = process.env.BOT_HOME || `${homedir()}/jarvis/runtime`;
   const commitFile = join(botHome, 'state', 'commitments.jsonl');
 
   if (!existsSync(commitFile)) return false;
@@ -108,7 +108,7 @@ export function resolveCommitment(id) {
 // pruneResolved — 30일 이상 지난 done 항목 정리 (선택적 유지보수)
 // ---------------------------------------------------------------------------
 export function pruneResolved() {
-  const botHome = process.env.BOT_HOME || `${homedir()}/.jarvis`;
+  const botHome = process.env.BOT_HOME || `${homedir()}/jarvis/runtime`;
   const commitFile = join(botHome, 'state', 'commitments.jsonl');
 
   if (!existsSync(commitFile)) return 0;

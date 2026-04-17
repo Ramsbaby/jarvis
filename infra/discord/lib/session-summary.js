@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { log } from './claude-runner.js';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const SESSION_SUMMARY_DIR = join(BOT_HOME, 'state', 'session-summaries');
 const MAX_SUMMARY_TURNS = 10;
 

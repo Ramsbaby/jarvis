@@ -16,11 +16,11 @@ set -uo pipefail
 #   1 — 검증 실패
 #
 # Usage:
-#   ~/.jarvis/scripts/validate-tasks.sh
-#   ~/.jarvis/scripts/validate-tasks.sh /path/to/tasks.json
+#   ~/jarvis/runtime/scripts/validate-tasks.sh
+#   ~/jarvis/runtime/scripts/validate-tasks.sh /path/to/tasks.json
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 
 # tasks.json 경로: 인자 > effective-tasks.json > tasks.json
 TASKS_FILE="${1:-}"
@@ -74,7 +74,7 @@ if [[ "$TASK_COUNT" -eq 0 ]]; then
   exit 1
 fi
 
-echo "  ℹ️  대상: $(basename "$TASKS_FILE") ($TASK_COUNT개 태스크)"
+echo "  ℹ️  대상: $(basename "$TASKS_FILE") (${TASK_COUNT}개 태스크)"
 
 # ── 1. 필수 필드(id) 존재 여부 ────────────────────────────────────────
 MISSING_ID=$(jq -r '[.tasks | to_entries[] | select(.value.id == null or .value.id == "") | .key] | join(",")' "$TASKS_FILE")

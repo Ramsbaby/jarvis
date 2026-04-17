@@ -287,7 +287,7 @@ sc_build_contract_prompt() {
 
 ## 규칙
 - successCriteria는 1~5개, 구체적이고 검증 가능하게
-- verifyCmd: 파일 존재 확인(test -f), 프로세스 상태(pgrep), e2e 테스트(~/.jarvis/scripts/e2e-test.sh), 문법 검사(bash -n, node --check) 등 활용
+- verifyCmd: 파일 존재 확인(test -f), 프로세스 상태(pgrep), e2e 테스트(~/jarvis/runtime/scripts/e2e-test.sh), 문법 검사(bash -n, node --check) 등 활용
 - 자동 검증 불가한 기준은 verifyCmd를 빈 문자열("")로 설정
 - maxIterations: 태스크 복잡도에 따라 2~5
 - JSON 블록만 출력하라. 설명/인사말 없이 \`\`\`json ... \`\`\` 블록만

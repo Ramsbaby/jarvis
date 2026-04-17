@@ -1,7 +1,7 @@
 /**
  * channel-feed.js — 채널별 발신 메시지 피드
  *
- * 봇/크론/알람이 채널에 보낸 메시지를 ~/.jarvis/state/channel-feed/{name}.jsonl에 기록.
+ * 봇/크론/알람이 채널에 보낸 메시지를 ~/jarvis/runtime/state/channel-feed/{name}.jsonl에 기록.
  * 사용자가 메시지를 보내면 claude-runner.js가 최근 N개를 시스템 프롬프트에 주입.
  * → "방금 크론이 보낸 알람이 뭐야?" 같은 질문에 재질문 없이 컨텍스트 보유.
  *
@@ -16,7 +16,7 @@ import { appendFileSync, readFileSync, writeFileSync, existsSync, mkdirSync } fr
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const FEED_DIR = join(homedir(), '.jarvis', 'state', 'channel-feed');
+const FEED_DIR = join(homedir(), 'jarvis/runtime', 'state', 'channel-feed');
 const MAX_ENTRIES = 30;  // 채널별 최대 보관 줄 수 (롤링)
 const MAX_TEXT_LEN = 2000;
 

@@ -14,7 +14,7 @@ for arg in "$@"; do
     fi
 done
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 MONITORING="${BOT_HOME}/config/monitoring.json"
 DECISIONS_FILE="${BOT_HOME}/state/kpi-decisions.jsonl"
 
@@ -43,7 +43,7 @@ APPLIED_MSG=$(DRY_RUN="$DRY_RUN" python3 << 'PYEOF'
 import json, sys, os
 from datetime import datetime, timezone
 
-bot_home = os.environ.get("BOT_HOME", os.path.expanduser("~/.jarvis"))
+bot_home = os.environ.get("BOT_HOME", os.path.expanduser("~/jarvis/runtime"))
 dry_run = os.environ.get("DRY_RUN", "true") == "true"
 tasks_path = os.path.join(bot_home, "config", "tasks.json")
 decisions_path = os.path.join(bot_home, "state", "kpi-decisions.jsonl")
@@ -108,7 +108,7 @@ prefix = "[DRY-RUN] " if dry_run else ""
 if applied:
     msg = f"{prefix}KPI decisions preview:\n" + "\n".join(applied)
     if dry_run:
-        msg += "\n\n실제 적용: bash ~/.jarvis/scripts/apply-kpi-decisions.sh --apply"
+        msg += "\n\n실제 적용: bash ~/jarvis/runtime/scripts/apply-kpi-decisions.sh --apply"
 else:
     msg = "No applicable pending decisions found."
 

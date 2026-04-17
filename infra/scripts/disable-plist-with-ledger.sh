@@ -11,7 +11,7 @@
 # 효과:
 #   1. launchctl bootout
 #   2. .plist → .plist.disabled rename (ctime 자동 기록)
-#   3. ~/.jarvis/ledger/policy-fix-disable.jsonl 에 append-only 기록
+#   3. ~/jarvis/runtime/ledger/policy-fix-disable.jsonl 에 append-only 기록
 #   4. 실패 시 exit 1 + 원장에 failure 기록
 
 set -euo pipefail
@@ -25,7 +25,7 @@ if [[ -z "$LABEL" ]]; then
   exit 2
 fi
 
-LEDGER_DIR="${HOME}/.jarvis/ledger"
+LEDGER_DIR="${HOME}/jarvis/runtime/ledger"
 LEDGER_FILE="${LEDGER_DIR}/policy-fix-disable.jsonl"
 PLIST="${HOME}/Library/LaunchAgents/${LABEL}.plist"
 TS_ISO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

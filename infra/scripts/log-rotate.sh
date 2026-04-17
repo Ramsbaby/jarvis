@@ -18,7 +18,7 @@ set -euo pipefail
 #
 # Schedule: daily 03:05 (e2e 03:30 이전, gen-indexes 06:17 이전)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_DIR="${BOT_HOME}/logs"
 RETENTION_DAYS=7
 LOG="${LOG_DIR}/log-rotate.log"

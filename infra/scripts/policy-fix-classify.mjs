@@ -11,7 +11,7 @@
  *   C-3 = Nexus paused
  *   C-4 = tasks.json에서 명시적 disabled
  *
- * 출력: ~/.jarvis/state/policy-fix-manifest.csv
+ * 출력: ~/jarvis/runtime/state/policy-fix-manifest.csv
  */
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
@@ -20,9 +20,9 @@ import { join, basename } from 'node:path';
 
 const HOME = homedir();
 const LA_DIR = join(HOME, 'Library/LaunchAgents');
-const TASKS_JSON = join(HOME, '.jarvis/config/tasks.json');
-const CRON_MANAGER_JSON = join(HOME, '.jarvis/state/cron-manager.json');
-const MANIFEST = join(HOME, '.jarvis/state/policy-fix-manifest.csv');
+const TASKS_JSON = join(HOME, 'jarvis/runtime/config/tasks.json');
+const CRON_MANAGER_JSON = join(HOME, 'jarvis/runtime/state/cron-manager.json');
+const MANIFEST = join(HOME, 'jarvis/runtime/state/policy-fix-manifest.csv');
 
 const SEVEN_DAYS_MS = 7 * 24 * 3600 * 1000;
 const NOW = Date.now();

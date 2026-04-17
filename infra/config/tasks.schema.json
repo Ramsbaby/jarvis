@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://jarvis.local/tasks.schema.json",
   "title": "Jarvis Tasks Configuration",
-  "description": "~/.jarvis/config/tasks.json 스키마. 42개 필드 정의 — 타이핑/오탈자 조기 감지용.",
+  "description": "~/jarvis/runtime/config/tasks.json 스키마. 42개 필드 정의 — 타이핑/오탈자 조기 감지용.",
   "type": "object",
   "required": ["tasks"],
   "properties": {
@@ -70,7 +70,7 @@
         },
         "prompt_file": {
           "type": "string",
-          "description": "~/.jarvis/context/ 하위 프롬프트 파일명 (.md). prompt 대신 사용."
+          "description": "~/jarvis/runtime/context/ 하위 프롬프트 파일명 (.md). prompt 대신 사용."
         },
         "script": {
           "type": "string",
@@ -87,7 +87,7 @@
         },
         "mcpConfig": {
           "type": "string",
-          "description": "MCP 프로파일 이름 (~/.jarvis/config/mcp-profiles/ 키)",
+          "description": "MCP 프로파일 이름 (~/jarvis/runtime/config/mcp-profiles/ 키)",
           "examples": ["serena", "coding", "minimal"]
         },
         "allowedTools": {
@@ -102,7 +102,7 @@
             { "type": "string" },
             { "type": "null" }
           ],
-          "description": "~/.jarvis/context/ 하위 컨텍스트 파일명 (.md). 프롬프트 앞에 주입."
+          "description": "~/jarvis/runtime/context/ 하위 컨텍스트 파일명 (.md). 프롬프트 앞에 주입."
         },
         "contextBudget": {
           "type": "string",

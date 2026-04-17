@@ -12,7 +12,7 @@
  * Phase 4: index.md 재생성
  * Phase 5: 메트릭 기록
  *
- * Log: ~/.jarvis/logs/wiki-ingest.log
+ * Log: ~/jarvis/runtime/logs/wiki-ingest.log
  */
 
 import {
@@ -28,7 +28,7 @@ import {
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
 const HOME         = homedir();
-const BOT_HOME     = process.env.BOT_HOME || join(HOME, '.jarvis');
+const BOT_HOME     = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
 const LOG_FILE     = join(BOT_HOME, 'logs', 'wiki-ingest.log');
 const METRICS_FILE = join(WIKI_ROOT, 'meta', 'metrics.jsonl');
 const INDEX_FILE   = join(WIKI_ROOT, 'index.md');

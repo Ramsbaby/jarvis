@@ -12,7 +12,7 @@
 set -euo pipefail
 trap 'rm -f "$TMP_DATA" 2>/dev/null' EXIT
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 TMP_DATA=$(mktemp /tmp/langfuse-report-XXXXXX.json)
 DAYS=7
 
@@ -147,7 +147,7 @@ print(f'{start.strftime(\"%m/%d\")} ~ {end.strftime(\"%m/%d\")}')
 ")
 
 # Send Discord visual card
-cd ~ && node ~/.jarvis/scripts/discord-visual.mjs \
+cd ~ && node ~/jarvis/runtime/scripts/discord-visual.mjs \
   --type stats \
   --data "{
     \"title\": \"📊 LLM 성과 리포트 (${WEEK_LABEL})\",

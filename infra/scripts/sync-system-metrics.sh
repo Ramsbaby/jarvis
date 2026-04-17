@@ -18,7 +18,7 @@ else
   exit 127
 fi
 
-BOT_HOME="${BOT_HOME:-$HOME/.jarvis}"
+BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
 BOARD_URL="${BOARD_URL:-https://jarvis-board-production.up.railway.app}"
 MONITORING="$BOT_HOME/config/monitoring.json"
 

@@ -4,7 +4,7 @@
 # 별도 크론으로 변경사항을 일괄 처리.
 #
 # 사용법:
-#   ~/.jarvis/scripts/agent-batch-commit.sh [--dry-run]
+#   ~/jarvis/runtime/scripts/agent-batch-commit.sh [--dry-run]
 #
 # git add 대상:
 #   state/*.md, state/*.json
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 # ── 경로 설정 ────────────────────────────────────────────────
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOCK_FILE="/tmp/jarvis-batch-commit.lock"
 LOG_FILE="${BOT_HOME}/logs/agent-batch-commit.log"
 DRY_RUN=false

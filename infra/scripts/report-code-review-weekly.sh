@@ -5,7 +5,7 @@ set -euo pipefail
 # 패턴 매칭(auditor)으로 못 잡는 로직 버그, 보안 취약점, SSoT 위반을 LLM이 검증
 # 크론: 매주 일요일 05:00
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 REVIEW_DIR="${BOT_HOME}/results/code-review"
 TODAY="$(date +%F)"
 REVIEW_FILE="${REVIEW_DIR}/${TODAY}.md"
@@ -200,7 +200,7 @@ python3 << 'PYEOF'
 import re, sys, os
 from datetime import datetime, timedelta
 
-handoff = os.path.expanduser("~/.jarvis/rag/handoff.md")
+handoff = os.path.expanduser("~/jarvis/runtime/rag/handoff.md")
 archive = os.environ.get("ARCHIVE_FILE", "")
 cutoff = os.environ.get("CUTOFF", "")
 

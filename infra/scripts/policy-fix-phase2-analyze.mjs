@@ -21,9 +21,9 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const HOME = homedir();
-const TASKS = JSON.parse(readFileSync(join(HOME, '.jarvis/config/tasks.json'), 'utf-8'));
-const MGR = JSON.parse(readFileSync(join(HOME, '.jarvis/state/cron-manager.json'), 'utf-8'));
-const MANIFEST_PATH = join(HOME, '.jarvis/state/policy-fix-manifest.csv');
+const TASKS = JSON.parse(readFileSync(join(HOME, 'jarvis/runtime/config/tasks.json'), 'utf-8'));
+const MGR = JSON.parse(readFileSync(join(HOME, 'jarvis/runtime/state/cron-manager.json'), 'utf-8'));
+const MANIFEST_PATH = join(HOME, 'jarvis/runtime/state/policy-fix-manifest.csv');
 
 const tasks = TASKS.tasks || [];
 const taskById = new Map(tasks.map(t => [t.id, t]));

@@ -3,7 +3,7 @@
 # 트리거: watchdog.sh가 연속 3회 재시작 실패 감지 시 호출
 set -euo pipefail
 
-JARVIS_DIR="$HOME/.jarvis"
+JARVIS_DIR="$HOME/jarvis/runtime"
 source "${JARVIS_DIR}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; IS_LINUX=false
   case "$(uname -s)" in Darwin) IS_MACOS=true ;; Linux) IS_LINUX=true ;; esac

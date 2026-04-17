@@ -181,7 +181,7 @@ export class SocialApiProcessor extends BasePreProcessor {
   }
 
   async enrich(prompt, ctx) {
-    const botHome = ctx.botHome || `${homedir()}/.jarvis`;
+    const botHome = ctx.botHome || `${homedir()}/jarvis/runtime`;
     const socialPath = join(botHome, 'config/secrets/social.json');
 
     let secrets;
@@ -219,7 +219,7 @@ export class GoalsProcessor extends BasePreProcessor {
   }
 
   async enrich(prompt, ctx) {
-    const botHome = ctx.botHome || `${homedir()}/.jarvis`;
+    const botHome = ctx.botHome || `${homedir()}/jarvis/runtime`;
     const goalsPath = join(botHome, 'config/goals.json');
 
     let goals;
@@ -272,7 +272,7 @@ export class SystemApiProcessor extends BasePreProcessor {
   }
 
   async enrich(prompt, ctx) {
-    const botHome = ctx.botHome || `${homedir()}/.jarvis`;
+    const botHome = ctx.botHome || `${homedir()}/jarvis/runtime`;
     const systemPath = join(botHome, 'config/secrets/system.json');
 
     let secrets;

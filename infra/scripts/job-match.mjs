@@ -13,7 +13,7 @@ import { homedir } from 'node:os';
 import puppeteer from 'puppeteer-core';
 import { discordSend } from '../lib/discord-notify.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const CRAWL_DIR = join(BOT_HOME, 'state', 'job-crawl');
 const LATEST = join(CRAWL_DIR, 'latest.json');
 const MATCHED = join(CRAWL_DIR, 'matched.json');
@@ -101,7 +101,7 @@ async function fetchDetailText(browser, url) {
 }
 
 // sendDiscord → SSoT: lib/discord-notify.mjs discordSend (줄경계 청킹 포함)
-const sendDiscord = (content) => discordSend(content, 'jarvis-system', { username: 'Jarvis Job Matcher' });
+const sendDiscord = (content) => discordSend(content, 'jarvis-career', { username: 'Jarvis Job Matcher' });
 
 // ── 메인 ──────────────────────────────────────────────────────────────────
 async function main() {

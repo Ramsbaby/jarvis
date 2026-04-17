@@ -19,7 +19,7 @@
  *
  * Exit codes: 항상 0. 세션 저장 파이프라인을 절대 차단하지 않음.
  *
- * Log: ~/.jarvis/logs/wiki-ingest-claude.log
+ * Log: ~/jarvis/runtime/logs/wiki-ingest-claude.log
  */
 
 import {
@@ -33,7 +33,7 @@ import { addFactToWiki } from '../discord/lib/wiki-engine.mjs';
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
 const HOME         = homedir();
-const BOT_HOME     = process.env.BOT_HOME || join(HOME, '.jarvis');
+const BOT_HOME     = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
 const SESSIONS_DIR = join(BOT_HOME, 'context', 'claude-code-sessions');
 const LOG_FILE     = join(BOT_HOME, 'logs', 'wiki-ingest-claude.log');
 

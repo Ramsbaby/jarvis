@@ -11,7 +11,7 @@ import { join }         from 'node:path';
 import { homedir }      from 'node:os';
 import { addTask, listTasks } from '../lib/task-store.mjs';
 
-const BOT_HOME   = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME   = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const QUEUE_FILE = join(BOT_HOME, 'state', 'dev-queue.json');
 const DRY_RUN    = process.argv.includes('--dry-run');
 

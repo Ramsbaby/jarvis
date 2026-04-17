@@ -6,7 +6,7 @@
 #      "땜질 검증 실패"를 명시적으로 알림 → 진짜 fix 유도.
 #
 # Usage: tasks.json에 등록 (schedule: "23 9 * * *", 매일 09:23)
-# 산출물: ~/.jarvis/ledger/unpause-rebound.jsonl
+# 산출물: ~/jarvis/runtime/ledger/unpause-rebound.jsonl
 #
 # 로직:
 #   1. cron-manager.json의 paused 객체 = 현재 paused task 목록
@@ -16,10 +16,10 @@
 
 set -euo pipefail
 
-MGR="${HOME}/.jarvis/state/cron-manager.json"
-DISABLE_LEDGER="${HOME}/.jarvis/ledger/policy-fix-disable.jsonl"
-REBOUND_LEDGER="${HOME}/.jarvis/ledger/unpause-rebound.jsonl"
-CONFIG="${HOME}/.jarvis/config/monitoring.json"
+MGR="${HOME}/jarvis/runtime/state/cron-manager.json"
+DISABLE_LEDGER="${HOME}/jarvis/runtime/ledger/policy-fix-disable.jsonl"
+REBOUND_LEDGER="${HOME}/jarvis/runtime/ledger/unpause-rebound.jsonl"
+CONFIG="${HOME}/jarvis/runtime/config/monitoring.json"
 
 mkdir -p "$(dirname "$REBOUND_LEDGER")"
 
@@ -118,7 +118,7 @@ if not rebounds and not stables:
 
 # Discord 알림 (rebound만)
 if rebounds:
-    config_path = os.path.expanduser('~/.jarvis/config/monitoring.json')
+    config_path = os.path.expanduser('~/jarvis/runtime/config/monitoring.json')
     try:
         with open(config_path) as f:
             cfg = json.load(f)

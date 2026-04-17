@@ -4,7 +4,7 @@
 # cron 환경에서 node/claude 경로 확보
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 #
 # 역할: credentials.json의 refreshToken으로 새 accessToken을 발급받아
 #       credentials.json을 갱신하고, 만료 임박 시 봇을 재시작.
@@ -29,7 +29,7 @@ trap 'rm -f "$_OAUTH_PID"' EXIT
 CREDENTIALS_FILE="${HOME}/.claude/.credentials.json"
 TOKEN_URL="https://platform.claude.com/v1/oauth/token"
 CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG="${BOT_HOME}/logs/oauth-refresh.log"
 RENEW_THRESHOLD_SECS=10800  # 만료 3시간 전부터 갱신 (2시간 간격 cron 기준)
 

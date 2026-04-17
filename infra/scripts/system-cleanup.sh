@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 # system-cleanup.sh — OS 재부팅 대신 경량 리소스 청소
 # 매일 새벽 04:00 cron 실행 (pmset 예약 재시작 대체)
 #
@@ -13,7 +13,7 @@ source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null 
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 
 LOG_FILE="${BOT_HOME}/logs/system-cleanup.log"

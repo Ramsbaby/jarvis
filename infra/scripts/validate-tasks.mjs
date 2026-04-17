@@ -27,7 +27,7 @@ const Ajv = (() => {
 
 const INFRA = join(homedir(), 'jarvis', 'infra');
 const SCHEMA_FILE = join(INFRA, 'config', 'tasks.schema.json');
-const TASKS_FILE = join(homedir(), '.jarvis', 'config', 'tasks.json');
+const TASKS_FILE = join(homedir(), 'jarvis/runtime', 'config', 'tasks.json');
 
 function log(msg) { process.stderr.write(`[validate-tasks] ${msg}\n`); }
 

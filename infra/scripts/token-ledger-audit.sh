@@ -4,7 +4,7 @@ set -euo pipefail
 # token-ledger-audit.sh — 주간 토큰 낭비 자동 감사
 #
 # Purpose:
-#   Tier 0 원장(`~/.jarvis/state/token-ledger.jsonl`) 위에서 주간 패턴 감사.
+#   Tier 0 원장(`~/jarvis/runtime/state/token-ledger.jsonl`) 위에서 주간 패턴 감사.
 #   사람이 수동으로 했던 "토큰 낭비 검사"를 매주 일요일 자동 실행.
 #
 # Schedule: 매주 일요일 08:30 KST (tasks.json: 30 8 * * 0)
@@ -19,10 +19,10 @@ set -euo pipefail
 #   G. 서킷브레이커 3회+ 연속실패
 #   H. 자동 권장사항 (dedup 확장, Tier 1~4 활성화 시점, 프롬프트 다이어트)
 #
-# Output: Markdown 리포트 ~/.jarvis/results/token-ledger-audit/<YYYY-MM-DD>.md
+# Output: Markdown 리포트 ~/jarvis/runtime/results/token-ledger-audit/<YYYY-MM-DD>.md
 # Alert:  유의미한 발견(dedup/budget/cb) 시 Discord jarvis-system 채널 알림
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LEDGER="${BOT_HOME}/state/token-ledger.jsonl"
 REPORT_DIR="${BOT_HOME}/results/token-ledger-audit"
 REPORT_FILE="${REPORT_DIR}/$(date +%F).md"
@@ -277,7 +277,7 @@ fi
 if [[ -n "$cb_high_fails" ]]; then
     recs="${recs}
 ### 서킷브레이커 해소
-3회+ 연속실패 태스크의 root cause 파악 (\`~/.jarvis/logs/claude-stderr-<task>*.log\` 참조).
+3회+ 연속실패 태스크의 root cause 파악 (\`~/jarvis/runtime/logs/claude-stderr-<task>*.log\` 참조).
 "
 fi
 
@@ -291,7 +291,7 @@ cat <<'EOF'
 
 ## 📋 Tier 로드맵 진행 상황
 
-- [x] **Tier 0**: 토큰 원장 (`~/.jarvis/state/token-ledger.jsonl`)
+- [x] **Tier 0**: 토큰 원장 (`~/jarvis/runtime/state/token-ledger.jsonl`)
 - [ ] **Tier 1**: 글로벌 일일 캡
 - [ ] **Tier 2**: 해시 dedup 범용화 (현재 github-monitor만)
 - [ ] **Tier 3**: 영구 실패 auto-disable

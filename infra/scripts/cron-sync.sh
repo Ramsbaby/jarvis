@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 TASKS_FILE="$BOT_HOME/config/effective-tasks.json"
 [[ -f "$TASKS_FILE" ]] || TASKS_FILE="$BOT_HOME/config/tasks.json"
@@ -31,7 +31,7 @@ SKIPPED=0
 python3 << PYEOF
 import json, os, subprocess, sys
 
-BOT_HOME = os.environ.get('BOT_HOME', os.path.expanduser('~/.jarvis'))
+BOT_HOME = os.environ.get('BOT_HOME', os.path.expanduser('~/jarvis/runtime'))
 LAUNCH_AGENTS = os.path.expanduser('~/Library/LaunchAgents')
 TASKS_FILE = '$TASKS_FILE'
 DRY_RUN = '$DRY_RUN' == '--dry-run'

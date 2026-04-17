@@ -109,7 +109,7 @@ function maskTechDetails(text) {
     let masked = line
       // PID 숫자 (예: "PID 1234", "pid=5678")
       .replace(/\b(PID|pid)[=\s]+\d{2,6}\b/g, '(내부 프로세스)')
-      // 절대 홈 경로 (예: /Users/username/.jarvis/..., ~/.jarvis/...)
+      // 절대 홈 경로 (예: /Users/username/.jarvis/..., ~/jarvis/runtime/...)
       .replace(/\/Users\/[^/\s]+\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)')
       .replace(/~\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)')
       // 절대 홈 경로 일반 (예: /Users/username/...)
@@ -189,7 +189,7 @@ function convertTablesToList(text) {
 }
 
 // Active placeholder tracking — persisted for orphan cleanup on restart
-const PLACEHOLDER_STATE = join(process.env.BOT_HOME || join(homedir(), '.jarvis'), 'state', 'active-placeholders.json');
+const PLACEHOLDER_STATE = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'state', 'active-placeholders.json');
 
 function _loadPlaceholders() {
   try { return JSON.parse(readFileSync(PLACEHOLDER_STATE, 'utf-8')); } catch { return []; }
@@ -742,7 +742,10 @@ export class StreamingMessage {
     // 안전망: rate limit 등으로 마지막 edit가 실패했을 경우 커서 잔류 방지
     // _flush()/_sendOrEdit에서 retry 했어도 실패했다면 여기서 여러 번 재시도 (말짤림 방지)
     if (this.currentMessage) {
-      const finalContent = (this.currentMessage.content || '').replace(/ ▌$/, '');
+      // buffer가 남아 있으면 전체 내용으로 복원, 없으면 Discord 캐시에서 커서만 제거
+      const finalContent = this.buffer.length > 0
+        ? formatForDiscord(this.buffer, { channelId: this.channelId })
+        : (this.currentMessage.content || '').replace(/ ▌$/, '');
       if ((this.currentMessage.content || '').endsWith(' ▌')) {
         log('warn', 'finalize: cursor still present after flush — force removing with retry');
         // Exponential backoff retry: rate limit 심각해도 최종적으로 반영

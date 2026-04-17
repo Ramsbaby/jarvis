@@ -5,7 +5,7 @@
  * compaction summary(자유 형식 마크다운)와 달리, 구조화된 JSON으로
  * 토픽/결정사항/미완료 태스크를 정확히 전달.
  *
- * 저장소: ~/.jarvis/state/session-handoffs/{sessionKey}.json
+ * 저장소: ~/jarvis/runtime/state/session-handoffs/{sessionKey}.json
  *
  * 사용:
  *   saveHandoff(sessionKey, data)  — 세션 종료 시
@@ -17,7 +17,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from '
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const HANDOFF_DIR = join(BOT_HOME, 'state', 'session-handoffs');
 const MAX_HANDOFF_AGE_MS = 24 * 60 * 60_000; // 24시간 초과 핸드오프는 stale
 

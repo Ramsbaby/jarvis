@@ -1,7 +1,7 @@
 /**
  * team-loader.mjs — Load team definitions from YAML + .md templates.
  *
- * Reads ~/.jarvis/teams/{name}/team.yml, system.md, prompt.md
+ * Reads ~/jarvis/runtime/teams/{name}/team.yml, system.md, prompt.md
  * and returns a TEAMS object compatible with company-agent.mjs.
  */
 

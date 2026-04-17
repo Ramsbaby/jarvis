@@ -7,13 +7,13 @@ set -euo pipefail
 #       emit-event.sh disk.threshold_exceeded '{"usage":92}'
 #       emit-event.sh task.failed '{"task_id":"morning-standup"}'
 #
-# → ~/.jarvis/state/events/<event_name>.trigger 파일 생성
+# → ~/jarvis/runtime/state/events/<event_name>.trigger 파일 생성
 # → event-watcher.sh 데몬이 30초 내에 감지하여 매칭 태스크 실행
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 EVENTS_DIR="${BOT_HOME}/state/events"
 LOG="${BOT_HOME}/logs/event-watcher.log"
 
@@ -26,7 +26,7 @@ if [[ $# -lt 1 ]]; then
 import json
 try:
     import os
-    bot_home = os.environ.get('BOT_HOME', os.path.expanduser('~/.jarvis'))
+    bot_home = os.environ.get('BOT_HOME', os.path.expanduser('~/jarvis/runtime'))
     for cfg in [bot_home+'/config/effective-tasks.json', bot_home+'/config/tasks.json']:
         try:
             with open(cfg) as f:

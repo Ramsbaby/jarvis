@@ -3,13 +3,13 @@ set -euo pipefail
 
 REPORT_TYPE="${1:-daily}"
 BOARD_URL="${BOARD_URL:-http://localhost:3100}"  # 로컬 실행 전용 — NAT loopback 우회
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_FILE="${BOT_HOME}/logs/report-generate.log"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
 # REPORT_SECRET: 환경변수 우선, 없으면 .env.local에서 절대경로로 로드
-ENV_FILE="${BOARD_DIR:-${BOT_HOME:-${HOME}/.jarvis}/board}/.env.local"
+ENV_FILE="${BOARD_DIR:-${BOT_HOME:-${HOME}/jarvis/runtime}/board}/.env.local"
 if [[ -z "${REPORT_SECRET:-}" ]] && [[ -f "$ENV_FILE" ]]; then
   REPORT_SECRET=$(grep '^REPORT_SECRET=' "$ENV_FILE" | cut -d'=' -f2- | tr -d '"' || true)
 fi

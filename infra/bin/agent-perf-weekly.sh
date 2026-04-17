@@ -15,7 +15,7 @@
 set -euo pipefail
 trap 'rm -f "$TMP_DATA" "$TMP_PROMPT" "$TMP_OUTPUT" 2>/dev/null' EXIT
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 TMP_DATA=$(mktemp /tmp/perf-agent-data-XXXXXX.json)
 TMP_PROMPT=$(mktemp /tmp/perf-agent-prompt-XXXXXX.txt)
 TMP_OUTPUT=$(mktemp /tmp/perf-agent-output-XXXXXX.json)
@@ -254,7 +254,7 @@ FSM_FAIL=$(echo "$FSM_STATS" | python3 -c "import json,sys; print(json.load(sys.
 LF_CALLS=$(echo "$LF_STATS"  | python3 -c "import json,sys; print(json.load(sys.stdin).get('total_calls',0))")
 LF_COST=$(echo "$LF_STATS"   | python3 -c "import json,sys; print(f\"\${json.load(sys.stdin).get('total_cost',0):.2f}\")")
 
-cd ~ && node ~/.jarvis/scripts/discord-visual.mjs \
+cd ~ && node ~/jarvis/runtime/scripts/discord-visual.mjs \
   --type stats \
   --data "{
     \"title\": \"📊 주간 성과 리포트 — ${WEEK}\",

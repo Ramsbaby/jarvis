@@ -6,9 +6,9 @@
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 ERROR_REASON="${1:-알 수 없는 시작 실패}"
 LOG_FILE="$BOT_HOME/logs/bot-heal.log"
 MONITORING="$BOT_HOME/config/monitoring.json"
@@ -187,7 +187,7 @@ if [[ -f "$GOTCHAS_FILE" ]]; then
     # python3으로 섹션 파싱: "상태: ...수정 완료" 줄 포함된 블록은 skip
     GOTCHAS_CONTENT=$(python3 - <<'PYEOF' 2>/dev/null || cat "$GOTCHAS_FILE" 2>/dev/null || echo "없음"
 import os, re
-bot_home = os.environ.get("BOT_HOME", os.path.expanduser("~/.jarvis"))
+bot_home = os.environ.get("BOT_HOME", os.path.expanduser("~/jarvis/runtime"))
 path = os.path.join(bot_home, "state", "gotchas.md")
 with open(path, "r", encoding="utf-8") as f:
     content = f.read()
@@ -258,7 +258,7 @@ HEAL_RESULT=$("$BOT_HOME/bin/ask-claude.sh" \
 
 if [[ $HEAL_EXIT -ne 0 ]]; then
     log "Claude 복구 실패 (exit $HEAL_EXIT) — 수동 개입 필요"
-    send_ntfy "Jarvis 자동복구 실패" "Claude가 해결하지 못했습니다.\n로그: ~/.jarvis/logs/bot-heal.log\n수동 확인 필요" "urgent"
+    send_ntfy "Jarvis 자동복구 실패" "Claude가 해결하지 못했습니다.\n로그: ~/jarvis/runtime/logs/bot-heal.log\n수동 확인 필요" "urgent"
     # 서킷브레이커 원장에 실패 기록
     echo "${_cause_sig}|$(date '+%Y-%m-%d %H:%M')|FAIL|exit=${HEAL_EXIT}|${ERROR_REASON}" >> "$HEAL_FAIL_LEDGER" 2>/dev/null || true
     # 실패 이력 기록

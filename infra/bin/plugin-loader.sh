@@ -8,7 +8,7 @@ set -euo pipefail
 #   --validate  : only validate manifests, don't generate
 #   --dry-run   : print effective JSON to stdout instead of writing
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 PLUGINS_DIR="${BOT_HOME}/plugins"
 TASKS_FILE="${BOT_HOME}/config/tasks.json"
 EFFECTIVE_FILE="${BOT_HOME}/config/effective-tasks.json"

@@ -21,11 +21,11 @@
 #   JARVIS_CONTEXT_MODE    — minimal | none (Stage 2, 4에서 설정)
 #
 # 통계:
-#   ~/.jarvis/state/continue-sites-stats.json
+#   ~/jarvis/runtime/state/continue-sites-stats.json
 
 set -euo pipefail
 
-_CS_STATS_FILE="${BOT_HOME:-${HOME}/.jarvis}/state/continue-sites-stats.json"
+_CS_STATS_FILE="${BOT_HOME:-${HOME}/jarvis/runtime}/state/continue-sites-stats.json"
 _CS_STAGE_DELAY=5
 
 # --- 로그 헬퍼 ---

@@ -23,7 +23,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
-const BOT_HOME  = process.env.BOT_HOME  || join(homedir(), '.jarvis');
+const BOT_HOME  = process.env.BOT_HOME  || join(homedir(), 'jarvis/runtime');
 const MODE      = process.env.BENCH_MODE   || 'qa';
 const SAVE      = process.env.BENCH_SAVE === '1';
 const SAMPLE    = parseInt(process.env.BENCH_SAMPLE  || '30', 10);

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 set -euo pipefail
 
 # ============================================================
@@ -12,11 +12,11 @@ set -euo pipefail
 #   ${VAULT_DIR:-$HOME/vault}/01-system/launchd-manifest.md
 #   ${VAULT_DIR:-$HOME/vault}/01-system/webhook-registry.md
 #
-# crontab 등록: 30 4 * * * ~/.jarvis/scripts/gen-inventory.sh >> ~/.jarvis/logs/gen-inventory.log 2>&1
+# crontab 등록: 30 4 * * * ~/jarvis/runtime/scripts/gen-inventory.sh >> ~/jarvis/runtime/logs/gen-inventory.log 2>&1
 # ============================================================
 
-TASKS_JSON="$HOME/.jarvis/config/tasks.json"
-MONITORING_JSON="$HOME/.jarvis/config/monitoring.json"
+TASKS_JSON="$HOME/jarvis/runtime/config/tasks.json"
+MONITORING_JSON="$HOME/jarvis/runtime/config/monitoring.json"
 OUT_DIR="${VAULT_DIR:-$HOME/vault}/01-system"
 TODAY="$(date +%Y-%m-%d)"
 TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"

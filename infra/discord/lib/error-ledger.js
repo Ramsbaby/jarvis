@@ -13,7 +13,7 @@ import { appendFileSync, readFileSync, writeFileSync, mkdirSync, statSync } from
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const LEDGER_PATH = join(BOT_HOME, 'state', 'error-ledger.jsonl');
 const MAX_SIZE_BYTES = 100 * 1024; // 100KB
 const KEEP_LINES = 500;

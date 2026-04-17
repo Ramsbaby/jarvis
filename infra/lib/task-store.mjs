@@ -26,7 +26,7 @@ import { mkdirSync, appendFileSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { canTransition } from './task-fsm.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const DB_PATH   = join(BOT_HOME, 'state', 'tasks.db');
 
 let _db = null;
@@ -550,7 +550,7 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         // enqueue 성공 → jarvis-coder 이벤트 트리거 (bot-cron 태스크 제외)
         if (eSrc !== 'bot-cron') {
           try {
-            const emitScript = join(process.env.BOT_HOME || join(homedir(), '.jarvis'), 'scripts', 'emit-event.sh');
+            const emitScript = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'scripts', 'emit-event.sh');
             execSync(`"${emitScript}" dev.task.queued '{"id":"${eId}"}'`, { timeout: 5000, stdio: 'ignore' });
           } catch { /* 이벤트 발행 실패해도 enqueue 자체는 성공 */ }
         }

@@ -5,9 +5,9 @@ set -euo pipefail
 # Runs every 3 minutes via cron. Detects unloaded launchd services and re-registers them.
 # Ensures critical LaunchAgents remain registered after system sleep or restart.
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 
 # launchd-guardian is macOS-only; exit gracefully on other platforms
 if ! $IS_MACOS; then

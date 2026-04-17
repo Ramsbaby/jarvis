@@ -13,11 +13,11 @@
 #   parallel-teams.sh --dry-run               # 실행 없이 순서 출력
 #
 # 크론 예시 (크론 이후 팀 병렬 실행):
-#   30 8 * * * $HOME/.jarvis/bin/parallel-teams.sh >> $HOME/.jarvis/logs/parallel-teams.log 2>&1
+#   30 8 * * * $HOME/jarvis/runtime/bin/parallel-teams.sh >> $HOME/jarvis/runtime/logs/parallel-teams.log 2>&1
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 AGENT="${BOT_HOME}/discord/lib/company-agent.mjs"
 LOG_DIR="${BOT_HOME}/logs"
 LOG_FILE="${LOG_DIR}/parallel-teams.log"

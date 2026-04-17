@@ -17,7 +17,7 @@ import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { t } from './i18n.js';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const PENDING_FILE = join(BOT_HOME, 'state', 'pending-approvals.json');
 const L3_REQUESTS_DIR = join(BOT_HOME, 'state', 'l3-requests');
 

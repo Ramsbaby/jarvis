@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { BOT_HOME, mkResult, mkError, logTelemetry } from './shared.mjs';
 
 // ---------------------------------------------------------------------------
-// Access count tracking — ~/.jarvis/rag/access-log.json
+// Access count tracking — ~/jarvis/runtime/rag/access-log.json
 // { "source:chunkIndex": { count: N, lastAccessed: ISO } }
 // ---------------------------------------------------------------------------
 const ACCESS_LOG_PATH = join(BOT_HOME, 'rag', 'access-log.json');

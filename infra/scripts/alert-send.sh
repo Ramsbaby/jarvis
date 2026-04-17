@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 ALERT_STATE_DIR="$BOT_HOME/state"
 LAST_ALERT_FILE="$ALERT_STATE_DIR/last-alert"

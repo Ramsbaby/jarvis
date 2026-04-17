@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { discordSend } from '../lib/discord-notify.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const RESULT_DIR = join(BOT_HOME, 'state', 'job-crawl');
 const RESULT_FILE = join(RESULT_DIR, 'latest.json');
 const SEEN_FILE = join(RESULT_DIR, 'seen.json');

@@ -14,7 +14,7 @@ send_discord() {
 
     # $2가 URL이 아닌 키 이름이면 monitoring.json에서 조회
     if [[ -n "$webhook" && "$webhook" != https://* ]]; then
-        webhook=$(jq -r ".webhooks[\"$webhook\"] // empty" "${BOT_HOME:-$HOME/.jarvis}/config/monitoring.json" 2>/dev/null)
+        webhook=$(jq -r ".webhooks[\"$webhook\"] // empty" "${BOT_HOME:-$HOME/jarvis/runtime}/config/monitoring.json" 2>/dev/null)
     fi
 
     [[ -z "$webhook" ]] && return 1

@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-LANGFUSE_DIR="${BOT_HOME:-${HOME}/.jarvis}/docker/langfuse"
-LOG_FILE="${BOT_HOME:-${HOME}/.jarvis}/logs/langfuse-ctl.log"
+LANGFUSE_DIR="${BOT_HOME:-${HOME}/jarvis/runtime}/docker/langfuse"
+LOG_FILE="${BOT_HOME:-${HOME}/jarvis/runtime}/logs/langfuse-ctl.log"
 HEALTH_URL="http://localhost:3200/api/public/health"
 DOCKER_SOCK="/var/run/docker.sock"
 MAX_WAIT_DOCKER=60   # seconds to wait for Docker Desktop
@@ -136,7 +136,7 @@ EOF
   echo ""
   echo "Created: $LANGFUSE_DIR/.env"
   echo ""
-  echo "API keys for tracing (add to discord/.env or ~/.jarvis/.env):"
+  echo "API keys for tracing (add to discord/.env or ~/jarvis/runtime/.env):"
   echo "  LANGFUSE_BASE_URL=http://localhost:3200"
   echo "  LANGFUSE_PUBLIC_KEY=${pub_key}"
   echo "  LANGFUSE_SECRET_KEY=${sec_key}"
