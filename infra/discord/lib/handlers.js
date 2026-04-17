@@ -74,7 +74,8 @@ import { ProcessorContext, createPreProcessorRegistry } from './pre-processor.js
 import { isTutoringQuery } from './prompt-sections.js';
 // langfuse 제거 (2026-04-17): Mac Mini 리소스 제약으로 로컬 JSONL 원장으로 교체.
 // 측정 파일: response-ledger.jsonl / feedback-score.jsonl / reask-tracker.jsonl
-//          / tool-guard-trips.jsonl / permission-denied.jsonl
+//          / permission-denied.jsonl
+// (tool-guard-trips.jsonl은 2026-04-17 가드 제거 후 더 이상 append 안 됨)
 import { detectAndRecord as _trackCommitment } from './commitment-tracker.js';
 import { detectStatType, sendStatVisual } from './stat-visual.js';
 import { detectAnalyticalType, generateAndSendVisual } from './visual-gen.js';
@@ -91,8 +92,8 @@ const _promptOverrides = new BoundedMap(500, 10 * 60_000); // 500 items, 10min T
 const _lastTraceByUser = new BoundedMap(1000, 24 * 60 * 60_000); // 1000 items, 24h TTL
 const _lastPromptByUser = new BoundedMap(1000, 24 * 60 * 60_000);
 
-// Phase 0 Sensor: turn당 tool call 상한 — 무한 루프/낭비 방지
-const MAX_TOOL_CALLS_PER_TURN = Number(process.env.MAX_TOOL_CALLS_PER_TURN ?? 8);
+// (2026-04-17 제거) MAX_TOOL_CALLS_PER_TURN 강제 가드 삭제 — SDK maxTurns + 타임아웃 + maxBudget으로 충분.
+// toolCount 관측은 response-ledger.jsonl에 그대로 저장.
 
 // Pre-processor registry (RAG context enrichment)
 const _preProcessorRegistry = createPreProcessorRegistry(searchRagForContext);
@@ -1238,30 +1239,10 @@ ${extracted}
             hasStreamEvents = true;
             lastStreamBlockWasTool = true;
             toolCount++;
-            // Phase 0 Sensor: tool-call guard — turn당 상한 초과 시 강제 중단
-            if (toolCount > MAX_TOOL_CALLS_PER_TURN) {
-              log('warn', 'Tool-call guard tripped', {
-                threadId: thread.id, toolCount, limit: MAX_TOOL_CALLS_PER_TURN,
-              });
-              try {
-                const ledgerDir = join(_BOT_HOME, 'state');
-                mkdirSync(ledgerDir, { recursive: true });
-                appendFileSync(
-                  join(ledgerDir, 'tool-guard-trips.jsonl'),
-                  JSON.stringify({
-                    ts: new Date().toISOString(),
-                    source: 'discord-bot',
-                    sessionKey, toolCount,
-                    limit: MAX_TOOL_CALLS_PER_TURN,
-                    userId: message.author.id,
-                    channelId: effectiveChannelId,
-                  }) + '\n'
-                );
-              } catch { /* ledger best-effort */ }
-              streamer.append('\n\n⛔ 도구 호출 한도(' + MAX_TOOL_CALLS_PER_TURN + '회) 초과 — 중단합니다.');
-              procShim.kill();
-              // 바깥 for-await가 abort 이벤트를 받아 자연 종료됨
-            }
+            // toolCount 관측만 — 강제 중단 가드는 제거(2026-04-17).
+            // 이유: SDK maxTurns + 10분 timeout + maxBudget이 이미 폭주를 차단함.
+            //      8회 제한은 정상 세션 잘라먹는 premature safeguard로 판명(2건 실제 trip).
+            //      response-ledger.jsonl에 toolCount 계속 기록되어 사후 패턴 분석 가능.
             const display = getToolDisplay(se.content_block.name || '');
             streamer.updateStatus(display.desc);
             // ② 세션 연속성: 툴 호출 이름 기록 (최대 20개, 민감 툴 제외)
