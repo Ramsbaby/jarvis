@@ -19,7 +19,12 @@ jobs:
       - name: 최신 태그 조회
         id: last_tag
         run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # semver 정렬 기준 최신 태그 (lightweight/annotated 무관).
+          # 2026-04-17 v2.0.0 사건 재발 방지: git describe 는 같은 커밋에 여러 태그가 있을 때
+          # 알파벳 순 앞선 것(v1.12.0)을 반환하여 v2.0.0을 무시했음. sort -V는 semver 순으로 정렬하여
+          # major bump도 올바르게 기준점으로 잡는다.
+          LAST_TAG=$(git tag -l 'v*.*.*' | sort -V | tail -1)
+          LAST_TAG="${LAST_TAG:-v0.0.0}"
           echo "tag=$LAST_TAG" >> $GITHUB_OUTPUT
           echo "Last tag: $LAST_TAG"
 
