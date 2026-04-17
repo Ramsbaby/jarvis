@@ -61,9 +61,9 @@ export const userMemory = {
     return _load(userId);
   },
 
-  addFact(userId, fact) {
+  addFact(userId, fact, source = 'unknown') {
     const data = _load(userId);
-    // facts는 string 또는 {text, addedAt[, category]} 혼용 허용 (하위 호환)
+    // facts는 string 또는 {text, addedAt[, category][, source]} 혼용 허용 (하위 호환)
     const normText = (f) => (typeof f === 'string' ? f : f?.text ?? '');
     const exists = data.facts.some(f => normText(f) === fact);
     if (!exists) {
@@ -71,10 +71,29 @@ export const userMemory = {
         text: fact,
         addedAt: new Date().toISOString(),
         category: detectCategory(fact),
+        source,
       });
       data.updatedAt = new Date().toISOString();
       _save(data);
+      return true;
     }
+    return false;
+  },
+
+  // Phase 0.5 (표면 통합 학습): 교정 저장 — Discord/CLI 모두 이 메서드로 수렴
+  // source 태그로 어느 표면에서 쌓인 교정인지 추적 가능 → 주간 감사로 불균형 감지
+  addCorrection(userId, fact, source = 'unknown') {
+    const data = _load(userId);
+    const normText = (c) => (typeof c === 'string' ? c : c?.text ?? '');
+    if (data.corrections.some(c => normText(c) === fact)) return false;
+    data.corrections.push({
+      text: String(fact),
+      addedAt: new Date().toISOString(),
+      source,
+    });
+    data.updatedAt = new Date().toISOString();
+    _save(data);
+    return true;
   },
 
   addPlan(userId, plan) {
