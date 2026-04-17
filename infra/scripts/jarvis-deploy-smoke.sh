@@ -139,6 +139,13 @@ if [[ "$FAIL" -gt 0 ]]; then
 fi
 
 # ── 봇 재시작 ─────────────────────────────────────────────────────
+# 재시작 직전 err.log 크기 snapshot — 이전 사고 영향 제외용 offset
+ERR_LOG="$BOT_HOME/logs/discord-bot.err.log"
+ERR_SIZE_BEFORE=0
+if [[ -f "$ERR_LOG" ]]; then
+    ERR_SIZE_BEFORE=$(stat -f %z "$ERR_LOG" 2>/dev/null || stat -c %s "$ERR_LOG" 2>/dev/null || echo 0)
+fi
+
 echo ""
 echo "▶ 봇 재시작..."
 if $IS_MACOS; then
@@ -151,7 +158,8 @@ else
 fi
 
 # ── 생존 확인 (15초 대기 + launchctl 상태 + stderr 로그 검사) ─────
-# 이전 버그: 10초만 기다리면 재시작 루프 중간에 prouds 잡혀서 ✅ 거짓 표시됨.
+# 이전 버그: 10초만 기다리면 재시작 루프 중간에 잡혀서 ✅ 거짓 표시됨.
+# 재수정: err.log 검사는 DEPLOY 이후 추가된 바이트만 본다 (offset diff).
 echo "  (15초 대기 중...)"
 sleep 15
 
@@ -160,11 +168,16 @@ LC_LINE=$(launchctl list | awk -v s="$SERVICE" '$3==s{print}' | head -1)
 LC_PID=$(echo "$LC_LINE" | awk '{print $1}')
 LC_STATUS=$(echo "$LC_LINE" | awk '{print $2}')
 
-# stderr 로그 확인 (preflight 루프 감지)
+# 재시작 이후 err.log 신규 내용만 추출
 RESTART_LOOP_COUNT=0
-if [[ -f "$BOT_HOME/logs/discord-bot.err.log" ]]; then
-    RESTART_LOOP_COUNT=$(tail -50 "$BOT_HOME/logs/discord-bot.err.log" 2>/dev/null \
-        | grep -cE "SyntaxError|Cannot find|<<<<<<<|Unexpected token" 2>/dev/null || echo 0)
+if [[ -f "$ERR_LOG" ]]; then
+    ERR_SIZE_AFTER=$(stat -f %z "$ERR_LOG" 2>/dev/null || stat -c %s "$ERR_LOG" 2>/dev/null || echo 0)
+    if [[ "$ERR_SIZE_AFTER" -gt "$ERR_SIZE_BEFORE" ]]; then
+        NEW_ERR=$(tail -c $((ERR_SIZE_AFTER - ERR_SIZE_BEFORE)) "$ERR_LOG" 2>/dev/null || true)
+        if [[ -n "$NEW_ERR" ]]; then
+            RESTART_LOOP_COUNT=$(echo "$NEW_ERR" | grep -cE "SyntaxError|Cannot find|<<<<<<<|Unexpected token" 2>/dev/null || echo 0)
+        fi
+    fi
 fi
 
 if [[ "$LC_PID" =~ ^[0-9]+$ ]] && [[ "$RESTART_LOOP_COUNT" -eq 0 ]]; then
