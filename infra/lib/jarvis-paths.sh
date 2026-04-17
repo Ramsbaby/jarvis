@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# jarvis-paths.sh — ~/.jarvis 경로 SSoT (shell 버전)
+# jarvis-paths.sh — 경로 SSoT (shell 버전)
 #
 # 왜 이 파일이 존재하는가:
 #   BOT_HOME/JARVIS_HOME/HOME/.jarvis 3가지 패턴이 60+개 스크립트에 혼재했다.
-#   macOS 기본값도 ~/.local/share/jarvis(Linux/Docker용) vs ~/.jarvis(macOS)가
-#   스크립트마다 달라 인터랙티브 실행 시 wrong path 버그가 반복됐다.
+#   A2 마이그레이션(2026-04-17) 이후 런타임 경로는 ~/jarvis/runtime 단일 기준.
+#   구버전 경로(~/.jarvis, ~/.local/share/jarvis)는 호환성 심링크로만 유지됨.
 #
 # 사용법:
 #   source "$(dirname "${BASH_SOURCE[0]}")/jarvis-paths.sh"
@@ -13,7 +13,7 @@
 # 환경 변수 우선순위:
 #   1. BOT_HOME    — LaunchAgent plist EnvironmentVariables 에서 주입 (런타임)
 #   2. JARVIS_HOME — Docker/CI override
-#   3. ~/.jarvis   — macOS 기본값 (이 시스템의 실제 경로)
+#   3. ~/jarvis/runtime — A2 마이그레이션 이후 기본값
 
 # ── Root ─────────────────────────────────────────────────────────────────────
 export BOT_HOME="${BOT_HOME:-${JARVIS_HOME:-${HOME}/jarvis/runtime}}"
