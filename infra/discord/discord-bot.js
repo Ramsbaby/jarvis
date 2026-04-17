@@ -20,7 +20,8 @@ import {
   REST,
   Routes,
 } from 'discord.js';
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
+loadEnv({ path: join(process.env.JARVIS_HOME || join(homedir(), 'jarvis'), 'runtime/discord/.env') });
 
 import { log, sendNtfy, getSessionHistoryFile } from './lib/claude-runner.js';
 import { SessionStore, RateTracker, Semaphore } from './lib/session.js';
