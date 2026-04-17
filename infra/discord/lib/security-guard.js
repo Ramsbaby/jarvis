@@ -34,7 +34,8 @@ const SENSITIVE_PATTERNS = [
   /(^|[\/\s'"`])\.pypirc\b/i,                     // PyPI auth
   /\.docker\/config\.json\b/i,                    // docker registry creds
   /\.config\/gh\/hosts\.yml\b/i,                  // GitHub CLI
-  /\bkubeconfig\b/i,                              // Kubernetes cluster creds
+  /\bkubeconfig\b/i,                              // Kubernetes cluster creds (literal 'kubeconfig' 단어)
+  /(^|[\/\s'"`])\.kube\/config\b/i,               // 실제 기본 경로 ~/.kube/config
   /\b(service-account|gcp-key|google-credentials)[-_]?\S*\.json\b/i, // GCP service account
   /\bprivate[_-]?key\b/i,                         // private_key, private-key
   /\bapi[_-]?key\s*[:=]\s*['"`]?[\w\-\.\/+]{12,}/i, // api_key = "실제값..." (값 기준, 파일명 아님)
