@@ -37,7 +37,22 @@ paths = [
   '''\.env\.example$''',
   '''\.example\.json$''',
   '''private/''',
+  '''^runtime/''',
   '''LICENSE$''',
   '''package-lock\.json$''',
   '''infra/scripts/job-apply\.mjs$''',
+  # 2026-04-17 추가: worktree/node_modules/git 내부 파일 오탐 제거
+  '''node_modules/''',
+  '''\.claude/worktrees/''',
+  '''\.git/''',
+  '''\.serena/cache/''',
+  # 문서/예시 파일 (예시 webhook/email 있을 수 있음)
+  '''infra/docs/DEPENDENCY-ANALYSIS\.md$''',
+]
+# 2026-04-17: boram-*.sh 레거시 파일 삭제했지만 history에 webhook URL 잔존.
+# 웹훅 비공격 가정 하에 history scan은 아래 커밋만 제외.
+# 장기 계획: Phase E (2026-10-17) 심링크 제거 시 BFG로 history 정화 고려.
+commits = [
+  "3fd64c6f0c4473c410e676bcb0f83ecdec4e236d",
+  "68b3bbb15a27bd6daf3f88c1114e91f363e9af1d",
 ]

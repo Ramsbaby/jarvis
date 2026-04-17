@@ -3,6 +3,15 @@ node_modules/
 __pycache__/
 *.pyc
 
+# ═══════════════════════════════════════════════════════════════════════
+# A2 Runtime — ~/jarvis/runtime/ 은 100% private.
+# Git 공식: parent dir 제외 시 하위 negation 불가. 따라서 /runtime/* 로
+# 파일만 exclude + !negation 허용. README.md/.gitkeep만 tracked.
+# ═══════════════════════════════════════════════════════════════════════
+/runtime/*
+!/runtime/.gitkeep
+!/runtime/README.md
+
 # Private data (personal configs, secrets, overrides)
 private/
 !private/README.md
@@ -29,6 +38,11 @@ infra/config/secrets/
 infra/config/tasks.json
 infra/config/goals.json
 infra/config/effective-tasks.json
+
+# Root config — username 노출 방지 (tracked 상태였으나 2026-04-17 제거)
+/config/
+/docker-compose.yml
+/wiki/
 infra/config/company-dna.md
 infra/config/jira.env
 infra/config/tutoring.env
@@ -78,6 +92,9 @@ data/
 *.env
 !*.env.example
 !*.env.test
+# runtime/.env.test 는 실제 시크릿 가능성 — 글로벌 !*.env.test negation 덮어쓰기
+runtime/.env.test
+runtime/discord/.env
 infra/config/monitoring.json
 infra/config/models.json
 config/*.bak*
