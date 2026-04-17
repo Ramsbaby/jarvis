@@ -6,7 +6,7 @@ set -euo pipefail
 # 최근 7일 크래시/복구 로그를 파싱해 자율 복구율(autonomy rate)을 산출.
 # 결과를 #jarvis-system Discord + 파일로 출력.
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 WATCHDOG_LOG="$BOT_HOME/logs/watchdog.log"
 BOT_WATCHDOG_LOG="$BOT_HOME/logs/bot-watchdog.log"
 HEAL_LOG="$BOT_HOME/logs/bot-heal.log"

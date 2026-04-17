@@ -9,7 +9,7 @@
 set -euo pipefail
 
 ROOT="${HOME}/backup/jarvis-topology"
-LEDGER="${HOME}/.jarvis/state/backup-retention.jsonl"
+LEDGER="${HOME}/jarvis/runtime/state/backup-retention.jsonl"
 TS="$(date +%Y-%m-%dT%H:%M:%S%z)"
 
 mkdir -p "$(dirname "$LEDGER")"
@@ -19,7 +19,7 @@ emit() {
     "$TS" "$1" "$2" "$3" >> "$LEDGER"
 }
 
-[[ ! -d "$ROOT" ]] && { echo "no backup root"; exit 0; }
+if [[ ! -d "$ROOT" ]]; then echo "no backup root"; exit 0; fi
 
 deleted=0
 # auto-recovery/* : 30일
@@ -39,4 +39,27 @@ find "$ROOT" -mindepth 1 -maxdepth 1 -type d \( -name 'topology-fix-*' -o -name 
 done
 
 emit "retention-run-complete" "$ROOT" "deleted=$deleted"
-echo "✅ backup retention: deleted $deleted"
+
+# ═══════════════════════════════════════════════════════════════════════
+# A2 migration 추가 (2026-04-17): ~/.jarvis-backup-*, ~/.jarvis.backup-*
+# 이들은 migration 시 생성되는 전체 백업. 7일 retention.
+# ═══════════════════════════════════════════════════════════════════════
+HOME_DELETED=0
+for pattern in "$HOME"/.jarvis-backup-* "$HOME"/.jarvis.backup-*; do
+    for dir in $pattern; do
+        [ -d "$dir" ] || continue
+        mtime=$(stat -f %m "$dir" 2>/dev/null || stat -c %Y "$dir" 2>/dev/null || echo 0)
+        age_days=$(( ( $(date +%s) - mtime ) / 86400 ))
+        if (( age_days >= 7 )); then
+            size_mb=$(du -sm "$dir" 2>/dev/null | awk '{print $1}')
+            emit "delete-home-backup" "$dir" "age=${age_days}d,size=${size_mb}MB"
+            rm -rf "$dir"
+            HOME_DELETED=$((HOME_DELETED+1))
+        else
+            emit "keep-home-backup" "$dir" "age=${age_days}d"
+        fi
+    done
+done
+
+emit "home-backup-retention-complete" "$HOME" "deleted=$HOME_DELETED"
+echo "✅ backup retention: topology=$deleted, home-backup=$HOME_DELETED"
