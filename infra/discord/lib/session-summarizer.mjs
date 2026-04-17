@@ -4,7 +4,7 @@
  * ANTHROPIC_API_KEY 없는 Claude Max 환경에서 패턴 매칭으로
  * 오늘 세션 요약 파일을 분석해 facts를 추출, userMemory에 저장.
  *
- * 실행: /opt/homebrew/bin/node ~/.jarvis/discord/lib/session-summarizer.mjs
+ * 실행: /opt/homebrew/bin/node ~/jarvis/runtime/discord/lib/session-summarizer.mjs
  * 크론: 0 3 * * * (매일 새벽 3시)
  */
 
@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { addFactToWiki } from './wiki-engine.mjs';
 import { ingestSessionToWiki } from './wiki-ingester.mjs';
+import { userMemory } from '../../lib/user-memory.mjs';  // SSoT — addFactDirect 폐기(2026-04-17)
 
 /** Lone surrogate 제거 — JSON 직렬화 시 invalid high/low surrogate 방지 */
 function sanitizeUnicode(str) {
@@ -30,7 +31,7 @@ function sanitizeUnicode(str) {
   });
 }
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const SESSION_SUMMARY_DIR = join(BOT_HOME, 'state', 'session-summaries');
 const USERS_DIR = join(BOT_HOME, 'state', 'users');
 const LOGS_DIR = join(BOT_HOME, 'logs');
@@ -197,34 +198,10 @@ function extractFacts(content) {
   return [...candidates];
 }
 
-// ── userMemory addFact (직접 구현 — ESM 동적 import 호환) ──────────────────
-function addFactDirect(userId, factText) {
-  const fpath = join(USERS_DIR, `${userId}.json`);
-  const defaults = { userId, facts: [], preferences: [], corrections: [], plans: [], updatedAt: null };
-  let data;
-  try {
-    data = JSON.parse(readFileSync(fpath, 'utf-8'));
-    const merged = { ...defaults, ...data };
-    merged.facts = Array.isArray(merged.facts) ? merged.facts : [];
-    merged.preferences = Array.isArray(merged.preferences) ? merged.preferences : [];
-    merged.corrections = Array.isArray(merged.corrections) ? merged.corrections : [];
-    merged.plans = Array.isArray(merged.plans) ? merged.plans : [];
-    data = merged;
-  } catch {
-    data = { ...defaults };
-  }
-
-  const normalize = (f) => (typeof f === 'string' ? f : f?.text ?? '');
-  const exists = data.facts.some(f => normalize(f) === factText);
-  if (!exists) {
-    data.facts.push({ text: sanitizeUnicode(factText), addedAt: new Date().toISOString() });
-    data.updatedAt = new Date().toISOString();
-    mkdirSync(USERS_DIR, { recursive: true });
-    writeFileSync(fpath, JSON.stringify(data, null, 2));
-    return true; // 신규 추가
-  }
-  return false; // 중복 스킵
-}
+// (2026-04-17 제거) addFactDirect — userMemory.addFact SSoT로 통일.
+// 이유: session-summarizer 단독으로 facts 배열을 직접 조작하면 Phase 0.5 source 태깅·
+//      category 자동감지 등 공용 로직이 우회됨. 모든 write는 userMemory 경유해야
+//      주간 audit(audit-cross-surface-learning)이 source 불균형 감지 가능.
 
 // ── 메인 ──────────────────────────────────────────────────────────────────
 async function main() {
@@ -300,7 +277,7 @@ async function main() {
         totalExtracted++;
         for (const userId of targetUserIds) {
           try {
-            const added = addFactDirect(userId, fact);
+            const added = userMemory.addFact(userId, sanitizeUnicode(fact), 'session-summarizer');
             if (added) {
               totalAdded++;
               log('info', `    [+] userId=${userId} fact: ${fact.slice(0, 80)}`);

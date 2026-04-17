@@ -51,7 +51,7 @@ rotate_one() {
     local base
     base=$(basename "$f")
 
-    # Tail rotate .N → .(N+1)
+    # 꼬리 rotate .N → .(N+1) — mv 안전 (봇은 f 만 열어둠, .N은 static)
     local i=$((KEEP_N))
     while [[ "$i" -gt 0 ]]; do
         local src="${f}.${i}"
@@ -68,11 +68,28 @@ rotate_one() {
         i=$((i-1))
     done
 
-    # 현재 파일 → .1
-    mv "$f" "${f}.1" 2>/dev/null
-    # 빈 파일 재생성 (append 기다리는 프로세스 깨지지 않게)
-    : > "$f"
-    echo "[$TS] rotate: $base (size=${size}B → .1)" >> "$LOG"
+    # ⚠️ 현재 파일 rotate — copy-truncate 패턴 필수
+    # 이유: 봇 프로세스가 append(O_APPEND)로 inode 를 열어둠.
+    #      `mv f f.1` 하면 inode 는 그대로라 봇은 계속 f.1 에 씀 → 새 이벤트 유실,
+    #      archive 파일에 실시간 데이터가 섞임. (logrotate의 copytruncate 옵션과 동일 원리)
+    #
+    # 방법:
+    #   1) f → f.1 복사 (봇이 여전히 f 에 쓰고 있음, 내용은 시점 스냅샷)
+    #   2) f 를 truncate (`: > f`, ftruncate(0)) — 같은 inode 유지하되 크기 0
+    #   3) 봇은 open FD 의 offset 이 > 0 상태라 다음 write 가 sparse hole 로 갈 수 있음
+    #      → 이를 피하려면 supplementary 로 close-reopen 유도 SIGHUP 전송이 정석이나,
+    #        discord-bot 은 SIGHUP 핸들러 없이 빠른 재시작 의존. 당분간 sparse OK.
+    #
+    # macOS/Linux 모두에서 작동. append 모드 open FD 는 매 write 마다 파일 끝으로 seek 하므로
+    # truncate 후에도 새 write 는 offset 0 이상에서 append 됨 (hole 생기지 않음).
+    if cp "$f" "${f}.1.tmp" 2>/dev/null; then
+        mv "${f}.1.tmp" "${f}.1"
+        : > "$f"  # ftruncate(0), 같은 inode 유지
+        echo "[$TS] rotate (copy-truncate): $base (size=${size}B → .1, inode 보존)" >> "$LOG"
+    else
+        echo "[$TS] rotate FAILED (cp error): $base" >> "$LOG"
+        return 1
+    fi
 }
 
 archive_cleanup() {

@@ -88,7 +88,7 @@ export function processFeedback(userId, text) {
 // ---------------------------------------------------------------------------
 
 const HOME = homedir();
-const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.jarvis'));
+const BOT_HOME = join(process.env.BOT_HOME || join(HOME, 'jarvis/runtime'));
 const MODELS = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'models.json'), 'utf-8'));
 const DISCORD_MCP_PATH = join(BOT_HOME, 'config', 'discord-mcp.json');
 const USER_PROFILE_PATH = join(BOT_HOME, 'context', 'user-profile.md');
@@ -680,7 +680,7 @@ export async function* createClaudeSession(prompt, {
   //     context/owner/preferences.md: tool/service constraints (calendar, tasks, etc.)
   if (!createClaudeSession._ownerPrefsCache || nowMs - (createClaudeSession._ownerPrefsCacheTime || 0) > 300_000) {
     try {
-      const BOT_HOME_EARLY = process.env.BOT_HOME || `${homedir()}/.jarvis`;
+      const BOT_HOME_EARLY = process.env.BOT_HOME || `${homedir()}/jarvis/runtime`;
       createClaudeSession._ownerPrefsCache = buildOwnerPreferencesSection({ botHome: BOT_HOME_EARLY });
     } catch {
       createClaudeSession._ownerPrefsCache = '';
@@ -706,7 +706,7 @@ export async function* createClaudeSession(prompt, {
     profileCache: createClaudeSession._profileCache,
   });
 
-  const BOT_HOME = process.env.BOT_HOME || `${homedir()}/.jarvis`;
+  const BOT_HOME = process.env.BOT_HOME || `${homedir()}/jarvis/runtime`;
 
   // 5. Build system prompt — Prompt Harness (Tiered Lazy Loading)
   //    Tier 0: 항상 로드 (<3KB) — identity, language, persona, principles, format-core, tools, safety
@@ -994,31 +994,49 @@ export async function* createClaudeSession(prompt, {
       'mcp__serena-board__replace_symbol_body', 'mcp__serena-board__insert_after_symbol',
       'mcp__serena-board__insert_before_symbol',
     ],
-    // Phase 0 Sensor: bypassPermissions → default 전환 + canUseTool 게이트
-    // 민감 경로(.env / secrets/* / SSH key / credentials)는 차단, 그 외 auto-allow.
+    // Phase 0 Sensor (재설계 2026-04-17): canUseTool → PreToolUse 훅 전환.
+    // 이유: SDK 'default' 모드에서 내부 'allow' 판정된 tool은 canUseTool 콜백을
+    //      아예 호출하지 않아 Read/Glob/Grep 등 대부분 tool에 대한 민감 경로 검사
+    //      bypass 가능. PreToolUse 훅은 SDK 내부 판정과 무관하게 모든 tool에 발화.
     permissionMode: 'default',
-    canUseTool: async (toolName, input) => {
-      const blocked = checkSensitivePath(toolName, input);
-      if (blocked) {
-        log('warn', 'canUseTool: denied (sensitive path)', {
-          tool: toolName, blocked: String(blocked).slice(0, 160),
-        });
-        try {
-          const ledgerDir = join(HOME, '.jarvis', 'state');
-          mkdirSync(ledgerDir, { recursive: true });
-          appendFileSync(
-            join(ledgerDir, 'permission-denied.jsonl'),
-            JSON.stringify({
-              ts: new Date().toISOString(),
-              source: 'discord-bot',
-              tool: toolName,
-              blocked: String(blocked).slice(0, 160),
-            }) + '\n'
-          );
-        } catch { /* ledger best-effort */ }
-        return { behavior: 'deny', message: `민감 경로 차단: ${String(blocked).slice(0, 120)}` };
-      }
-      return { behavior: 'allow' };
+    hooks: {
+      PreToolUse: [{
+        hooks: [async (input) => {
+          try {
+            const blocked = checkSensitivePath(input.tool_name, input.tool_input);
+            if (blocked) {
+              log('warn', 'PreToolUse: denied (sensitive path)', {
+                tool: input.tool_name, blocked: String(blocked).slice(0, 160),
+              });
+              try {
+                const ledgerDir = join(HOME, 'jarvis/runtime', 'state');
+                mkdirSync(ledgerDir, { recursive: true });
+                appendFileSync(
+                  join(ledgerDir, 'permission-denied.jsonl'),
+                  JSON.stringify({
+                    ts: new Date().toISOString(),
+                    source: 'discord-bot',
+                    tool: input.tool_name,
+                    blocked: String(blocked).slice(0, 160),
+                  }) + '\n'
+                );
+              } catch { /* ledger best-effort */ }
+              return {
+                hookSpecificOutput: {
+                  hookEventName: 'PreToolUse',
+                  permissionDecision: 'deny',
+                  permissionDecisionReason: `민감 경로 차단: ${String(blocked).slice(0, 120)}`,
+                },
+              };
+            }
+          } catch (err) {
+            // 훅 자체 오류 시 fail-open (봇 먹통 방지 우선). 로그로 감지 가능하게 기록.
+            log('error', 'PreToolUse hook threw (fail-open)', { error: err?.message });
+          }
+          return { continue: true };
+        }],
+        timeout: 5,
+      }],
     },
     mcpServers,
     maxTurns,
