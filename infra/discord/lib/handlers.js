@@ -60,7 +60,7 @@ import {
 } from './claude-runner.js';
 import { appendFeed } from './channel-feed.js';
 import { generateCode, verifyCode } from './pairing.js';
-import { userMemory } from './user-memory.js';
+import { userMemory } from '../../lib/user-memory.mjs';
 import { t } from './i18n.js';
 import { recordError } from './error-tracker.js';
 
