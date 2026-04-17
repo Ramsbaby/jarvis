@@ -16,8 +16,10 @@
 
     <key>EnvironmentVariables</key>
     <dict>
+        <key>HOME</key>
+        <string>/Users/ramsbaby</string>
         <key>BOT_HOME</key>
-        <string>/Users/ramsbaby/.local/share/jarvis</string>
+        <string>/Users/ramsbaby/jarvis/runtime</string>
         <key>JARVIS_HOME</key>
         <string>/Users/ramsbaby/jarvis</string>
         <key>NODE_ENV</key>
@@ -36,9 +38,9 @@
     <integer>30</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/ramsbaby/.local/share/jarvis/logs/discord-bot.out.log</string>
+    <string>/Users/ramsbaby/jarvis/runtime/logs/discord-bot.out.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/ramsbaby/.local/share/jarvis/logs/discord-bot.err.log</string>
+    <string>/Users/ramsbaby/jarvis/runtime/logs/discord-bot.err.log</string>
 </dict>
 </plist>
