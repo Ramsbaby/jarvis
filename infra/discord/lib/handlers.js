@@ -110,7 +110,7 @@ function _buildBatchContent(messages) {
 // Pending task state — timeout 발생 시 저장, "계속" 입력 시 재주입
 // ---------------------------------------------------------------------------
 
-const _BOT_HOME = process.env.BOT_HOME || join(homedir(), '.jarvis');
+const _BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const PENDING_TASKS_PATH = join(_BOT_HOME, 'state', 'pending-tasks.json');
 const PENDING_TASK_TTL_MS = 30 * 60 * 1000; // 30분
 
@@ -542,7 +542,7 @@ export async function handleMessage(message, state) {
   if (rememberMatch) {
     const fact = rememberMatch[1].trim();
     if (fact) {
-      userMemory.addFact(message.author.id, fact);
+      userMemory.addFact(message.author.id, fact, 'discord-remember-cmd');
       await message.reply(t('msg.remembered'));
       log('info', 'User memory saved via text command', { userId: message.author.id, fact: fact.slice(0, 100) });
     }
@@ -1476,7 +1476,7 @@ ${extracted}
       originalPrompt,
       channelId: effectiveChannelId,
       threadId: thread.id,
-      botHome: process.env.BOT_HOME || `${homedir()}/.jarvis`,
+      botHome: process.env.BOT_HOME || `${homedir()}/jarvis/runtime`,
       client,
     });
     await streamer.updatePhase('🔍 컨텍스트 검색 중...');
@@ -1765,7 +1765,7 @@ export async function rerunQuery(channel, query, sessionKey, state, opts = {}) {
         originalPrompt: query,   // use original (un-summarized) query for pattern matching
         channelId: channel.id,
         threadId: channel.id,
-        botHome: process.env.BOT_HOME || `${homedir()}/.jarvis`,
+        botHome: process.env.BOT_HOME || `${homedir()}/jarvis/runtime`,
         client: channel.client ?? null,
       });
       fullQuery = await _preProcessorRegistry.run(fullQuery, preCtx);
