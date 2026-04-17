@@ -27,8 +27,39 @@ fi
 TOKEN_FILE="$BOT_HOME/config/google-calendar-token.json"
 if [[ ! -f "$TOKEN_FILE" ]]; then
     log "ERROR: $TOKEN_FILE 없음. calendar-setup-oauth.sh를 먼저 실행하세요."
-    exit 0
+    exit 1
 fi
+
+# 토큰 파일 유효성 검증 (client_id, client_secret, refresh_token 필드 확인)
+VALIDATE_STDERR="/tmp/validate-$$.err"
+trap "rm -f '$VALIDATE_STDERR'" EXIT
+
+if ! python3 - "$TOKEN_FILE" 2>"$VALIDATE_STDERR" << 'VALIDATEEOF'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        creds = json.load(f)
+    required_fields = ["client_id", "client_secret", "refresh_token"]
+    for field in required_fields:
+        if field not in creds or not creds[field]:
+            print(f"ERROR: Missing or empty field: {field}", file=sys.stderr)
+            sys.exit(1)
+    print("OK", file=sys.stdout)
+except Exception as e:
+    print(f"ERROR: Token validation failed: {e}", file=sys.stderr)
+    sys.exit(1)
+VALIDATEEOF
+then
+    if [[ -s "$VALIDATE_STDERR" ]]; then
+        ERROR_MSG=$(cat "$VALIDATE_STDERR")
+        log "ERROR: Token validation failed: $ERROR_MSG"
+    else
+        log "ERROR: Token validation failed (unknown error)"
+    fi
+    exit 1
+fi
+
+log "Token validation OK"
 
 # 알림 상태 파일 초기화
 if [[ ! -f "$ALERTED_FILE" ]]; then
@@ -41,71 +72,112 @@ WINDOW_TO="$(date -v+"${ALERT_WINDOW_MAX}"M '+%Y-%m-%dT%H:%M:%S')"
 
 # Google Calendar API로 이벤트 조회 (curl 기반, keychain 불필요)
 CALENDAR_OUTPUT=""
-CALENDAR_OUTPUT=$(python3 - "$TOKEN_FILE" "$WINDOW_FROM" "$WINDOW_TO" << 'GCALEOF'
-import json, sys, urllib.request, urllib.parse
+API_STDERR="/tmp/calendar-api-$$.err"
+trap "rm -f '$API_STDERR'" EXIT
+
+log "Fetching calendar events for window: $WINDOW_FROM to $WINDOW_TO"
+
+CALENDAR_OUTPUT=$(python3 - "$TOKEN_FILE" "$WINDOW_FROM" "$WINDOW_TO" 2>"$API_STDERR" << 'GCALEOF'
+import json, sys, urllib.request, urllib.parse, traceback
 
 token_file = sys.argv[1]
 window_from = sys.argv[2]  # 2026-03-12T10:25:00
 window_to = sys.argv[3]    # 2026-03-12T10:35:00
 
-with open(token_file) as f:
-    creds = json.load(f)
+try:
+    with open(token_file) as f:
+        creds = json.load(f)
 
-client_id = creds["client_id"]
-client_secret = creds["client_secret"]
-refresh_token = creds["refresh_token"]
+    client_id = creds["client_id"]
+    client_secret = creds["client_secret"]
+    refresh_token = creds["refresh_token"]
 
-# 1) Refresh access token
-token_data = urllib.parse.urlencode({
-    "client_id": client_id,
-    "client_secret": client_secret,
-    "refresh_token": refresh_token,
-    "grant_type": "refresh_token"
-}).encode()
-req = urllib.request.Request("https://oauth2.googleapis.com/token", data=token_data)
-with urllib.request.urlopen(req, timeout=10) as resp:
-    access_token = json.loads(resp.read())["access_token"]
+    # 1) Refresh access token
+    token_data = urllib.parse.urlencode({
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token"
+    }).encode()
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=token_data)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            token_resp = json.loads(resp.read())
+            access_token = token_resp.get("access_token")
+            if not access_token:
+                raise ValueError(f"No access_token in response: {token_resp}")
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        raise RuntimeError(f"OAuth token refresh failed (HTTP {e.code}): {error_body}")
 
-# 2) Fetch calendar events (timeMin/timeMax in RFC3339)
-# Note: RFC3339 requires %2B for + sign in URL params (e.g., 2026-04-17T10:30:00%2B09:00)
-time_min = urllib.parse.quote(window_from + "+09:00", safe=':')
-time_max = urllib.parse.quote(window_to + "+09:00", safe=':')
-cal_url = (
-    f"https://www.googleapis.com/calendar/v3/calendars/primary/events"
-    f"?timeMin={time_min}&timeMax={time_max}"
-    f"&singleEvents=true&orderBy=startTime&maxResults=10"
-)
-cal_req = urllib.request.Request(cal_url, headers={"Authorization": f"Bearer {access_token}"})
-with urllib.request.urlopen(cal_req, timeout=10) as resp:
-    cal_data = json.loads(resp.read())
+    # 2) Fetch calendar events (timeMin/timeMax in RFC3339)
+    # Note: RFC3339 requires %2B for + sign in URL params (e.g., 2026-04-17T10:30:00%2B09:00)
+    time_min = urllib.parse.quote(window_from + "+09:00", safe=':')
+    time_max = urllib.parse.quote(window_to + "+09:00", safe=':')
+    cal_url = (
+        f"https://www.googleapis.com/calendar/v3/calendars/primary/events"
+        f"?timeMin={time_min}&timeMax={time_max}"
+        f"&singleEvents=true&orderBy=startTime&maxResults=10"
+    )
+    cal_req = urllib.request.Request(cal_url, headers={"Authorization": f"Bearer {access_token}"})
+    try:
+        with urllib.request.urlopen(cal_req, timeout=10) as resp:
+            cal_data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode()
+        raise RuntimeError(f"Google Calendar API failed (HTTP {e.code}): {error_body}")
 
-# 3) Map to {"events": [...]} format (기존 Python 코드 호환)
-events = []
-for item in cal_data.get("items", []):
-    events.append({
-        "id": item.get("id", ""),
-        "summary": item.get("summary", "(제목 없음)"),
-        "start": item.get("start", {}),
-        "end": item.get("end", {})
-    })
+    # 3) Map to {"events": [...]} format (기존 Python 코드 호환)
+    events = []
+    for item in cal_data.get("items", []):
+        events.append({
+            "id": item.get("id", ""),
+            "summary": item.get("summary", "(제목 없음)"),
+            "start": item.get("start", {}),
+            "end": item.get("end", {})
+        })
 
-print(json.dumps({"events": events}, ensure_ascii=False))
+    print(json.dumps({"events": events}, ensure_ascii=False))
+    sys.exit(0)
+
+except Exception as e:
+    print(f"ERROR: Google Calendar API call failed: {e}", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
+    sys.exit(1)
 GCALEOF
-) 2>&1 || {
-    log "WARN: Google Calendar API 호출 실패, using empty events"
-    CALENDAR_OUTPUT='{"events":[]}'
+) || {
+    if [[ -s "$API_STDERR" ]]; then
+        ERROR_MSG=$(cat "$API_STDERR")
+        log "ERROR: Google Calendar API failed: $ERROR_MSG"
+    else
+        log "ERROR: Google Calendar API call failed (unknown error)"
+    fi
+    exit 1
 }
 
 # Webhook URL 가져오기
 WEBHOOK_URL=""
-if ! WEBHOOK_URL="$(CFG_PATH="$WEBHOOK_CONFIG" python3 -c "import json,os; print(json.load(open(os.environ['CFG_PATH']))['webhook']['url'])" 2>/dev/null)"; then
-    log "ERROR: webhook URL parse failed"
-    exit 0
+WEBHOOK_STDERR="/tmp/webhook-$$.err"
+trap "rm -f '$WEBHOOK_STDERR'" EXIT
+
+if ! WEBHOOK_URL="$(CFG_PATH="$WEBHOOK_CONFIG" python3 -c "import json,os; print(json.load(open(os.environ['CFG_PATH']))['webhook']['url'])" 2>"$WEBHOOK_STDERR")"; then
+    if [[ -s "$WEBHOOK_STDERR" ]]; then
+        ERROR_MSG=$(cat "$WEBHOOK_STDERR")
+        log "ERROR: webhook URL parse failed: $ERROR_MSG"
+    else
+        log "ERROR: webhook URL parse failed"
+    fi
+    exit 1
+fi
+
+if [[ -z "$WEBHOOK_URL" ]]; then
+    log "ERROR: webhook URL is empty"
+    exit 1
 fi
 
 # 이벤트 처리: 필터링 + 중복 체크 + 알림 전송 + 정리
-# python3 실패(exit 1 등) 시에도 스크립트가 정상 종료되도록 || true 처리
-python3 - "$CALENDAR_OUTPUT" "$ALERTED_FILE" "$WEBHOOK_URL" "$WINDOW_FROM" "$WINDOW_TO" "$LOG" << 'PYEOF' || { log "ERROR: python3 event processing failed (exit $?)"; exit 0; }
+# python3 실패 시 exit 1로 크론 에러 신호
+python3 - "$CALENDAR_OUTPUT" "$ALERTED_FILE" "$WEBHOOK_URL" "$WINDOW_FROM" "$WINDOW_TO" "$LOG" << 'PYEOF' || { log "ERROR: python3 event processing failed (exit $?)"; exit 1; }
 import json
 import sys
 import subprocess
