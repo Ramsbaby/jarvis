@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.jarvis.discord-bot</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>/Users/ramsbaby/jarvis/infra/discord/discord-bot.js</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/ramsbaby/jarvis/infra/discord</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>BOT_HOME</key>
+        <string>/Users/ramsbaby/.local/share/jarvis</string>
+        <key>JARVIS_HOME</key>
+        <string>/Users/ramsbaby/jarvis</string>
+        <key>NODE_ENV</key>
+        <string>production</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/ramsbaby/.local/share/jarvis/logs/discord-bot.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/ramsbaby/.local/share/jarvis/logs/discord-bot.err.log</string>
+</dict>
+</plist>
