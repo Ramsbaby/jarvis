@@ -55,4 +55,7 @@ paths = [
 commits = [
   "3fd64c6f0c4473c410e676bcb0f83ecdec4e236d",
   "68b3bbb15a27bd6daf3f88c1114e91f363e9af1d",
+  # A2 Phase D 코드 치환 커밋 — streaming.js 마스킹 regex 포함 (의도적)
+  # 81d11fc에서 inline gitleaks:allow 추가했으나 커밋 자체 스캔 시 오탐.
+  "8b3adfb8105f6595b5a839e05f4817555f53444e",
 ]
