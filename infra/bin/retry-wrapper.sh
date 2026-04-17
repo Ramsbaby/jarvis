@@ -111,6 +111,8 @@ classify_exit_code() {
 }
 
 # --- Error classification by stdout+stderr content ---
+# Phase 1 (2026-04-17): 실패 관측가능성 확보 — UNKNOWN 비율을 줄이는 게 목표.
+# 신규 카테고리: SCRIPT_MISSING / BUDGET_EXCEEDED / NETWORK_ERROR
 classify_error() {
     local result_file="$1"
     local stderr_file="${result_file}.stderr"
@@ -120,15 +122,40 @@ classify_error() {
     elif grep -qi "overloaded\|503\|capacity" "${check_files[@]}" 2>/dev/null; then echo "OVERLOADED"
     elif grep -qi "authentication\|unauthorized\|401" "${check_files[@]}" 2>/dev/null; then echo "AUTH_ERROR"
     elif grep -qi "context_length\|too.long\|too.large" "${check_files[@]}" 2>/dev/null; then echo "TOO_LONG"
+    elif grep -qi "no such file or directory\|command not found" "${check_files[@]}" 2>/dev/null; then echo "SCRIPT_MISSING"
+    elif grep -qi "budget exceeded\|max.budget\|예산 초과\|예산초과\|budget.cap" "${check_files[@]}" 2>/dev/null; then echo "BUDGET_EXCEEDED"
+    elif grep -qiE "getaddrinfo|connection refused|econnrefused|network is unreachable|curl:.*\([67]\)|curl:.*\(28\)|dial tcp.*timeout" "${check_files[@]}" 2>/dev/null; then echo "NETWORK_ERROR"
     else echo "UNKNOWN"; fi
 }
 
+# --- Content-level classification (exit 0인데 응답 본문이 에러 의미) ---
+# Phase 1: exit 0 SUCCESS 구멍 감지 (enforce는 안 함, 태깅만).
+# 2026-04-17 Preply 사건: LLM이 "스크립트 없어요" 자연어로 응답하고 exit 0 → SUCCESS로 기록된 패턴 포착용.
+classify_content() {
+    local result_file="$1"
+    [[ -f "$result_file" ]] || { echo ""; return; }
+    if grep -qiE "스크립트.{0,10}(아직.{0,10})?(생성되지 않|설치되지 않|없습니다|미설치)|필요한 스크립트|script.{0,20}(not found|not installed|missing|not yet created)|스크립트가 아직" "$result_file" 2>/dev/null; then
+        echo "CONTENT_ERROR_SCRIPT_MISSING"
+    elif grep -qiE "죄송합니다.{0,50}(실행할 수 없|할 수 없)|unable to (execute|run|complete)|cannot (proceed|execute|complete)" "$result_file" 2>/dev/null; then
+        echo "CONTENT_ERROR_UNABLE_TO_EXECUTE"
+    else
+        echo ""
+    fi
+}
+
 # --- JSONL log entry ---
+# Phase 1: failure_class 필드 추가 (optional, 호환성 유지).
 log_retry() {
-    local attempt="$1" exit_code="$2" classification="$3" duration_s="$4"
-    printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"exit_code":%d,"classification":"%s","duration_s":%s}\n' \
-        "$(date -u +%FT%TZ)" "$TASK_ID" "$attempt" "$exit_code" "$classification" "$duration_s" \
-        >> "$RETRY_LOG"
+    local attempt="$1" exit_code="$2" classification="$3" duration_s="$4" failure_class="${5:-}"
+    if [[ -n "$failure_class" ]]; then
+        printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"exit_code":%d,"classification":"%s","failure_class":"%s","duration_s":%s}\n' \
+            "$(date -u +%FT%TZ)" "$TASK_ID" "$attempt" "$exit_code" "$classification" "$failure_class" "$duration_s" \
+            >> "$RETRY_LOG"
+    else
+        printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"exit_code":%d,"classification":"%s","duration_s":%s}\n' \
+            "$(date -u +%FT%TZ)" "$TASK_ID" "$attempt" "$exit_code" "$classification" "$duration_s" \
+            >> "$RETRY_LOG"
+    fi
 }
 
 # --- Retry loop ---
@@ -170,7 +197,23 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
         esac
     fi
 
-    log_retry "$attempt" "$exit_code" "$classification" "$duration_s"
+    # Phase 1 (2026-04-17): failure_class 계산 — 태깅만, 재시도 결정은 건드리지 않음.
+    #   - exit 124 → TIMEOUT
+    #   - exit ≠ 0 → classify_error() 재활용 (SCRIPT_MISSING/BUDGET_EXCEEDED/NETWORK_ERROR 등 신규 포함)
+    #   - exit = 0 → classify_content() 로 본문 검사 (exit 0 SUCCESS 구멍 감지)
+    failure_class=""
+    if [[ "$exit_code" -eq 124 ]]; then
+        failure_class="TIMEOUT"
+    elif [[ "$exit_code" -ne 0 ]]; then
+        failure_class=$(classify_error "$RESULT_TMP")
+    else
+        _content_cls=$(classify_content "$RESULT_TMP")
+        if [[ -n "$_content_cls" ]]; then
+            failure_class="$_content_cls"
+        fi
+    fi
+
+    log_retry "$attempt" "$exit_code" "$classification" "$duration_s" "$failure_class"
 
     # --- Output quality check (exit_code=0이어도 결과 품질 검증) ---
     if [[ "$classification" == "success" ]]; then
