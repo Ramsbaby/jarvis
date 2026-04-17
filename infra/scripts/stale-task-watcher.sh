@@ -177,40 +177,177 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Phase 2: Never-Run Reaper — 로그 0건인 active 태스크 감지
+# Phase 2: Never-Run Reaper — 스케줄 기반 판단 (addedAt + 예상실행횟수)
+#
+# 판단 기준: "지금까지 몇 번 실행됐어야 하나?" 계산 후 실제 0회면 dead로 판정
+#   - addedAt 기준으로 경과 일수 계산
+#   - schedule 파싱: 매분(*/N) → 하루 수백회, 매일(0 H * * *) → 1회/일
+#                    주간(0 H * * 0) → 1회/주, 이벤트 트리거 → 제외
+#   - 경과 일수 동안 예상 실행횟수 ≥ MIN_EXPECTED_RUNS 이고 실제 0회 → dead
+#
+# 자동 비활성화 조건 (세 가지 모두 충족):
+#   1. addedAt 기준 14일 이상 경과
+#   2. 스케줄 계산 기준 예상 실행횟수 ≥ 3회
+#   3. cron.log에 실제 실행 이력 0건
 # ══════════════════════════════════════════════════════════════════════════════
 CRON_LOG="${BOT_HOME}/logs/cron.log"
-NEVER_RUN_IDS=""
-NEVER_RUN_COUNT=0
+DEAD_IDS=""      # 자동 비활성화 대상
+DEAD_CSV=""
+DEAD_COUNT=0
+WARN_IDS=""      # 아직 판단 보류 (신규/희소 스케줄)
+WARN_COUNT=0
+MIN_EXPECTED_RUNS=3
+MIN_AGE_DAYS=14
 
 if [[ -f "$TASKS_CONFIG" && -f "$CRON_LOG" ]]; then
-    ACTIVE_IDS=$(python3 -c "
-import json
+    # Python으로 스케줄 기반 예상 실행횟수 계산 후 dead/warn 분류
+    REAPER_RESULT=$(python3 - <<'PYEOF' 2>/dev/null
+import json, re
+from datetime import date, datetime
+
+TODAY = date.today()
+MIN_AGE = 14
+MIN_RUNS = 3
+
+def expected_runs_per_day(schedule):
+    """cron 표현식에서 하루 예상 실행 횟수 반환. 이벤트 트리거는 -1."""
+    if not schedule or schedule.strip() == '':
+        return -1  # 이벤트 트리거 / 온디맨드
+    parts = schedule.split()
+    if len(parts) != 5:
+        return -1
+    minute, hour, dom, month, dow = parts
+    # 분 단위 (*/N or *)
+    if re.match(r'^\*/(\d+)$', minute):
+        interval = int(re.match(r'^\*/(\d+)$', minute).group(1))
+        return 60 / interval * 24
+    if minute == '*':
+        return 60 * 24
+    # 시간 단위 (hour 부분이 */N)
+    if re.match(r'^\*/(\d+)$', hour):
+        interval = int(re.match(r'^\*/(\d+)$', hour).group(1))
+        return 24 / interval
+    # 주간 (dow 가 특정 요일)
+    if dow not in ('*', '') and dom == '*':
+        days_per_week = len(dow.split(',')) if ',' in dow else 1
+        if '-' in dow:
+            parts_dow = dow.split('-')
+            days_per_week = int(parts_dow[1]) - int(parts_dow[0]) + 1
+        return days_per_week / 7
+    # 월간 (dom이 특정 일)
+    if dom not in ('*', '') and dow == '*':
+        return 1 / 30
+    # 기본: 하루 1회
+    return 1.0
+
 try:
     data = json.load(open('$TASKS_CONFIG'))
     tasks = data.get('tasks', data) if isinstance(data, dict) else data
+    log_content = open('$CRON_LOG').read()
+
     for t in tasks:
-        if isinstance(t, dict) and not t.get('disabled', False):
-            print(t.get('id',''))
-except Exception:
-    pass
-" 2>/dev/null) || true
+        if not isinstance(t, dict): continue
+        if not t.get('enabled', True) or t.get('disabled', False): continue
+        tid = t.get('id', '')
+        if not tid: continue
+        # 이벤트 트리거 태스크 제외
+        if t.get('event_trigger'): continue
+        if '[' + tid + ']' in log_content: continue  # 실행 이력 있음
 
-    for tid in $ACTIVE_IDS; do
-        [[ -z "$tid" ]] && continue
-        HIT=$(grep -c "\[${tid}\]" "$CRON_LOG" 2>/dev/null | tr -d '\n' || echo "0")
-        if [[ "$HIT" -eq 0 ]]; then
-            NEVER_RUN_IDS="${NEVER_RUN_IDS}\n- \`${tid}\`"
-            NEVER_RUN_COUNT=$((NEVER_RUN_COUNT + 1))
+        # addedAt 파싱
+        added_str = t.get('addedAt', '')
+        try:
+            added = date.fromisoformat(added_str)
+        except Exception:
+            added = TODAY
+        age_days = (TODAY - added).days
+
+        schedule = t.get('schedule', '')
+        runs_per_day = expected_runs_per_day(schedule)
+
+        if runs_per_day < 0:
+            continue  # 이벤트/온디맨드 제외
+
+        expected = runs_per_day * age_days
+
+        if age_days >= MIN_AGE and expected >= MIN_RUNS:
+            print(f'DEAD|{tid}|age={age_days}d|expected={expected:.1f}runs')
+        elif age_days < MIN_AGE:
+            print(f'WARN|{tid}|age={age_days}d|신규 — 관망')
+        else:
+            # 희소 스케줄 (월간 등) — 아직 시점 미도래 가능성
+            print(f'WARN|{tid}|age={age_days}d|expected={expected:.1f}runs — 희소 스케줄')
+except Exception as e:
+    import sys
+    print(f'ERROR:{e}', file=sys.stderr)
+PYEOF
+    )
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        TYPE="${line%%|*}"; REST="${line#*|}"
+        TID="${REST%%|*}"
+        DETAIL="${REST#*|}"
+        case "$TYPE" in
+            DEAD)
+                DEAD_IDS="${DEAD_IDS}\n- \`${TID}\` (${DETAIL})"
+                DEAD_CSV="${DEAD_CSV}${TID},"
+                DEAD_COUNT=$((DEAD_COUNT + 1))
+                ;;
+            WARN)
+                WARN_IDS="${WARN_IDS}\n- \`${TID}\` (${DETAIL})"
+                WARN_COUNT=$((WARN_COUNT + 1))
+                ;;
+        esac
+    done <<< "$REAPER_RESULT"
+
+    # ── Dead 태스크: 자동 비활성화 ──────────────────────────────────────────
+    if (( DEAD_COUNT > 0 )); then
+        log "Never-Run Reaper: dead 태스크 ${DEAD_COUNT}개 → tasks.json 자동 비활성화"
+        DISABLED_RESULT=$(python3 - <<PYEOF 2>/dev/null || echo "ERROR"
+import json, sys
+tasks_file = '${TASKS_CONFIG}'
+dead_ids = set(filter(None, '${DEAD_CSV}'.rstrip(',').split(',')))
+try:
+    with open(tasks_file) as f:
+        data = json.load(f)
+    tasks = data.get('tasks', data) if isinstance(data, dict) else data
+    done = []
+    for t in tasks:
+        if isinstance(t, dict) and t.get('id') in dead_ids:
+            t['enabled'] = False
+            done.append(t.get('id'))
+    if isinstance(data, dict):
+        data['tasks'] = tasks
+    with open(tasks_file, 'w') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print(','.join(done))
+except Exception as e:
+    print('ERROR:' + str(e), file=sys.stderr); sys.exit(1)
+PYEOF
+        )
+        node "${BOT_HOME}/scripts/gen-tasks-index.mjs" 2>/dev/null || true
+        log "자동 비활성화 완료: ${DISABLED_RESULT}"
+        discord_alert "🪓 **Never-Run Reaper**: dead 태스크 **${DEAD_COUNT}개 자동 비활성화**
+기준: addedAt 14일+ 경과 & 예상실행 3회+ & 실제 0회${DEAD_IDS}"
+    fi
+
+    # ── 신규/희소 스케줄 태스크: 일 1회 알림만 ──────────────────────────────
+    if (( WARN_COUNT > 0 )); then
+        NEVER_RUN_THROTTLE="${BOT_HOME}/state/never-run-reaper-last-alert.txt"
+        _TODAY=$(date +%Y-%m-%d)
+        _LAST=$(cat "$NEVER_RUN_THROTTLE" 2>/dev/null || echo "")
+        if [[ "$_LAST" != "$_TODAY" ]]; then
+            discord_alert "👀 **Never-Run Reaper**: 관망 중 **${WARN_COUNT}개** (신규 or 희소 스케줄 — 자동 처리 보류)${WARN_IDS}"
+            echo "$_TODAY" > "$NEVER_RUN_THROTTLE"
+            log "Never-Run 관망 ${WARN_COUNT}개 → 일 1회 알림"
+        else
+            log "Never-Run 관망 ${WARN_COUNT}개 — 오늘 이미 알림, skip"
         fi
-    done
+    fi
 
-    if (( NEVER_RUN_COUNT > 0 )); then
-        discord_alert "👻 **Never-Run Reaper**: ${NEVER_RUN_COUNT}개 태스크 로그 0건 (active인데 미실행)${NEVER_RUN_IDS}
-tasks.json disable 또는 삭제 권장."
-        log "Never-Run: ${NEVER_RUN_COUNT}개 감지"
-    else
-        log "Never-Run: 모든 active 태스크 실행 이력 정상"
+    if (( DEAD_COUNT == 0 && WARN_COUNT == 0 )); then
+        log "Never-Run Reaper: 모든 active 태스크 실행 이력 정상"
     fi
 fi
 
@@ -246,9 +383,18 @@ except Exception:
     done
 
     if (( GHOST_COUNT > 0 )); then
-        discord_alert "🔍 **Ghost Detector**: ${GHOST_COUNT}개 고스트 태스크 (로그에 있지만 tasks.json 미등록)${GHOST_IDS}
+        # ── 일 1회 throttle ──
+        GHOST_THROTTLE="${BOT_HOME}/state/ghost-detector-last-alert.txt"
+        _TODAY=$(date +%Y-%m-%d)
+        _LAST_GHOST=$(cat "$GHOST_THROTTLE" 2>/dev/null || echo "")
+        if [[ "$_LAST_GHOST" == "$_TODAY" ]]; then
+            log "Ghost: ${GHOST_COUNT}개 감지 — 오늘 이미 알림 전송됨, skip"
+        else
+            discord_alert "🔍 **Ghost Detector**: ${GHOST_COUNT}개 고스트 태스크 (로그에 있지만 tasks.json 미등록)${GHOST_IDS}
 등록하거나 발생원 제거 권장."
-        log "Ghost: ${GHOST_COUNT}개 감지"
+            echo "$_TODAY" > "$GHOST_THROTTLE"
+            log "Ghost: ${GHOST_COUNT}개 감지 → Discord 알림 전송 (일 1회 throttle 적용)"
+        fi
     else
         log "Ghost: 고스트 태스크 없음"
     fi

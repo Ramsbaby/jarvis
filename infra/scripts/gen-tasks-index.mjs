@@ -25,9 +25,9 @@ const HOME = os.homedir();
 const TASKS_JSON = path.join(HOME, 'jarvis/runtime/config/tasks.json');
 const VALIDATE_SCRIPT = path.resolve(new URL('.', import.meta.url).pathname, 'validate-tasks.mjs');
 
-// tasks.json Schema 검증 — 실패 시 잘못된 인덱스 생성 방지
+// tasks.json Schema 검증 + addedAt 누락 자동 삽입 (--fix 모드)
 try {
-  execFileSync(process.execPath, [VALIDATE_SCRIPT], { stdio: 'inherit' });
+  execFileSync(process.execPath, [VALIDATE_SCRIPT, '--fix'], { stdio: 'inherit' });
 } catch {
   console.error('[gen-tasks-index] validate-tasks 실패 — 인덱스 생성 중단');
   process.exit(1);

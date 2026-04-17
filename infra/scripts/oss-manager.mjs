@@ -206,7 +206,7 @@ ${currentReadme}
   const summary = results
     .map(r => `**${r.repo}** ★${r.stars}\n${r.analysis.slice(0, 350)}`)
     .join('\n\n---\n\n');
-  discordSend(`🔍 **OSS Recon — ${TODAY}**\n\n${summary.slice(0, 1900)}`, 'jarvis-market');
+  discordSend(`🔍 **OSS Recon — ${TODAY}**\n\n${summary.slice(0, 1900)}`);
 
   return results;
 }

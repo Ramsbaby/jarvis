@@ -113,6 +113,32 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
+// ── addedAt 누락 감지 + --fix 시 자동 삽입 ──────────────────────────────────
+const TODAY = new Date().toISOString().slice(0, 10);
+const FIX_MODE = process.argv.includes('--fix');
+let fixedCount = 0;
+const missingAddedAt = [];
+
+for (const task of tasks) {
+  if (!task.addedAt) {
+    missingAddedAt.push(task.id);
+    if (FIX_MODE) {
+      task.addedAt = TODAY;
+      fixedCount++;
+    }
+  }
+}
+
+if (missingAddedAt.length > 0) {
+  if (FIX_MODE) {
+    const { writeFileSync } = await import('fs');
+    writeFileSync(TASKS_FILE, JSON.stringify(tasksData, null, 2), 'utf-8');
+    log(`--fix: addedAt 자동 삽입 ${fixedCount}개 (${TODAY})`);
+  } else {
+    log(`⚠️  addedAt 누락 ${missingAddedAt.length}개 — gen-tasks-index 실행 시 자동 삽입됨`);
+  }
+}
+
 // ── 통과 ─────────────────────────────────────────────────────────────────────
 log(`PASS — ${tasks.length}개 태스크 검증 완료`);
 process.exit(0);
