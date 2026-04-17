@@ -74,6 +74,14 @@ jobs:
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
           echo "New tag: $NEW_TAG"
 
+      - name: 릴리즈 노트 생성 (conventional commits → 한국어 그룹)
+        run: |
+          NEW_TAG="${{ steps.version.outputs.new_tag }}"
+          LAST_TAG="${{ steps.last_tag.outputs.tag }}"
+          bash .github/scripts/release-notes.sh "$LAST_TAG" "$NEW_TAG" > release-notes.md
+          echo "--- release-notes.md 프리뷰 ---"
+          cat release-notes.md
+
       - name: 릴리즈 생성
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -82,13 +90,11 @@ jobs:
           LAST_TAG="${{ steps.last_tag.outputs.tag }}"
           BUMP="${{ steps.bump.outputs.bump }}"
 
-          # 커밋 수 계산
           COMMIT_COUNT=$(git log "${LAST_TAG}..HEAD" --oneline | wc -l | tr -d ' ')
 
           gh release create "$NEW_TAG" \
             --title "$NEW_TAG" \
-            --generate-notes \
-            --notes-start-tag "$LAST_TAG" \
+            --notes-file release-notes.md \
             --target main
 
           echo "✅ Released: $NEW_TAG ($COMMIT_COUNT commits since $LAST_TAG, bump=$BUMP)"
