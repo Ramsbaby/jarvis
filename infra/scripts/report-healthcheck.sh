@@ -29,6 +29,21 @@ if [[ ! -f "$BOARD_DB" ]]; then
   exit 1
 fi
 
+# ── Discord 봇 err.log 감시 (early-warn) ───────────────────────────
+# 최근 60분 내에 err.log가 쓰였으면 경고. 조용한 실패(=재기동 루프 등)를 조기 포착.
+ERR_LOG="$HOME/.jarvis/logs/discord-bot.err.log"
+if [[ -f "$ERR_LOG" ]]; then
+  err_size=$(stat -f %z "$ERR_LOG" 2>/dev/null || stat -c %s "$ERR_LOG" 2>/dev/null || echo 0)
+  err_mtime=$(stat -f %m "$ERR_LOG" 2>/dev/null || stat -c %Y "$ERR_LOG" 2>/dev/null || echo 0)
+  now_ts=$(date +%s)
+  err_age_min=$(( (now_ts - err_mtime) / 60 ))
+  if (( err_size > 0 && err_age_min < 60 )); then
+    log "WARN: discord-bot.err.log 최근 ${err_age_min}분 전 갱신 (${err_size}B) — 봇 상태 확인 권장"
+  else
+    log "OK: discord-bot.err.log 정적 (${err_age_min}분 전, ${err_size}B)"
+  fi
+fi
+
 # 최신 보고서 조회 (UTC). 레코드 없으면 NULL → CAST로 빈 값 나옴.
 hours_since=$(sqlite3 "$BOARD_DB" "SELECT CAST((julianday('now') - julianday(MAX(created_at))) * 24 AS INTEGER) FROM posts WHERE type='report';")
 latest=$(sqlite3 "$BOARD_DB" "SELECT COALESCE(MAX(created_at), '(없음)') FROM posts WHERE type='report';")
