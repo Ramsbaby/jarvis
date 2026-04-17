@@ -52,7 +52,10 @@ check_loaded() {
     local plist_file="${PLIST_DIR}/${service}.plist"
     if [[ ! -f "$plist_file" ]]; then return 0; fi
     local status_line
-    status_line=$(launchctl list 2>/dev/null | grep "$service" || true)
+    # 3번째 필드(Label) 정확 일치. 부분매칭 버그 방지 (ai.jarvis.board vs ai.jarvis.board-watchdog).
+    # 2026-04-17 사건 root cause: grep "ai.jarvis.board"가 board-watchdog 라인을 매칭해서
+    # unload된 서비스를 "loaded"로 오판 → bootstrap 경로 미발동 → 1시간 장애.
+    status_line=$(launchctl list 2>/dev/null | awk -v s="$service" '$3 == s' || true)
     if [[ -z "$status_line" ]]; then
         log "RECOVERY: $service not loaded, re-registering"
         if launchctl bootstrap "gui/${UID_NUM}" "$plist_file" 2>/dev/null; then
@@ -71,7 +74,8 @@ check_loaded() {
 for service in "${KEEPALIVE_SERVICES[@]}"; do
     plist_file="${PLIST_DIR}/${service}.plist"
     if [[ ! -f "$plist_file" ]]; then continue; fi
-    status_line=$(launchctl list 2>/dev/null | grep "$service" || true)
+    # 동일 부분매칭 버그 방지 — awk로 Label 정확 일치만 매칭.
+    status_line=$(launchctl list 2>/dev/null | awk -v s="$service" '$3 == s' || true)
     if [[ -z "$status_line" ]]; then
         log "RECOVERY: $service not loaded, re-registering"
         if launchctl bootstrap "gui/${UID_NUM}" "$plist_file" 2>/dev/null; then
@@ -111,7 +115,25 @@ for service in "${KEEPALIVE_SERVICES[@]}"; do
                 log "RECOVERY: npm install done, kickstarting"
             fi
 
+            # kickstart 시도
             launchctl kickstart -k "gui/${UID_NUM}/${service}" 2>/dev/null || true
+
+            # 3회 이상 kickstart 실패 시 강제 재등록 (bootout + bootstrap). 보조 방어막.
+            # 2026-04-17 1시간 장애의 진짜 root cause는 위 `awk $3 == s` fix (status_line 오판 버그)였음.
+            # 이 블록은 drop-down 케이스 — loaded 상태인데 PID=- stuck (launchd ThrottleInterval 의심)
+            # 에 대비한 2차 장치. 탐지(awk)가 먼저 작동하면 check_loaded 경로로 bootstrap 되어 여기까진 도달 X.
+            if [[ "$fail_count" -ge 3 && "$service" != "ai.jarvis.discord-bot" ]]; then
+                log "RECOVERY: $service kickstart failed ${fail_count}x — escalating to bootout+bootstrap"
+                launchctl bootout "gui/${UID_NUM}/${service}" 2>/dev/null || true
+                sleep 1
+                if launchctl bootstrap "gui/${UID_NUM}" "$plist_file" 2>/dev/null; then
+                    log "RECOVERY: $service re-bootstrapped (stuck state cleared)"
+                    echo "0" > "$FAIL_FILE"
+                else
+                    log "ERROR: $service bootstrap failed after bootout — manual intervention needed"
+                fi
+            fi
+
             recovered=$(( recovered + 1 ))
         else
             # 정상 실행 중이면 실패 카운터 초기화
