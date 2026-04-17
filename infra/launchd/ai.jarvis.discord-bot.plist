@@ -26,6 +26,8 @@
         <string>production</string>
         <key>PATH</key>
         <string>/Users/ramsbaby/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>LITE_CHANNEL_ID</key>
+        <string>1470559565258162312</string>
     </dict>
 
     <key>RunAtLoad</key>
