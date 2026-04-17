@@ -14,6 +14,14 @@ LAST_TAG="${1:?last_tag required (e.g. v2.1.0)}"
 NEW_TAG="${2:?new_tag required (e.g. v2.2.0)}"
 REPO_SLUG="${3:-${GITHUB_REPOSITORY:-Ramsbaby/jarvis}}"
 
+# 범위 끝: NEW_TAG가 이미 git 태그로 존재하면 그 커밋까지,
+# 없으면 HEAD (workflow에서 release create 직전에 호출되는 케이스).
+if git rev-parse --verify "${NEW_TAG}^{commit}" >/dev/null 2>&1; then
+  RANGE_END="$NEW_TAG"
+else
+  RANGE_END="HEAD"
+fi
+
 TYPES="feat fix perf refactor docs test build ci chore style revert"
 
 title_for() {
@@ -36,14 +44,14 @@ title_for() {
 # 특정 타입 커밋 → "- subject (`hash`)" 라인들
 commits_of_type() {
   local type="$1"
-  git log "${LAST_TAG}..HEAD" --format='%h %s' 2>/dev/null |
+  git log "${LAST_TAG}..${RANGE_END}" --format='%h %s' 2>/dev/null |
     grep -E "^[a-f0-9]+ ${type}(\([^)]+\))?!?: " |
     sed -E "s/^([a-f0-9]+) (.+)$/- \2 (\`\1\`)/" || true
 }
 
 # 알려진 타입에 안 잡히는 커밋
 commits_other() {
-  git log "${LAST_TAG}..HEAD" --format='%h %s' 2>/dev/null |
+  git log "${LAST_TAG}..${RANGE_END}" --format='%h %s' 2>/dev/null |
     grep -vE "^[a-f0-9]+ (feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert)(\([^)]+\))?!?: " |
     sed -E "s/^([a-f0-9]+) (.+)$/- \2 (\`\1\`)/" || true
 }
@@ -51,13 +59,13 @@ commits_other() {
 # breaking 커밋: subject에 `!:` 또는 body에 BREAKING CHANGE
 commits_breaking() {
   local shas
-  shas=$(git log "${LAST_TAG}..HEAD" --format='%H' 2>/dev/null || true)
+  shas=$(git log "${LAST_TAG}..${RANGE_END}" --format='%H' 2>/dev/null || true)
   [ -z "$shas" ] && return 0
   for sha in $shas; do
     local subj body
     subj=$(git log -1 --format='%s' "$sha")
     body=$(git log -1 --format='%b' "$sha")
-    if echo "$subj" | grep -qE '^[a-z]+(\([^)]+\))?!:' || echo "$body" | grep -q 'BREAKING CHANGE'; then
+    if echo "$subj" | grep -qE '^[a-z]+(\([^)]+\))?!:' || echo "$body" | grep -qE '^BREAKING CHANGE:'; then
       local hash
       hash=$(git log -1 --format='%h' "$sha")
       echo "- ${subj} (\`${hash}\`)"
@@ -65,7 +73,7 @@ commits_breaking() {
   done
 }
 
-TOTAL=$(git log "${LAST_TAG}..HEAD" --oneline 2>/dev/null | wc -l | tr -d ' ')
+TOTAL=$(git log "${LAST_TAG}..${RANGE_END}" --oneline 2>/dev/null | wc -l | tr -d ' ')
 
 # ── 출력 ────────────────────────────────────────────────────
 echo "## ${NEW_TAG}"
