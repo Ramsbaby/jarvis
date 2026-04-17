@@ -237,8 +237,35 @@ export function transition(id, toStatus, { triggeredBy = 'system', extra = {} } 
   return { ...task, status: toStatus, retries: newRetries, meta: newMeta };
 }
 
-/** 태스크 추가 (중복 시 무시) */
+/** 태스크 추가 (중복 시 무시, prompt 품질 게이트 포함) */
 export function addTask(task) {
+  // Phase 1 재발 방지 (2026-04-17): "이름만 있는" placeholder 태스크가 dev-queue에 들어가
+  // jarvis-coder에서 무한 실패하는 패턴 차단. tech-*-도입 5건 사건 참고.
+  // 환경변수로 엄격도 제어:
+  //   ADDTASK_PROMPT_GATE=enforce (기본) — 기준 미달 시 throw
+  //   ADDTASK_PROMPT_GATE=warn          — 로그만 찍고 통과 (신규 호출자 관측용)
+  //   ADDTASK_PROMPT_GATE=off           — 게이트 비활성 (비상)
+  const gate = process.env.ADDTASK_PROMPT_GATE ?? 'enforce';
+  if (gate !== 'off') {
+    const prompt = typeof task.prompt === 'string' ? task.prompt.trim() : '';
+    const name = typeof task.name === 'string' ? task.name.trim() : '';
+    const issues = [];
+    if (!prompt) issues.push('prompt_missing');
+    else if (prompt.length < 20) issues.push(`prompt_too_short(${prompt.length}c)`);
+    if (prompt && name && prompt === name) issues.push('prompt_equals_name');
+    if (issues.length > 0) {
+      const msg = `[task-store:addTask] QUALITY_GATE ${gate.toUpperCase()} id=${task.id} issues=${issues.join(',')}`;
+      console.error(msg);
+      if (gate === 'enforce') {
+        const err = new Error(`addTask rejected by quality gate: ${issues.join(',')}`);
+        err.code = 'ADDTASK_QUALITY_GATE';
+        err.taskId = task.id;
+        err.issues = issues;
+        throw err;
+      }
+    }
+  }
+
   const { id, status = 'pending', priority = 0, retries = 0, depends = [], parent_id = null, ...rest } = task;
   getDb().prepare(
     'INSERT OR IGNORE INTO tasks (id, status, priority, retries, depends, parent_id, meta, updated_at) VALUES (?,?,?,?,?,?,?,?)'

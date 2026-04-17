@@ -56,13 +56,22 @@ Runtime state (not in repo):
 
 ```
 ~/.jarvis/
-├── config/               # Live config read by crons — tasks.json is SSoT (see CONFIG.md)
-├── logs/                 # All cron stdout/stderr + claude-stderr-<id>-*.log
-├── data/
-│   ├── lancedb/          # RAG vector store (destroyed twice — handle with care)
+├── config/               # (real) Live config — tasks.json is SSoT (see CONFIG.md)
+├── logs/                 # (real) All cron stdout/stderr + claude-stderr-<id>-*.log
+├── data/                 # (real) RAG vector store, index state
+│   ├── lancedb/          #        destroyed twice — handle with care
 │   └── index-state.json
-└── scripts/              # User-local scripts (outside version control)
+├── state/                # (real) sessions, rate-tracker, caches
+├── ledger/               # (real) append-only JSONL audit trails
+├── wiki/                 # (real) LLM Wiki pages per userId
+├── private/              # (real) personal-only scripts — repo-ignored, your data
+├── scripts/              # → symlink to ~/jarvis/infra/scripts/  (OSS code, re-pointed by updates)
+├── bin/                  # → symlink to ~/jarvis/infra/bin/
+├── lib/                  # → symlink to ~/jarvis/infra/lib/
+└── infra/                # → symlink to ~/jarvis/infra/
 ```
+
+**Why the split**: code (symlinks into `~/jarvis/`) and personal data (real dirs) live under one root so crons can reference stable paths, but `git pull` only replaces the symlinked code — your data is structurally untouchable. Personal helper scripts that shouldn't go public belong in `~/.jarvis/private/` (real dir, repo-ignored).
 
 ---
 

@@ -4,16 +4,16 @@
 # 정책:
 #   - 파일 크기 > ROTATE_MB (기본 20MB) 시 .1로 rotate
 #   - .1이 이미 있으면 .2 → .3 ... 최대 KEEP_N (기본 3)까지 보존
-#   - KEEP_N 초과분은 gzip 압축 후 별도 ~/.jarvis/archive/ 에 이동
+#   - KEEP_N 초과분은 gzip 압축 후 별도 ~/jarvis/runtime/archive/ 에 이동
 #   - 압축본도 KEEP_ARCHIVE_DAYS (기본 90일) 넘으면 삭제
 #
 # 실행: 매일 새벽 크론 (아래 crontab 추가 필요)
-# 대상: ~/.jarvis/state/*.jsonl + ~/.jarvis/logs/ 중 센서 관련 파일
+# 대상: ~/jarvis/runtime/state/*.jsonl + ~/jarvis/runtime/logs/ 중 센서 관련 파일
 
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 ARCHIVE_DIR="${BOT_HOME}/archive/jsonl"
 LOG="${BOT_HOME}/logs/retention-jsonl.log"
 

@@ -171,5 +171,8 @@ if [[ $violations -eq 0 ]]; then
   exit 0
 else
   echo "⚠️  ${violations} un-recovered violations (see ${LEDGER})"
-  exit 1
+  # 원칙: 감사 스크립트의 exit code = "감사 실행 자체의 성공 여부".
+  # violation 발견은 ledger + throttled alert로 신호 → exit 0.
+  # tasks-integrity-audit 가 exit>0 을 "실행 실패"로 간주하므로 violation ≠ failure.
+  exit 0
 fi
