@@ -1,5 +1,9 @@
 # Jarvis
 
+> **⚠️ Migration Notice (2026-04-17)**: Runtime data relocated from `~/.jarvis/` → `~/jarvis/runtime/`.
+> Existing installations: `~/.jarvis` remains as a backward-compatible symlink through **2026-10-17** (D+180).
+> Fresh installs: use `~/jarvis/runtime/` directly. See [docs/A2-MIGRATION.md](infra/docs/A2-MIGRATION.md) (upcoming).
+
 <p align="center">
   <strong>AI operations platform that manages itself 24/7</strong><br>
   Discord Bot + RAG Knowledge Base + Insight Layer + Self-Healing Automation

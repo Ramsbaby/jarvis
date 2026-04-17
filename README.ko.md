@@ -1,5 +1,9 @@
 # Jarvis
 
+> **⚠️ 마이그레이션 공지 (2026-04-17)**: 런타임 데이터 위치 변경 `~/.jarvis/` → `~/jarvis/runtime/`.
+> 기존 설치: `~/.jarvis` 는 **2026-10-17까지** 호환성 심링크로 유지.
+> 신규 설치: `~/jarvis/runtime/` 직접 사용. [docs/A2-MIGRATION.md](infra/docs/A2-MIGRATION.md) (작성 예정).
+
 <p align="center">
   <strong>24/7 스스로 관리되는 AI 운영 플랫폼</strong><br>
   Discord 봇 + RAG 지식 베이스 + 인사이트 레이어 + 자가 복구 자동화
