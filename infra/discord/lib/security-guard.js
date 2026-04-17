@@ -25,7 +25,7 @@ const SENSITIVE_PATTERNS = [
   /\.aws\/credentials\b/i,                        // AWS 자격증명
   /\.netrc\b/i,                                   // .netrc
   /\bprivate[_-]?key\b/i,                         // private_key, private-key
-  /\bapi[_-]?key\b/i,                             // api_key 파일명 (값 아님)
+  /\bapi[_-]?key\s*[:=]\s*['"`]?[\w\-\.\/+]{12,}/i, // api_key = "실제값..." 형태만 차단 (하이픈 포함 토큰 대응, grep 오탐 방지)
   /\.pem\b/i,                                     // PEM keys
   /\.keystore\b/i,                                // Java keystore
   /\bmacos[_-]?keychain\b/i,
