@@ -550,7 +550,7 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
               log('debug', 'Auto memory skipped (low importance)', { userId, fact: f.slice(0, 60), score });
               continue;
             }
-            userMemory.addFact(userId, f); saved2++;
+            userMemory.addFact(userId, f, 'discord-auto-extract-sdk'); saved2++;
             wikiAddFact(userId, f); // LLM Wiki 실시간 기록
             log('info', 'Auto memory extracted (SDK)', { userId, fact: f.slice(0, 80), score });
           }
@@ -612,7 +612,7 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
         log('debug', 'Auto memory skipped (low importance)', { userId, fact: fact.slice(0, 60), score });
         continue;
       }
-      userMemory.addFact(userId, fact);
+      userMemory.addFact(userId, fact, 'discord-auto-extract');
       wikiAddFact(userId, fact);
       saved++;
       log('info', 'Auto memory extracted', { userId, fact: fact.slice(0, 80), score });
