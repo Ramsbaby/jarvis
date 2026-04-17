@@ -427,6 +427,17 @@ Output: `context-bus.md` (shared context) + `decisions/{date}.jsonl` + `board-mi
 | **Rate Limiting** | Per-user token budget + semaphore concurrency control (max 3) |
 | **i18n** | Korean + multilingual support |
 
+## Where Jarvis Stores Things
+
+**Two directories, one reason** — code and your data live apart so updates can never touch your stuff.
+
+- **`~/jarvis/`** — the recipe book (this git repo; replaced on every update)
+- **`~/.jarvis/`** — your fridge (tokens, chat history, RAG DB, personal configs; never touched by `git pull`)
+
+Same pattern as `~/.ssh` or `~/.aws` — the tool is shared, your data is yours. A phone OS update doesn't delete your photos; a `git pull` here doesn't delete your memory. `~/.jarvis/private/` (repo-ignored) is the correct home for personal helper scripts that a public repo shouldn't carry.
+
+Since the A2 migration (2026-04-17), `~/.jarvis/` is a symlink to `~/jarvis/runtime/` so the two paths resolve to the same files. Code-containing subdirectories (`bin/`, `lib/`, `scripts/`, `infra/`) are further symlinked into the repo so crons reference stable paths; everything else (`config/`, `data/`, `logs/`, `state/`, `ledger/`, `private/`, `wiki/`, `rag/`) is a real directory that holds only your data.
+
 ## Project Structure
 
 ```

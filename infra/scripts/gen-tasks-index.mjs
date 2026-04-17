@@ -91,7 +91,6 @@ const TEAM_REGISTRY = [
     keywords: [
       'record-daily', 'memory', 'session-sum', 'session-sync',
       'compact', 'rag-index', 'vault-sync', 'vault-auto-link',
-      'private-sync',
     ],
   },
   {
