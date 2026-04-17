@@ -108,8 +108,7 @@ nexus_enabled = {
 }
 nexus_all = {t['id'] for t in d.get('tasks', []) if t.get('id')}
 
-policy_duplicate = []   # com.jarvis.X + tasks.json 에 enabled X + launchctl 에 실제 로드 → 이중 실행
-policy_stale_file = []  # com.jarvis.X + tasks.json 에 enabled X + launchctl 미로드 → 잔존 파일 (SSoT 오염만)
+policy_duplicate = []   # com.jarvis.X + tasks.json 에 enabled X → 이중 실행
 policy_orphan_plist = []  # com.jarvis.Y + tasks.json 에 없음 → Nexus 미등록
 policy_ghost = []       # com.jarvis.Z plist 의 참조 스크립트가 없음 (즉시 제거 가능)
 
@@ -126,16 +125,11 @@ for label in com_plists:
     except Exception:
         script = None
     script_exists = bool(script) and os.path.exists(script)
-    loaded = label in status_map  # launchctl 에 실제로 로드되어 있나
 
     if not script_exists:
         policy_ghost.append({'label': label, 'script': script or '(unknown)'})
     elif task_id in nexus_enabled:
-        # "이중 실행"은 launchctl 에 실제 로드된 경우만. 잔존 파일은 분리 카테고리로.
-        if loaded:
-            policy_duplicate.append(label)
-        else:
-            policy_stale_file.append(label)
+        policy_duplicate.append(label)
     elif task_id not in nexus_all:
         policy_orphan_plist.append(label)
 
@@ -150,7 +144,6 @@ report = {
     'ai_plist_failing': ai_failing,
     'com_plist_total': len(com_plists),
     'policy_duplicate': policy_duplicate,
-    'policy_stale_file': policy_stale_file,
     'policy_orphan_plist': policy_orphan_plist,
     'policy_ghost': policy_ghost,
 }
@@ -172,7 +165,6 @@ ai_un = a["ai_plist_unloaded"]
 ai_fail = a["ai_plist_failing"]
 pending = a["auto_disabled_pending_review"]
 dup = a["policy_duplicate"]
-stale = a.get("policy_stale_file", [])
 orphan = a["policy_orphan_plist"]
 ghost = a["policy_ghost"]
 
@@ -180,7 +172,7 @@ lines = []
 lines.append("📋 **tasks-integrity-audit**")
 lines.append("enabled 태스크 {}건 / 누락 스크립트 {}건".format(a["enabled_total"], len(miss)))
 lines.append("ai.jarvis.* LaunchAgent {}/{} 로드 / 실패 {}건".format(a["ai_plist_loaded"], a["ai_plist_total"], len(ai_fail)))
-lines.append("com.jarvis.* 정책 정합: 활성 {}건 / 중복 {}건 / stale {}건 / orphan {}건 / ghost {}건".format(a["com_plist_total"], len(dup), len(stale), len(orphan), len(ghost)))
+lines.append("com.jarvis.* 정책 정합: 활성 {}건 / 중복 {}건 / orphan {}건 / ghost {}건".format(a["com_plist_total"], len(dup), len(orphan), len(ghost)))
 
 if miss:
     lines.append("\n**🔴 누락 스크립트 (auto-disable 대상):**")
@@ -193,13 +185,9 @@ if ghost:
     lines.append("  → 조치: `launchctl bootout` + plist 백업 후 삭제 (안전)")
     for g in ghost[:5]: lines.append("  • `{}`".format(g["label"]))
 if dup:
-    lines.append("\n**🔴 정책 위반 — 이중 실행 (com.jarvis 로드됨 + Nexus enabled):** {}건".format(len(dup)))
-    lines.append("  → 조치: com.jarvis bootout + plist 제거 (Nexus tasks.json SSoT)")
+    lines.append("\n**🔴 정책 위반 — 이중 실행 (com.jarvis + Nexus 모두 enabled):** {}건".format(len(dup)))
+    lines.append("  → 조치: com.jarvis plist 제거 (Nexus tasks.json SSoT)")
     for d_lbl in dup[:5]: lines.append("  • `{}`".format(d_lbl))
-if stale:
-    lines.append("\n**⚪ com.jarvis plist 잔존 (미로드, Nexus enabled — 실행은 안 됨):** {}건".format(len(stale)))
-    lines.append("  → 조치: rm {~/Library/LaunchAgents/com.jarvis.X.plist} (안전 — 로드 안 됨)")
-    for s_lbl in stale[:5]: lines.append("  • `{}`".format(s_lbl))
 if orphan:
     lines.append("\n**🟡 com.jarvis.* Nexus 미등록 (단발 plist):** {}건".format(len(orphan)))
     lines.append("  → 조치: tasks.json 이관 or 의도적이면 유지 판단")
@@ -211,7 +199,7 @@ if ai_un:
     lines.append("\n⚠️ ai.jarvis.* 미로드: {}건 — {}{}".format(len(ai_un), ", ".join(ai_un[:5]), more))
 
 print("\n".join(lines))
-print("---HAS_ISSUE---" if (miss or ai_fail or ghost or dup or ai_un or orphan or stale) else "---OK---")
+print("---HAS_ISSUE---" if (miss or ai_fail or ghost or dup or ai_un or orphan) else "---OK---")
 ')
 
 HAS_ISSUE=$(echo "$SUMMARY" | grep -q "HAS_ISSUE" && echo yes || echo no)

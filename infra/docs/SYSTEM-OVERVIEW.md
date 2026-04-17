@@ -1,7 +1,7 @@
 # Jarvis 시스템 개요
 
 > 🤖 **자동 생성 문서** — 직접 편집 금지
-> Generated: 2026-04-17 13:54:57 | Commit: `1ad5449` (`main`)
+> Generated: 2026-04-10 06:48:15 | Commit: `ef4f804` (`main`)
 > 업데이트: `scripts/gen-system-overview.sh` (매일 04:05 + git commit 시)
 
 ---
@@ -80,70 +80,64 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 
 **현재 등록된 태스크:**
 
-> ✅ 활성 **71개** / 비활성 23개
+> ✅ 활성 **77개** / 비활성 1개
 
 | 태스크 ID | 스케줄 | 채널 | 설명 |
 |-----------|--------|------|------|
 | `session-sync` | `*/15 * * * *` | - | 최근 30분 내 대화 활동 감지 시 context-bus 즉시 갱신 |
-| `tqqq-monitor` | `*/15 22-23 * * 1-5` | jarvis-market | 시장 모니터링 |
+| `stock-monitor-monitor` | `*/15 22-23 * * 1-5` | jarvis-market | 시장 모니터링 |
 | `rate-limit-check` | `*/30 * * * *` | - | Rate Limit 체크 |
 | `update-usage-cache` | `*/30 * * * *` | - | /usage 명령 stale 방지 — 30분마다 ~/.claude/usage-cache.jso |
 | `stale-task-watcher` | `*/30 * * * *` | - | Stale 태스크 감지 및 자동 전이 |
-| `calendar-alert` | `*/5 * * * *` | jarvis | 일정 선제 알림 |
-| `dev-task-runner` | `*/5 * * * *` | - | dev-task-runner (launchd→tasks.json 이관 2026-04-16) |
 | `system-health` | `*/60 * * * *` | jarvis-system | 시스템 헬스체크 |
 | `github-monitor` | `0 * * * *` | jarvis-system | GitHub 알림 모니터 |
-| `vault-sync` | `0 */6 * * *` | jarvis | Obsidian Vault 동기화 |
 | `token-sync` | `0 1 * * *` | - | 토큰 동기화 |
-| `context-extractor` | `0 1 * * *` | - | context-extractor (launchd→tasks.json 이관 2026-04-16) |
+| `oss-docs` | `0 11 * * 3` | jarvis-blog | OSS README 갱신 제안 |
 | `oss-promo` | `0 17 * * 5` | jarvis-blog | OSS 주간 홍보 초안 생성 |
+| `career-weekly` | `0 18 * * 5` | jarvis-dev | 커리어 주간 리포트 |
 | `memory-cleanup` | `0 2 * * *` | - | 메모리 정리 |
 | `daily-summary` | `0 20 * * *` | jarvis | 일일 요약 |
 | `academy-support` | `0 20 * * 0` | jarvis-ceo | 학습팀 주간 보고 (Academy) |
 | `weekly-perf-agent` | `0 21 * * 0` | jarvis-system | 매주 일요일 21:00 FSM/Langfuse/RAG/Board 데이터 종합 분석 → Boar |
+| `dev-event-watcher` | `0 23 * * *` | - |  |
 | `rag-health` | `0 3 * * *` | jarvis-system | RAG 건강 체크 |
-| `jarvis-home-sync` | `0 4 * * *` | - | jarvis-home-sync (launchd→tasks.json 이관 2026-04-16) |
+| `rag-bench` | `0 3 * * 0` | - | RAG 품질 측정 |
+| `memory-expire` | `0 3 * * 1` | - | 기억 만료 아카이브 |
+| `gen-gotchas` | `0 3 * * 1` | - | Gotchas 자동 승격 |
+| `schedule-coherence` | `0 4 * * 1` | jarvis | 일정 정합성 점검 |
 | `doc-supervisor` | `0 5 * * *` | jarvis-system | 문서화 시스템 감독 (Doc Supervisor) |
 | `weekly-code-review` | `0 5 * * 0` | jarvis-system | 주간 LLM 코드 리뷰 |
 | `news-briefing` | `0 6 * * *` | jarvis | 뉴스 브리핑 |
 | `system-doctor` | `0 6 * * *` | jarvis-system | Jarvis 자동 시스템 점검 (LaunchAgent, Discord봇, RAG, 크론, E2 |
 | `finance-monitor` | `0 8 * * 1-5` | jarvis-ceo | 평일 08:00 재무/시장 모니터링. finance/team.yml 기반으로 실행. |
+| `brand-weekly` | `0 8 * * 2` | jarvis-ceo | 브랜드팀 주간 보고 (Brand) |
 | `infra-daily` | `0 9 * * *` | jarvis-ceo | 인프라팀 일일 점검 (Infra) |
-| `job-alert` | `0 9 * * *` | jarvis-career | 채용 공고 크롤링 & 매칭 |
+| `cost-monitor` | `0 9 * * 0` | jarvis-ceo | 비용 모니터링 |
 | `weekly-usage-stats` | `0 9 * * 1` | jarvis-system | Discord 주간 활용도 통계 |
 | `recon-weekly` | `0 9 * * 1` | jarvis-ceo | 매주 월요일 AI/기술/시장 정보탐험. recon/team.yml 기반으로 실행. |
-| `jira-sync` | `0 9 * * 1` | jarvis-ceo | JIRA 커리어 히스토리 동기화 |
+| `monthly-review` | `0 9 1 * *` | jarvis-ceo | 월간 회고 |
 | `disk-alert` | `10 * * * *` | jarvis-system | 디스크 사용량 경고 |
 | `morning-standup` | `10 6 * * *` | jarvis | 모닝 스탠드업 |
-| `launchagents-audit` | `13 * * * *` | - | LaunchAgents 디렉토리 변경 감지 |
 | `ceo-daily-digest` | `15 23 * * *` | jarvis-ceo | 일일 CEO 다이제스트 |
 | `oss-maintenance` | `15 9 * * *` | jarvis-blog | OSS 이슈/PR 일간 트리아지 |
-| `log-size-audit` | `17 13 * * *` | jarvis-system | 로그 파일 크기 감사 |
-| `gen-indexes` | `17 6 * * *` | - | gen-indexes (launchd→tasks.json 이관 2026-04-16) |
 | `doc-sync-auditor` | `20 23 * * *` | jarvis-system | 문서-코드 정합성 감사 + 자동 적용 |
-| `tasks-prompt-path-audit` | `23 3 * * *` | - | 매일 03:23 KST 활성 태스크 프롬프트/script 필드의 스크립트 경로 존재성 감사.  |
-| `unpause-rebound-check` | `23 9 * * *` | jarvis-system | unpause 후 재-paused 자동 감시 |
-| `career-extractor` | `30 0 * * *` | - | 커리어 인사이트 자동 추출 |
 | `oss-recon` | `30 10 * * 1` | jarvis-blog | OSS 경쟁자 주간 분석 |
 | `security-scan` | `30 2 * * *` | jarvis-system | 보안 스캔 |
 | `bot-quality-check` | `30 2 * * *` | jarvis-system | 봇 응답 품질 분석 |
 | `record-daily` | `30 22 * * *` | jarvis-ceo | 기록팀 일일 마감 (Record) |
-| `macro-briefing` | `30 23 * * 0-4` | jarvis-market | 시장 매크로 브리핑 |
 | `skill-eval` | `30 4 * * 0` | jarvis-ceo | 스킬 자동 평가 |
 | `memory-sync` | `30 4 * * 1` | jarvis-system | 메모리 자동 동기화 |
 | `cron-auditor` | `30 5 * * *` | jarvis-system | 크론 전체 점검 |
-| `vault-auto-link` | `30 6 * * *` | jarvis | Vault 자동 링크 생성 |
-| `personal-schedule-daily` | `30 7 * * *` | jarvis-boram | 매일 07:30 KST Preply 수업 일정을 #jarvis-boram 채널로 자동 전송. |
 | `agent-batch-commit` | `30 8 * * *` | - | 에이전트 산출물 일괄 커밋 |
-| `token-ledger-audit` | `30 8 * * 0` | - | token-ledger-audit (launchd→tasks.json 이관 2026-04-16 |
-| `tune-task-params` | `35 8 * * 0` | - | tune-task-params (launchd→tasks.json 이관 2026-04-16) |
+| `weekly-kpi` | `30 8 * * 1` | jarvis-ceo | 주간 KPI 리포트 |
 | `bot-self-critique` | `45 2 * * *` | jarvis-system | 봇 자가 품질 점검 |
-| `entity-graph` | `45 3 * * *` | - | entity-graph (launchd→tasks.json 이관 2026-04-16) |
 | `code-auditor` | `45 4 * * *` | jarvis-system | 코드 품질 감사 |
+| `connections-weekly-insight` | `45 9 * * 1` | jarvis-ceo | Connections 주간 인사이트 |
 | `weekly-report` | `5 20 * * 0` | jarvis-ceo | 주간 리포트 |
 | `council-insight` | `5 23 * * *` | jarvis-ceo | 감사팀 일일 점검 (Council) |
 | `gen-system-overview` | `5 4 * * *` | - | 시스템 개요 문서 자동 재생성 (SYSTEM-OVERVIEW.md) |
 | `market-alert` | `5 9,13,16 * * 1-5` | jarvis-market | 시장 급변 알림 |
+| `dev-event-bus` | `50 22 * * *` | - |  |
 | `dev-runner` | `55 22 * * *` | jarvis-system | 자율 개발 큐 러너 |
 | `weekly-roi` | `55 23 * * 0` | jarvis-ceo | 매주 일요일 23:55 지난주 태스크들의 ROI 집계 및 리포트 생성 |
 | `daily-usage-check` | `55 5 * * *` | jarvis-lite | 매일 아침 사용량 체크 |
@@ -155,8 +149,8 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `bot-crash-classifier` | `(event/manual)` | jarvis-system | 봇 크래시 원인 분류 및 Discord 알림 |
 | `env-restore-notifier` | `(event/manual)` | jarvis-system | .env 소멸 감지 알림 |
 | `log-cleanup` | `(event/manual)` | jarvis-system | 디스크 임계치 초과 시 로그 자동 정리 |
+| `private-sync` | `(event/manual)` | - | 커밋 후 private 레포 동기화 |
 
-> ⚠️ 비활성: `schedule-coherence`, `weekly-kpi`, `connections-weekly-insight`, `monthly-review`, `cost-monitor`, `career-weekly`, `brand-weekly`, `board-meeting-am`, `board-meeting-pm`, `memory-expire`, `dev-event-bus`, `dev-event-watcher`, `oss-docs`, `gen-gotchas`, `board-conclude`, `board-topic-proposer`, `board-perf-review`, `boram-daily-schedule`, `rag-bench`, `geeknews-bench-crawl`, `geeknews-bench-report`, `self-healing-digest`, `tasks-integrity-audit`
 
 ### 3.3 AI 두뇌 (`bin/ask-claude.sh`)
 
@@ -183,7 +177,7 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 Obsidian Vault의 모든 노트를 검색 가능한 장기기억으로 변환.
 
 ```
-Obsidian Vault (${VAULT_DIR:-$HOME/vault}/)
+Obsidian Vault ($VAULT_DIR/)
   ↓ rag-watch.mjs (chokidar 실시간 감시)
 LanceDB (rag/lancedb/)
   ├── Vector Index  (text-embedding-3-small)
@@ -202,7 +196,7 @@ LanceDB (rag/lancedb/)
 
 Claude Code와 자비스 시스템을 연결하는 MCP 도구 허브.
 
-> ✅ **17개 MCP 도구** (4개 게이트웨이)
+> ✅ **16개 MCP 도구** (4개 게이트웨이)
 
 | 게이트웨이 | 도구명 | 용도 |
 |-----------|--------|------|
@@ -220,7 +214,6 @@ Claude Code와 자비스 시스템을 연결하는 MCP 도구 허브.
 | `extras` | `emit_event` | 이벤트 발행 (event-watcher 트리거) |
 | `extras` | `usage_stats` | Claude API 토큰 사용량 통계 |
 | `extras` | `nexus_stats` | Nexus 도구 사용 통계 (자기진단) |
-| `extras` | `wiki_add_fact` | - |
 | `health` | `health` | 시스템 전체 상태 단일 조회 |
 | `rag` | `rag_search` | Obsidian 장기기억 하이브리드 검색 (BM25+Vector) |
 
@@ -394,19 +387,20 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 | `discord/discord-bot.js` | 724 | Discord 봇 메인 |
 | `lib/mcp-nexus.mjs` | 156 | Nexus MCP 오케스트레이터 |
 | `lib/nexus/exec-gateway.mjs` | 385 | exec 게이트웨이 + Circuit Breaker |
-| `lib/nexus/extras-gateway.mjs` | 462 | extras 게이트웨이 (discord/cron/stats) |
+| `lib/nexus/extras-gateway.mjs` | 390 | extras 게이트웨이 (discord/cron/stats) |
 | `lib/nexus/rag-gateway.mjs` | 114 | RAG 게이트웨이 |
 | `lib/nexus/health-gateway.mjs` | 103 | 헬스 게이트웨이 |
-| `bin/ask-claude.sh` | 304 | claude -p 래퍼 (크론 진입점) |
-| `bin/jarvis-cron.sh` | 638 | 크론 실행 엔진 |
-| `config/tasks.json` | 1883 | 크론 태스크 설정 |
-| `discord/personas.json` | 13 | 채널 페르소나 설정 |
-| `scripts/system-doctor.sh` | 370 | 자동 시스템 점검 (매일 06:00) |
-| `scripts/gen-system-overview.sh` | 520 | 이 문서 생성 스크립트 |
+| `lib/rag-engine.mjs` | 1560 | RAG 하이브리드 검색 엔진 |
+| `bin/ask-claude.sh` | 274 | claude -p 래퍼 (크론 진입점) |
+| `bin/jarvis-cron.sh` | 586 | 크론 실행 엔진 |
+| `config/tasks.json` | 1597 | 크론 태스크 설정 |
+| `discord/personas.json` | 14 | 채널 페르소나 설정 |
+| `scripts/system-doctor.sh` | 301 | 자동 시스템 점검 (매일 06:00) |
+| `scripts/gen-system-overview.sh` | 494 | 이 문서 생성 스크립트 |
 
 **디렉토리 구조:**
 ```
-~/jarvis/runtime/
+~/.jarvis/
 ├── bin/           크론 진입점 (ask-claude.sh, jarvis-cron.sh, route-result.sh)
 ├── config/        tasks.json, monitoring.json, goals.json
 ├── discord/       봇 코드, personas.json, node_modules/
@@ -428,47 +422,40 @@ Circuit Breaker로 반복 타임아웃 자동 차단
 
 | 서비스 | 상태 | PID |
 |--------|------|-----|
-| ai.jarvis.watchdog | 🟢 실행중 | 1461 |
+| ai.jarvis.watchdog | 🟢 실행중 | 96983 |
 | ai.jarvis.rag-compact | 🔴 중지 | - |
-| ai.jarvis.orchestrator | 🟢 실행중 | 90263 |
-| ai.jarvis.wiki-lint | 🔴 중지 | - |
-| ai.jarvis.github-runner | 🟢 실행중 | 763 |
-| ai.jarvis.boram-student-extract | 🔴 중지 | - |
-| ai.jarvis.symlink-audit | 🔴 중지 | - |
-| ai.jarvis.insight-extractor | 🔴 중지 | - |
-| ai.jarvis.boram-memory-monitor | 🔴 중지 | - |
-| ai.jarvis.wiki-ingest | 🔴 중지 | - |
-| ai.jarvis.cloudflared-tunnel | 🟢 실행중 | 92073 |
-| ai.jarvis.discord-bot | 🟢 실행중 | 74418 |
-| ai.jarvis.release-checker | 🔴 중지 | - |
+| ai.jarvis.aggregate-metrics | 🔴 중지 | - |
+| ai.jarvis.serena-mcp | 🟢 실행중 | 11151 |
+| ai.jarvis.glances | 🟢 실행중 | 11241 |
+| ai.jarvis.langfuse | 🔴 중지 | - |
+| ai.jarvis.webhook-listener | 🟢 실행중 | 20103 |
+| ai.jarvis.discord-bot | 🟢 실행중 | 355 |
 | ai.jarvis.session-summarizer | 🔴 중지 | - |
-| ai.jarvis.boram-briefing | 🔴 중지 | - |
 | ai.jarvis.scorecard-enforcer | 🔴 중지 | - |
 | ai.jarvis.commitment-check | 🔴 중지 | - |
 | ai.jarvis.daily-restart | 🔴 중지 | - |
-| ai.jarvis.rag-watcher | 🟢 실행중 | 91996 |
-| ai.jarvis.board | 🟢 실행중 | 95040 |
-| ai.jarvis.board-watchdog | 🔴 중지 | - |
-| ai.jarvis.event-watcher | 🟢 실행중 | 91920 |
+| ai.jarvis.rag-watcher | 🟢 실행중 | 99909 |
+| ai.jarvis.board | 🟢 실행중 | 54924 |
+| ai.jarvis.dashboard | 🟢 실행중 | 2585 |
+| ai.jarvis.event-watcher | 🟢 실행중 | 678 |
 | ai.jarvis.boot-auth-check | 🔴 중지 | - |
-| ai.jarvis.stale-items-check | 🔴 중지 | - |
 
-> 마지막 확인: 2026-04-17 13:54:57
+> 마지막 확인: 2026-04-10 06:48:15
 
 ---
 
 ## 11. 최근 변경
 
-- `1ad5449` fix(guardian): status_line 부분매칭 버그 수정 + plist mtime 감시 가드 추가
-- `8bfa0b1` feat(migration): upgrade-v2.sh — one-shot v1.x → v2.0.0 upgrade
-- `af8d13d` fix(security): gitleaks allowlist에 A2 치환 커밋 추가 (streaming.js 오탐)
-- `81d11fc` fix(security): streaming.js 마스킹 regex에 gitleaks:allow 주석
-- `23f35d9` docs: A2 Migration Notice + runtime 디렉토리 문서
-- `8b3adfb` refactor(paths)!: BOT_HOME ~/.jarvis → ~/jarvis/runtime 전수 치환
-- `1e3aba1` feat(runtime): A2 migration 인프라 스크립트
-- `569ee06` chore(ci): A2 Runtime Migration 선행 가드
-- `b45d9ee` fix(security+audit): removeFact shell injection 차단 + source 태그 누락 보정
-- `cce1bde` fix(session): 4개 블로커 근본 봉합 — 보안·운영·SSoT
+- `ef4f804` fix: synthesizer timeout + phantom dispatch 제거
+- `13f81de` jarvis-coder: tech-claude-compaction-api-도입 완료 (자동)
+- `9b151a6` snapshot: jarvis-coder tech-claude-compaction-api-도입 실행 전 (2026-04-10 06:21:26)
+- `2702374` fix(board): 코드 리뷰 지적 사항 전체 적용 (🔴 6건 + 🟡 9건)
+- `4735667` fix(board): 토론 재개 시 이전 라운드 댓글 합성 누락 버그 수정
+- `5abada3` feat(board): multi-agent 베스트 프랙티스 5종 적용
+- `3b08db8` fix(board): insight 페르소나 참여 구조 전면 수정
+- `1adfcbf` feat(board): insight 포스트에 참여할 페르소나 post_types 추가 (lee-jihwan, llm-critic, product-team 등 7명)
+- `aadf893` jarvis-coder: debug-cron-rag-index-claude-conversations.sh 완료 (자동)
+- `e5630ca` snapshot: jarvis-coder debug-cron-rag-index-claude-conversations.sh 실행 전 (2026-04-09 23:23:38)
 
 ---
 

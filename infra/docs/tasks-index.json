@@ -1,24 +1,24 @@
 {
-  "generatedAt": "2026-04-17T04:53:09.535Z",
+  "generatedAt": "2026-04-17T00:21:42.611Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 94,
+  "totalTasks": 93,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
     "infra-lead": 16,
     "finance": 8,
     "trend-lead": 8,
-    "record-lead": 4,
+    "record-lead": 5,
     "library": 1,
     "growth-lead": 4,
     "brand-lead": 4,
-    "audit-lead": 17,
+    "audit-lead": 15,
     "secretary": 10,
     "uncategorized": 8
   },
   "typeDistribution": {
-    "prompt": 36,
-    "script": 58
+    "prompt": 37,
+    "script": 56
   },
   "groups": [
     {
@@ -1540,6 +1540,38 @@
       },
       "tasks": [
         {
+          "id": "private-sync",
+          "name": "커밋 후 private 레포 동기화",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "record-lead",
+            "name": "데이터실 (메모리·RAG 백엔드)"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "event",
+          "maxBudget": "0.10",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/private-sync.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/private-sync-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-private-sync-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
           "id": "record-daily",
           "name": "기록팀 일일 마감 (Record)",
           "schedule": "30 22 * * *",
@@ -2244,38 +2276,6 @@
           }
         },
         {
-          "id": "log-size-audit",
-          "name": "로그 파일 크기 감사",
-          "schedule": "17 13 * * *",
-          "scheduleHuman": "매일 13:17",
-          "type": "script",
-          "handler": "log-size-audit.sh",
-          "team": {
-            "id": "audit-lead",
-            "name": "QA실 (품질·감사·E2E)"
-          },
-          "discordChannel": "jarvis-system",
-          "model": null,
-          "priority": "normal",
-          "maxBudget": null,
-          "disabled": false,
-          "description": "WARN ≥10MB / CRIT ≥100MB. webhook-listener.err.log(2.9MB) 폭주 재발 방지. 매일 13:17 KST. violation 있을 때만 Discord (24h throttle).",
-          "logs": {
-            "stdout": {
-              "path": "~/jarvis/runtime/logs/log-size-audit.log",
-              "exists": false
-            },
-            "stderr": {
-              "path": "~/jarvis/runtime/logs/log-size-audit-err.log",
-              "exists": false
-            },
-            "claudeStderr": {
-              "pattern": "claude-stderr-log-size-audit-*.log",
-              "exists": false
-            }
-          }
-        },
-        {
           "id": "schedule-coherence",
           "name": "일정 정합성 점검",
           "schedule": "0 4 * * 1",
@@ -2359,46 +2359,14 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/tasks-integrity-audit.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/tasks-integrity-audit-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-tasks-integrity-audit-*.log",
-              "exists": false
-            }
-          }
-        },
-        {
-          "id": "tasks-prompt-path-audit",
-          "name": "tasks.json 프롬프트 경로 유령 감사 (일일)",
-          "schedule": "23 3 * * *",
-          "scheduleHuman": "매일 03:23",
-          "type": "script",
-          "handler": "tasks-prompt-path-audit.mjs",
-          "team": {
-            "id": "audit-lead",
-            "name": "QA실 (품질·감사·E2E)"
-          },
-          "discordChannel": null,
-          "model": null,
-          "priority": "low",
-          "maxBudget": null,
-          "disabled": false,
-          "description": "매일 03:23 KST 활성 태스크 프롬프트/script 필드의 스크립트 경로 존재성 감사. 유령 발견 시 jarvis-system 채널 알림 + ledger 기록 + exit 2. 매주 → 매일로 상향(24h 내 감지 보장).",
-          "logs": {
-            "stdout": {
-              "path": "~/jarvis/runtime/logs/tasks-prompt-path-audit.log",
-              "exists": false
-            },
-            "stderr": {
-              "path": "~/jarvis/runtime/logs/tasks-prompt-path-audit-err.log",
-              "exists": false
-            },
-            "claudeStderr": {
-              "pattern": "claude-stderr-tasks-prompt-path-audit-*.log",
               "exists": false
             }
           }
@@ -3111,11 +3079,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/unpause-rebound-check.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/unpause-rebound-check-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-unpause-rebound-check-*.log",
