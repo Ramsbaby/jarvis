@@ -1,1 +1,1 @@
-../../rag/bin/rag-index-safe.sh
+/Users/ramsbaby/jarvis/rag/bin/rag-index-safe.sh

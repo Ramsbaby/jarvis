@@ -267,6 +267,10 @@ export function addTask(task) {
   }
 
   const { id, status = 'pending', priority = 0, retries = 0, depends = [], parent_id = null, ...rest } = task;
+  // addedAt 자동 삽입 — 없으면 오늘 날짜로 채움
+  if (!rest.addedAt && !rest.meta?.addedAt) {
+    rest.addedAt = new Date().toISOString().slice(0, 10);
+  }
   getDb().prepare(
     'INSERT OR IGNORE INTO tasks (id, status, priority, retries, depends, parent_id, meta, updated_at) VALUES (?,?,?,?,?,?,?,?)'
   ).run(id, status, priority, retries, JSON.stringify(depends), parent_id, JSON.stringify(rest), Date.now());

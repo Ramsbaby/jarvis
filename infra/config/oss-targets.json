@@ -31,7 +31,7 @@
   ],
   "settings": {
     "reportDir": "rag/oss-reports",
-    "discordChannel": "jarvis-market",
+    "discordChannel": "jarvis",
     "maxIssuesPerRepo": 20,
     "staleCommitDays": 7
   }

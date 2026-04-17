@@ -218,21 +218,24 @@ route_to_discord() {
     local total=${#message}
     local offset=0
 
-    while [[ $offset -lt $total ]]; do
-        local chunk="${message:$offset:1990}"
-        local payload
-        payload=$(jq -n --arg content "$chunk" '{"content": $content, "flags": 4, "allowed_mentions": {"parse": []}}')
-        local http_code
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
-            -H "Content-Type: application/json" \
-            -d "$payload") || true
-        if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
-            echo "ERROR: Discord webhook returned HTTP $http_code for task $TASK_ID" >&2
-        fi
-        offset=$((offset + 1990))
-        # Rate limit protection between chunks
-        if [[ $offset -lt $total ]]; then sleep 1; fi
-    done
+    # CV2_DATA가 있으면 텍스트 중복 전송 생략 — 카드가 메인 콘텐츠
+    if [[ -z "$CV2_JSON" ]]; then
+        while [[ $offset -lt $total ]]; do
+            local chunk="${message:$offset:1990}"
+            local payload
+            payload=$(jq -n --arg content "$chunk" '{"content": $content, "flags": 4, "allowed_mentions": {"parse": []}}')
+            local http_code
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
+                -H "Content-Type: application/json" \
+                -d "$payload") || true
+            if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
+                echo "ERROR: Discord webhook returned HTTP $http_code for task $TASK_ID" >&2
+            fi
+            offset=$((offset + 1990))
+            # Rate limit protection between chunks
+            if [[ $offset -lt $total ]]; then sleep 1; fi
+        done
+    fi
 
     # --- Rich embed (if EMBED_DATA present, send as color card) ---
     if [[ -n "$EMBED_JSON" ]]; then
