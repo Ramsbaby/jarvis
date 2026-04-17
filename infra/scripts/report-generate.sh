@@ -45,9 +45,14 @@ case "$REPORT_TYPE" in
     PERIOD_END="$NOW"
     ;;
   monthly)
-    MONTH_START="${TODAY:0:7}-01"
-    PERIOD_START="${MONTH_START} 00:00:00"
-    PERIOD_END="$NOW"
+    # 전월 1일 00:00 ~ 전월 마지막 날 23:59
+    # "전월 마지막 날" = "이번 달 1일의 전날" — 실행일이 언제든 항상 정확
+    # BSD: date -v1d -v-1d (이번달 1일 세팅 → 1일 빼기)
+    # GNU: date --date="$(date '+%Y-%m-01') -1 day"
+    PREV_MONTH=$(date -v-1m '+%Y-%m' 2>/dev/null || date --date='1 month ago' '+%Y-%m')
+    PREV_MONTH_END=$(date -v1d -v-1d '+%Y-%m-%d' 2>/dev/null || date --date="$(date '+%Y-%m-01') -1 day" '+%Y-%m-%d')
+    PERIOD_START="${PREV_MONTH}-01 00:00:00"
+    PERIOD_END="${PREV_MONTH_END} 23:59:59"
     ;;
   *)
     log "ERROR: Unknown report type: $REPORT_TYPE"

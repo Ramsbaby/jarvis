@@ -32,6 +32,7 @@ bash infra/scripts/launchd-sync.sh
 |---|---|---|---|
 | `ai.jarvis.report-daily.plist` | 일일 보고서 생성 | 매일 23:50 KST | `infra/scripts/report-generate.sh daily` |
 | `ai.jarvis.report-weekly.plist` | 주간 보고서 생성 | 토요일 23:50 KST | `infra/scripts/report-generate.sh weekly` |
+| `ai.jarvis.report-monthly.plist` | 월간 보고서 생성 (전월 기준) | 매월 1일 00:05 KST | `infra/scripts/report-generate.sh monthly` |
 | `ai.jarvis.report-healthcheck.plist` | 보고서 미생성 감시 → Discord 경보 | 매일 06:05 KST | `infra/scripts/report-healthcheck.sh` |
 
 ## 동작 테스트 (fire-now)
