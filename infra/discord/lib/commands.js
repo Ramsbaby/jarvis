@@ -12,7 +12,7 @@ const { EmbedBuilder, MessageFlags } = discordPkg;
 import { log, sendNtfy } from './claude-runner.js';
 import { lastQueryStore } from './streaming.js';
 import { rerunQuery, clearProcessedId } from './handlers.js';
-import { userMemory } from './user-memory.js';
+import { userMemory } from '../../lib/user-memory.mjs';
 import { t } from './i18n.js';
 import { getActivities } from './lounge.js';
 
