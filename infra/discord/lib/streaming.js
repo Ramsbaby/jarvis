@@ -109,11 +109,11 @@ function maskTechDetails(text) {
     let masked = line
       // PID 숫자 (예: "PID 1234", "pid=5678")
       .replace(/\b(PID|pid)[=\s]+\d{2,6}\b/g, '(내부 프로세스)')
-      // 절대 홈 경로 (예: /Users/username/.jarvis/..., ~/jarvis/runtime/...)
-      .replace(/\/Users\/[^/\s]+\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)')
-      .replace(/~\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)')
-      // 절대 홈 경로 일반 (예: /Users/username/...)
-      .replace(/\/Users\/[^/\s]+\/(?!\.jarvis)[^\s,)'"]{8,}/g, '(내부 경로)');
+      // 절대 홈 경로 (예: /Users/username/.jarvis/..., ~/jarvis/runtime/...) gitleaks:allow
+      .replace(/\/Users\/[^/\s]+\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)') // gitleaks:allow
+      .replace(/~\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)') // gitleaks:allow
+      // 절대 홈 경로 일반 (예: /Users/username/...)  gitleaks:allow
+      .replace(/\/Users\/[^/\s]+\/(?!\.jarvis)[^\s,)'"]{8,}/g, '(내부 경로)'); // gitleaks:allow
     result.push(masked);
   }
   return result.join('\n');
