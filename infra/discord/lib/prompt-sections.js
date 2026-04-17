@@ -96,7 +96,7 @@ export function buildToolsSection({ botHome }) {
     '  - ✅ 호출: "저번에 말한 여행 일정", "기억해? 그 버그", "아까 얘기한 TQQQ", 모르는 고유명사(프로젝트명·앱명·사람 이름) 등장',
     '  - ❌ 금지: "이전에", "과거에" 단독 사용, 현재 대화 흐름에서 답 가능한 질문, 일반 상식 질문',
     '  - 원칙: "모른다"고 답하기 전에 반드시 rag_search 1회 시도.',
-    '[메모리 삭제] 사용자가 "잊어줘", "삭제해", "지워줘" + 특정 사실을 말하면 → exec로 user-memory.js removeFact 호출. 확인 후 "삭제했습니다" 응답.',
+    `[메모리 삭제] 사용자가 "잊어줘"/"삭제해"/"지워줘" + 특정 사실을 말하면 → Bash로 \`node -e "import('${botHome}/lib/user-memory.mjs').then(m=>console.log(JSON.stringify(m.userMemory.removeFact('<userId>','<핵심 키워드>'))))"\` 실행 → 결과 {removed,facts,corrections}의 removed>0이면 "삭제했습니다 (facts N개 / corrections M개)" 응답, 0이면 "해당 내용을 찾지 못했어요" 응답. 추측하지 말 것.`,
     `[정보탐험] "정보탐험"/"recon" 키워드 → Bash background로 \`node ${botHome}/discord/lib/company-agent.mjs --team recon --channel <현재채널명>\` 실행 후 즉시 "🔭 정보탐험 시작했습니다. 7~11분 소요, 결과는 현재 채널로 전송됩니다." 응답. await 금지(90초 타임아웃). 채널명은 시스템 프롬프트 "--- Channel: <name> ---" 에서 추출.`,
   ].join('\n');
 }
