@@ -7,12 +7,12 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/node</string>
-        <string>/Users/ramsbaby/jarvis/infra/discord/discord-bot.js</string>
+        <string>/bin/bash</string>
+        <string>/Users/ramsbaby/jarvis/runtime/scripts/bot-preflight.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/ramsbaby/jarvis/infra/discord</string>
+    <string>/Users/ramsbaby/jarvis/runtime/discord</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -25,7 +25,7 @@
         <key>NODE_ENV</key>
         <string>production</string>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>/Users/ramsbaby/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
 
     <key>RunAtLoad</key>
