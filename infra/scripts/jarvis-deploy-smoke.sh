@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # deploy-with-smoke.sh — Jarvis 봇 변경사항 검증 후 재시작
 # 문법 오류·핵심 함수 삭제 감지 시 재시작 차단
-# 사용: bash ~/.jarvis/scripts/deploy-with-smoke.sh
+# 사용: bash ~/jarvis/runtime/scripts/deploy-with-smoke.sh
 
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/.jarvis}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 SERVICE="ai.jarvis.discord-bot"
 PASS=0; FAIL=0
 RESULTS=""
@@ -18,18 +18,32 @@ fail() { FAIL=$((FAIL+1)); RESULTS+="❌ $1\n"; echo "  FAIL: $1"; }
 
 echo "=== Jarvis Smoke Test ==="
 
-# 1. JS/MJS 문법 검사
+# 1. JS/MJS 문법 검사 (-L로 symlink 추적 — runtime/discord/lib가 infra/discord/lib 심링크)
+# 충돌 마커 별도 감지 — node --check는 <<<<<<< 를 SyntaxError로 잡지만 메시지 혼동 방지
 echo ""
 echo "▶ 문법 검사..."
+FILES_CHECKED=0
 while IFS= read -r f; do
+    FILES_CHECKED=$((FILES_CHECKED+1))
+    # 병합 충돌 마커 우선 검사 (더 명확한 메시지)
+    if grep -qE '^(<<<<<<<|=======|>>>>>>>) ' "$f" 2>/dev/null; then
+        fail "병합 충돌 마커 남음: ${f##*/} — 해결 후 재배포"
+        continue
+    fi
     if node --check "$f" 2>/dev/null; then
         ok "문법 OK: ${f##*/}"
     else
         fail "문법 에러: ${f##*/}"
     fi
-done < <(find "$BOT_HOME/discord" "$BOT_HOME/lib" \
+done < <(find -L "$BOT_HOME/discord" "$BOT_HOME/lib" \
     -not -path '*/node_modules/*' \
+    -not -path '*/.serena/*' \
     \( -name '*.js' -o -name '*.mjs' \) 2>/dev/null)
+
+# 최소 10개 미만이면 find가 범위 잘못 잡음 — smoke 의미 없음
+if [[ "$FILES_CHECKED" -lt 10 ]]; then
+    fail "문법 검사 대상 ${FILES_CHECKED}개 — symlink 전개 실패 가능성 (정상: 50+개)"
+fi
 
 # 2. 핵심 파일 존재 확인
 echo ""
@@ -136,25 +150,42 @@ else
     pm2 restart discord-bot 2>/dev/null || true
 fi
 
-# ── 생존 확인 (10초 대기 — 즉시 크래시 감지) ─────────────────────
-echo "  (10초 대기 중...)"
-sleep 10
-if pgrep -f "discord-bot.js" > /dev/null 2>&1; then
-    # 재시작 직후 에러 로그 확인
-    _recent_err=$(tail -20 "$BOT_HOME/logs/discord-bot.log" 2>/dev/null \
-        | grep -iE "Error:|TypeError|SyntaxError|Cannot find|ENOENT|FATAL" \
+# ── 생존 확인 (15초 대기 + launchctl 상태 + stderr 로그 검사) ─────
+# 이전 버그: 10초만 기다리면 재시작 루프 중간에 prouds 잡혀서 ✅ 거짓 표시됨.
+echo "  (15초 대기 중...)"
+sleep 15
+
+# launchctl 상태: PID 정수 + 최근 exit code 확인
+LC_LINE=$(launchctl list | awk -v s="$SERVICE" '$3==s{print}' | head -1)
+LC_PID=$(echo "$LC_LINE" | awk '{print $1}')
+LC_STATUS=$(echo "$LC_LINE" | awk '{print $2}')
+
+# stderr 로그 확인 (preflight 루프 감지)
+RESTART_LOOP_COUNT=0
+if [[ -f "$BOT_HOME/logs/discord-bot.err.log" ]]; then
+    RESTART_LOOP_COUNT=$(tail -50 "$BOT_HOME/logs/discord-bot.err.log" 2>/dev/null \
+        | grep -cE "SyntaxError|Cannot find|<<<<<<<|Unexpected token" 2>/dev/null || echo 0)
+fi
+
+if [[ "$LC_PID" =~ ^[0-9]+$ ]] && [[ "$RESTART_LOOP_COUNT" -eq 0 ]]; then
+    # discord-bot.log(jsonl)과 out.log 양쪽 모두 검사
+    _recent_err=$(tail -20 "$BOT_HOME/logs/discord-bot.jsonl" 2>/dev/null \
+        | grep -iE '"level":"error"|TypeError|SyntaxError|Cannot find|ENOENT|FATAL' \
         | tail -1 || true)
     if [[ -n "$_recent_err" ]]; then
-        echo "⚠️  봇 실행 중이나 에러 감지: $_recent_err"
+        echo "⚠️  봇 실행 중이나 에러 감지 (PID=$LC_PID): $_recent_err"
     else
-        echo "✅ 봇 정상 실행 확인"
+        echo "✅ 봇 정상 실행 확인 (PID=$LC_PID)"
     fi
 else
-    _crash_err=$(tail -30 "$BOT_HOME/logs/discord-bot.log" 2>/dev/null \
-        | grep -iE "Error:|TypeError|SyntaxError|Cannot find|ENOENT|FATAL" \
-        | tail -1 || echo "로그 없음")
-    echo "❌ 봇 프로세스 없음 — 즉시 크래시 가능성"
-    echo "   마지막 에러: $_crash_err"
+    _crash_err=$(tail -30 "$BOT_HOME/logs/discord-bot.err.log" 2>/dev/null \
+        | grep -iE "SyntaxError|Cannot find|<<<<<<<|Error:|TypeError|FATAL" \
+        | tail -2 || echo "로그 없음")
+    echo "❌ 봇 비정상 (launchctl PID=${LC_PID:-'-'}, status=${LC_STATUS:-'-'}, err출현=${RESTART_LOOP_COUNT}건)"
+    echo "   최근 에러: $_crash_err"
+    echo ""
+    echo "   ▶ 롤백 힌트: git reset --hard HEAD~1 후 재배포"
+    exit 1
 fi
 
 echo ""
