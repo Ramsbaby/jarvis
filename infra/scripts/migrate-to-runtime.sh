@@ -14,7 +14,7 @@ set -euo pipefail
 #   bash migrate-to-runtime.sh --copy       # 실제 복사 (idempotent)
 #   bash migrate-to-runtime.sh --verify     # 무결성 검증
 
-LEGACY="${HOME}/.jarvis"
+LEGACY="${HOME}/jarvis/runtime"
 RUNTIME="${HOME}/jarvis/runtime"
 MODE="${1:---dry-run}"
 

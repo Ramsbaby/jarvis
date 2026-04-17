@@ -49,17 +49,7 @@ alert_throttled() {
 
 kickstart() {
   local label="$1"
-  local plist="${HOME}/Library/LaunchAgents/${label}.plist"
-  local out
-  out=$(launchctl kickstart -k "gui/$(id -u)/${label}" 2>&1 | head -1 || true)
-  # 서비스 미로드 케이스 → plist 있으면 bootstrap 으로 자가치유
-  if echo "$out" | grep -q "Could not find service" && [[ -f "$plist" ]]; then
-    launchctl bootstrap "gui/$(id -u)" "$plist" 2>&1 | head -1 || true
-    launchctl kickstart -k "gui/$(id -u)/${label}" 2>&1 | head -1 || true
-    emit "self-heal" "ok" "bootstrapped ${label} (was not loaded)"
-  else
-    echo "$out"
-  fi
+  launchctl kickstart -k "gui/$(id -u)/${label}" 2>&1 | head -1 || true
 }
 
 failures=0

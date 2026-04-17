@@ -1,1 +1,0 @@
-../../rag/bin/rag-index-safe.sh
