@@ -15,7 +15,6 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.76",
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.2.0",
     "@lancedb/lancedb": "~0.26.2",
     "@modelcontextprotocol/sdk": "~1.27.1",
     "@xenova/transformers": "^2.17.2",
@@ -24,12 +23,14 @@
     "chokidar": "~5.0.0",
     "discord.js": "^14.25.1",
     "dotenv": "~16.6.1",
+    "eslint": "^10.2.0",
     "js-yaml": "^4.1.0",
     "lru-cache": "^11.2.7",
     "openai": "~6.29.0",
     "playwright": "^1.59.1",
     "playwright-extra": "^4.3.6",
     "playwright-extra-plugin-stealth": "^0.0.1",
+    "puppeteer-core": "^24.41.0",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "yaml": "~2.8.2",
     "zod": "^4.0.0"
