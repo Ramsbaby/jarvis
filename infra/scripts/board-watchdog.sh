@@ -17,11 +17,18 @@
 # LaunchAgent ai.jarvis.board-watchdog (StartInterval 300)로 기동.
 set -euo pipefail
 
-# ~/.jarvis/.env 자동 로드 (로컬 운영용 env var)
-if [ -f "${HOME}/.jarvis/.env" ]; then
+# 운영용 env 자동 로드 — SSoT 경로(~/jarvis/runtime/.env) 직접 참조.
+# ~/.jarvis는 ~/jarvis/runtime 심링크라 둘 다 동작하지만 SSoT 일관성을 위해 실제 경로 사용.
+# source 시 발생하는 stderr(파싱 에러 등)은 별도 로그로 격리해 watchdog 로그를 더럽히지 않음.
+ENV_FILE="${HOME}/jarvis/runtime/.env"
+ENV_ERR_LOG="${HOME}/jarvis/runtime/logs/env-load-errors.log"
+if [ -f "$ENV_FILE" ]; then
+  mkdir -p "$(dirname "$ENV_ERR_LOG")"
   set -a
-  # shellcheck disable=SC1091
-  source "${HOME}/.jarvis/.env"
+  # shellcheck disable=SC1090
+  source "$ENV_FILE" 2>>"$ENV_ERR_LOG" || {
+    echo "[$(date -u +%FT%TZ)] [board-watchdog] env-load partial failure (see $ENV_ERR_LOG)" >&2
+  }
   set +a
 fi
 
