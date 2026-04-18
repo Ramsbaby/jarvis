@@ -147,6 +147,36 @@ async function registerSlashCommands(clientId, guildId) {
       .setDescription('미이행 약속 목록 조회 (오너 전용)'),
   ];
 
+  // ---------------------------------------------------------------------------
+  // SSoT 스킬 자동 등록 — ~/.jarvis/skills/*.md 를 Discord 슬래시 커맨드로 승격
+  // CLI의 `/mock-interview 삼성물산` 경험을 디스코드에서 그대로 재현.
+  // 중복 이름은 기존 하드코딩 커맨드가 우선 (스킬 무시).
+  // ---------------------------------------------------------------------------
+  try {
+    const { loadSkills } = await import('./lib/skill-loader.js');
+    const skills = loadSkills();
+    const existingNames = new Set(commands.map((c) => c.name));
+    let added = 0;
+    for (const s of skills) {
+      if (existingNames.has(s.name)) continue;
+      // Discord 제약: 이름은 소문자+하이픈만, 32자 이내
+      if (!/^[a-z0-9-]{1,32}$/.test(s.name)) continue;
+      const desc = (s.description || `${s.name} 스킬`).slice(0, 100);
+      commands.push(
+        new SlashCommandBuilder()
+          .setName(s.name)
+          .setDescription(desc)
+          .addStringOption((opt) =>
+            opt.setName('target').setDescription('회사명·주제·세부 지시 (선택)').setRequired(false)
+          )
+      );
+      added++;
+    }
+    log('info', 'SSoT skills registered as slash commands', { added, total: skills.length });
+  } catch (err) {
+    log('warn', 'SSoT skill auto-registration failed (non-critical)', { error: err.message });
+  }
+
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
@@ -426,8 +456,14 @@ const handlerState = { sessions, rateTracker, semaphore, activeProcesses, client
 client.on('messageCreate', (message) => {
   if (isShuttingDown) return; // 종료 중 신규 세션 생성 차단 — orphan 방지
   lastMessageAt = Date.now();
-  handleMessage(message, handlerState).catch((err) => {
+  handleMessage(message, handlerState).catch(async (err) => {
     log('error', 'Unhandled error in handleMessage', { error: err.message, stack: err.stack });
+    try {
+      const { appendFileSync } = await import('node:fs');
+      appendFileSync('/tmp/jarvis-guard-debug.log',
+        `\n[${new Date().toISOString()}] HANDLER ERROR\n  msg: ${err.message}\n  stack: ${err.stack?.slice(0,1000)}\n`
+      );
+    } catch {}
   });
 });
 

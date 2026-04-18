@@ -4,21 +4,38 @@
 # jarvis-board 3중 헬스체크 + auto-recovery.
 #
 #   1) Local   — http://localhost:3100/api/health (Next.js 서버)
-#   2) Tunnel  — cloudflared tunnel info jarvis-board (active connector ≥1)
-#   3) External — https://board.ramsbaby.com/ (2xx/3xx/4xx 응답)
+#   2) Tunnel  — cloudflared tunnel info <tunnel-name> (active connector ≥1)
+#   3) External — $BOARD_EXT_URL (2xx/3xx/4xx 응답)
 #
 # 실패 레이어 식별 후 해당 LaunchAgent만 kickstart. Discord 알림 24h 스로틀.
-# 원장: ~/jarvis/runtime/state/board-watchdog.jsonl (10MB rotate).
+# 원장: $HOME/jarvis/runtime/state/board-watchdog.jsonl (10MB rotate).
+#
+# 환경변수:
+#   BOARD_EXT_URL   외부 URL (필수). ~/.jarvis/.env 또는 shell profile에서 export.
+#   BOARD_TUNNEL_NAME cloudflared 터널 이름 (기본: jarvis-board)
 #
 # LaunchAgent ai.jarvis.board-watchdog (StartInterval 300)로 기동.
 set -euo pipefail
+
+# ~/.jarvis/.env 자동 로드 (로컬 운영용 env var)
+if [ -f "${HOME}/.jarvis/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${HOME}/.jarvis/.env"
+  set +a
+fi
 
 LEDGER="${HOME}/jarvis/runtime/state/board-watchdog.jsonl"
 THROTTLE_DIR="${HOME}/jarvis/runtime/state/board-watchdog-throttle"
 LOCAL_URL="http://localhost:3100/api/health"
 FALLBACK_URL="http://localhost:3100/"
-EXT_URL="https://board.ramsbaby.com/"
-TUNNEL_NAME="jarvis-board"
+EXT_URL="${BOARD_EXT_URL:-}"
+TUNNEL_NAME="${BOARD_TUNNEL_NAME:-jarvis-board}"
+
+if [ -z "$EXT_URL" ]; then
+  echo "[ERROR] BOARD_EXT_URL 환경변수 미설정. ~/.jarvis/.env 에 추가하세요." >&2
+  exit 1
+fi
 TS="$(date +%Y-%m-%dT%H:%M:%S%z)"
 EPOCH="$(date +%s)"
 
@@ -93,7 +110,7 @@ ext_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$EXT_URL" 2>/de
 if [[ "$ext_code" == "000" ]] || [[ "$ext_code" == 5?? ]]; then
   emit "external" "fail" "http=${ext_code}"
   # local+tunnel 둘 다 ok인데 external fail이면 DNS/CF 쪽 문제. kickstart 불가, 알림만.
-  alert_throttled "external" "board.ramsbaby.com returned ${ext_code}"
+  alert_throttled "external" "${EXT_URL} returned ${ext_code}"
   failures=$((failures+1))
 else
   emit "external" "ok" "http=${ext_code}"

@@ -1,0 +1,101 @@
+# Privacy Blocklist (Phase 1 — Privacy Guard)
+#
+# Purpose: 개인 식별 정보(PII)·실명·이메일·도메인·하드코딩 절대경로가
+#          공개 저장소(jarvis)에 유출되는 것을 사전에 차단한다.
+#
+# 보완 관계:
+#   - .gitleaks.toml         → 시크릿(토큰/키) 탐지
+#   - .githooks/pre-commit   → secret 패턴 + 본 블록리스트 호출
+#   - scripts/privacy/scan.mjs → 본 블록리스트 실행 엔진
+#
+# 룰 스키마:
+#   id              (string, 필수)  고유 식별자
+#   severity        (string, 필수)  critical | high | medium | low
+#   pattern         (regex,  필수)  단일 라인 검사 패턴
+#   description     (string, 권장)  왜 막는지 + 권장 대안
+#   context_allow   (regex[], 선택) 같은 라인에 매치되면 skip
+#   allow_paths     (glob[],  선택) 해당 경로 패턴이면 skip (* 와 ** 지원)
+#
+# 인라인 예외:
+#   라인 끝에 `# privacy:allow <rule-id>` 또는 `// privacy:allow <rule-id>`
+#   주석을 달면 해당 룰만 그 라인에서 skip.
+
+rules:
+  - id: korean-owner-name
+    severity: high
+    pattern: "이정우"
+    description: "Owner 실명 — process.env.OWNER_NAME 사용"
+    context_allow:
+      - "process\\.env\\.OWNER_NAME"
+      - "OWNER_NAME=이정우"
+    allow_paths:
+      - ".privacy-blocklist.yml"
+      - "*.example.*"
+
+  - id: company-names
+    severity: high
+    pattern: "SK D&D|JANDI|카카오페이"
+    description: "근무/지원 회사 — OWNER_COMPANIES 사용"
+    context_allow:
+      - "process\\.env\\.OWNER_COMPANIES"
+    allow_paths:
+      - ".privacy-blocklist.yml"
+
+  - id: personal-email
+    severity: critical
+    pattern: "ms6698@naver|yuiopnm1931@gmail"
+    description: "개인 이메일 — env var 사용"
+    allow_paths:
+      - ".privacy-blocklist.yml"
+
+  - id: personal-domain
+    severity: medium
+    pattern: "ramsbaby\\.netlify\\.app|board\\.ramsbaby\\.com"
+    description: "개인 도메인"
+    allow_paths:
+      - "*.md"
+      - ".privacy-blocklist.yml"
+
+  - id: absolute-home-path
+    severity: medium
+    pattern: "/Users/ramsbaby/"
+    description: "하드코딩 절대경로 — $HOME 사용. 문서/마이그레이션 스크립트는 샘플 목적 허용."
+    # TODO(privacy): .mcp.json 분리 — OSS 공개 시 .mcp.json.example 로 바꾸고 실제 경로는 gitignore.
+    # 지금은 기존 사용자 워크플로우 유지 위해 임시 허용.
+    allow_paths:
+      - "infra/scripts/*.sh"
+      - "infra/scripts/*.mjs"
+      - "infra/launchd/*.plist"
+      - "infra/docs/**/*.md"
+      - "**/*.example.*"
+      - ".mcp.json"
+      - ".privacy-blocklist.yml"
+
+  - id: discord-owner-id
+    severity: high
+    pattern: "364093757018079234"
+    description: "Owner Discord ID — OWNER_DISCORD_ID 사용"
+    allow_paths:
+      - ".privacy-blocklist.yml"
+
+  - id: github-username
+    severity: low
+    pattern: "Ramsbaby|ramsbaby"
+    description: "GitHub username — plist/스크립트 경로·LICENSE 등 비기능 노출만 허용."
+    allow_paths:
+      - "*.md"
+      - "*.toml"
+      - "LICENSE"
+      - "infra/launchd/*.plist"
+      - "infra/scripts/*.sh"
+      - "infra/scripts/*.mjs"
+      - ".github/**"
+      - ".mcp.json"
+      - ".privacy-blocklist.yml"
+
+global_ignore:
+  - ".git/**"
+  - "node_modules/**"
+  - ".claude/worktrees/**"
+  - "runtime/**"
+  - "_quarantine/**"

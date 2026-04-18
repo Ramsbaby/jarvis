@@ -252,7 +252,9 @@ export async function cleanupOrphanPlaceholders(client) {
   _savePlaceholders(survivors);
 }
 
-const STREAM_EDIT_INTERVAL_MS = 2000;
+// 700ms — Discord edit rate limit(~초당 1회) 내에서 체감 "타이핑" 수준.
+// 2000ms 였을 때 블록 단위로 뚝뚝 떨어지는 느낌 → 대화형 경험 해침.
+const STREAM_EDIT_INTERVAL_MS = 700;
 const STREAM_MAX_CHARS = 1700; // 포맷팅 확장(URL 래핑, 테이블→리스트) 여유 확보
 const CODE_FILE_MIN_LINES = 30;
 const LANG_EXT = {

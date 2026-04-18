@@ -294,9 +294,35 @@ export async function execRagAsync(query, opts = {}) {
 
 // ---------------------------------------------------------------------------
 // saveConversationTurn — append to daily file for RAG indexing
+//
+// RAG 오염 방지: "시뮬레이션 턴" 만 제외 (채널 전체가 아님).
+// 모의면접 스킬이 활성화된 턴 → 답변이 Jarvis 가공한 시뮬레이션 이므로
+// 실증 경험처럼 RAG 색인되면 자기 오염 루프 발생. 이런 턴만 배제.
+// 일반 커리어 상담·이력서 피드백·이직 전략 등은 정상 저장 → RAG 활용.
+//
+// 판별: userMsg 에 슬래시 커맨드 또는 스킬 트리거 키워드가 포함됐는지 확인.
 // ---------------------------------------------------------------------------
 
+function _isSimulationTurn(userMsg) {
+  if (!userMsg) return false;
+  const text = userMsg.toLowerCase();
+  // 슬래시 커맨드 형태 — ~/.jarvis/skills/<name>.md 파일 존재 여부로 판정.
+  // (claude-runner 상단의 fs/path/os 임포트를 공유)
+  const slashMatch = userMsg.trim().match(/^\/([a-zA-Z0-9_-]+)/);
+  if (slashMatch) {
+    const skillPath = join(HOME, '.jarvis', 'skills', `${slashMatch[1]}.md`);
+    if (existsSync(skillPath)) return true;
+  }
+  // 트리거 키워드 — 스킬 frontmatter triggers와 정합. 추가 스킬 생길 때 이 배열도 확장.
+  const triggers = ['모의면접', '면접 연습', '면접 답변', '면접 준비', '면접관 해줘'];
+  return triggers.some((t) => text.includes(t.toLowerCase()));
+}
+
 export function saveConversationTurn(userMsg, botMsg, channelName, userId = null) {
+  if (_isSimulationTurn(userMsg)) {
+    log('debug', 'Skipping conversation save (simulation turn)', { channelName });
+    return;
+  }
   const profile = userId ? getUserProfile(userId) : null;
   const senderName = profile?.name || 'Unknown';
   try {
@@ -653,6 +679,21 @@ export async function* createClaudeSession(prompt, {
   injectedSummary = '',
   _budgetMode = 'normal',  // Progressive Compaction: 'normal' | 'lean'
 } = {}) {
+  // 0. 슬래시 커맨드 인터셉터 — `/skillname args` 형태면 스킬 로드 + 인자를 프롬프트로
+  // CLI의 `/mock-interview 삼성물산` 경험을 디스코드에서도 동일하게 제공 (SSoT 공유).
+  let _injectedSkillBody = null;
+  try {
+    const { matchSkillByCommand } = await import('./skill-loader.js');
+    const cmd = matchSkillByCommand(prompt);
+    if (cmd) {
+      _injectedSkillBody = { name: cmd.skill.name, body: cmd.skill.body };
+      prompt = cmd.args || '시작해줘';
+      log('info', 'Slash command skill invoked', { skill: cmd.skill.name, args: cmd.args });
+    }
+  } catch (cmdErr) {
+    log('warn', 'Slash command interceptor failed (non-critical)', { error: cmdErr.message });
+  }
+
   // 1. Setup stable workDir — same 4-layer token isolation as before
   const stableDir = join('/tmp', 'claude-discord', String(threadId));
   mkdirSync(stableDir, { recursive: true });
@@ -696,6 +737,12 @@ export async function* createClaudeSession(prompt, {
   const activeUserProfile = getUserProfile(userId);
   const isOwner = activeUserProfile?.type === 'owner' || activeUserProfile?.role === 'owner';
   const isGuest = !activeUserProfile;
+  try {
+    const { appendFileSync } = await import('node:fs');
+    appendFileSync('/tmp/jarvis-guard-debug.log',
+      `  → createClaudeSession | userId=${userId} | activeProfile=${activeUserProfile ? JSON.stringify({role:activeUserProfile.role,name:activeUserProfile.name}) : 'null'} | isOwner=${isOwner} | isGuest=${isGuest}\n`
+    );
+  } catch {}
 
   // 4a. Build user context section (SSoT: prompt-sections.js)
   const userContextParts = buildUserContextSection({
@@ -757,6 +804,42 @@ export async function* createClaudeSession(prompt, {
     } else {
       systemParts.push('', channelPersona);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 공통 스킬 주입 (~/.jarvis/skills/) — CLI·Discord·Mac 앱이 SSoT로 공유
+  // 주입 우선순위:
+  //   1) 슬래시 커맨드 (`/skillname args`) — 명시적, 최우선
+  //   2) 채널 매칭 (skill의 channels에 현재 채널 포함)
+  //   3) 트리거 키워드 매칭 (자연어 발화 중 키워드 포함)
+  // 중복은 스킬 이름 기준으로 제거.
+  //
+  // 성능 최적화: mock-interview 의 경우 handlers.js 가 이미 질문 유형별 가이드 +
+  // RAG 컨텍스트 + 엄격 규칙을 userPrompt 에 넣어줌. 스킬 본문(4200자) 중복 주입은
+  // 낭비이므로 mock-interview 는 skill-loader 단계에서 스킵.
+  // ---------------------------------------------------------------------------
+  try {
+    const { matchSkills } = await import('./skill-loader.js');
+    const injected = new Set();
+    const SKIP_SKILLS_WHEN_INLINE = new Set(['mock-interview']);
+    if (_injectedSkillBody && !SKIP_SKILLS_WHEN_INLINE.has(_injectedSkillBody.name)) {
+      systemParts.push('', `--- 스킬 활성화: ${_injectedSkillBody.name} (슬래시 커맨드) ---\n${_injectedSkillBody.body}`);
+      injected.add(_injectedSkillBody.name);
+      log('info', 'Skill injected via slash', { skill: _injectedSkillBody.name });
+    } else if (_injectedSkillBody) {
+      log('info', 'Skill body skipped (handled inline in handlers.js)', { skill: _injectedSkillBody.name });
+    }
+    const matchedSkills = matchSkills({ channelName, messageText: prompt });
+    for (const { skill, byChannel, byTrigger } of matchedSkills) {
+      if (injected.has(skill.name)) continue;
+      if (SKIP_SKILLS_WHEN_INLINE.has(skill.name)) continue;
+      const reason = byChannel ? `채널: ${channelName}` : `트리거 키워드`;
+      systemParts.push('', `--- 스킬 활성화: ${skill.name} (${reason}) ---\n${skill.body}`);
+      injected.add(skill.name);
+      log('info', 'Skill injected', { skill: skill.name, reason, channelName });
+    }
+  } catch (skillErr) {
+    log('warn', 'Skill loader failed (non-critical)', { error: skillErr.message });
   }
 
   // Owner system preferences (Stable) — survives session resets & bot restarts
@@ -932,15 +1015,26 @@ export async function* createClaudeSession(prompt, {
 
   // 6. 모델 선택
   // jarvis-lite(small) → Haiku (빠른 응답, 50턴)
+  // channelOverrides에 등록된 채널 → 지정 모델 (직접 실행, opusplan 아님)
   // 그 외 → opusplan (계획 Opus, 실행 Sonnet, 200턴)
   const maxTurns = contextBudget === 'small' ? 50 : 200;
-  const model = contextBudget === 'small' ? MODELS.small : 'opusplan';
+  const channelModelKey = channelName && MODELS.channelOverrides?.[channelName];
+  const model = contextBudget === 'small' ? MODELS.fast : (channelModelKey ? MODELS[channelModelKey] : 'opusplan');
 
   // 7. Load MCP server config (same servers, now as SDK mcpServers object)
   // 우선순위: discord-mcp.json > ~/.mcp.json (nexus, serena, serena-board 필터)
   // ${ENV_VAR} 형식의 env var를 실제 값으로 치환 지원 (GITHUB_TOKEN 등)
+  //
+  // 성능 최적화: mock-interview 스킬이 활성화된 턴은 MCP 전부 스킵.
+  // - 이유 1: 면접 답변 생성에 RAG/serena/github 도구 불필요 (스킬 본문만으로 충분)
+  // - 이유 2: MCP 서버 초기화가 첫 쿼리에 5~10초 오버헤드
+  // - 이유 3: 도구가 로드되면 모델이 RAG 호출을 고민하다 지연 증가
   let mcpServers = {};
-  try {
+  const _isMockInterviewTurn = _injectedSkillBody?.name === 'mock-interview' ||
+    /모의면접|면접\s*연습|면접\s*답변|면접관\s*해줘/.test(prompt);
+  if (_isMockInterviewTurn) {
+    log('info', 'MCP servers skipped for mock-interview turn (speed optimization)');
+  } else try {
     const rawMcp = readFileSync(DISCORD_MCP_PATH, 'utf-8')
       .replace(/\$\{([^}]+)\}/g, (_, name) => process.env[name] ?? '');
     mcpServers = (JSON.parse(rawMcp)).mcpServers ?? {};

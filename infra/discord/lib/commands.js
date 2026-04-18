@@ -838,5 +838,68 @@ export async function handleInteraction(interaction, deps) {
       await interaction.editReply(`❌ 조회 실패: ${err.message?.slice(0, 300)}`);
       log('error', '/commitments failed', { error: err.message?.slice(0, 200) });
     }
+
+  } else {
+    // ---------------------------------------------------------------------------
+    // SSoT 스킬 폴백 — 하드코딩 커맨드에 없으면 ~/.jarvis/skills/ 확인
+    // 매치되면 채널에 `/skillname target` 메시지를 프록시 발송 (registerSlashProxy로
+    // 원 사용자 ID 매핑). messageCreate 필터가 이 프록시를 통과시켜 정상 처리.
+    // ---------------------------------------------------------------------------
+    try {
+      const { loadSkills } = await import('./skill-loader.js');
+      const skill = loadSkills().find((s) => s.name === commandName);
+      if (skill) {
+        const target = interaction.options.getString('target') || '';
+        const proxyContent = target ? `/${commandName} ${target}` : `/${commandName}`;
+        await interaction.reply({
+          content: `🎤 **${skill.name}** 시작${target ? ` · ${target}` : ''}`,
+          flags: MessageFlags.Ephemeral,
+        });
+        const { registerSlashProxy, activateMockSession, setMockContext } = await import('./slash-proxy.js');
+        registerSlashProxy(interaction.channelId, interaction.user.id, proxyContent);
+        if (skill.name === 'mock-interview') {
+          activateMockSession(interaction.channelId, interaction.user.id);
+          // RAG pre-fetch — 세션 시작 시 1회 정우님 커리어 전체를 긁어와 프롬프트에 박아둠.
+          // 이후 어떤 질문이 와도 이 컨텍스트를 재료로만 답변 → 할루시네이션 방지 + 범용 대응.
+          (async () => {
+            try {
+              const { execFile } = await import('node:child_process');
+              const { promisify } = await import('node:util');
+              const execFileP = promisify(execFile);
+              // RAG 쿼리는 환경변수 기반 생성 — 개인 식별자를 코드에 하드코딩하지 않음.
+              // OWNER_NAME·OWNER_COMPANIES 미설정 시 generic 쿼리로 대체 (다른 OSS 사용자 대비).
+              const ownerName = process.env.OWNER_NAME || 'owner';
+              const ownerCompanies = process.env.OWNER_COMPANIES || '';
+              const queries = [
+                `${ownerName} STAR 경험 수치 ${ownerCompanies}`.trim(),
+                `${ownerName} 이력서 프로젝트 기술스택 아키텍처`,
+                `${ownerName} 면접 답변 트레이드오프 설계 결정`,
+              ];
+              const results = [];
+              for (const q of queries) {
+                try {
+                  const ragBin = process.env.BOT_HOME
+                    ? `${process.env.BOT_HOME}/lib/rag-query.mjs`
+                    : `${process.env.HOME}/jarvis/runtime/lib/rag-query.mjs`;
+                  const { stdout } = await execFileP('node', [ragBin, q], { timeout: 8000, encoding: 'utf-8' });
+                  if (stdout?.trim()) results.push(`[검색: ${q}]\n${stdout.slice(0, 2500)}`);
+                } catch { /* skip failed query */ }
+              }
+              const contextText = results.join('\n\n---\n\n').slice(0, 3500);
+              if (contextText) {
+                setMockContext(interaction.channelId, interaction.user.id, contextText, target);
+                log('info', 'Mock interview RAG pre-fetch complete', { len: contextText.length, company: target });
+              }
+            } catch (err) {
+              log('warn', 'Mock RAG pre-fetch failed', { error: err.message });
+            }
+          })();
+        }
+        await interaction.channel.send(proxyContent);
+        log('info', 'SSoT skill invoked via slash', { skill: skill.name, target, user: interaction.user.tag });
+      }
+    } catch (err) {
+      log('warn', 'SSoT skill fallback failed', { error: err.message, commandName });
+    }
   }
 }
