@@ -1,4 +1,4 @@
-name: PII Pattern Scan
+name: Privacy Guard
 
 on:
   pull_request:
@@ -6,20 +6,55 @@ on:
   push:
     branches: [main]
 
+# SSoT: scripts/privacy/scan.mjs + .privacy-blocklist.yml
+# 로컬 pre-commit hook과 동일한 바이너리·룰을 사용해
+# "로컬 통과 / CI 실패" 불일치를 구조적으로 제거한다.
 jobs:
-  pii-scan:
+  privacy-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Run PII pattern scan
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve diff base
+        id: diff
         run: |
-          # 공개 패턴만 (캐논은 로컬에만 존재)
-          # 일반적으로 OSS에 있어서는 안 되는 명백한 PII만 검사
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+            echo "head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+            echo "mode=diff" >> "$GITHUB_OUTPUT"
+          else
+            # push 이벤트: 전체 스캔으로 잔존 PII 상태 가시화 (실패시키지 않음 - report only)
+            echo "mode=all" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Privacy scan (PR diff)
+        if: steps.diff.outputs.mode == 'diff'
+        run: |
+          node scripts/privacy/scan.mjs \
+            --diff=${{ steps.diff.outputs.base }}..${{ steps.diff.outputs.head }}
+
+      - name: Privacy scan (push full audit — report only)
+        if: steps.diff.outputs.mode == 'all'
+        continue-on-error: true
+        run: |
+          node scripts/privacy/scan.mjs --all || {
+            echo ""
+            echo "ℹ️ 잔존 위반은 main 병합 차단 대상이 아님 (PR diff 에서만 차단)."
+            echo "ℹ️ 점진 정리 대상으로 별도 이슈 추적 권장."
+            exit 0
+          }
+
+      - name: Legacy shape patterns (extra safety net)
+        run: |
+          # 리포 외부 패턴(개인 정보 형태) 방어 — Privacy Guard 룰이 다루지 않는 일반적 PII 형태.
           PATTERNS=(
-            'owner-id'
             '010-[0-9]{4}-[0-9]{4}'
             '[0-9]{6}-[1-4][0-9]{6}'
             'BEGIN RSA PRIVATE KEY'
@@ -28,21 +63,18 @@ jobs:
             'ghp_[A-Za-z0-9]{36}'
             'AKIA[0-9A-Z]{16}'
           )
-
           FOUND=0
           for pattern in "${PATTERNS[@]}"; do
-            # 워크플로우 자체 제외 — 패턴 정의가 PII로 오탐되는 것 방지
             matches=$(git grep -nE "$pattern" -- ':!node_modules' ':!*.lock' ':!.github/workflows/pii-scan.yml' || true)
             if [[ -n "$matches" ]]; then
-              echo "❌ Pattern detected: $pattern"
+              echo "❌ Shape pattern detected: $pattern"
               echo "$matches"
               FOUND=$((FOUND + 1))
             fi
           done
-
           if [[ $FOUND -gt 0 ]]; then
             echo ""
-            echo "🚫 PII patterns detected. Block merge until resolved."
+            echo "🚫 Shape PII patterns detected. Block merge."
             exit 1
           fi
-          echo "✅ No PII patterns found."
+          echo "✅ Shape pattern scan clean."
