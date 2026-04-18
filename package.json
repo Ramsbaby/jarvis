@@ -1,0 +1,9 @@
+{
+  "name": "jarvis-privacy-guard",
+  "private": true,
+  "scripts": {
+    "postinstall": "git config core.hooksPath .githooks",
+    "privacy:scan": "node scripts/privacy/scan.mjs --all",
+    "privacy:scan-staged": "node scripts/privacy/scan.mjs --staged"
+  }
+}
