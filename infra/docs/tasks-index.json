@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-17T09:51:17.523Z",
+  "generatedAt": "2026-04-17T21:17:05.857Z",
   "source": "~/jarvis/runtime/config/tasks.json",
   "totalTasks": 94,
   "teamDistribution": {
@@ -2391,11 +2391,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/tasks-prompt-path-audit.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/tasks-prompt-path-audit-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-tasks-prompt-path-audit-*.log",
@@ -2987,7 +2987,7 @@
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/entity-graph-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-entity-graph-*.log",

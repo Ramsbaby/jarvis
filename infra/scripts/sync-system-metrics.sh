@@ -47,6 +47,30 @@ DISK_FREE_GB=$(awk "BEGIN {printf \"%.1f\", $DISK_BLOCKS_AVAIL / 2097152}")
 DISK_USED_PCT=$(df -h / | tail -1 | awk '{gsub(/%/,"",$5); print int($5)}')
 
 # ══════════════════════════════════════════════════════
+# 1-b. 메모리 (macOS: sysctl + vm_stat)
+# ══════════════════════════════════════════════════════
+MEM_TOTAL_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo "0")
+MEM_TOTAL_GB=$(awk "BEGIN {printf \"%.1f\", $MEM_TOTAL_BYTES / 1073741824}")
+VM_STAT_OUT=$(vm_stat 2>/dev/null || echo "")
+MEM_PAGE_SIZE=16384
+MEM_ACTIVE=$(echo "$VM_STAT_OUT" | awk '/Pages active/{gsub(/\./,"",$NF); print $NF+0}')
+MEM_WIRED=$(echo "$VM_STAT_OUT" | awk '/Pages wired down/{gsub(/\./,"",$NF); print $NF+0}')
+MEM_COMPRESSED=$(echo "$VM_STAT_OUT" | awk '/Pages occupied by compressor/{gsub(/\./,"",$NF); print $NF+0}')
+MEM_USED_PAGES=$(( ${MEM_ACTIVE:-0} + ${MEM_WIRED:-0} + ${MEM_COMPRESSED:-0} ))
+MEM_USED_GB=$(awk "BEGIN {printf \"%.1f\", $MEM_USED_PAGES * $MEM_PAGE_SIZE / 1073741824}")
+MEM_USED_PCT=0
+if [[ "$MEM_TOTAL_BYTES" -gt 0 ]]; then
+  MEM_USED_PCT=$(awk "BEGIN {printf \"%d\", ($MEM_USED_PAGES * $MEM_PAGE_SIZE / $MEM_TOTAL_BYTES) * 100}")
+fi
+
+# ══════════════════════════════════════════════════════
+# 1-c. CPU (macOS: sysctl + ps)
+# ══════════════════════════════════════════════════════
+CPU_LOAD_AVG=$(sysctl -n vm.loadavg 2>/dev/null | tr -d '{}' | awk '{printf "%.2f", $1}' || echo "0")
+CPU_N_CORES=$(sysctl -n hw.logicalcpu 2>/dev/null || echo "1")
+CPU_USED_PCT=$(awk "BEGIN {v=$CPU_LOAD_AVG/$CPU_N_CORES*100; printf \"%d\", (v>100?100:v)}")
+
+# ══════════════════════════════════════════════════════
 # 2. health.json
 # ══════════════════════════════════════════════════════
 HEALTH_FILE="$STATE_DIR/health.json"
@@ -298,6 +322,16 @@ const p = {
     free_gb: parseFloat('$DISK_FREE_GB')||0,
     total_gb: parseFloat('$DISK_TOTAL_GB')||0
   },
+  memory: {
+    used_pct: parseInt('$MEM_USED_PCT')||0,
+    used_gb: parseFloat('$MEM_USED_GB')||0,
+    total_gb: parseFloat('$MEM_TOTAL_GB')||0
+  },
+  cpu: {
+    used_pct: parseInt('$CPU_USED_PCT')||0,
+    load_avg: parseFloat('$CPU_LOAD_AVG')||0,
+    n_cores: parseInt('$CPU_N_CORES')||1
+  },
   health: $HEALTH_JSON,
   scorecard: $SCORECARD_JSON,
   cron_stats: $CRON_STATS_JSON,
@@ -323,7 +357,7 @@ HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
   -d "$PAYLOAD")
 
 if [[ "$HTTP_CODE" == "200" ]]; then
-  echo "[$(date '+%F %T')] sync OK — disk=${DISK_FREE_GB}GB/${DISK_TOTAL_GB}GB (${DISK_USED_PCT}%) | cron=$(echo "$CRON_STATS_JSON" | "$NODE_BIN" -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const r=JSON.parse(d);process.stdout.write(r.rate+'%')}catch{process.stdout.write('?')}})" 2>/dev/null)%"
+  echo "[$(date '+%F %T')] sync OK — disk=${DISK_USED_PCT}% | mem=${MEM_USED_PCT}% (${MEM_USED_GB}/${MEM_TOTAL_GB}GB) | cpu=${CPU_USED_PCT}% load=${CPU_LOAD_AVG} | cron=$(echo "$CRON_STATS_JSON" | "$NODE_BIN" -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const r=JSON.parse(d);process.stdout.write(r.rate+'%')}catch{process.stdout.write('?')}})" 2>/dev/null)%"
 else
   echo "[$(date '+%F %T')] sync FAILED — HTTP $HTTP_CODE" >&2
   exit 1

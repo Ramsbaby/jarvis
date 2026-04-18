@@ -112,6 +112,7 @@ function _buildBatchContent(messages) {
 
 const _BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const PENDING_TASKS_PATH = join(_BOT_HOME, 'state', 'pending-tasks.json');
+const _MODELS = JSON.parse(readFileSync(join(_BOT_HOME, 'config', 'models.json'), 'utf-8'));
 const PENDING_TASK_TTL_MS = 30 * 60 * 1000; // 30분
 
 function _pruneExpiredPendingTasks(tasks) {
@@ -376,7 +377,33 @@ export async function handleMessage(message, state) {
     contentLen: message.content?.length ?? 0,
   });
 
-  if (message.author.bot) return;
+  // 봇 필터 + slash-proxy 예외:
+  // 슬래시 커맨드 경로로 봇 자신이 프록시 발송한 메시지만 통과시키고,
+  // 이 경우 message.author 를 원래 사용자의 User 객체로 교체해
+  // 하류 로직(userId·displayName·memory 등 28개 참조)이 자연스럽게 원 사용자로 동작.
+  if (message.author.bot) {
+    try {
+      const { consumeSlashProxy } = await import('./slash-proxy.js');
+      const isSelf = message.author.id === message.client.user.id;
+      if (!isSelf) return;
+      const proxy = consumeSlashProxy(message.channel.id, message.content);
+      if (!proxy) return;
+      const origUser =
+        message.client.users.cache.get(proxy.userId) ??
+        (await message.client.users.fetch(proxy.userId).catch(() => null));
+      if (!origUser) return;
+      // Discord.js v14: message.author 는 getter 라 직접 할당 불가.
+      // 대신 _proxyAuthor 저장 + getEffectiveAuthor() 헬퍼로 다운스트림이 조회.
+      message._proxyAuthor = origUser;
+      message._viaSlashProxy = true;
+    } catch {
+      return;
+    }
+  }
+
+  // 프록시 우회 시 진짜 author 를 얻는 헬퍼 (message 객체에 주입해 어디서든 사용).
+  // Discord.js v14 getter 특성상 message.author = X 가 먹히지 않아 이 패턴 필수.
+  const effectiveAuthor = message._proxyAuthor ?? message.author;
 
   // Dedup guard
   if (processingMsgIds.has(message.id)) {
@@ -448,7 +475,7 @@ export async function handleMessage(message, state) {
     const detected = injectionPatterns.some(p => p.test(message.content));
     if (detected) {
       log('warn', 'Potential prompt injection detected', {
-        userId: message.author.id,
+        userId: effectiveAuthor.id,
         channelId: message.channelId,
         contentLen: message.content.length,
         preview: message.content.slice(0, 80),
@@ -459,7 +486,12 @@ export async function handleMessage(message, state) {
   // ---------------------------------------------------------------------------
   // Pairing — 미등록 사용자 접근 제어 + Owner !pair <code> 승인
   // ---------------------------------------------------------------------------
-  const senderProfile = getUserProfile(message.author.id);
+  const senderProfile = getUserProfile(effectiveAuthor.id);
+  try {
+    appendFileSync('/tmp/jarvis-guard-debug.log',
+      `  → senderProfile check | author.id=${effectiveAuthor?.id} | profile=${senderProfile ? JSON.stringify({role:senderProfile.role, name:senderProfile.name}) : 'null'}\n`
+    );
+  } catch {}
   const senderIsOwner = senderProfile?.type === 'owner' || senderProfile?.role === 'owner';
 
   // !pair <code> — Owner 전용 커맨드 (debounce 우회, 즉시 처리)
@@ -490,7 +522,7 @@ export async function handleMessage(message, state) {
         role: 'guest',
         discordId: entry.discordId,
         pairedAt: new Date().toISOString(),
-        pairedBy: message.author.id,
+        pairedBy: effectiveAuthor.id,
       };
       writeFileSync(profilesPath, JSON.stringify(profiles, null, 2));
       reloadUserProfiles();
@@ -506,7 +538,7 @@ export async function handleMessage(message, state) {
 
   // 미등록 사용자(guest) 차단 — 페어링 코드 발급
   if (!senderProfile) {
-    const code = generateCode(message.author.id, message.author.displayName || message.author.username);
+    const code = generateCode(effectiveAuthor.id, effectiveAuthor.displayName || effectiveAuthor.username);
     await message.reply(
       `🔒 **미등록 사용자입니다.**\n\n` +
       `접근을 요청하려면 Owner에게 아래 코드를 전달하세요.\n\n` +
@@ -522,7 +554,7 @@ export async function handleMessage(message, state) {
         if (alertCh) {
           await alertCh.send(
             `🔔 **[페어링 요청]** 미등록 사용자가 접근을 시도했습니다.\n` +
-            `- 사용자: **${message.author.displayName || message.author.username}** (\`${message.author.id}\`)\n` +
+            `- 사용자: **${effectiveAuthor.displayName || effectiveAuthor.username}** (\`${effectiveAuthor.id}\`)\n` +
             `- 채널: <#${message.channel.id}>\n` +
             `- 코드: \`${code}\`\n\n` +
             `승인하려면: \`!pair ${code}\``,
@@ -532,7 +564,7 @@ export async function handleMessage(message, state) {
         log('warn', '[pairing] owner alert 전송 실패', { error: alertErr.message });
       }
     }
-    log('info', '[pairing] 미등록 사용자 차단 + 코드 발급', { userId: message.author.id, username: message.author.username, code });
+    log('info', '[pairing] 미등록 사용자 차단 + 코드 발급', { userId: effectiveAuthor.id, username: effectiveAuthor.username, code });
     processingMsgIds.delete(message.id);
     return;
   }
@@ -542,9 +574,9 @@ export async function handleMessage(message, state) {
   if (rememberMatch) {
     const fact = rememberMatch[1].trim();
     if (fact) {
-      userMemory.addFact(message.author.id, fact, 'discord-remember-cmd');
+      userMemory.addFact(effectiveAuthor.id, fact, 'discord-remember-cmd');
       await message.reply(t('msg.remembered'));
-      log('info', 'User memory saved via text command', { userId: message.author.id, fact: fact.slice(0, 100) });
+      log('info', 'User memory saved via text command', { userId: effectiveAuthor.id, fact: fact.slice(0, 100) });
     }
     processingMsgIds.delete(message.id);
     return;
@@ -553,7 +585,7 @@ export async function handleMessage(message, state) {
   // 이미지/문서 첨부 → debounce 없이 즉시 처리 (CDN URL 만료 위험)
   // 슬래시 명령 → 즉시 처리
   const isBypassDebounce = hasImages || hasDocAtt || message.content.startsWith('/');
-  const debounceKey = isThread ? message.channel.id : `${message.channel.id}-${message.author.id}`;
+  const debounceKey = isThread ? message.channel.id : `${message.channel.id}-${effectiveAuthor.id}`;
 
   if (isBypassDebounce) {
     await _processBatch([message], state);
@@ -578,6 +610,9 @@ export async function handleMessage(message, state) {
 
 async function _processBatch(messages, { sessions, rateTracker, semaphore, activeProcesses, client }) {
   const message = messages[messages.length - 1]; // Discord 작업용 (reply, react 등)
+  // handleMessage 에서 slash-proxy 로 주입한 실제 작성자. 없으면 원본 author 사용.
+  // Discord.js v14 의 author 가 getter 라 직접 교체 불가이므로 이 패턴 필수.
+  const effectiveAuthor = message._proxyAuthor ?? message.author;
   // 음성 메시지 판별 (_processBatch는 handleMessage 스코프 밖이므로 여기서 재계산)
   const voiceAtt = message.attachments?.size > 0
     ? Array.from(message.attachments.values()).find((a) =>
@@ -641,7 +676,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
   const isThread = message.channel.isThread() && channelIds2.includes(message.channel.parentId);
 
   if (!(await semaphore.acquire())) {
-    const queueKey = isThread ? message.channel.id : `${message.channel.id}-${message.author.id}`;
+    const queueKey = isThread ? message.channel.id : `${message.channel.id}-${effectiveAuthor.id}`;
 
     // Cancel Token: 동일 사용자 응답 생성 중 → 중단 후 통합 재시작
     // (Claude SDK: 동일 session_id 동시 호출 공식 미지원 — 직렬화 필수)
@@ -692,13 +727,13 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
   const originalPrompt = batchContent;    // ← 배치 결합 프롬프트
 
   // Learning feedback loop
-  const feedback = processFeedback(message.author.id, userPrompt);
+  const feedback = processFeedback(effectiveAuthor.id, userPrompt);
   if (feedback) {
-    log('info', 'Feedback detected', { userId: message.author.id, type: feedback.type });
+    log('info', 'Feedback detected', { userId: effectiveAuthor.id, type: feedback.type });
 
     // Phase 0 Sensor: positive/negative/correction → feedback-score.jsonl 로컬 원장
     // (Langfuse 의존 제거 — Mac Mini 리소스 절약, JSONL로 1주 집계 충분)
-    const prevTraceId = _lastTraceByUser.get(message.author.id);
+    const prevTraceId = _lastTraceByUser.get(effectiveAuthor.id);
     const scoreMap = { positive: 1.0, negative: 0.0, correction: 0.3 };
     if (prevTraceId && scoreMap[feedback.type] !== undefined) {
       try {
@@ -710,7 +745,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
             ts: new Date().toISOString(),
             source: 'discord-bot',
             traceId: prevTraceId,
-            userId: message.author.id,
+            userId: effectiveAuthor.id,
             channelId: message.channel?.id ?? null,
             feedbackType: feedback.type,
             score: scoreMap[feedback.type],
@@ -732,11 +767,11 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
           JSON.stringify({
             ts: new Date().toISOString(),
             source: 'discord-bot',
-            userId: message.author.id,
+            userId: effectiveAuthor.id,
             channelId: message.channel?.id ?? null,
             feedbackType: feedback.type,
             feedbackText: String(userPrompt).slice(0, 240),
-            prevPrompt: String(_lastPromptByUser.get(message.author.id) ?? '').slice(0, 240),
+            prevPrompt: String(_lastPromptByUser.get(effectiveAuthor.id) ?? '').slice(0, 240),
             lastTraceId: prevTraceId ?? null,
           }) + '\n'
         );
@@ -769,7 +804,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
   let retryHandled = false;
   try {
     thread = message.channel;
-    sessionKey = isThread ? thread.id : `${thread.id}-${message.author.id}`;
+    sessionKey = isThread ? thread.id : `${thread.id}-${effectiveAuthor.id}`;
     sessionId = sessions.get(sessionKey);
 
     // ── Phase 1: 세션 종료 감지 ───────────────────────────────────────────
@@ -1075,8 +1110,10 @@ ${extracted}
     // Session summary pre-injection for resume safety
     // _continueHandled=true이면 이미 "계속" 블록에서 요약을 주입했으므로 중복 방지
     // sessionId 조건 제거: compact 직후 첫 턴(sessionId=null)에도 요약 주입
+    // jarvis-career 예외: save 쪽에서 저장 안 하므로 load 해도 빈 값이지만
+    // 혹시 과거 오염된 파일이 남아있을 수 있으므로 명시적으로 skip.
     let _summaryInjected = false;
-    if (!_continueHandled) {
+    if (!_continueHandled && chName !== 'jarvis-career') {
       const summary = loadSessionSummary(sessionKey);
       if (summary) {
         // tutoring 질문인데 요약에 잘못된 MCP/캘린더 내용이 있으면 주입하지 않음
@@ -1157,7 +1194,7 @@ ${extracted}
         procShim.kill();
       }, 600_000);
 
-      activeProcesses.set(sessionKey, { proc: procShim, timeout: timeoutHandle, typingInterval, userId: message.author.id, streamer, originalPrompt, sessionKey });
+      activeProcesses.set(sessionKey, { proc: procShim, timeout: timeoutHandle, typingInterval, userId: effectiveAuthor.id, streamer, originalPrompt, sessionKey });
       // 즉시 active-session 파일 기록 (watchdog이 5분 주기 전에 체크해도 보호됨)
       try { writeFileSync(join(_BOT_HOME, 'state', 'active-session'), String(Date.now())); } catch { /* best effort */ }
 
@@ -1196,7 +1233,14 @@ ${extracted}
         channelId: effectiveChannelId,
         channelName: chName,
         attachments: imageAttachments,
-        userId: message.author.id,
+        userId: (() => {
+          try {
+            appendFileSync('/tmp/jarvis-guard-debug.log',
+              `  → before createClaudeSession | effectiveAuthor.id=${effectiveAuthor?.id} | viaSlashProxy=${message._viaSlashProxy} | clientUserId=${message.client?.user?.id}\n`
+            );
+          } catch {}
+          return effectiveAuthor.id;
+        })(),
         contextBudget,
         signal: abortController.signal,
         injectedSummary: _injectedSummary,
@@ -1336,7 +1380,7 @@ ${extracted}
                   ts: new Date().toISOString(),
                   source: 'discord-bot',
                   traceId: localTraceId,
-                  userId: message.author?.id ?? null,
+                  userId: effectiveAuthor?.id ?? null,
                   channelId: effectiveChannelId,
                   sessionId: thread.id,
                   toolCount,
@@ -1352,9 +1396,9 @@ ${extracted}
               log('debug', 'response-ledger append failed (non-blocking)', { error: e?.message });
             }
             // 유저별 직전 trace/prompt 캐시 — 다음 턴 피드백 도착 시 scoring 대상
-            if (message.author?.id) {
-              _lastTraceByUser.set(message.author.id, localTraceId);
-              _lastPromptByUser.set(message.author.id, String(originalPrompt).slice(0, 240));
+            if (effectiveAuthor?.id) {
+              _lastTraceByUser.set(effectiveAuthor.id, localTraceId);
+              _lastPromptByUser.set(effectiveAuthor.id, String(originalPrompt).slice(0, 240));
             }
           }
           const rateStatus = rateTracker.check();
@@ -1390,8 +1434,12 @@ ${extracted}
           });
 
           if (lastAssistantText.length > 20) {
-            saveConversationTurn(originalPrompt, lastAssistantText, chName, message.author.id);
-            saveSessionSummary(sessionKey, originalPrompt, lastAssistantText);
+            saveConversationTurn(originalPrompt, lastAssistantText, chName, effectiveAuthor.id);
+            // jarvis-career 는 세션 요약 저장 차단: 모의면접 시뮬 답변이 요약에 섞이면
+            // 다음 턴에 pre-inject 되어 RAG·가드를 모두 우회하며 거짓 스토리 부활.
+            if (chName !== 'jarvis-career') {
+              saveSessionSummary(sessionKey, originalPrompt, lastAssistantText);
+            }
             // 토큰 누적: result 이벤트의 usage.input_tokens (claude-runner.js에서 포워딩)
             const inputTokens = event.usage?.input_tokens ?? 0;
             if (inputTokens > 0) {
@@ -1401,9 +1449,9 @@ ${extracted}
               log('debug', 'Token count updated', { sessionKey, inputTokens, total: newTotal });
             }
             // 비동기 메모리 추출 — 메인 응답에 영향 없는 fire-and-forget
-            autoExtractMemory(message.author.id, originalPrompt, lastAssistantText, effectiveChannelId).catch((e) => log('debug', 'autoExtractMemory outer catch', { error: e?.message }));
+            autoExtractMemory(effectiveAuthor.id, originalPrompt, lastAssistantText, effectiveChannelId).catch((e) => log('debug', 'autoExtractMemory outer catch', { error: e?.message }));
             // 비동기 약속 감지 — Jarvis가 "하겠습니다" 발화 시 commitments.jsonl 기록
-            _trackCommitment(lastAssistantText, { channelId: effectiveChannelId, userId: message.author.id })
+            _trackCommitment(lastAssistantText, { channelId: effectiveChannelId, userId: effectiveAuthor.id })
               .catch((e) => log('debug', 'commitment-tracker outer catch', { error: e?.message }));
           }
         }
@@ -1481,9 +1529,256 @@ ${extracted}
     });
     await streamer.updatePhase('🔍 컨텍스트 검색 중...');
     userPrompt = await _preProcessorRegistry.run(userPrompt, preCtx);
+
+    // ---------------------------------------------------------------------------
+    // Hard 가드 — jarvis-career 에서 면접 전형 질문이 왔는데 mock-interview 스킬이
+    // 명시적으로 켜지지 않은 경우, 모델이 창작하기 전에 고정 응답으로 short-circuit.
+    // 이유: 프롬프트 지시("모의면접 쓸까요?"라고 먼저 확인)만으로는 LLM이 무시하고
+    // 실증 없이 STAR 답변을 만들어낸다. 코드 레벨 가드가 유일한 해결책.
+    // ---------------------------------------------------------------------------
+    const INTERVIEW_PATTERNS = [
+      /실수\s*경험/, /실패\s*경험/, /조직\s*갈등/, /갈등\s*경험/,
+      /협업\s*경험/, /자기\s*소개/, /지원\s*동기/,
+      /장단점/, /본인.*강점/, /본인.*약점/,
+      /인상\s*깊었/, /도전\s*경험/, /성장\s*경험/,
+      /조직경험.*실수/, /어려웠던.*경험/,
+    ];
+    // 가드는 원본 사용자 입력만 검사. userPrompt 는 이전 세션 요약 pre-inject 로
+    // 오염된 상태라 여기서 패턴 매칭하면 과거 대화의 거짓말 스토리까지 잡혀 오탐 발생.
+    const _rawInput = (message.content || '').trim();
+    const hasInterviewPattern = INTERVIEW_PATTERNS.some((re) => re.test(_rawInput));
+    const hasSkillTrigger = /^\/[a-zA-Z0-9_-]+/.test(_rawInput)
+      || /모의면접|면접\s*연습|면접\s*답변|면접관\s*해줘/.test(_rawInput);
+
+    // 모의면접 세션 활성 상태 체크 — /mock-interview 로 시작된 세션이면
+    // 자연어 후속 질문도 스킬 모드로 처리 (가드 우회).
+    const { isMockSessionActive, deactivateMockSession, activateMockSession: _activateMock } = await import('./slash-proxy.js');
+    const mockActive = isMockSessionActive(effectiveChannelId, effectiveAuthor.id);
+
+    // 키워드로 모의면접 시작한 경우도 세션 활성화
+    if (hasSkillTrigger && /모의면접|면접\s*연습|면접\s*답변|면접관\s*해줘/.test(_rawInput)) {
+      _activateMock(effectiveChannelId, effectiveAuthor.id);
+    }
+
+    // 세션 종료 트리거
+    if (mockActive && /^(끝|그만|마무리|피드백\s*줘|총평)$/.test(_rawInput)) {
+      deactivateMockSession(effectiveChannelId, effectiveAuthor.id);
+      // 피드백 요청은 그대로 통과 (스킬이 피드백 모드로 처리)
+    }
+
+    // mockActive 이면 후속 자연어 메시지에도 스킬이 주입되도록 트리거 마커 prepend.
+    // claude-runner 의 skill-loader 가 "모의면접" 키워드를 감지해 스킬 활성화.
+    if (mockActive && !hasSkillTrigger) {
+      userPrompt = `[모의면접 세션 진행중]\n\n${userPrompt}`;
+    }
+
+    // ---------------------------------------------------------------------------
+    // 모의면접 범용 답변 가드 — 카드 하드코딩 없이 질문 유형별 원칙 + RAG 컨텍스트 주입.
+    //
+    // 구조:
+    // 1. 세션 시작 시 RAG로 정우님 커리어 전체를 pre-fetch (commands.js) → MOCK_CONTEXT
+    // 2. 매 턴마다 질문 유형 감지 (취약성/자기소개/기술깊이/동기 등)
+    // 3. 유형별 답변 원칙 + pre-fetch된 RAG 컨텍스트를 프롬프트에 주입
+    // 4. Claude는 "재료(RAG) + 원칙(유형별 가이드)" 만으로 답변 생성 → 창작 차단
+    // ---------------------------------------------------------------------------
+    const QUESTION_TYPES = {
+      vulnerability: /실수\s*경험|실패\s*경험|조직\s*갈등|갈등\s*경험|본인.*약점|단점.*경험|어려웠던.*경험|조직경험.*실수|조직경험.*실패|조직경험.*갈등/,
+      intro: /자기\s*소개|간단.*소개|본인.*소개해|본인.*어떤/,
+      motivation: /지원\s*동기|왜.*회사|왜.*지원|지원.*이유|어떻게.*지원/,
+      techDepth: /어떤.*기술|가장.*관심.*기술|최근.*공부|기술.*스택|어떤.*프로젝트|아키텍처|설계/,
+      collab: /협업|팀.*경험|동료.*갈등|의견.*차이|소통.*어려웠/,
+      decision: /의사.*결정|판단.*근거|선택.*이유|왜.*그.*방법|트레이드오프/,
+      leadership: /주도.*경험|리더|이끌어|설득.*경험/,
+      growth: /성장.*경험|도전.*경험|새로.*배운|학습|인상.*깊었/,
+      future: /앞으로.*목표|커리어.*계획|5년|3년|어떤.*개발자/,
+    };
+    let questionType = 'generic';
+    for (const [type, re] of Object.entries(QUESTION_TYPES)) {
+      if (re.test(_rawInput)) { questionType = type; break; }
+    }
+    const isInterviewQuestion = questionType !== 'generic' || /경험|답변|설명.*해|말해/.test(_rawInput);
+
+    if (mockActive && isInterviewQuestion) {
+      const { getMockContext } = await import('./slash-proxy.js');
+      const mockCtx = getMockContext(effectiveChannelId, effectiveAuthor.id);
+      const ragContextBlock = mockCtx?.context
+        ? `\n\n[정우님 실증 커리어 컨텍스트 — 답변의 재료는 여기에서만 가져와라]\n${mockCtx.context}\n`
+        : '';
+      const companyBlock = mockCtx?.company ? `\n[회사: ${mockCtx.company}]` : '';
+
+      const TYPE_GUIDES = {
+        vulnerability: `
+[질문 유형: 취약성 · 실수/실패/갈등/약점 — 시니어 레벨 답변]
+
+이 유형은 "실수를 덮지 않고 기술적으로 복기"하는 자각이 핵심. 빈 반성 문구가 아니라 **현상 vs 원인 혼동**을 구체적 기술 용어로 짚어야 면접관이 "시니어 감각 있다"고 판단.
+
+**답변 3단 구조 필수:**
+1. **실수 인정 (기술 수준 포함)**: "당시 저는 ○○ 로그를 보고 ×× 가설을 세웠습니다. 이는 현상과 원인을 혼동한 판단 미스였습니다"
+2. **이유 설명 (개념 수준)**: "○○는 △△ 레벨의 문제이고, 실제 병목은 □□ 레벨이었는데, 표면 지표에만 매몰됐습니다"
+3. **반전과 학습 (구체적 도구/방법)**: "로그/락 모니터링/덤프/쿼리 플랜 분석 등으로 본질을 파악했고, 이후 ○○ 가이드라인을 세웠습니다"
+
+**데드락 문제를 쓸 경우 반드시 기술 정합성 유지:**
+- 데드락의 원인은 **트랜잭션 Lock 점유 시간/범위 / 인덱스 미비 / 쿼리 플랜** 계열이지 커넥션 풀 크기가 아님
+- 풀 크기를 초기 가설로 쓰려면 반드시 "이는 현상과 원인 혼동이었다"고 명시 (안 쓰면 가설 자체가 허술해 보임)
+- 더 안전한 초기 가설: "인덱스 미비로 풀 스캔 발생 → Next-Key Lock 범위 확대" / "트랜잭션 범위 과대 설정"
+- DB 엔진 언급 가능 (MySQL InnoDB, Oracle 등) — Lock 방식 차이 이해 시그널
+
+**풀 이름 / 용어 정합성:**
+- Lock 경합 = Lock Contention
+- 락 점유 시간 = Lock Hold Time
+- 범위 락 = Next-Key Lock (MySQL InnoDB)
+- 근본 원인 분석 = Root Cause Analysis
+
+**필수 포함:** 대안 1~2개 비교 / 수치 3종 / 팀 리뷰 맥락 / 이후 문서화·표준화
+**금지:** "혼자 판단", "공유 없이", "테스트 생략", "몰래", 수치 없는 "개선"`,
+        intro: `
+[질문 유형: 자기소개]
+- 구조: 경력 연차·핵심 기술 → 최근 성과 1개 (수치) → 지원 포지션 연결고리 1줄
+- 금지: "저는 열정적이고 꼼꼼한 성격이라" 같은 직무 무관 성격 나열`,
+        motivation: `
+[질문 유형: 지원 동기]
+- 구조: 회사 전략/도메인에서 본 강점 → 내 경험과 정확한 연결 → 무엇을 만들고 싶은지
+- 필수: 회사 구체적 맥락 (서비스·최근 뉴스·기술 방향 중 1개)
+- 금지: "좋은 회사라 지원했다" 같은 일반론`,
+        techDepth: `
+[질문 유형: 기술 깊이]
+- 구조: 실제 적용 맥락 → 왜 이 기술 선택했나 (대안 비교) → 실제 만난 함정과 해결 → 측정 결과
+- 필수: 트레이드오프 명시, 수치 지표 (p95·처리량·비용 등)
+- 금지: 교과서적 정의만 늘어놓기
+- **기술 정합성 주의**: 개념 층위를 혼동하지 말 것.
+  예시 함정:
+  - 데드락 ≠ 커넥션 풀 부족 (락 경합 vs 연결 고갈은 다른 층위)
+  - N+1 ≠ 쿼리 느림 (반복 호출 vs 단일 쿼리 성능은 다름)
+  - OSIV ≠ 트랜잭션 (View 범위 vs TX 범위)
+  틀릴 법한 부분은 "○○는 △△ 레벨 문제이고, 실제는 □□ 레벨"처럼 층위 구분 명시`,
+        collab: `
+[질문 유형: 협업/갈등]
+- 구조: 상황 → 상대 입장 이해 시도 → 데이터·근거 기반 대화 → 합의 도출 → 이후 관계
+- 필수: 상대를 인격적으로 존중한 시그널, 결과가 서로에게 유익
+- 금지: "제가 설득해서 제 뜻대로 됐다" 류 우월감`,
+        decision: `
+[질문 유형: 의사결정 근거]
+- 구조: 옵션 A/B/C 명시 → 각 장단점 → 선택 기준 (운영비·확장성·팀 역량·리스크) → 선택 + 이후 검증
+- 필수: 최소 2개 대안 비교, 선택 기준 명시적 언급`,
+        leadership: `
+[질문 유형: 리더십]
+- 구조: 담당이 아닌데 먼저 제기한 문제 → 팀 동의 이끈 과정 (데이터·페어) → 구조적 개선 → 재발 방지
+- 필수: "제가 먼저 제안했다" + 팀 합의 맥락`,
+        growth: `
+[질문 유형: 성장 경험]
+- 구조: 모르던 영역 → 학습 방법 (문서·페어·사이드프로젝트) → 실무 적용 → 이후 확장
+- 필수: 구체적 학습 과정 (책 제목·강의·페어 대상 중 1개)`,
+        future: `
+[질문 유형: 미래 목표]
+- 구조: 단기(1~2년) 기술 목표 → 중기(3~5년) 역할 목표 → 지원 회사와 어떻게 연결되는지
+- 필수: 회사 도메인·방향성과의 연결고리`,
+        generic: `
+[질문 유형: 범용 면접 질문]
+- STAR 구조 (상황·과제·행동·결과)로 답변
+- 실증 경험 기반, 수치 포함
+- 끝에 조직 기여·학습 킥 1개`,
+      };
+      const typeGuide = TYPE_GUIDES[questionType] || TYPE_GUIDES.generic;
+
+      userPrompt = `[모의면접 · 1분 30초 즉답]${companyBlock}
+
+원 질문: ${_rawInput}
+${typeGuide}
+${ragContextBlock}
+**답변 생성 규칙 (엄격):**
+1. 어미는 모두 ~습니다/~합니다. 준말(~했어요/~거든요) 금지
+2. 길이 370~420자 (1분 30초 분량). 초과·미달 금지
+3. 위 컨텍스트의 실증 경험(STAR·이력서·수치)만 재료로 사용. 기술·수치·프로젝트 창작 금지
+4. **필수 포함 3요소**:
+   - 수치 3종: before→after + 기간/규모 중 1개
+   - 선택지 비교 또는 트레이드오프 명시 1개 ("A도 검토했으나 B가 적합했습니다" 식)
+   - 조직 기여 킥 1개 (표준화·문서화·패턴 재사용·재발 방지 중 하나)
+5. **금지 표현**: "혼자 판단", "공유 없이", "몰래", "테스트 생략", "열심히 했습니다", "꼼꼼한 성격", 수치 없는 "효율화/개선"
+6. 마지막 한 줄: **강점 파고드는 예상 꼬리질문** 1개. 약점 파고드는 꼬리질문("왜 처음부터 X로 안 했나요") 금지
+
+바로 답변 생성 시작. 서론·설명 없이 답변 본문부터.`;
+    }
+
+    // 이전 카드 기반 분기 제거 (유지 이유: 기존 플로우 깨지지 않게 변수만 둠)
+    const VULNERABILITY_PATTERNS_LEGACY = [/__never_match__/];
+    const isVulnerabilityQuestion = VULNERABILITY_PATTERNS_LEGACY.some((re) => re.test(_rawInput));
+    if (false && mockActive && isVulnerabilityQuestion) {
+      userPrompt = `[모의면접 — 취약성 질문 · 즉답]
+
+원 질문: ${_rawInput}
+
+아래 카드 중 하나를 골라 1인칭 격식체로 확장하라. 카드 밖 사실 창작 금지.
+
+[카드 A · 기술 가설 검증 과정에서 방향 재설정 — 스케줄러 데드락]
+상황: 스케줄러 배치에서 데드락이 시간당 3회 발생. SLA 위반 직전
+초기 가설: 인덱스/쿼리 플랜 이슈로 락 점유가 길어진다고 추정 → **팀 리뷰 후** 쿼리 플랜 분석·인덱스 튜닝 시범 적용 → 증상 미개선
+재분석: 실제 원인은 20만 건을 **단일 트랜잭션으로 묶어 락을 20초 점유**하고 있던 트랜잭션 경계 설계
+선택지 비교: ①배치 자체 분리는 스케줄 재편이 커서 제외, ②Pessimistic Lock은 경합 악화 우려, ③REQUIRES_NEW + 500건 Chunking 선택 — 자식 트랜잭션 독립 분리로 Lock 점유 시간 단축 + 부모 롤백 전파 차단
+수치 근거: 500건은 당시 평균 행 크기 기준 단일 트랜잭션 1초 이내 완료되는 임계점
+결과: Lock 20초→1ms, 데드락 시간당 3회→0회, 배치 실패율 소폭 하락 → 팀 표준 문서화·공유
+
+[카드 B · 설계 타이밍 오판 → 패턴 리팩터 — IoT Adapter]
+상황: IoT 신규 제조사 온보딩 초기, if-else 분기로 빠르게 가자는 팀 합의
+초기 판단: 신규 3~4개 제조사까진 분기 로직으로 충분 → **팀 리뷰 거쳐** 도입
+재분석: 분기 100줄 돌파 시점에 신규 제조사 추가마다 기존 로직 회귀 테스트 부담이 기하급수적으로 커지는 걸 확인
+선택지 비교: ①if-else 유지+헬퍼 분리는 여전히 결합도↑, ②Strategy 패턴은 조건 분기 유지, ③Adapter 패턴 선택 — 제조사별 계약 격리로 신규 추가가 기존 로직에 영향 없음
+결과: 온보딩 2주→2일(약 7배), 이후 신규 제조사는 같은 패턴 재사용 → 팀 내 설계 원칙으로 정착
+
+[카드 C · 범위 추정 오판 → 전략 전환 — 배치 최적화]
+상황: 야간 정산 배치가 3~4분 소요, 다음 배치 스케줄과 겹쳐 데이터 정합성 위협
+초기 가설: 쿼리 튜닝으로 충분 → **팀 리뷰 후** 인덱스·조인 순서 수정 시범 적용 → 30% 개선에 그침
+재분석: DB 병목이 아니라 단건 INSERT 반복에 따른 커넥션 오버헤드가 실제 원인
+선택지 비교: ①트랜잭션 배치 크기만 늘리면 Lock 시간 증가, ②비동기 큐로 돌리면 순서 보장 이슈, ③JDBC Bulk Insert + ForkJoinPool 병렬화 선택 — 커넥션 오버헤드 제거 + CPU 코어 활용
+결과: 3분→10초(20배), 이후 유사 배치 2건에 동일 패턴 적용 → 팀 내 표준 레퍼런스로 정착
+
+**답변 규칙 (370~420자, 1분 30초):**
+1. 어미 모두 ~습니다/~합니다. 준말(~했어요) 금지
+2. **프레이밍 안전장치:**
+   - "초기 판단 잘못" X → "초기 가설이 빗나갔다"
+   - "빠르게 배포" X → "팀 리뷰 거쳐 시범 적용"
+   - "혼자·공유 없이·몰래" 절대 금지
+3. **포함 필수 요소 (대기업·빅테크 양쪽 킥):**
+   - 수치 3종: before → after + 기간/규모
+   - 비교 고려한 옵션 최소 1개 언급 ("다른 안도 검토했지만~" 식)
+   - 조직 기여 킥 1개 (표준 문서화·패턴 재사용·팀 원칙)
+4. 구조: 상황 → 초기 가설 → 전환 계기 → 선택 근거(1~2개 비교 포함) → 수치 결과 → 조직 기여
+5. 마지막 한 줄: **강점 파고드는 꼬리질문**. 예: "선택지 비교는 어떤 기준으로 하셨나요?" / "500건 청킹 숫자 근거는?" / "이후 팀 표준으로 어떻게 확산시키셨나요?"
+
+**꼬리질문 대비 메모 (답변 후 정우님 외울 답안)**:
+- Q "왜 REQUIRES_NEW·청킹 선택?"
+  → "배치 분리는 스케줄 재편 부담, Pessimistic Lock은 경합 악화. REQUIRES_NEW는 자식 TX 독립으로 Lock 점유 시간 단축 + 롤백 전파 차단이 핵심. 500건은 테이블 평균 행 기준 단일 TX 1초 이내 임계점."
+- Q "왜 Adapter 선택?"
+  → "Strategy는 분기 조건 유지가 단점, Adapter는 제조사별 계약 격리로 신규 추가가 기존에 영향 없음."
+
+사용자가 카드 지정 안 하면 질문 취지에 가장 맞는 카드 선택. 바로 답변 생성 시작.`;
+    }
+
+    if (chName === 'jarvis-career' && hasInterviewPattern && !hasSkillTrigger && !mockActive) {
+      const guardMsg = `🎤 면접 전형 질문 감지됨.\n\n이 채널은 일반 커리어 상담 채널이라 자동으로 1인칭 면접 답변을 만들지 않습니다 (할루시네이션 방지).\n\n**모의면접 답변 만들려면:**\n\`/mock-interview 삼성물산\` (슬래시 커맨드)\n또는 \`면접 연습해줘: 조직 실수 경험 질문\` (자연어)\n\n**그냥 질문 자체에 대한 상담이면:** "상담 모드로 답해줘"라고 덧붙여 주세요.`;
+      await message.reply(guardMsg).catch(() => message.channel.send(guardMsg));
+      await streamer.finalize();
+      try {
+        appendFileSync('/tmp/jarvis-guard-debug.log',
+          `\n[${new Date().toISOString()}] BLOCKED\n` +
+          `  channel: ${chName}\n` +
+          `  prompt: ${userPrompt.slice(0, 300)}\n` +
+          `  hasInterviewPattern: ${hasInterviewPattern}\n` +
+          `  hasSkillTrigger: ${hasSkillTrigger}\n`
+        );
+      } catch {}
+      log('info', 'Interview question blocked', {
+        channel: chName,
+        preview: userPrompt.slice(0, 60),
+      });
+      return;
+    }
+
     const LITE_CHANNEL_ID = process.env.LITE_CHANNEL_ID || '';
     const contextBudget = effectiveChannelId === LITE_CHANNEL_ID ? 'small' : 'large';
-    const modelLabel = contextBudget === 'small' ? 'claude-haiku' : 'claude-opusplan';
+    const _chOverride = _MODELS.channelOverrides?.[chName];
+    const modelLabel = contextBudget === 'small'
+      ? 'claude-haiku'
+      : (_chOverride ? `claude-${_chOverride}` : 'claude-opusplan');
     await streamer.updatePhase(`🧠 ${modelLabel} 호출 중...`);
 
     // First attempt
@@ -1637,7 +1932,7 @@ ${extracted}
       } else {
         await thread.send({ embeds: [embed] });
       }
-      recordError(thread.id, message.author.id, 'no_response');
+      recordError(thread.id, effectiveAuthor.id, 'no_response');
     }
   } catch (err) {
     log('error', 'handleMessage error', { error: err.message, stack: err.stack });
@@ -1663,7 +1958,7 @@ ${extracted}
         return handleMessage(message, { sessions, rateTracker, semaphore, activeProcesses, client });
       } catch (retryErr) {
         log('error', 'Auto-retry also failed', { error: retryErr.message });
-        recordError(target.id, message.author.id, retryErr.message?.slice(0, 200));
+        recordError(target.id, effectiveAuthor.id, retryErr.message?.slice(0, 200));
       }
     }
 
@@ -1675,7 +1970,7 @@ ${extracted}
     }
 
     // Claude 처리 오류만 사용자에게 알림 — 디버깅용 세션ID 포함
-    recordError(target.id, message.author.id, err.message?.slice(0, 200));
+    recordError(target.id, effectiveAuthor.id, err.message?.slice(0, 200));
     sendNtfy(`${process.env.BOT_NAME || 'Claude Bot'} Error`, err.message, 'high');
     // 에러 시에만 세션ID 표시 (디버깅 필요)
     const errSessionId = sessionId || sessions.get(sessionKey) || null;
