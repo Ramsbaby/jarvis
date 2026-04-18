@@ -19,8 +19,13 @@ else
 fi
 
 BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
-BOARD_URL="${BOARD_URL:-https://jarvis-board-production.up.railway.app}"
 MONITORING="$BOT_HOME/config/monitoring.json"
+
+# ── board URL (SSoT: monitoring.json > env > default localhost) ──
+if [[ -z "${BOARD_URL:-}" ]]; then
+  BOARD_URL=$(jq -r '.boardUrl // empty' "$MONITORING" 2>/dev/null || true)
+fi
+BOARD_URL="${BOARD_URL:-http://localhost:3100}"
 
 # ── agent key ──
 API_KEY="${AGENT_API_KEY:-}"
