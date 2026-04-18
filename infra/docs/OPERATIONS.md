@@ -599,8 +599,6 @@ BOT_HOME=~/.jarvis ~/jarvis/infra/scripts/token-ledger-audit.sh
 
 **설계 의도**: 이전에 사람이 수동으로 했던 "토큰 낭비 5팀 감사"를 매주 자동으로 수행. 원장이 1~2주 쌓이면 Tier 1~4 활성화 우선순위를 데이터 기반으로 결정할 수 있다. 땜질식 대응이 아닌 지속 가능한 waste prevention 루프를 구성.
 
----
-
 ## Auto-Disable Recovery (태스크 자동 비활성화 복구 절차)
 
 `jarvis-cron.sh` / `bot-cron.sh` 의 `_permanent_disable_task` 헬퍼가 script-not-found
@@ -708,4 +706,56 @@ BOT_HOME=~/.jarvis bash ~/.jarvis/scripts/tasks-integrity-audit.sh
   수정 → audit 이 다음 실행 때 0 리포트.
 - plist 백업 디렉토리(`~/backup/jarvis-topology/`) 는 **복구용 원장**. 정리한 plist 는
   절대 즉시 삭제하지 말고 이 경로에 보관.
+
+## Orphan LaunchAgent 수동 해제 절차
+
+**언제 사용하나**
+- 백업 스크립트가 사라졌는데 LaunchAgent 가 5분마다 hot-loop (예: `com.jarvis.board-conclude`)
+- `tasks.json` 엔트리는 살아 있지만 `command` 가 exit 127 + circuit breaker 가 무력화된 경우
+- 일반 `_permanent_disable_task` 자동 흐름이 잡지 못한 잔존 entity
+
+**도구**: `infra/scripts/bootout-orphan-launchagents.sh`
+
+**원칙 (CLAUDE.md 최상위 지침 준수)**
+1. **삭제 금지** — plist 는 항상 `~/Library/LaunchAgents/_orphan-backup-YYYYMMDD/` 에
+   먼저 복사 후, 라이브 파일은 `*.disabled-YYYYMMDD-HHMMSS` 로 리네임 (기존 `.disabled` 보존).
+2. **dry-run 기본** — 인자 없이 실행하면 어떤 변경도 일어나지 않고 명령 시뮬레이션만 출력.
+3. **tasks.json 패치는 jq + tmp + atomic mv** — 원본은 `tasks.json.bak-<ts>` 로 자동 백업.
+
+**실행 순서**
+
+```bash
+# 1) 시뮬레이션 (mutation 0)
+~/jarvis/infra/scripts/bootout-orphan-launchagents.sh --dry-run
+
+# 2) 출력 확인 후 실제 적용
+~/jarvis/infra/scripts/bootout-orphan-launchagents.sh --apply
+
+# 3) 검증
+launchctl list | grep -E "board-conclude|board-meeting" || echo "OK: 모두 unloaded"
+jq '.tasks[] | select(.id=="system-health" or .id=="github-monitor") | {id, enabled, _disabled_reason}' \
+   ~/jarvis/runtime/config/tasks.json
+ls ~/Library/LaunchAgents/_orphan-backup-*/
+```
+
+**롤백 방법**
+
+```bash
+TS=<적용시간 YYYYMMDD-HHMMSS>
+# (a) LaunchAgent 복구
+for label in com.jarvis.board-conclude com.jarvis.board-meeting-am com.jarvis.board-meeting-pm; do
+  cp ~/Library/LaunchAgents/_orphan-backup-*/$label.plist ~/Library/LaunchAgents/
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/$label.plist
+done
+# (b) tasks.json 복구
+cp ~/jarvis/runtime/config/tasks.json.bak-$TS ~/jarvis/runtime/config/tasks.json
+```
+
+**주의사항**
+- 스크립트는 worktree 내부에서 작성되지만, **실행 시 시스템 경로**(`~/Library/LaunchAgents/`,
+  `~/jarvis/runtime/config/tasks.json`) 를 수정한다. worktree 안의 사본을 고치는 것이 아님.
+- `--apply` 후 반드시 `tasks-integrity-audit` + `launchagents-audit` 한 번씩 실행해
+  ghost/orphan 0 리포트 확인.
+- 새 orphan 패턴이 또 발견되면 이 스크립트의 `LA_LABELS` / `TASKS_IDS` 배열에 추가만 하면
+  되도록 데이터 분리 설계됨 — 매번 새 스크립트 만들지 말 것.
 

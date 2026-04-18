@@ -57,7 +57,7 @@ cleanup() {
     rm -f "$PID_FILE"
     [[ -z "${CAFFEINATE_PID:-}" ]] || kill "${CAFFEINATE_PID}" 2>/dev/null || true
 }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM HUP
 
 # --- Setup ---
 mkdir -p "$WORK_DIR" "$RESULTS_DIR" "$(dirname "$LOG_FILE")" "$(dirname "$PID_FILE")"

@@ -29,9 +29,18 @@ mkdir -p "$ALERT_STATE_DIR"
 # 함수
 # ============================================================================
 
-# 쿨다운 체크 (동일 메시지 중복 방지)
+# 채널별 쿨다운(초) 조회: .alerts.cooldown_per_channel.<ch> > .alerts.cooldown_seconds > 300
+_cooldown_for_channel() {
+    local ch="${1:-default}"
+    jq -r --arg ch "$ch" \
+       '.alerts.cooldown_per_channel[$ch] // .alerts.cooldown_seconds // 300' \
+       "$MONITORING_CONFIG"
+}
+
+# 쿨다운 체크 (동일 메시지 중복 방지). 두 번째 인자로 채널별 cooldown 주입 가능.
 is_in_cooldown() {
     local message_hash="$1"
+    local cooldown="${2:-$COOLDOWN_SECONDS}"
 
     if [[ ! -f "$LAST_ALERT_FILE" ]]; then
         return 1
@@ -47,7 +56,7 @@ is_in_cooldown() {
     local elapsed=$((now - last_time))
 
     # 동일 메시지 + 쿨다운 시간 내
-    if [[ "$last_hash" == "$message_hash" ]] && [[ $elapsed -lt $COOLDOWN_SECONDS ]]; then
+    if [[ "$last_hash" == "$message_hash" ]] && [[ $elapsed -lt $cooldown ]]; then
         return 0
     fi
     return 1
@@ -89,12 +98,14 @@ send_alert() {
     local title="$2"
     local message="$3"
     local fields="${4:-}"  # JSON array string
+    local channel="${5:-default}"  # 채널별 cooldown 적용용 (없으면 글로벌)
 
-    # 쿨다운 체크
-    local message_hash
+    # 쿨다운 체크 — 채널별 TTL 우선
+    local message_hash cooldown
     message_hash=$(echo "$level$title$message" | /sbin/md5 -q)
-    if is_in_cooldown "$message_hash"; then
-        echo "Alert skipped (cooldown): $title"
+    cooldown=$(_cooldown_for_channel "$channel")
+    if is_in_cooldown "$message_hash" "$cooldown"; then
+        echo "Alert skipped (cooldown=${cooldown}s, channel=${channel}): $title"
         return 0
     fi
 
