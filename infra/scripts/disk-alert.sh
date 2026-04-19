@@ -30,3 +30,4 @@ if (( USAGE >= 90 )); then
         >> "$BOT_HOME_LOCAL/logs/event-watcher.log" 2>&1 || true
 fi
 # 90% 미만이면 무출력 → bot-cron.sh가 allowEmptyResult=true 처리
+exit 0
