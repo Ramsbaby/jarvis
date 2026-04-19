@@ -248,7 +248,7 @@ if [[ -n "$_cur_md5" ]]; then
 import json, os
 f = '$_PROMPT_HASH_FILE'
 d = json.load(open(f)) if os.path.exists(f) else {}
-print(d.get('$TASK_ID', ''))
+print(d.get(\"$TASK_ID\", ''))
 " 2>/dev/null || echo "")
     if [[ -n "$_prev_md5" && "$_prev_md5" != "$_cur_md5" ]]; then
         log "REGRESSION: 프롬프트 변경 감지 (${TASK_ID}) — 다음 3회 실행 태깅 시작"
