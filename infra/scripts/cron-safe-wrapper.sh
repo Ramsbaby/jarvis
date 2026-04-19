@@ -43,6 +43,9 @@ DURATION_END=$(date '+%s%N')
 DURATION_MS=$(( (DURATION_END - DURATION_START) / 1000000 ))
 DURATION_SEC=$(( DURATION_MS / 1000 ))
 
+# 로깅 전에 원본 exit code 저장 (trap 처리 후 반환용)
+ORIG_EXIT_CODE=$EXIT_CODE
+
 # 상태 결정
 if [[ $EXIT_CODE -eq 0 ]]; then
   STATUS="SUCCESS"
@@ -80,4 +83,4 @@ if [[ $EXIT_CODE -ne 0 ]]; then
   fi
 fi
 
-exit $EXIT_CODE
+exit $ORIG_EXIT_CODE
