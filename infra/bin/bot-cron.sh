@@ -558,6 +558,8 @@ if [[ $EXIT_CODE -ne 0 ]]; then
 fi
 
 _PHASE="post-execute"
+# Store duration before unsetting (used in file routing)
+_TASK_DURATION="${_ACTUAL_DURATION}"
 # Continue Sites: 복구 단계에서 성공한 경우 로그 보강
 if [[ "${JARVIS_RECOVERY_STAGE:-1}" -gt 1 ]]; then
     log "SUCCESS (duration=${_ACTUAL_DURATION}s, recovered at stage ${JARVIS_RECOVERY_STAGE})"
@@ -658,7 +660,19 @@ for mode in $OUTPUT_MODES; do
             "$BOT_HOME/bin/route-result.sh" ntfy "$TASK_ID" "$RESULT" || log "WARN: ntfy routing failed"
             ;;
         file)
-            # Already saved by ask-claude.sh, no-op
+            # Save result to task-specific log file
+            _log_file="${BOT_HOME}/logs/${TASK_ID}.log"
+            mkdir -p "$(dirname "$_log_file")"
+            {
+                echo "===== Task: $TASK_ID ====="
+                echo "Timestamp: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+                echo "Exit Code: $EXIT_CODE"
+                echo "Duration: ${_TASK_DURATION}s"
+                echo "---"
+                echo "$RESULT"
+            } >> "$_log_file"
+            log "Result saved to: $_log_file"
+            unset _log_file
             ;;
     esac
 done
