@@ -18,10 +18,20 @@ if [[ $# -eq 0 ]]; then
   exit 1
 fi
 
-# 중복 실행 방지 (동시 실행 체크)
+# 중복 실행 방지 (동시 실행 체크 + 타임아웃)
 LOCK_FILE="${HOME}/.jarvis/tmp/.cron-wrapper-${TASK_NAME}.lock"
 mkdir -p "${HOME}/.jarvis/tmp"
+
+# 오래된 락파일 정리 (30분 초과)
+if [[ -f "$LOCK_FILE" ]]; then
+  LOCK_AGE=$(($(date '+%s') - $(stat -f '%m' "$LOCK_FILE" 2>/dev/null || echo 0)))
+  if [[ $LOCK_AGE -gt 1800 ]]; then
+    rm -f "$LOCK_FILE"
+  fi
+fi
+
 touch "$LOCK_FILE"
+trap "rm -f '$LOCK_FILE'" EXIT
 
 # 크론 작업 실행 및 결과 캡처
 DURATION_START=$(date '+%s%N')
@@ -69,8 +79,5 @@ if [[ $EXIT_CODE -ne 0 ]]; then
       >/dev/null 2>&1 || true
   fi
 fi
-
-# 락 파일 정리 (성공 시만)
-[[ $EXIT_CODE -eq 0 ]] && rm -f "$LOCK_FILE"
 
 exit $EXIT_CODE
