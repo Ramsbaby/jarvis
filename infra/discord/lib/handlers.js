@@ -1104,6 +1104,17 @@ ${extracted}
     lastQueryStore.set(sessionKey, originalPrompt);
     streamer = new StreamingMessage(thread, message, sessionKey, effectiveChannelId);
     streamer.setContext(getContextualThinking(userPrompt, imageAttachments.length > 0));
+    streamer.setChannelName(chName); // P0-3: 아티팩트 태그에 사용
+    // P3-3: A/B 실험 variant 결정 — userId 기반 deterministic
+    try { streamer.setUserId(effectiveAuthor?.id || message.author?.id || null); } catch { /* 비차단 */ }
+    // P2-1: 상시 Status bar 활성화 — 채널 기준 모델 자동 감지
+    if (process.env.STATUS_BAR_ENABLED !== '0') {
+      try {
+        const tier = _MODELS.channelOverrides?.[chName] || 'sonnet';
+        const modelLabel = { power: 'Opus 4.7', sonnet: 'Sonnet 4.6', fast: 'Haiku 4.5' }[tier] || tier;
+        streamer.setStatusMeta({ model: modelLabel, startedAt: Date.now(), turn: 0 });
+      } catch { /* status bar 실패는 비차단 */ }
+    }
     await streamer.sendPlaceholder();
     await streamer.updatePhase('🔍 요청 분석 중...');
 
@@ -1288,7 +1299,10 @@ ${extracted}
             //      8회 제한은 정상 세션 잘라먹는 premature safeguard로 판명(2건 실제 trip).
             //      response-ledger.jsonl에 toolCount 계속 기록되어 사후 패턴 분석 가능.
             const display = getToolDisplay(se.content_block.name || '');
-            streamer.updateStatus(display.desc);
+            // P0-1: 통합 엔트리 — placeholder 모드면 updateStatus, 본문 스트리밍 중이면 prefix 라인
+            streamer.setToolStatus(display.desc);
+            // P2-1: 턴 카운터 증가 (상시 Status bar)
+            streamer.incTurn();
             // ② 세션 연속성: 툴 호출 이름 기록 (최대 20개, 민감 툴 제외)
             const toolName = se.content_block.name || '';
             if (toolName && !toolName.includes('secret') && completedTools.length < 20) {
@@ -1303,6 +1317,14 @@ ${extracted}
               appendFileSync(join(ledgerDir, 'tool-call-ledger.jsonl'), toolEntry);
             } catch { /* ledger 기록 실패는 비차단 */ }
             log('info', `Tool: ${se.content_block.name}`, { threadId: thread.id });
+          } else if (se.type === 'content_block_start' && se.content_block?.type === 'thinking') {
+            // P0-1: thinking 블록 시작 — 본문 스트리밍 중이면 "🧠 생각 정리 중" prefix
+            hasStreamEvents = true;
+            streamer.setThinking(true);
+          } else if (se.type === 'content_block_stop') {
+            // P0-1: tool/thinking 블록 종료 → prefix 제거
+            streamer.clearToolStatus();
+            streamer.setThinking(false);
           }
         } else if (event.type === 'assistant') {
           if (event.message?.content) {
@@ -1366,6 +1388,9 @@ ${extracted}
 
           const cost = event.cost_usd ?? null;
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          // P2-1: 최종 토큰을 Status bar 에 반영 (input+output 합산 = 실제 처리량)
+          const totalTok = (event.usage?.input_tokens ?? 0) + (event.usage?.output_tokens ?? 0);
+          if (totalTok > 0) streamer.setStatusMeta({ tokens: totalTok });
 
           // Phase 0 Sensor: 로컬 response-ledger (Langfuse 의존 제거)
           // feedback-score.jsonl과 traceId로 join 가능
@@ -1409,9 +1434,19 @@ ${extracted}
             : event.stop_reason === 'tool_use'               ? '🛠️ 도구 종료'
             : event.stop_reason ?? '-';
 
-          const footerParts = [`${elapsed}s`];
-          if (toolCount > 0) footerParts.push(`🛠${toolCount}`);
-          footerParts.push(`📊${Math.round(rateStatus.pct * 100)}%`);
+          // P2-1: Status bar 확장 — 모델/토큰/경과시간 포함 (Claude.ai 스타일)
+          const _modelShort = /power|opus-4-7|opus-4-6/.test(modelLabel) ? 'Opus'
+            : /opusplan/.test(modelLabel) ? 'Opus⁺'
+            : /sonnet/.test(modelLabel) ? 'Sonnet'
+            : /haiku/.test(modelLabel) ? 'Haiku'
+            : modelLabel.replace('claude-', '');
+          const _inTk = event.usage?.input_tokens ?? 0;
+          const _outTk = event.usage?.output_tokens ?? 0;
+          const _tokShort = (n) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+          const footerParts = [`🤖 ${_modelShort}`, `⏱️ ${elapsed}s`];
+          if (_inTk + _outTk > 0) footerParts.push(`💭 ${_tokShort(_inTk)}↑ ${_tokShort(_outTk)}↓`);
+          if (toolCount > 0) footerParts.push(`🛠️ ${toolCount}`);
+          footerParts.push(`📊 ${Math.round(rateStatus.pct * 100)}%`);
           const stopPrefix = event.stop_reason !== 'end_turn' ? `${stopLabel} · ` : '';
 
           // 가족 채널에서는 stats 숨김
@@ -2033,6 +2068,13 @@ export async function rerunQuery(channel, query, sessionKey, state, opts = {}) {
 
   const streamer = new StreamingMessage(channel, null, sessionKey, channel.id);
   streamer.setContext(opts.contextLabel ?? '🔄 재생성 중...');
+  streamer.setChannelName(channel?.name || null); // P0-3: artifact 업로드 시 채널 태그
+  // P3-3: 재생성에도 같은 userId 기반 variant 유지 (sessionKey에 userId 포함됨: ch-id:user-id)
+  try {
+    const parts = String(sessionKey || '').split(':');
+    const uid = parts.length >= 2 ? parts[parts.length - 1] : null;
+    if (uid) streamer.setUserId(uid);
+  } catch { /* 비차단 */ }
   await streamer.sendPlaceholder();
 
   const abortController = new AbortController();
@@ -2083,7 +2125,15 @@ export async function rerunQuery(channel, query, sessionKey, state, opts = {}) {
         if (se.type === 'content_block_delta' && se.delta?.type === 'text_delta' && se.delta?.text) {
           streamer.append(se.delta.text);
         } else if (se.type === 'content_block_start' && se.content_block?.type === 'tool_use') {
-          streamer.updateStatus(`🔧 ${se.content_block.name || '도구 실행 중'}`);
+          // P0-1: updateStatus → setToolStatus 교체 (본문 스트리밍 중에도 prefix 표시)
+          streamer.setToolStatus(`🔧 ${se.content_block.name || '도구 실행 중'}`);
+        } else if (se.type === 'content_block_start' && se.content_block?.type === 'thinking') {
+          // P0-1: thinking 블록 시작 → "🧠 생각 정리 중" prefix
+          streamer.setThinking(true);
+        } else if (se.type === 'content_block_stop') {
+          // P0-1: tool/thinking 블록 종료 → prefix 제거
+          streamer.clearToolStatus();
+          streamer.setThinking(false);
         }
       }
     }

@@ -1017,8 +1017,24 @@ export async function* createClaudeSession(prompt, {
   // jarvis-lite(small) → Haiku (빠른 응답, 50턴)
   // channelOverrides에 등록된 채널 → 지정 모델 (직접 실행, opusplan 아님)
   // 그 외 → opusplan (계획 Opus, 실행 Sonnet, 200턴)
+  // P2-2: ADAPTIVE_MODEL_ENABLED=1 이면 프롬프트 분류로 trivial → fast 다운그레이드.
   const maxTurns = contextBudget === 'small' ? 50 : 200;
-  const channelModelKey = channelName && MODELS.channelOverrides?.[channelName];
+  let channelModelKey = channelName && MODELS.channelOverrides?.[channelName];
+  if (process.env.ADAPTIVE_MODEL_ENABLED === '1' && contextBudget !== 'small' && channelModelKey) {
+    try {
+      const { resolveModelTier } = await import('./adaptive-model.js');
+      const resolved = resolveModelTier(channelModelKey, prompt);
+      if (resolved.downgraded) {
+        log('info', 'adaptive-model: downgraded', {
+          from: channelModelKey, to: resolved.tier, reason: resolved.reason,
+          channelName, promptLen: prompt.length,
+        });
+        channelModelKey = resolved.tier;
+      }
+    } catch (err) {
+      log('warn', 'adaptive-model routing failed (using base tier)', { error: err.message });
+    }
+  }
   const model = contextBudget === 'small' ? MODELS.fast : (channelModelKey ? MODELS[channelModelKey] : 'opusplan');
 
   // 7. Load MCP server config (same servers, now as SDK mcpServers object)
@@ -1135,6 +1151,11 @@ export async function* createClaudeSession(prompt, {
     mcpServers,
     maxTurns,
     model,
+    // effort: channelOverrides와 동일 방식으로 effortOverrides에서 채널별 effort 레벨 결정
+    ...((() => {
+      const effortKey = channelName && MODELS.effortOverrides?.[channelName];
+      return effortKey ? { effort: effortKey } : {};
+    })()),
     // inference_geo: 환경변수 설정 시에만 적용 (미설정 시 Anthropic 기본 라우팅)
     ...(process.env.INFERENCE_GEO ? { inference_geo: process.env.INFERENCE_GEO } : {}),
     includePartialMessages: true,
