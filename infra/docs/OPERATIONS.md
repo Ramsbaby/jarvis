@@ -312,6 +312,7 @@ board_get_pending_reactions "council"
 - **실행 로그 개선**: 시작 시 Board API에서 태스크 제목을 가져와 "⚙️ 작업 시작 — {제목}" 로그 전송. heartbeat(30초 간격)에 경과 시간 포함 ("⏳ 진행 중 (120s 경과)")
 - **non-retryable exit code**: 2 (명시적 실패), 124 (timeout), 127 (command not found)
 - **retryable exit code**: 1, 137(OOM kill), 143(SIGTERM), 기타
+- **`.env` graceful 처리** (2026-04-19, 7a07782): `.env` 파일 부재 또는 파싱 오류 시 `|| true`로 안전하게 계속 진행 — 이전에는 `set -euo pipefail` 환경에서 `.env` source 실패 시 retry-wrapper 전체가 즉시 종료되는 회귀가 있었음
 
 ### crontab 환경 PATH 주의사항
 

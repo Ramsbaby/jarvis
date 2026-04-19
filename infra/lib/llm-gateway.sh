@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# --- PATH 강화 (cron 환경에서 경로 누락 방지) ---
+export PATH="${PATH:-/usr/bin:/bin}:/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin"
+
 # llm-gateway.sh — Multi-provider LLM call with automatic fallback
 #
 # Usage (sourced):
