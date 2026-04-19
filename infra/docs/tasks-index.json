@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-18T21:17:05.051Z",
+  "generatedAt": "2026-04-19T21:17:05.375Z",
   "source": "~/jarvis/runtime/config/tasks.json",
   "totalTasks": 94,
   "teamDistribution": {
@@ -2423,11 +2423,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/token-ledger-audit.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/token-ledger-audit-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-token-ledger-audit-*.log",
@@ -2455,11 +2455,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/tune-task-params.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/tune-task-params-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-tune-task-params-*.log",
@@ -3079,11 +3079,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/self-healing-digest.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/self-healing-digest-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-self-healing-digest-*.log",
