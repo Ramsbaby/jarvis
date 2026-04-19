@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-17T21:17:05.857Z",
+  "generatedAt": "2026-04-18T21:17:05.051Z",
   "source": "~/jarvis/runtime/config/tasks.json",
   "totalTasks": 94,
   "teamDistribution": {
@@ -954,7 +954,7 @@
           "model": "claude-haiku-4-5-20251001",
           "priority": "daily",
           "maxBudget": "0.50",
-          "disabled": false,
+          "disabled": true,
           "description": null,
           "logs": {
             "stdout": {
@@ -1327,11 +1327,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/geeknews-bench-crawl.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/geeknews-bench-crawl-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-geeknews-bench-crawl-*.log",
@@ -1386,7 +1386,7 @@
           "model": "claude-haiku-4-5-20251001",
           "priority": "daily",
           "maxBudget": "0.50",
-          "disabled": false,
+          "disabled": true,
           "description": null,
           "logs": {
             "stdout": {
@@ -2263,11 +2263,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/log-size-audit.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/log-size-audit-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-log-size-audit-*.log",
