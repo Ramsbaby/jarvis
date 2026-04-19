@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import { log } from './claude-runner.js';
 import { t } from './i18n.js';
 import { formatForDiscord } from './format-pipeline.js';
+import { pickVariant, recordOutcome } from './ab-experiment.js';
 
 // ---------------------------------------------------------------------------
 // 이미지 캐시 — SHA-256 해시 키, max 30건 (의존성 없는 간단한 Map LRU)
@@ -254,7 +255,25 @@ export async function cleanupOrphanPlaceholders(client) {
 
 // 700ms — Discord edit rate limit(~초당 1회) 내에서 체감 "타이핑" 수준.
 // 2000ms 였을 때 블록 단위로 뚝뚝 떨어지는 느낌 → 대화형 경험 해침.
-const STREAM_EDIT_INTERVAL_MS = 700;
+// 2026-04-19: 고정 700ms → adaptiveInterval() 가변 throttle 도입. 짧은 응답 체감 속도 2배.
+const STREAM_EDIT_INTERVAL_MS = 700; // DEPRECATED: fallback 기본값. 실제는 adaptiveInterval() 사용.
+
+/**
+ * Discord edit 간격을 버퍼 특성에 맞춰 조정.
+ *   - 짧은 응답(≤120자): 300ms  — 즉각적인 체감 응답
+ *   - 일반 응답: 400ms             — 부드러운 타이핑
+ *   - 긴 응답(>800자): 550ms       — rate-limit 부담 완화
+ *   - 코드 블록 열림: 600ms         — fence 안전 마진
+ *   - tool status 갱신 직후: 450ms  — 상태 라인 빠른 반영
+ */
+function adaptiveInterval({ bufferLen = 0, inFence = false, hasTool = false } = {}) {
+  if (inFence) return 600;
+  if (hasTool) return 450;
+  if (bufferLen < 120) return 300;
+  if (bufferLen > 800) return 550;
+  return 400;
+}
+
 const STREAM_MAX_CHARS = 1700; // 포맷팅 확장(URL 래핑, 테이블→리스트) 여유 확보
 const CODE_FILE_MIN_LINES = 30;
 const LANG_EXT = {
@@ -343,6 +362,146 @@ export class StreamingMessage {
     // family 채널 등 quiet 채널: tool 상태 표시 생략
     const quietIds = (process.env.QUIET_CHANNEL_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
     this._isQuiet = channelId ? quietIds.includes(channelId) : false;
+    // ----- P0-1: tool status / thinking prefix (본문 스트리밍 중에도 표시) -----
+    this._toolStatusLine = '';      // 현재 진행 중인 도구(한 줄)
+    this._thinkingActive = false;   // thinking 블록 활성 상태
+    this._lastToolAt = 0;           // 마지막 tool 이벤트 시각 (stale 제거용)
+    this._channelName = null;       // artifact 업로드 시 태그로 사용
+    // ----- P2-1: 상시 Status bar (모델·경과·턴·토큰) -----
+    this._statusMeta = null;        // { model, startedAt, turn, tokens } 또는 null (비활성)
+    // ----- P2-3: Stream resumption (edit 실패 연속 발생 시 새 메시지로 이어붙이기) -----
+    this._editFailureStreak = 0;    // edit 연속 실패 카운터
+    this._resumedCount = 0;         // 이어붙인 횟수 (메시지 분할)
+    // ----- P3-1: 마커 조기 전송 (CHART_DATA_EARLY_SEND=1 opt-in) -----
+    this._markerEarlySent = new Set(); // 조기 전송 완료된 마커 이름 (예: 'CHART_DATA')
+    // ----- P3-3: A/B 실험 — throttle-v1 variant ('adaptive'|'fixed-700') -----
+    this._userId = null;              // handlers.js가 setUserId()로 주입
+    this._throttleVariant = null;     // pickVariant 결과 캐싱 (null = 미결정 → 기본 adaptive)
+    this._startedAtMs = Date.now();   // recordOutcome용 elapsed 기산점
+    this._editCount = 0;              // recordOutcome용 edit 횟수
+    this._experimentRecorded = false; // finalize 중복 기록 방지
+  }
+
+  /**
+   * P3-3: userId 설정 — A/B 실험 variant 결정에 사용.
+   * 사용자 단위 deterministic 분산 (같은 userId는 항상 같은 variant).
+   */
+  setUserId(userId) {
+    this._userId = userId || null;
+    if (this._userId) {
+      try {
+        this._throttleVariant = pickVariant('throttle-v1', this._userId, {
+          channelName: this._channelName,
+        });
+      } catch { this._throttleVariant = null; }
+    }
+  }
+
+  /** 채널 이름 설정 — handlers.js에서 페르소나 로드 후 주입. artifact 태그에 사용. */
+  setChannelName(name) { this._channelName = name || null; }
+
+  /**
+   * P0-1: 도구 실행 상태 표시.
+   * placeholder 모드면 기존 updateStatus() 경로, 텍스트 스트리밍 중이면 prefix 라인으로 표시.
+   */
+  setToolStatus(line) {
+    if (this._isQuiet) return;
+    this._toolStatusLine = line || '';
+    this._lastToolAt = Date.now();
+    if (this._textSent) {
+      // 본문 스트리밍 중 — 다음 flush에 prefix 반영
+      this._scheduleFlush();
+    } else {
+      // placeholder 모드 — 기존 경로 (line ×N 카운팅 포함)
+      this.updateStatus(line);
+    }
+  }
+
+  /** tool 블록 종료 시 호출 — prefix 제거. 300ms debounce로 잔상 방지. */
+  clearToolStatus() {
+    if (!this._toolStatusLine) return;
+    this._toolStatusLine = '';
+    if (this._textSent) this._scheduleFlush();
+  }
+
+  /** P0-1: thinking 블록 감지. 본문 스트리밍 중 "🧠 생각 정리 중" prefix. */
+  setThinking(on) {
+    if (this._isQuiet) return;
+    const next = !!on;
+    if (this._thinkingActive === next) return;
+    this._thinkingActive = next;
+    if (this._textSent) this._scheduleFlush();
+  }
+
+  /**
+   * P2-1: 상시 Status bar 메타 갱신.
+   * 처음 호출 시 활성화 (startedAt 기록), 이후 patch 방식으로 누적.
+   * 호출 예:
+   *   setStatusMeta({ model: 'Opus 4.7', startedAt: Date.now() })
+   *   setStatusMeta({ turn: prev+1 })
+   *   setStatusMeta({ tokens: 8234 })
+   */
+  setStatusMeta(patch) {
+    if (this._isQuiet) return;
+    if (!patch || typeof patch !== 'object') return;
+    if (!this._statusMeta) this._statusMeta = {};
+    Object.assign(this._statusMeta, patch);
+    if (this._textSent) this._scheduleFlush();
+  }
+
+  /** 턴 카운터 편의 메서드 — setStatusMeta({ turn: ++ }) 대용 */
+  incTurn() {
+    if (this._isQuiet) return;
+    if (!this._statusMeta) this._statusMeta = { turn: 0 };
+    this._statusMeta.turn = (this._statusMeta.turn || 0) + 1;
+    if (this._textSent) this._scheduleFlush();
+  }
+
+  /** 상태 바 문자열 렌더 (없으면 빈 문자열) */
+  _renderStatusBar(isFinal) {
+    const m = this._statusMeta;
+    if (!m) return '';
+    const parts = [];
+    if (m.model) parts.push(`🤖 ${m.model}`);
+    if (m.startedAt) {
+      const elapsed = Math.max(0, Math.round((Date.now() - m.startedAt) / 1000));
+      parts.push(`⏱️ ${elapsed}s`);
+    }
+    if (m.turn) parts.push(`📊 ${m.turn}턴`);
+    if (m.tokens) {
+      const t = m.tokens >= 1000
+        ? `${(m.tokens / 1000).toFixed(1)}k`
+        : String(m.tokens);
+      parts.push(`🎫 ${t}`);
+    }
+    if (parts.length === 0) return '';
+    // 완료 시 prefix 아이콘을 ✅로 교체해 눈에 띄게
+    const lead = isFinal ? '✅' : '⏳';
+    return `-# ${lead} ${parts.join(' · ')}`;
+  }
+
+  /**
+   * P0-1: 본문 + status prefix 합성.
+   * - 🧠 thinking 활성 → 상단 1줄
+   * - 🔧 tool 상태(15초 이내) → 상단 소형 라인 (-# prefix)
+   * - isFinal=false면 커서(▌) 부착
+   */
+  _composeDisplay(content, isFinal) {
+    const prefixes = [];
+    if (this._thinkingActive && !this.finalized && !isFinal) {
+      prefixes.push('🧠 *생각 정리 중…*');
+    }
+    if (this._toolStatusLine && (Date.now() - this._lastToolAt) < 15000 && !this.finalized && !isFinal) {
+      // -# prefix는 Discord small text — 본문을 방해하지 않음
+      prefixes.push(`-# ${this._toolStatusLine}`);
+    }
+    const cursor = (!this.finalized && !isFinal) ? ' ▌' : '';
+    // P2-1: 상시 Status bar (모델·경과·턴·토큰) — 본문 하단 메타 라인
+    const statusBar = this._renderStatusBar(isFinal);
+    const head = prefixes.length > 0
+      ? `${prefixes.join('\n')}\n\n${content}${cursor}`
+      : `${content}${cursor}`;
+    return statusBar ? `${head}\n\n${statusBar}` : head;
   }
 
   /** Build the Stop button row (null if no sessionKey) */
@@ -353,6 +512,29 @@ export class StreamingMessage {
         .setCustomId(`cancel_${this.sessionKey}`)
         .setLabel(t('stream.stop'))
         .setStyle(ButtonStyle.Danger)
+    );
+  }
+
+  /**
+   * P1-2: 종료 시 표시되는 최종 액션 행 — 재생성 / 요약 / 다운로드
+   * 3개 섹션(마커 이미지, CV2, 일반 텍스트) 모두 동일 행 사용 (DRY).
+   * sessionKey 없으면 null.
+   */
+  _finalActionRow() {
+    if (!this.sessionKey) return null;
+    return new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`regen_${this.sessionKey}`)
+        .setLabel('🔄 재생성')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`summarize_${this.sessionKey}`)
+        .setLabel('📝 요약')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`download_${this.sessionKey}`)
+        .setLabel('💾 다운로드')
+        .setStyle(ButtonStyle.Secondary),
     );
   }
 
@@ -504,10 +686,19 @@ export class StreamingMessage {
 
   _scheduleFlush() {
     if (this.timer) return;
+    // P3-3: throttle-v1 A/B — 'fixed-700' variant일 때는 고정 700ms, 아니면 adaptive
+    const interval = this._throttleVariant === 'fixed-700'
+      ? 700
+      : adaptiveInterval({
+          bufferLen: this.buffer.length,
+          inFence: this.fenceOpen,
+          hasTool: !!this._toolStatusLine,
+        });
     this.timer = setTimeout(() => {
       this.timer = null;
+      this._editCount++; // P3-3: flush = 1 edit 시도 (대략적 지표)
       this._flush();
-    }, STREAM_EDIT_INTERVAL_MS);
+    }, interval);
   }
 
   async _flush() {
@@ -526,6 +717,9 @@ export class StreamingMessage {
     // 스트리밍 버퍼 전체에 narration filter 적용 (라인 단위 regex가 전체 텍스트에서 매칭)
     // _sendOrEdit의 formatForDiscord는 청크 단위라 분할된 내러티브를 못 잡음
     this.buffer = formatForDiscord(this.buffer, { channelId: this.channelId });
+
+    // P3-1: 마커 조기 전송 (opt-in) — 마커가 완성되자마자 이미지 전송 착수
+    await this._tryEarlyMarkerSend();
 
     while (this.buffer.length > STREAM_MAX_CHARS) {
       const splitAt = this._findSplitPoint(this.buffer, STREAM_MAX_CHARS);
@@ -557,6 +751,77 @@ export class StreamingMessage {
       if (fencesInRemaining % 2 === 1) this.fenceOpen = !this.fenceOpen;
       await this._sendOrEdit(this.buffer, false);
     }
+    // P3-1: CHART_DATA / TABLE_DATA 마커가 완성되면 백그라운드 렌더링 사전 실행
+    // finalize 시점에 이미 캐시에 적중하도록 → 전송 지연 단축
+    this._maybePrefetchMarkers();
+  }
+
+  /**
+   * P3-1: 스트리밍 중 CHART_DATA JSON이 balanced 완료되면 백그라운드로 PNG 렌더링.
+   * finalize 시점에 `_imageCache`에서 바로 적중 → 차트 표시 체감 지연 최소화.
+   * 실패/미완성은 silent — finalize의 정식 경로가 재시도.
+   */
+  _maybePrefetchMarkers() {
+    if (this._chartPrefetchScheduled) return;
+    const buf = this.buffer;
+    const idx = buf.indexOf('CHART_DATA:{');
+    if (idx < 0) return;
+    // balanced JSON 찾기
+    const after = buf.slice(idx + 'CHART_DATA:'.length);
+    let depth = 0, inStr = false, escape = false, end = -1;
+    for (let i = 0; i < after.length; i++) {
+      const ch = after[i];
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (ch === '{' || ch === '[') depth++;
+      if (ch === '}' || ch === ']') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end === -1) return; // 아직 JSON 미완성 — 다음 flush 시 재시도
+    const rawJson = after.slice(0, end + 1);
+    let chartJson;
+    try { chartJson = JSON.parse(rawJson); } catch { return; }
+    this._chartPrefetchScheduled = true;
+    const key = _cacheKey(chartJson);
+    if (_imageCacheGet(key)) return; // 이미 캐시됨
+    // 백그라운드 렌더링 — 메인 flush 루프 차단 금지
+    setImmediate(async () => {
+      try {
+        const { type = 'line', title, labels = [], datasets = [] } = chartJson;
+        const palette = ['#5865f2', '#57f287', '#fee75c', '#ed4245', '#eb459e', '#faa61a'];
+        const normalizedDatasets = datasets.map((d, i) => ({
+          borderColor: d.borderColor || d.color || palette[i % palette.length],
+          backgroundColor: d.backgroundColor ?? (type === 'line' ? 'transparent' : (d.color || palette[i % palette.length]) + '99'),
+          borderWidth: d.borderWidth ?? 2,
+          pointRadius: d.pointRadius ?? 3,
+          tension: d.tension ?? 0.3,
+          fill: d.fill ?? false,
+          ...d,
+        }));
+        const config = {
+          type,
+          data: { labels, datasets: normalizedDatasets },
+          options: {
+            responsive: false, animation: false, devicePixelRatio: 2,
+            plugins: {
+              title: { display: !!title, text: title ?? '', color: '#fff', font: { size: 15, weight: 'bold' }, padding: { bottom: 12 } },
+              legend: { labels: { color: '#dbdee1', font: { size: 12 }, padding: 16, usePointStyle: true } },
+            },
+            scales: (type !== 'pie' && type !== 'doughnut') ? {
+              x: { ticks: { color: '#9b9fa8', font: { size: 11 } }, grid: { color: '#3b3d43' }, border: { color: '#3b3d43' } },
+              y: { ticks: { color: '#9b9fa8', font: { size: 11 } }, grid: { color: '#3b3d43' }, border: { color: '#3b3d43' } },
+            } : undefined,
+          },
+        };
+        const renderer = _getChartNodeCanvas();
+        const buf = await renderer.renderToBuffer(config);
+        _imageCacheSet(key, buf);
+        log('info', 'CHART_DATA prefetch rendered', { key, size: buf.length });
+      } catch (err) {
+        log('debug', 'CHART_DATA prefetch failed (non-blocking)', { error: err.message });
+      }
+    });
   }
 
   _findSplitPoint(text, maxLen) {
@@ -639,7 +904,8 @@ export class StreamingMessage {
     }
     // maskTechDetails: 비기술 채널에서만 선택 적용 (개발자 채널은 경로/PID 필요)
     // LLM 레벨 few-shot으로 이미 가이드 중 — 전체 파이프라인 강제 적용 금지
-    const displayContent = (!this.finalized && !isFinal) ? content + ' ▌' : content;
+    // P0-1: tool status / thinking prefix + 커서 합성 통합
+    const displayContent = this._composeDisplay(content, isFinal);
     const row = this._stopRow();
     const components = (this.finalized || isFinal) ? [] : (row ? [row] : []);
 
@@ -680,7 +946,7 @@ export class StreamingMessage {
         log('warn', '_sendOrEdit rate limited — retrying', { retryAfter });
         await new Promise(r => setTimeout(r, retryAfter));
         try {
-          const retryDisplay = (!this.finalized && !isFinal) ? content + ' ▌' : content;
+          const retryDisplay = this._composeDisplay(content, isFinal);
           if (this.currentMessage) {
             await this.currentMessage.edit({ content: retryDisplay, embeds: [], components: [], flags: MessageFlags.SuppressEmbeds });
           } else {
@@ -688,10 +954,53 @@ export class StreamingMessage {
           }
           this.sentLength = content.length;
           log('info', '_sendOrEdit retry succeeded');
+          return;
         } catch (retryErr) {
           log('error', '_sendOrEdit retry also failed', { error: retryErr.message });
+          // P2-3: stream resumption — retry도 실패하면 차이분을 새 메시지로 분할 전송
+          await this._resumeAsNewMessage(content, isFinal, retryErr);
         }
+      } else {
+        // 429 외 다른 영구성 오류(권한/메시지 삭제 등) — 즉시 resumption 시도
+        await this._resumeAsNewMessage(content, isFinal, err);
       }
+    }
+  }
+
+  /**
+   * P2-3: edit 실패 후 차이분(delta)을 새 메시지로 이어 전송.
+   *
+   * 기존 currentMessage는 이미 전송된 sentLength 까지 보존되어 있다고 가정.
+   * content[sentLength:] 만 new message로 send → currentMessage 교체 → 이후 append는 새 메시지에 대해 edit.
+   *
+   * 삭제/권한 오류로 새 send 조차 실패하면 silent (로그만).
+   */
+  async _resumeAsNewMessage(content, isFinal, originalErr) {
+    const delta = this.sentLength > 0 ? content.slice(this.sentLength) : content;
+    if (!delta || !delta.trim()) {
+      log('debug', '_resumeAsNewMessage: no delta, skipping');
+      return;
+    }
+    try {
+      const resumeMarker = '\n\n-# ↪️ 이어서…';
+      const resumeDisplay = this._composeDisplay(delta, isFinal);
+      const newMsg = await this.channel.send({
+        content: resumeMarker + '\n' + resumeDisplay,
+        embeds: [],
+        components: [],
+        flags: MessageFlags.SuppressEmbeds,
+      });
+      // 새 메시지를 currentMessage 로 교체 → 이후 append/edit 타겟 이동
+      this.currentMessage = newMsg;
+      this.sentLength = content.length;
+      log('warn', '_resumeAsNewMessage: split successful (edit failed, new msg created)', {
+        newMsgId: newMsg.id, deltaLen: delta.length, originalErr: originalErr?.message?.slice(0, 120),
+      });
+    } catch (splitErr) {
+      log('error', '_resumeAsNewMessage failed — content may be lost', {
+        error: splitErr.message,
+        deltaLen: delta.length,
+      });
     }
   }
 
@@ -775,10 +1084,265 @@ export class StreamingMessage {
     }
     await this._extractCodeBlockFiles();
     await this._extractAndSendMarkers();
+    // P1-1: 인용 각주 자동 포맷 (2개 이상 감지 시 [^N] 치환 + 출처 블록)
+    await this._maybeFormatCitations();
     await this._wrapInCV2();
+    // P0-3: 아티팩트 분리 — 코드 첨부 후에도 남은 본문이 여전히 길면 board 업로드
+    await this._maybeUploadArtifact();
+    // P1-2: 종료 액션 버튼 행(재생성/요약/다운로드) — 응답 길이 임계 충족 시 편집으로 부착
+    await this._appendActionButtons();
+    // P1-3: 긴 응답 자동 Thread — 채널 직접 응답 & 3000자+ 시 follow-up 스레드 생성
+    await this._maybeCreateThread();
+    // P3-3: A/B 실험 outcome 기록 — ledger에 elapsed/edits/variant 누적
+    this._recordExperimentOutcome();
     // GC 힌트: 대형 버퍼 참조 해제 (응답이 길수록 효과적)
     this.buffer = '';
     this._statusLines = [];
+  }
+
+  /**
+   * P3-3: throttle-v1 outcome ledger 기록 (응답 1회당 1 entry).
+   * silent — 실패해도 응답 흐름에 영향 없음.
+   */
+  _recordExperimentOutcome() {
+    if (this._experimentRecorded) return;
+    this._experimentRecorded = true;
+    if (!this._userId || !this._throttleVariant) return;
+    try {
+      recordOutcome('throttle-v1', this._userId, {
+        variant: this._throttleVariant,
+        elapsedMs: Date.now() - this._startedAtMs,
+        editCount: this._editCount,
+        bufferLen: this._textSent ? (this.currentMessage?.content?.length ?? 0) : 0,
+        channelName: this._channelName,
+      });
+    } catch { /* 응답 차단 금지 */ }
+  }
+
+  /**
+   * P1-2: 최종 응답에 액션 버튼 행(재생성/요약/다운로드) 부착.
+   *
+   * 조건:
+   *   - currentMessage 존재
+   *   - sessionKey 존재 (핸들러가 customId 파싱)
+   *   - 응답 본문 ≥ 600자 (짧은 응답에는 버튼 노이즈 회피)
+   *   - 이미 components 붙은 메시지(CV2/마커 카드)면 스킵 — 중복 방지
+   *
+   * 구현:
+   *   현재 메시지를 edit({ components: [ActionRow] })로 업데이트.
+   *   Discord.js에서 평문 메시지도 components 추가 가능(IsComponentsV2 플래그 없을 때).
+   *   실패 시 silent — 채팅 흐름 차단 금지.
+   */
+  async _appendActionButtons() {
+    if (!this.currentMessage || !this.sessionKey) return;
+    if (this._markerCardSent) return; // CV2 마커 카드가 이미 전송됨
+    const content = this.currentMessage.content || '';
+    if (content.length < 600) return; // 짧은 응답 스킵
+    // 이미 components가 붙어있으면(예: _wrapInCV2 경로) 중복 방지
+    try {
+      const existing = this.currentMessage.components;
+      if (Array.isArray(existing) && existing.length > 0) return;
+    } catch { /* ignore */ }
+
+    try {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`regen_${this.sessionKey}`)
+          .setLabel('🔄 재생성')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`summarize_${this.sessionKey}`)
+          .setLabel('📝 요약')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`download_${this.sessionKey}`)
+          .setLabel('📄 다운로드')
+          .setStyle(ButtonStyle.Secondary),
+      );
+      await this.currentMessage.edit({ content, components: [row] });
+      log('debug', 'action buttons attached', {
+        sessionKey: this.sessionKey,
+        contentLen: content.length,
+      });
+    } catch (err) {
+      log('warn', '_appendActionButtons failed (non-critical)', { error: err.message });
+    }
+  }
+
+  /**
+   * P3-1: CHART_DATA / TABLE_DATA 마커 조기 전송.
+   *
+   * opt-in: CHART_DATA_EARLY_SEND=1 env.
+   * buffer에서 마커 완성분만 제거 + 이미지 렌더 + 채널 전송 (비차단).
+   * 조기 전송된 마커 타입은 finalize의 _extractAndSendMarkers에서 skip.
+   *
+   * 실패 / 비활성 시 silent.
+   */
+  async _tryEarlyMarkerSend() {
+    try {
+      const { isEarlySendEnabled, peekCompleteMarker } = await import('./early-marker.js');
+      if (!isEarlySendEnabled()) return;
+      const hit = peekCompleteMarker(this.buffer, this._markerEarlySent);
+      if (!hit) return;
+      // 버퍼에서 해당 마커 라인 제거 (이후 finalize가 중복 전송 안 하도록 Set에도 등록)
+      this.buffer = this.buffer.replace(hit.raw, '').replace(/^\n/m, '');
+      this._markerEarlySent.add(hit.name);
+      // 실제 이미지 렌더·전송은 비동기로 띄워 다음 flush 흐름을 막지 않음
+      setImmediate(() => this._renderAndSendEarlyMarker(hit).catch(err => {
+        log('warn', 'early marker render failed (non-critical)', { name: hit.name, error: err.message });
+      }));
+    } catch (err) {
+      log('debug', '_tryEarlyMarkerSend skipped', { error: err.message });
+    }
+  }
+
+  /** 조기 마커 렌더링·전송 (CHART_DATA 만 처리 — TABLE은 Chrome 비용 높음). */
+  async _renderAndSendEarlyMarker({ name, json }) {
+    if (name !== 'CHART_DATA') return;
+    const { type = 'line', title, labels = [], datasets = [] } = json;
+    const colorPalette = ['#5865f2', '#57f287', '#fee75c', '#ed4245', '#eb459e', '#faa61a'];
+    const normalizedDatasets = datasets.map((d, i) => ({
+      ...d,
+      borderColor: d.borderColor || d.color || colorPalette[i % colorPalette.length],
+      backgroundColor: d.backgroundColor || ((d.borderColor || d.color || colorPalette[i % colorPalette.length]) + '33'),
+    }));
+    const cfg = {
+      type, data: { labels, datasets: normalizedDatasets },
+      options: {
+        plugins: {
+          title: title ? { display: true, text: title, color: '#fff' } : undefined,
+          legend: { labels: { color: '#fff' } },
+        },
+        scales: type === 'pie' || type === 'doughnut'
+          ? {}
+          : { x: { ticks: { color: '#ddd' } }, y: { ticks: { color: '#ddd' } } },
+      },
+    };
+    const canvas = _getChartNodeCanvas();
+    const buf = await canvas.renderToBuffer(cfg, 'image/png');
+    await this.channel.send({
+      content: '-# ⏳ 차트 먼저 보내드립니다 (본문은 계속 작성 중)',
+      files: [new AttachmentBuilder(buf, { name: 'chart-early.png' })],
+    });
+    log('info', 'CHART_DATA early-sent', { channel: this.channel.id });
+  }
+
+  /**
+   * P1-3: 긴 응답 자동 Thread 생성.
+   *
+   * 채널 직접 응답 & 본문 ≥ AUTO_THREAD_MIN(기본 3000자)일 때,
+   * currentMessage에 딸린 follow-up 스레드를 만들고 후속 대화를 유도.
+   * 원본 메시지는 그대로 유지 (스트리밍 결과 훼손 방지).
+   *
+   * 비활성 조건:
+   *   - AUTO_THREAD_ENABLED=0 환경변수
+   *   - 이미 Thread 채널(this.channel.isThread())
+   *   - 봇 권한 부족 / channel.type != GuildText
+   *   - ARTIFACT 경로 대형 본문(8000자+) — board로 이관했으므로 스레드 불필요
+   *
+   * 실패 시 silent.
+   */
+  async _maybeCreateThread() {
+    if (process.env.AUTO_THREAD_ENABLED === '0') return;
+    if (!this.currentMessage || !this.channel) return;
+    // 이미 Thread 안이면 중첩 스레드 불가
+    try {
+      if (typeof this.channel.isThread === 'function' && this.channel.isThread()) return;
+    } catch { /* ignore */ }
+
+    const content = this.currentMessage.content || '';
+    const MIN = Number(process.env.AUTO_THREAD_MIN || 3000);
+    const MAX = Number(process.env.AUTO_THREAD_MAX || 8000);
+    // 길이 게이트: MIN 이상 & MAX 미만 (MAX 이상은 artifact로 이관되는 편이 나음)
+    if (content.length < MIN || content.length >= MAX) return;
+
+    try {
+      // Discord.js: GuildText 채널에서 message.startThread 가능
+      if (typeof this.currentMessage.startThread !== 'function') return;
+      const rawTitle = (content.split('\n').map(l => l.trim()).find(l => l.length > 10) || '응답').replace(/^[-*#>`]+\s*/, '');
+      const threadName = rawTitle.length > 90 ? rawTitle.slice(0, 89) + '…' : rawTitle;
+      const thread = await this.currentMessage.startThread({
+        name: `💬 ${threadName}`,
+        autoArchiveDuration: 60, // 1시간 후 자동 아카이브
+        reason: 'Jarvis auto-thread for long response',
+      });
+      if (!thread) return;
+      // 스레드에 후속 대화 유도 메시지
+      await thread.send({
+        content: [
+          '💡 **후속 질문/피드백은 이 스레드에서 이어갈 수 있습니다.**',
+          '-# 채널 메인 스크롤을 방해하지 않기 위해 자동 생성된 스레드입니다.',
+        ].join('\n'),
+      }).catch(() => {});
+      log('info', 'auto-thread created', {
+        messageId: this.currentMessage.id,
+        threadId: thread.id,
+        contentLen: content.length,
+      });
+    } catch (err) {
+      log('warn', '_maybeCreateThread failed (non-critical)', { error: err.message });
+    }
+  }
+
+  /**
+   * P0-3: 아티팩트 자동 분리.
+   * _extractCodeBlockFiles()이 30줄+ 코드를 파일 첨부로 빼낸 '후' 실행됨.
+   * 남은 본문이 여전히 길면(TOTAL_CHARS_THRESHOLD+) board로 업로드하고
+   * 카드 링크를 채널에 추가 전송.
+   *
+   * 비활성 조건:
+   *   - ARTIFACT_ENABLED=0 환경변수
+   *   - AGENT_API_KEY 미설정
+   *   - 실패 시 silent (채팅 흐름 차단하지 않음)
+   */
+  /**
+   * P1-1: 본문에 흩어진 bare citation을 [^N] 각주로 통합 포맷.
+   *
+   * 대상: `[filename.md]`, `(출처: ...)`, `[[wiki]]` — 2개 이상일 때만 적용.
+   * 적용 후: 본문 번호 치환 + 하단 `-# 📚 출처` 블록.
+   *
+   * 실패 시 silent (citation 미형성도 응답 흐름 차단 금지).
+   */
+  async _maybeFormatCitations() {
+    if (!this.currentMessage) return;
+    const content = this.currentMessage.content || '';
+    if (!content || content.length < 200) return; // 짧은 응답은 패스
+    try {
+      const { formatCitations } = await import('./citation-formatter.js');
+      const result = formatCitations(content, { minCitations: 2 });
+      if (!result.changed) return;
+      await this._sendOrEdit(result.content, true);
+      log('info', 'citations formatted', {
+        count: result.citations.length,
+        channel: this.channel.id,
+      });
+    } catch (err) {
+      log('warn', '_maybeFormatCitations failed (non-critical)', { error: err.message });
+    }
+  }
+
+  async _maybeUploadArtifact() {
+    if (!this.currentMessage) return;
+    const content = this.currentMessage.content || '';
+    if (!content || content.length < 2500) return; // threshold 빠른 게이트 (uploader도 재검증)
+    try {
+      const { uploadArtifact, renderArtifactCard } = await import('./artifact-uploader.js');
+      const artifact = await uploadArtifact({
+        content,
+        sessionKey: this.sessionKey,
+        channelName: this._channelName,
+      });
+      if (!artifact) return;
+      // 카드 전송 — 원본 메시지는 그대로 두고 후속 카드로 링크 안내
+      const card = renderArtifactCard(artifact);
+      await this.channel.send({
+        content: card,
+        flags: MessageFlags.SuppressEmbeds,
+      });
+      log('info', 'artifact card sent', { id: artifact.id, channel: this.channel.id });
+    } catch (err) {
+      log('warn', '_maybeUploadArtifact failed (non-critical)', { error: err.message });
+    }
   }
 
   /** Post-finalize: extract long code blocks (30+ lines) as file attachments. */
@@ -868,8 +1432,22 @@ export class StreamingMessage {
     const embedResult = _extractMarker(content, 'EMBED_DATA');
     if (embedResult) { embedJson = embedResult.json; content = embedResult.content; }
 
-    const chartResult = _extractMarker(content, 'CHART_DATA');
-    if (chartResult) { chartJson = chartResult.json; content = chartResult.content; }
+    // P3-1: 다중 CHART_DATA 지원 — 여러 마커를 순차 추출해서 배열에 적재.
+    // 조기 전송(CHART_DATA_EARLY_SEND=1)으로 이미 처리된 경우 finalize는 스킵.
+    const chartJsons = [];
+    if (!this._markerEarlySent?.has('CHART_DATA')) {
+      while (true) {
+        const r = _extractMarker(content, 'CHART_DATA');
+        if (!r) break;
+        chartJsons.push(r.json);
+        content = r.content;
+        if (chartJsons.length >= 6) break; // MediaGallery + rate limit 한계
+      }
+      if (chartJsons.length > 0) chartJson = chartJsons[0];
+    } else {
+      // 남아있는 CHART_DATA 라인이 본문에 혹시 있으면 제거만 수행 (재전송 안 함)
+      content = content.replace(/^CHART_DATA:\{[^\n]+\}\s*$/gm, '').replace(/\n{3,}/g, '\n\n');
+    }
 
     const cv2Result = _extractMarker(content, 'CV2_DATA');
     if (cv2Result) { cv2Json = cv2Result.json; content = cv2Result.content; }
@@ -903,6 +1481,8 @@ export class StreamingMessage {
       let chartImgBuf = null;
       let tableImgBuf = null;
       let mermaidImgBuf = null;
+      // P3-1: 추가 차트 버퍼 (2번째부터 N번째)
+      const extraChartBufs = [];
 
       // Send CHART_DATA as Chart.js PNG via chartjs-node-canvas (Chrome 불필요, 순수 Node.js)
       if (chartJson) {
@@ -958,6 +1538,52 @@ export class StreamingMessage {
             chartImgBuf = imgBuf;
           } catch (cErr) {
             log('error', 'CHART_DATA render failed', { error: cErr.message });
+          }
+        }
+      }
+
+      // P3-1: 추가 차트(2번째부터) 렌더링 — 같은 파이프라인 사용 (캐시 포함)
+      if (chartJsons.length > 1) {
+        for (let ci = 1; ci < chartJsons.length; ci++) {
+          const extraJson = chartJsons[ci];
+          const key = _cacheKey(extraJson);
+          const cached = _imageCacheGet(key);
+          if (cached) { extraChartBufs.push(cached); continue; }
+          try {
+            const { type = 'line', title, labels = [], datasets = [] } = extraJson;
+            const colorPalette = ['#5865f2', '#57f287', '#fee75c', '#ed4245', '#eb459e', '#faa61a'];
+            const normalizedDatasets = datasets.map((d, i) => {
+              const color = d.borderColor || d.color || colorPalette[i % colorPalette.length];
+              return {
+                borderColor: color,
+                backgroundColor: d.backgroundColor ?? (type === 'line' ? 'transparent' : color + '99'),
+                borderWidth: d.borderWidth ?? 2,
+                pointRadius: d.pointRadius ?? 3,
+                tension: d.tension ?? 0.3,
+                fill: d.fill ?? false,
+                ...d,
+              };
+            });
+            const cfg = {
+              type,
+              data: { labels, datasets: normalizedDatasets },
+              options: {
+                responsive: false, animation: false, devicePixelRatio: 2,
+                plugins: {
+                  title: { display: !!title, text: title ?? '', color: '#fff', font: { size: 15, weight: 'bold' }, padding: { bottom: 12 } },
+                  legend: { labels: { color: '#dbdee1', font: { size: 12 }, padding: 16, usePointStyle: true } },
+                },
+                scales: (type !== 'pie' && type !== 'doughnut') ? {
+                  x: { ticks: { color: '#9b9fa8', font: { size: 11 } }, grid: { color: '#3b3d43' }, border: { color: '#3b3d43' } },
+                  y: { ticks: { color: '#9b9fa8', font: { size: 11 } }, grid: { color: '#3b3d43' }, border: { color: '#3b3d43' } },
+                } : undefined,
+              },
+            };
+            const buf = await _getChartNodeCanvas().renderToBuffer(cfg);
+            _imageCacheSet(key, buf);
+            extraChartBufs.push(buf);
+          } catch (eErr) {
+            log('error', 'CHART_DATA extra render failed', { idx: ci, error: eErr.message });
           }
         }
       }
@@ -1036,7 +1662,7 @@ mermaid.initialize({
       }
 
       // CHART/TABLE/Mermaid 이미지 → MediaGallery + 버튼으로 단일 메시지 전송
-      if (chartImgBuf || tableImgBuf || mermaidImgBuf) {
+      if (chartImgBuf || tableImgBuf || mermaidImgBuf || extraChartBufs.length > 0) {
         try {
           const imgContainer = new ContainerBuilder();
           const gallery = new MediaGalleryBuilder();
@@ -1044,6 +1670,12 @@ mermaid.initialize({
           if (chartImgBuf) {
             gallery.addItems(new MediaGalleryItemBuilder().setURL('attachment://chart.png'));
             imgFiles.push(new AttachmentBuilder(chartImgBuf, { name: 'chart.png' }));
+          }
+          // P3-1: 추가 차트 MediaGallery 아이템 추가 (chart-2.png, chart-3.png, ...)
+          for (let i = 0; i < extraChartBufs.length; i++) {
+            const name = `chart-${i + 2}.png`;
+            gallery.addItems(new MediaGalleryItemBuilder().setURL(`attachment://${name}`));
+            imgFiles.push(new AttachmentBuilder(extraChartBufs[i], { name }));
           }
           if (tableImgBuf) {
             gallery.addItems(new MediaGalleryItemBuilder().setURL('attachment://table.png'));
@@ -1054,20 +1686,10 @@ mermaid.initialize({
             imgFiles.push(new AttachmentBuilder(mermaidImgBuf, { name: 'diagram.png' }));
           }
           imgContainer.addMediaGalleryComponents(gallery);
-          if (this.sessionKey) {
+          const imgRow = this._finalActionRow();
+          if (imgRow) {
             imgContainer.addSeparatorComponents(new SeparatorBuilder());
-            imgContainer.addActionRowComponents(
-              new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                  .setCustomId(`regen_${this.sessionKey}`)
-                  .setLabel('🔄 재생성')
-                  .setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder()
-                  .setCustomId(`summarize_${this.sessionKey}`)
-                  .setLabel('📝 요약')
-                  .setStyle(ButtonStyle.Secondary),
-              )
-            );
+            imgContainer.addActionRowComponents(imgRow);
           }
           await this.channel.send({
             files: imgFiles,
@@ -1079,6 +1701,11 @@ mermaid.initialize({
           log('error', 'MediaGallery send failed, falling back to raw files', { error: imgErr.message });
           // 폴백: 개별 파일 전송
           if (chartImgBuf) await this.channel.send({ files: [new AttachmentBuilder(chartImgBuf, { name: 'chart.png' })] });
+          // P3-1 폴백: 추가 차트도 개별 전송
+          for (let i = 0; i < extraChartBufs.length; i++) {
+            const name = `chart-${i + 2}.png`;
+            await this.channel.send({ files: [new AttachmentBuilder(extraChartBufs[i], { name })] });
+          }
           if (tableImgBuf) await this.channel.send({ files: [new AttachmentBuilder(tableImgBuf, { name: 'table.png' })] });
           if (mermaidImgBuf) await this.channel.send({ files: [new AttachmentBuilder(mermaidImgBuf, { name: 'diagram.png' })] });
         }
@@ -1115,20 +1742,10 @@ mermaid.initialize({
               container.addSeparatorComponents(new SeparatorBuilder());
             }
           });
-          if (this.sessionKey) {
+          const cv2Row = this._finalActionRow();
+          if (cv2Row) {
             container.addSeparatorComponents(new SeparatorBuilder());
-            container.addActionRowComponents(
-              new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                  .setCustomId(`regen_${this.sessionKey}`)
-                  .setLabel('🔄 재생성')
-                  .setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder()
-                  .setCustomId(`summarize_${this.sessionKey}`)
-                  .setLabel('📝 요약')
-                  .setStyle(ButtonStyle.Secondary),
-              )
-            );
+            container.addActionRowComponents(cv2Row);
           }
           await this.channel.send({
             components: [container],
@@ -1192,19 +1809,11 @@ mermaid.initialize({
         const container = new ContainerBuilder().setAccentColor(0x5865f2); // Discord blurple
         container.addTextDisplayComponents(new TextDisplayBuilder().setContent(chunks[i]));
         if (isLast && addButtons) {
-          container.addSeparatorComponents(new SeparatorBuilder());
-          container.addActionRowComponents(
-            new ActionRowBuilder().addComponents(
-              new ButtonBuilder()
-                .setCustomId(`regen_${this.sessionKey}`)
-                .setLabel('🔄 재생성')
-                .setStyle(ButtonStyle.Secondary),
-              new ButtonBuilder()
-                .setCustomId(`summarize_${this.sessionKey}`)
-                .setLabel('📝 요약')
-                .setStyle(ButtonStyle.Secondary),
-            )
-          );
+          const plainRow = this._finalActionRow();
+          if (plainRow) {
+            container.addSeparatorComponents(new SeparatorBuilder());
+            container.addActionRowComponents(plainRow);
+          }
         }
         const sent = await this.channel.send({
           components: [container],
