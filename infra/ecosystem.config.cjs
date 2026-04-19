@@ -30,7 +30,7 @@ module.exports = {
     },
     {
       name: 'jarvis-rag-watcher',
-      script: 'lib/rag-watch.mjs',
+      script: 'rag/lib/rag-watch.mjs',
       cwd: JARVIS_HOME,
       interpreter: 'node',
       interpreter_args: '--max-old-space-size=150',
