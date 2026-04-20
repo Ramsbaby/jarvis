@@ -20,6 +20,14 @@
 
 set -euo pipefail
 
+# 자체 로그 (Blocker #2 대응: plist StandardOutPath는 bot-cron.sh 우회 경로라 0B.
+# tee로 화면과 파일 양쪽 기록 → cron-master 본인이 죽어도 사후 조사 가능)
+SELF_LOG="${HOME}/.jarvis/logs/cron-master-self.log"
+mkdir -p "$(dirname "$SELF_LOG")"
+exec > >(tee -a "$SELF_LOG") 2>&1
+echo ""
+echo "═══ cron-master 시작: $(date '+%Y-%m-%d %H:%M:%S %z') (PID=$$) ═══"
+
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_DIR="$BOT_HOME/logs"
 LA_DIR="$HOME/Library/LaunchAgents"
@@ -140,10 +148,13 @@ REPAIRS=()
 DRY_RUN="${CRON_MASTER_DRY_RUN:-0}"
 
 repair_count_today() {
-  local action="$1" target="$2" today
+  local action="$1" target="$2" today count
   today=$(date +%Y-%m-%d)
   [[ ! -f "$REPAIR_LEDGER" ]] && { echo 0; return; }
-  grep -cF "\"action\":\"$action\",\"target\":\"$target\",\"ts\":\"$today" "$REPAIR_LEDGER" 2>/dev/null || echo 0
+  # grep -c 는 매치 0건일 때 stdout "0" + exit 1 → `|| true`로 exit만 삼키고 stdout "0" 유지
+  # (`|| echo 0` 안티패턴: 이전엔 "0\n0" 출력되어 [[ ]] syntax error 유발)
+  count=$(grep -cF "\"action\":\"$action\",\"target\":\"$target\",\"ts\":\"$today" "$REPAIR_LEDGER" 2>/dev/null || true)
+  echo "${count:-0}"
 }
 
 log_repair() {

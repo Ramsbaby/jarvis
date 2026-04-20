@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-04-19T21:17:05.375Z",
+  "generatedAt": "2026-04-20T03:54:23.674Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 94,
+  "totalTasks": 95,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -14,11 +14,11 @@
     "brand-lead": 4,
     "audit-lead": 17,
     "secretary": 10,
-    "uncategorized": 8
+    "uncategorized": 9
   },
   "typeDistribution": {
     "prompt": 36,
-    "script": 58
+    "script": 59
   },
   "groups": [
     {
@@ -30,8 +30,8 @@
         {
           "id": "morning-standup",
           "name": "모닝 스탠드업",
-          "schedule": "10 6 * * *",
-          "scheduleHuman": "매일 06:10",
+          "schedule": "30 7 * * *",
+          "scheduleHuman": "매일 07:30",
           "type": "prompt",
           "handler": "ask-claude.sh (LLM)",
           "team": {
@@ -1359,11 +1359,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/geeknews-bench-report.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/geeknews-bench-report-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-geeknews-bench-report-*.log",
@@ -1826,7 +1826,7 @@
           "model": "claude-haiku-4-5-20251001",
           "priority": "daily",
           "maxBudget": "1.00",
-          "disabled": true,
+          "disabled": false,
           "description": null,
           "logs": {
             "stdout": {
@@ -2927,6 +2927,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-context-extractor-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "cron-master",
+          "name": "크론 총괄 리포트 — 아침 종합",
+          "schedule": "3 6 * * *",
+          "scheduleHuman": "매일 06:03",
+          "type": "script",
+          "handler": "cron-master.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "daily",
+          "maxBudget": null,
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/cron-master.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/cron-master-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-cron-master-*.log",
               "exists": false
             }
           }
