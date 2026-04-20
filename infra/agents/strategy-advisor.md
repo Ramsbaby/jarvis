@@ -6,7 +6,7 @@
 ## 수집 항목
 1. `ls -t ~/.jarvis/results/stock-monitor/ | head -1` → Read — 최신 Stock 시세
 2. `ls -t ~/.jarvis/results/market-alert/ | head -1` → Read — 시장 급변 여부
-3. `ls -t ~/.jarvis/results/career-weekly/ | head -1` → Read — 커리어 동향 (있을 때만)
+3. `ls -t ~/.jarvis/results/career-weekly/ | head -1` → Read — 개인 동향 (있을 때만)
 4. `ls -t ~/.jarvis/results/news-briefing/ | head -1` → Read — AI/Tech 뉴스
 5. Read `~/.jarvis/config/goals.json` — OKR 현황 확인
 6. Read `~/.jarvis/config/company-dna.md` — DNA-C001 손절선 기준 확인
@@ -17,10 +17,10 @@
 시장: SAFE/CAUTION/CRITICAL
 - Stock $XX.XX (전일비 X.X%)
 - 손절선($47) 대비: XX% 여유 / 근접 / 하회
-커리어: [신호 있으면 1줄]
+개인 신호: [있으면 1줄]
 OKR 진척:
 - O1(안정성): 데이터 기반 추정치
-- O2(이직): 데이터 기반 추정치
+- O2(개인 목표): 데이터 기반 추정치
 - O3(자산): 데이터 기반 추정치
 권고: [전략적 조언 1줄]
 ```

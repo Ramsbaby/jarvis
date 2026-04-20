@@ -22,54 +22,26 @@ const jsonOnly = process.argv.includes('--json-only');
 
 mkdirSync(RESULT_DIR, { recursive: true });
 
-// ─── 대상 사이트 ──────────────────────────────────────────────────────────
-const SITES = [
-  { id: 'hyundai-autoever', company: '현대오토에버', url: 'https://career.hyundai-autoever.com/ko/apply', parser: 'link', linkPattern: '/ko/o/' },
-  { id: 'skcareers', company: 'SK(텔레콤/하이닉스)', url: 'https://www.skcareers.com/Recruit/Index?searchText=백엔드', parser: 'link', linkPattern: '/Recruit/Detail/' },
-  { id: 'kakao', company: '카카오', url: 'https://careers.kakao.com/jobs?part=TECHNOLOGY&page=1', parser: 'link', linkPattern: '/jobs/' },
-  { id: 'kakaobank', company: '카카오뱅크', url: 'https://recruit.kakaobank.com/jobs', parser: 'link', linkPattern: '/jobs/' },
-  { id: 'kakaoent', company: '카카오엔터테인먼트', url: 'https://careers.kakaoent.com/ko/main', parser: 'link', linkPattern: '/ko/o/' },
-  { id: 'kakaogames', company: '카카오게임즈', url: 'https://recruit.kakaogames.com/ko/joinjuskr', parser: 'link', linkPattern: '/o/' },
-  { id: 'naver', company: '네이버', url: 'https://recruit.navercorp.com/rcrt/list.do?entTypeCd=&jobCd=3010001%2C3010002%2C3010003&sysType=normal', parser: 'link', linkPattern: 'annoId' },
-  { id: 'naver-cloud', company: '네이버 클라우드', url: 'https://recruit.navercloudcorp.com/rcrt/list.do', parser: 'link', linkPattern: 'annoId' },
-  { id: 'krafton', company: '크래프톤', url: 'https://krafton.com/careers/jobs/?category=Engineering', parser: 'link', linkPattern: '/jobs/' },
-  { id: 'toss', company: '토스', url: 'https://toss.im/career/jobs', parser: 'link', linkPattern: 'job-detail' },
-  { id: 'daangn', company: '당근', url: 'https://about.daangn.com/jobs/', parser: 'link', linkPattern: '/jobs/' },
-  { id: 'hyundai-motor', company: '현대자동차', url: 'https://talent.hyundai.com/apply/applyList.hc', parser: 'link', linkPattern: 'applyView' },
-  { id: 'kia', company: '기아', url: 'https://career.kia.com/notic/noticList.kc', parser: 'link', linkPattern: 'applyView.kc' },
-  { id: 'lge', company: 'LG전자', url: 'https://careers.lg.com/channel/detail/lge/job_openings', parser: 'link', linkPattern: 'jobNoticeId' },
-  { id: 'woowa', company: '우아한형제들(배민)', url: 'https://career.woowahan.com/recruitment/?category=jobGroupCode&tag=BA005001', parser: 'link', linkPattern: 'recruitment' },
-  { id: 'lgcns', company: 'LG CNS', url: 'https://www.lgcns.com/content/lgcns/kr/careers/jobs.html', parser: 'auto' },
-  { id: 'kt', company: 'KT', url: 'https://recruit.kt.com/applicant/recruitment/list.do', parser: 'auto' },
-  { id: 'samsung-elec', company: '삼성전자', url: 'https://www.samsungcareers.com/hr/', parser: 'auto' },
-  { id: 'line', company: '라인(LINE)', url: 'https://careers.linecorp.com/jobs?co=Korea&cl=Engineering', parser: 'link', linkPattern: '/jobs/' },
-  { id: 'coupang', company: '쿠팡', url: 'https://www.coupang.jobs/contents/job-search/?search_keyword=backend&search_area=true', parser: 'link', linkPattern: '/job/' },
-  { id: 'dunamu', company: '두나무(업비트)', url: 'https://www.dunamu.com/careers/jobs', parser: 'link', linkPattern: '/careers/' },
-  { id: 'yeogi', company: '여기어때', url: 'https://gccompany.career.greetinghr.com/ko/apply', parser: 'link', linkPattern: '/o/' },
-  { id: 'kbank', company: '케이뱅크', url: 'https://recruit.kbanknow.com/Recruit', parser: 'link', linkPattern: '/Recruit/' },
-  { id: 'nhn', company: 'NHN', url: 'https://careers.nhn.com/recruits', parser: 'auto' },
-  { id: 'nexon', company: '넥슨', url: 'https://career.nexon.com/user/recruit/member/postList?joinCorp=NX', parser: 'auto' },
-  { id: 'ncsoft', company: 'NC소프트', url: 'https://careers.ncsoft.com/apply/list', parser: 'link', linkPattern: '/apply/' },
-  { id: 'hyundaicard', company: '현대카드', url: 'https://careerhyundai.recruiter.co.kr/career/home', parser: 'auto' },
-  { id: 'lguplus', company: 'LG유플러스', url: 'https://careers.lg.com/channel/detail/lgu/job_openings', parser: 'link', linkPattern: 'jobNoticeId' },
-  { id: 'kakao-enterprise', company: '카카오엔터프라이즈', url: 'https://careers.kakaoenterprise.com/ko/job', parser: 'link', linkPattern: '/ko/job/' },
-  { id: 'musinsa', company: '무신사', url: 'https://www.musinsacareers.com/ko', parser: 'auto' },
-];
-
-// ── GreetingHR API 사이트 (탭 불필요, HTTP 직접 호출) ──────────────────────
-const GREETINGHR_SITES = [
-  { id: 'kurly', company: '컬리', wid: 6012, baseUrl: 'https://kurly.career.greetinghr.com/ko/o/' },
-  { id: 'banksalad', company: '뱅크샐러드', wid: 5130, baseUrl: 'https://banksalad.career.greetinghr.com/ko/o/' },
-  { id: 'kakao-mobility', company: '카카오모빌리티', wid: 14346, baseUrl: 'https://kakaomobility.career.greetinghr.com/ko/o/' },
-  { id: 'bucketplace', company: '오늘의집(버킷플레이스)', wid: 1671, baseUrl: 'https://bucketplace.career.greetinghr.com/ko/o/' },
-  { id: 'zigbang', company: '직방', wid: 1724, baseUrl: 'https://zigbang.career.greetinghr.com/ko/o/' },
-  { id: 'socar', company: '쏘카', wid: 455, baseUrl: 'https://socar.career.greetinghr.com/ko/o/' },
-];
-
-// ── NineHire API (카카오스타일) ─────────────────────────────────────────────
-const NINEHIRE_SITES = [
-  { id: 'kakaostyle', company: '카카오스타일(지그재그)', apiUrl: 'https://api.ninehire.com/identity-access/homepage/recruitments?companyId=1573cfe0-2c72-11ef-950a-65a32c77a0c3&page=1&countPerPage=100', baseUrl: 'https://career.kakaostyle.com/job_posting/' },
-];
+// ─── 대상 사이트 (private/config 분리 — PII 격리) ──────────────────────────
+// SSoT: ~/jarvis/private/config/job-crawl-targets.json (gitignored)
+// 파일 없으면 크롤링 0건 graceful fallback — OSS 사용자는 본인 타겟을 여기에 정의
+const TARGETS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'job-crawl-targets.json');
+let SITES = [];
+let GREETINGHR_SITES = [];
+let NINEHIRE_SITES = [];
+try {
+  if (existsSync(TARGETS_PATH)) {
+    const cfg = JSON.parse(readFileSync(TARGETS_PATH, 'utf-8'));
+    SITES = Array.isArray(cfg.sites) ? cfg.sites : [];
+    GREETINGHR_SITES = Array.isArray(cfg.greetinghr_sites) ? cfg.greetinghr_sites : [];
+    NINEHIRE_SITES = Array.isArray(cfg.ninehire_sites) ? cfg.ninehire_sites : [];
+    console.log(`📂 타겟 로드: ${SITES.length} sites + ${GREETINGHR_SITES.length} greetinghr + ${NINEHIRE_SITES.length} ninehire`);
+  } else {
+    console.warn(`⚠️ ${TARGETS_PATH} 없음 — 크롤링 대상 0건. 샘플: private/config/job-crawl-targets.example.json 참고`);
+  }
+} catch (e) {
+  console.warn(`⚠️ job-crawl-targets.json 로드 실패 (${e.message}) — 크롤링 대상 0건으로 동작`);
+}
 
 // ── 키워드 ─────────────────────────────────────────────────────────────────
 const BACKEND_KW = [

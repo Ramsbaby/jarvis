@@ -263,7 +263,7 @@ Every response includes contextual action buttons:
 
 - Each Discord user gets **isolated memory** (facts, preferences, corrections, plans)
 - New users join via **pairing code** (6-digit, 10min TTL, owner approval)
-- **Family channels** automatically filter out owner's private data (trading, career)
+- **Family channels** automatically filter out owner's private data (configurable sensitive domains)
 - Per-channel **personas** — different personality per channel (`personas.json`)
 - **Message debouncing** — consecutive messages batched (1.5s) into single Claude call
 
@@ -273,8 +273,8 @@ Three layers work together — LLM Wiki accumulates structured knowledge, RAG re
 
 ```
 🗂️  LLM Wiki (daily digest)          📚 RAG Layer (per-query)          📊 Insight Layer (daily)
-  profile.md / work.md /               semantic search across              "career topic surged 534x"
-  trading.md / projects.md             10,000+ indexed documents           "focus shifted to interviews"
+  profile.md / work.md /               semantic search across              "topic frequency shift detected"
+  trading.md / projects.md             10,000+ indexed documents           "domain focus transition"
   (Stateful — pages updated,                    │                                    │
    not just appended)                           │                                    │
               │                                 │                                    │
@@ -300,7 +300,7 @@ Inspired by [Andrej Karpathy's LLM Wiki](https://gist.github.com/karpathy/442a6b
 | Page | Captures |
 |------|---------|
 | `profile.md` | Name, job, family basics |
-| `work.md` | Tech stack, company, career goals |
+| `work.md` | Tech stack, work context, professional goals |
 | `trading.md` | Portfolio, investment strategy, watchlist |
 | `projects.md` | Ongoing projects (Jarvis bot, side projects) |
 | `preferences.md` | Habits, likes/dislikes, routines |
@@ -315,8 +315,8 @@ Two additional layers work together — RAG retrieves raw facts, the Insight Lay
 
 ```
 📊 Insight Layer (daily, ~1.2KB)                 📚 RAG Layer (per-query)
-  "career topic surged 534x"                        semantic search across
-  "focus shifted from infra to interviews"           10,000+ indexed documents
+  "topic frequency shift detected"                  semantic search across
+  "domain focus transition"                         10,000+ indexed documents
               │                                              │
               └──────────────┬───────────────────────────────┘
                              ▼
@@ -395,7 +395,7 @@ Summon specialised teams via `/team <name>`:
 | **Infra** | Infrastructure chief — cron/LaunchAgent/disk/memory audits |
 | **Record** | Meeting notes + decision audit log |
 | **Brand** | Blog content + portfolio management |
-| **Career** | Job search strategy + interview prep |
+| **Career** | Professional development + learning plans |
 | **Academy** | Learning plans + skill development |
 | **Trend** | Market signals + tech trend analysis |
 | **Recon** | Reconnaissance — competitive intelligence |
@@ -408,7 +408,7 @@ Automated executive review system. 4 AI agents convene daily:
 |-------|------|
 | **CEO** | Final decisions — system stability + market + OKR progress |
 | **Infra Chief** | Uptime, error rates, performance metrics |
-| **Strategy Advisor** | Market signals, investment analysis, career moves |
+| **Strategy Advisor** | Market signals, investment analysis, strategic planning |
 | **Record Keeper** | Meeting minutes, decision audit log |
 
 Output: `context-bus.md` (shared context) + `decisions/{date}.jsonl` + `board-minutes/{date}.md`
