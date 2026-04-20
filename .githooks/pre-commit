@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
-# Privacy Guard pre-commit hook (Phase 1)
-# 단일 스캐너(scripts/privacy/scan.mjs) 호출만 담당.
+# Privacy Guard pre-commit hook (Phase 2)
+# scripts/privacy/scan.mjs 를 호출.
+#
+# Phase 2 변경점 (2026-04-20):
+#   - PRIVACY_BYPASS_REASON 은 이제 medium/low 위반만 우회 가능.
+#   - critical/high 위반이 감지되면 BYPASS 무시 → 무조건 exit 1.
+#   - 이유: high 등급 리터럴(이메일·회사명·실명 등)은 "긴급 예외" 이유로도
+#     저장소에 올려서는 안 되는 설계 원칙. 반드시 private/ 분리 또는 env 사용.
 #
 # 이전 버전(secret 패턴 in-line grep)은 git history 에서 참조:
 #   git log -p -- .githooks/pre-commit
@@ -15,8 +21,34 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 if [ -n "${PRIVACY_BYPASS_REASON:-}" ]; then
-  echo "⚠️  Privacy scan bypassed: $PRIVACY_BYPASS_REASON" >&2
-  # TODO Phase 3: ledger 기록 (~/.jarvis/logs/privacy-bypass.jsonl)
+  # bypass 요청 들어와도 먼저 scan 돌려서 high/critical 있는지 확인.
+  set +e
+  scan_out=$(node "$ROOT/scripts/privacy/scan.mjs" --staged 2>&1)
+  rc=$?
+  set -e
+
+  if [ "$rc" -ne 0 ]; then
+    # 위반 존재 — severity 등급 판단
+    if echo "$scan_out" | grep -qE '\[(critical|high)/'; then
+      echo "$scan_out" >&2
+      echo "" >&2
+      echo "🚨 BYPASS 거부 — critical/high 등급 위반은 PRIVACY_BYPASS_REASON 우회 불가" >&2
+      echo "   bypass reason: $PRIVACY_BYPASS_REASON" >&2
+      echo "" >&2
+      echo "   해결 방법:" >&2
+      echo "     1. 민감 리터럴을 private/config/*.json (gitignored) 으로 분리" >&2
+      echo "     2. 런타임에 readFileSync 로 로드 + graceful fallback 구현" >&2
+      echo "     3. 블록리스트 룰 확장이 필요하면 .privacy-blocklist.yml 수정" >&2
+      exit 1
+    fi
+    # medium/low 만 존재 — bypass 허용
+    echo "$scan_out" >&2
+    echo "⚠️  Privacy scan bypassed (medium/low only): $PRIVACY_BYPASS_REASON" >&2
+    # TODO Phase 3: ledger 기록 (~/.jarvis/logs/privacy-bypass.jsonl)
+    exit 0
+  fi
+  # 위반 없음에도 bypass 사용됨 — 경고만 하고 통과
+  echo "⚠️  Privacy scan bypassed (no violations): $PRIVACY_BYPASS_REASON" >&2
   exit 0
 fi
 
