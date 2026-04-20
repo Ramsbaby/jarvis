@@ -10,6 +10,33 @@ CONFIG="${BOT_HOME}/config/monitoring.json"
 # --- Config check ---
 [[ -f "$CONFIG" ]] || { echo "ERROR: $CONFIG not found" >&2; exit 1; }
 
+# --- Discord 중복 전송 방어 게이트 ---
+# 같은 TASK_ID가 DEDUP_WINDOW_S 이내 Discord로 이미 전송된 경우 차단
+# 원인: run_cron 다중 호출, LaunchAgent+Nexus 이중 트리거 등 모든 경우 방어
+_DEDUP_DIR="${BOT_HOME}/state/dedup"
+_DEDUP_WINDOW_S="${DEDUP_WINDOW_S:-300}"  # 기본 5분, 환경변수로 조정 가능
+mkdir -p "$_DEDUP_DIR"
+
+_discord_dedup_check() {
+    local task_id="$1"
+    local channel="${2:-default}"
+    local dedup_key="${task_id}__${channel}"
+    local dedup_file="${_DEDUP_DIR}/${dedup_key}.last_sent"
+    local now
+    now=$(date +%s)
+    if [[ -f "$dedup_file" ]]; then
+        local last_sent
+        last_sent=$(cat "$dedup_file" 2>/dev/null || echo 0)
+        local elapsed=$(( now - last_sent ))
+        if [[ $elapsed -lt $_DEDUP_WINDOW_S ]]; then
+            echo "DEDUP_SKIP: ${task_id} — ${elapsed}s 전 이미 전송 (차단 창: ${_DEDUP_WINDOW_S}s)" >&2
+            return 1  # 차단
+        fi
+    fi
+    echo "$now" > "$dedup_file"
+    return 0  # 허용
+}
+
 # --- Shared libraries ---
 source "${BOT_HOME}/lib/ntfy-notify.sh"
 source "${BOT_HOME}/lib/discord-notify-bash.sh"
@@ -260,6 +287,10 @@ route_to_discord() {
 # --- Route by mode ---
 case "$MODE" in
     discord)
+        # Dedup gate: 같은 태스크가 DEDUP_WINDOW_S 이내 이미 Discord로 전송됐으면 차단
+        if ! _discord_dedup_check "$TASK_ID" "${CHANNEL:-default}"; then
+            exit 0
+        fi
         # Noise gate: 순수 성공 메시지는 Discord 전송 생략
         if [[ -z "$EMBED_JSON" && -z "$CV2_JSON" && -z "$CHART_JSON" ]] && _is_noise "$MESSAGE"; then
             echo "NOISE_GATE: $TASK_ID — 순수 성공, Discord 전송 생략" >&2

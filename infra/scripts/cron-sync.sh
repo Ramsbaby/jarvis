@@ -12,7 +12,21 @@ TASKS_FILE="$BOT_HOME/config/effective-tasks.json"
 LOG="$BOT_HOME/logs/cron-sync.log"
 DRY_RUN="${1:-}"
 
-log() { echo "[$(date '+%F %T')] cron-sync: $*" | tee -a "$LOG"; }
+# log()는 >> 리다이렉트(bot-preflight.sh)와 tee 이중 기록 방지: 파일만 append
+log() { echo "[$(date '+%F %T')] cron-sync: $*" >> "$LOG"; echo "[$(date '+%F %T')] cron-sync: $*"; }
+
+# --- 동시 실행 방지 락 ---
+_LOCK_FILE="/tmp/jarvis-cron-sync.lock"
+if [[ -f "$_LOCK_FILE" ]]; then
+    _old_pid=$(cat "$_LOCK_FILE" 2>/dev/null || echo "")
+    if [[ -n "$_old_pid" ]] && kill -0 "$_old_pid" 2>/dev/null; then
+        echo "[$(date '+%F %T')] cron-sync: 이미 실행 중 (PID $_old_pid) — skip" >> "$LOG"
+        exit 0
+    fi
+    rm -f "$_LOCK_FILE"
+fi
+echo $$ > "$_LOCK_FILE"
+trap 'rm -f "$_LOCK_FILE"' EXIT
 notify() {
   local webhook; webhook=$(python3 -c "import json; d=json.load(open('$BOT_HOME/config/monitoring.json')); print(d.get('webhooks',{}).get('jarvis',''))" 2>/dev/null || echo "")
   if [[ -z "$webhook" ]]; then return; fi
