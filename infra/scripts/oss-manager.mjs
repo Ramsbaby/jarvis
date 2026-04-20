@@ -85,9 +85,10 @@ function preflight() {
 
 // SSoT: lib/discord-notify.mjs (_discordNotify). 로컬 wrapper 이름 discordSend 유지.
 // caller 사이트들 await 없이 호출 → fire-and-forget (정상).
-// channelKey 기본값은 CONFIG 참조가 필요해 래퍼 유지.
-function discordSend(content, channelKey) {
-  _discordNotify(content, channelKey ?? CONFIG.settings?.discordChannel ?? 'jarvis-blog').catch(
+// channelKey 기본값은 CONFIG 참조가 필요해 래퍼 유지. opts (embeds 등) 투명 전달.
+function discordSend(content, channelKey, opts) {
+  const ch = channelKey ?? CONFIG.settings?.discordChannel ?? 'jarvis-blog';
+  _discordNotify(content, ch, opts).catch(
     e => log('warn', `Discord 전송 실패: ${e.message}`),
   );
 }
@@ -132,9 +133,10 @@ async function runRecon() {
     const searchResults = [];
     for (const term of (repo.searchTerms ?? []).slice(0, 2)) {
       try {
+        // 주의: `gh search repos` 는 `stargazersCount` (복수), `gh repo view` 는 `stargazerCount` (단수) — 섞이지 않도록.
         const raw = gh('search', 'repos', term,
           '--limit', '5',
-          '--json', 'name,fullName,description,stargazerCount,updatedAt');
+          '--json', 'name,fullName,description,stargazersCount,updatedAt');
         const items = JSON.parse(raw);
         // 내 레포 제외
         items
@@ -202,11 +204,27 @@ ${currentReadme}
   writeFileSync(reportPath, reportMd);
   log('info', `리포트 저장: ${reportPath}`);
 
-  // Discord 전송
-  const summary = results
-    .map(r => `**${r.repo}** ★${r.stars}\n${r.analysis.slice(0, 350)}`)
-    .join('\n\n---\n\n');
-  discordSend(`🔍 **OSS Recon — ${TODAY}**\n\n${summary.slice(0, 1900)}`);
+  // Discord 전송 — Embed 전환 (350자 컷 제거, description 4096자 수용)
+  // 각 레포를 별도 embed 로 — Discord 는 메시지당 embed 10개까지 허용.
+  const EMBED_DESC_LIMIT = 4096;
+  const buildDesc = (analysis) => {
+    const s = String(analysis ?? '');
+    if (s.length <= EMBED_DESC_LIMIT) return s;
+    // 초과 시 말미에 절단 마커만 표시 (리포트 파일에 원문 보관됨)
+    return s.slice(0, EMBED_DESC_LIMIT - 60) + '\n\n_... (잘림 — 전체: `rag/oss-reports/recon-' + TODAY + '.md`)_';
+  };
+  const embedsForRecon = results.slice(0, 10).map(r => ({
+    title: `${r.repo} ★${r.stars}`,
+    description: buildDesc(r.analysis),
+    color: 0x5865F2, // Discord blurple
+  }));
+  if (embedsForRecon.length === 0) {
+    discordSend(`🔍 **OSS Recon — ${TODAY}**\n\n_(분석 결과 없음)_`);
+  } else {
+    discordSend(`🔍 **OSS Recon — ${TODAY}** (${results.length} repos)`, undefined, {
+      embeds: embedsForRecon,
+    });
+  }
 
   return results;
 }
