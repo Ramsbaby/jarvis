@@ -23,8 +23,8 @@
 rules:
   - id: korean-owner-name
     severity: high
-    pattern: "이정우"
-    description: "Owner 실명 — process.env.OWNER_NAME 사용"
+    pattern: "이정우|정우님"
+    description: "Owner 실명·별칭 — process.env.OWNER_NAME 사용"
     context_allow:
       - "process\\.env\\.OWNER_NAME"
       - "OWNER_NAME=이정우"

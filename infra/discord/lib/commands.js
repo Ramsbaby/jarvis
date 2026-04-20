@@ -938,7 +938,7 @@ export async function handleInteraction(interaction, deps) {
         registerSlashProxy(interaction.channelId, interaction.user.id, proxyContent);
         if (skill.name === 'mock-interview') {
           activateMockSession(interaction.channelId, interaction.user.id);
-          // RAG pre-fetch — 세션 시작 시 1회 정우님 커리어 전체를 긁어와 프롬프트에 박아둠.
+          // RAG pre-fetch — 세션 시작 시 1회 오너 프로필 전체를 긁어와 프롬프트에 박아둠.
           // 이후 어떤 질문이 와도 이 컨텍스트를 재료로만 답변 → 할루시네이션 방지 + 범용 대응.
           (async () => {
             try {

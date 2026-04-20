@@ -126,3 +126,6 @@ infra/chrome-extension/*
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Archive directories (PII 정리 과정에서 이관된 구파일 — 절대 tracked 금지)
+_archive-*/

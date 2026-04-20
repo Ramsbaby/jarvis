@@ -12,10 +12,10 @@ I've been running **Jarvis** on my Mac Mini 24/7 for 3 months. It's an AI operat
 **What it does:**
 - **Discord bot** with voice recognition (Whisper STT) — talk to Claude naturally
 - **RAG knowledge base** — 10,000+ documents, hybrid BM25 + vector search
-- **Insight Layer** — daily behavioural analysis that detects what I'm focused on (e.g., "career topic surged 534x this week, focus shifted from infrastructure to interview prep")
+- **Insight Layer** — daily behavioural analysis that detects what I'm focused on (e.g., "topic X surged 534x this week, focus shifted from infrastructure to another domain")
 - **99 automation scripts** with 4-layer self-recovery — if a service crashes, it's back within 3 minutes
 - **Dev-Queue** — AI extracts action items from task results, then autonomously executes them via Claude
-- **8 AI agent teams** — specialised agents for infrastructure, career, code review, etc.
+- **8 AI agent teams** — specialised agents for infrastructure, growth, code review, etc.
 - **Multi-user** with family privacy mode — each Discord user gets isolated memory, family channels filter out sensitive data
 - **Board Meeting AI** — 4 AI agents convene daily for system-level decisions
 

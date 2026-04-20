@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-20T10:17:06.803Z",
+  "generatedAt": "2026-04-20T13:27:32.521Z",
   "source": "~/jarvis/runtime/config/tasks.json",
   "totalTasks": 98,
   "teamDistribution": {
@@ -3143,7 +3143,7 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/mistake-extractor.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/mistake-extractor-err.log",

@@ -1630,7 +1630,7 @@ ${extracted}
     // 모의면접 범용 답변 가드 — 카드 하드코딩 없이 질문 유형별 원칙 + RAG 컨텍스트 주입.
     //
     // 구조:
-    // 1. 세션 시작 시 RAG로 정우님 커리어 전체를 pre-fetch (commands.js) → MOCK_CONTEXT
+    // 1. 세션 시작 시 RAG로 오너 프로필 전체를 pre-fetch (commands.js) → MOCK_CONTEXT
     // 2. 매 턴마다 질문 유형 감지 (취약성/자기소개/기술깊이/동기 등)
     // 3. 유형별 답변 원칙 + pre-fetch된 RAG 컨텍스트를 프롬프트에 주입
     // 4. Claude는 "재료(RAG) + 원칙(유형별 가이드)" 만으로 답변 생성 → 창작 차단
@@ -1656,7 +1656,7 @@ ${extracted}
       const { getMockContext } = await import('./slash-proxy.js');
       const mockCtx = getMockContext(effectiveChannelId, effectiveAuthor.id);
       const ragContextBlock = mockCtx?.context
-        ? `\n\n[정우님 실증 커리어 컨텍스트 — 답변의 재료는 여기에서만 가져와라]\n${mockCtx.context}\n`
+        ? `\n\n[오너 실증 프로필 컨텍스트 — 답변의 재료는 여기에서만 가져와라]\n${mockCtx.context}\n`
         : '';
       const companyBlock = mockCtx?.company ? `\n[회사: ${mockCtx.company}]` : '';
 
@@ -1798,7 +1798,7 @@ ${ragContextBlock}
 4. 구조: 상황 → 초기 가설 → 전환 계기 → 선택 근거(1~2개 비교 포함) → 수치 결과 → 조직 기여
 5. 마지막 한 줄: **강점 파고드는 꼬리질문**. 예: "선택지 비교는 어떤 기준으로 하셨나요?" / "500건 청킹 숫자 근거는?" / "이후 팀 표준으로 어떻게 확산시키셨나요?"
 
-**꼬리질문 대비 메모 (답변 후 정우님 외울 답안)**:
+**꼬리질문 대비 메모 (답변 후 오너 외울 답안)**:
 - Q "왜 REQUIRES_NEW·청킹 선택?"
   → "배치 분리는 스케줄 재편 부담, Pessimistic Lock은 경합 악화. REQUIRES_NEW는 자식 TX 독립으로 Lock 점유 시간 단축 + 롤백 전파 차단이 핵심. 500건은 테이블 평균 행 기준 단일 TX 1초 이내 임계점."
 - Q "왜 Adapter 선택?"

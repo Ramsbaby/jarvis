@@ -36,9 +36,9 @@ const DEFAULT_SCHEMA = {
   domains: {
     career: {
       title: '커리어 & 기술',
-      description: '직장, 기술 스택, 면접, 이직, 커리어 목표, 개인 프로필',
-      keywords: ['spring', 'kafka', 'redis', 'aws', 'backend', '백엔드', '개발', '이직',
-                 '회사', 'sk', 'grpc', '면접', '이력서', '채용', '핀테크', '이름', '직업',
+      description: '직장, 기술 스택, 면접, 커리어 목표, 개인 프로필',
+      keywords: ['spring', 'kafka', 'redis', 'aws', 'backend', '백엔드', '개발',
+                 '회사', 'grpc', '면접', '이력서', '채용', '핀테크', '이름', '직업',
                  '나이', '거주', 'star'],
     },
     trading: {

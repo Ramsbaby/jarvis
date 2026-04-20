@@ -246,7 +246,7 @@ function shouldRegenerateSummary(domainId) {
 
   const stat = statSync(summaryFile);
   const ageDays = (Date.now() - stat.mtimeMs) / (1000 * 60 * 60 * 24);
-  // career는 이직 준비 중이므로 매일, 나머지는 주 1회
+  // career 도메인은 오너 활성 관심사 → 매일 재생성, 그 외 도메인은 주 1회
   return domainId === 'career' ? ageDays >= 1 : ageDays >= 7;
 }
 
