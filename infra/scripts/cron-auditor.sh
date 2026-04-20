@@ -161,6 +161,56 @@ else
   grep -E 'FAILED|ERROR' "$BOT_HOME/logs/cron.log" 2>/dev/null | tail -20 || echo "  (없음)"
 fi
 
+# ── 4. output:['discord'] BYPASS 탐지 (2026-04-20 추가) ──────────────────────
+# 2026-04-17 daily-usage-check plist 우회 사건 재발 방지 가드레일.
+# tasks.json에 output:discord 설정된 태스크의 LaunchAgent가 bot-cron.sh를 타지
+# 않으면서 자체 스크립트에도 webhook 호출이 없으면 "전송 파이프 끊김"으로 경보.
+
+echo ""
+echo "## [output:discord BYPASS 의심]"
+python3 - "$BOT_HOME/config/tasks.json" "$HOME/Library/LaunchAgents" <<'PYEOF' \
+  || echo "  (python 실행 실패)"
+import json, os, re, sys
+tasks_path, la_dir = sys.argv[1], sys.argv[2]
+try:
+    with open(tasks_path) as f:
+        data = json.load(f)
+except Exception as e:
+    print(f"  (tasks.json 읽기 실패: {e})")
+    sys.exit(0)
+tasks = data.get('tasks', []) if isinstance(data, dict) else data
+suspect = []
+for t in tasks:
+    if 'discord' not in (t.get('output') or []):
+        continue
+    tid = t.get('id')
+    plist_path = None
+    for prefix in ('com.jarvis.', 'ai.jarvis.'):
+        p = os.path.join(la_dir, f"{prefix}{tid}.plist")
+        if os.path.exists(p):
+            plist_path = p
+            break
+    if not plist_path:
+        continue
+    content = open(plist_path).read()
+    if 'bot-cron.sh' in content:
+        continue
+    m = re.search(r'<key>ProgramArguments</key>\s*<array>(.*?)</array>', content, re.S)
+    args = re.findall(r'<string>(.*?)</string>', m.group(1)) if m else []
+    script = next((a for a in args if a.endswith(('.sh', '.mjs', '.py'))), None)
+    if not (script and os.path.exists(script)):
+        continue
+    body = open(script, errors='ignore').read()
+    has_webhook = bool(re.search(r'webhook|curl.*(discord|webhook)|route-result\.sh', body, re.I))
+    if not has_webhook:
+        suspect.append((tid, script))
+if suspect:
+    for tid, script in suspect:
+        print(f"  {tid:<36}  BYPASS  script={script}")
+else:
+    print("  (위험 없음)")
+PYEOF
+
 read -r ok issue < "$COUNTS_TMP"
 echo ""
 echo "## [요약]"
