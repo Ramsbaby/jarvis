@@ -457,8 +457,16 @@ export class StreamingMessage {
     if (this._textSent) this._scheduleFlush();
   }
 
-  /** 상태 바 문자열 렌더 (없으면 빈 문자열) */
+  /** 상태 바 문자열 렌더 (없으면 빈 문자열)
+   *
+   * isFinal=true 시에는 빈 문자열 반환 — 최종 메시지에는 handlers.js 가
+   * `streamer.append('\n' + statsLine)` 으로 붙이는 completion stats line
+   * (`🤖 Opus · ⏱️ Ns · 💭 K↑ K↓ · 🛠️ N · 📊 N%`) 만 남도록.
+   * (과거엔 여기서도 `✅ 🤖 ... · 📊 N턴 · 🎫 N` 을 붙였으나 정보 중복 + 아래 푸터
+   * 2개가 겹치는 버그가 있어 최종 시점에는 숨김.)
+   */
   _renderStatusBar(isFinal) {
+    if (isFinal) return '';
     const m = this._statusMeta;
     if (!m) return '';
     const parts = [];
@@ -475,9 +483,7 @@ export class StreamingMessage {
       parts.push(`🎫 ${t}`);
     }
     if (parts.length === 0) return '';
-    // 완료 시 prefix 아이콘을 ✅로 교체해 눈에 띄게
-    const lead = isFinal ? '✅' : '⏳';
-    return `-# ${lead} ${parts.join(' · ')}`;
+    return `-# ⏳ ${parts.join(' · ')}`;
   }
 
   /**
