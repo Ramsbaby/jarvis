@@ -278,6 +278,22 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
     }
   }
 
+  // 3. meta/learned-mistakes.md — 도메인 불문 항상 주입 (Compound Engineering)
+  //    오답노트는 "실수 회피"용이므로 모든 응답 전에 참조되어야 함.
+  //    도메인 감지와 무관하게 전역 주입. 최대 800자로 제한.
+  let mistakesInjected = false;
+  try {
+    const mistakesPath = join(wikiDir, 'meta', 'learned-mistakes.md');
+    if (existsSync(mistakesPath)) {
+      let mistakes = readFileSync(mistakesPath, 'utf-8');
+      mistakes = mistakes.replace(/^---[\s\S]*?---\n*/m, '').trim();
+      if (mistakes.length > 100) {
+        parts.push(`### [meta/오답노트]\n${mistakes.slice(0, 800)}`);
+        mistakesInjected = true;
+      }
+    }
+  } catch {}
+
   if (parts.length === 0) return '';
 
   let result = `--- 위키 컨텍스트 ---\n${parts.join('\n\n')}`;
@@ -286,12 +302,14 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
   }
 
   // 위키 주입 관찰 로그 — 실제로 주입되는지 추적
+  // mistakes 필드 추가: meta/learned-mistakes.md 주입 여부 별도 기록 (reference-report용)
   try {
     const logLine = JSON.stringify({
       ts: new Date().toISOString(),
       domain: domain || 'none',
       chars: result.length,
       parts: parts.length,
+      mistakes: mistakesInjected,
     }) + '\n';
     appendFileSync(join(botHome, 'logs', 'wiki-inject.log'), logLine);
   } catch {}
