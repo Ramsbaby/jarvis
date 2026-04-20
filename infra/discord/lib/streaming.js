@@ -466,7 +466,10 @@ export class StreamingMessage {
    * 2개가 겹치는 버그가 있어 최종 시점에는 숨김.)
    */
   _renderStatusBar(isFinal) {
-    if (isFinal) return '';
+    // finalize() 진입 시점부터는 절대 statusBar 붙이지 않음 (append→_flush race 방지).
+    // handlers.js가 completion stats line(`🤖 Opus · 📊 N%`)을 append한 뒤 finalize를
+    // 호출하므로, 그 사이에 일어나는 _flush의 _sendOrEdit도 this.finalized=true를 보고 스킵.
+    if (isFinal || this.finalized) return '';
     const m = this._statusMeta;
     if (!m) return '';
     const parts = [];
@@ -1051,8 +1054,11 @@ export class StreamingMessage {
       await this._flush();  // _sendOrEdit 내부에서 placeholder→text 전환 처리
     } else if (this.currentMessage) {
       try {
-        // 커서 ▌ 잔류 방지: content에서도 커서 제거
-        const cleaned = (this.currentMessage.content || '').replace(/ ▌$/, '');
+        // 커서 ▌ + 진행 상태 바(`-# ⏳ ...`) 잔류 방지.
+        // Discord 캐시 content에는 이전 _sendOrEdit가 붙여둔 statusBar가 literal로 남아있으므로,
+        // 커서만 제거하면 `⏳ 🤖 Opus 4.7 · ⏱️ Ns · 📊 N턴 · 🎫 Nk` 줄이 두 번째 푸터로 노출됨.
+        let cleaned = (this.currentMessage.content || '').replace(/ ▌$/, '');
+        cleaned = cleaned.replace(/\n{1,2}-# ⏳ [^\n]*$/, '');
         await this.currentMessage.edit({ content: cleaned, components: [] });
       } catch (err) { recordSilentError('streaming.finalize.editClean', err); }
     }
