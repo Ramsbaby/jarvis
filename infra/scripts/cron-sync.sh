@@ -114,11 +114,15 @@ for t in tasks:
         skipped += 1
         continue
     
-    # script 결정
+    # script 결정 — .mjs/.js 는 node, 그 외는 bash
     script_field = t.get('script', '')
     if script_field and script_field != '(none)':
         script_field = script_field.replace('~', os.path.expanduser('~'))
-        prog_args = ['/bin/bash', script_field]
+        if script_field.endswith('.mjs') or script_field.endswith('.js'):
+            # node 로 실행 (launchd 가 shebang 못 읽으므로 명시)
+            prog_args = ['/usr/bin/env', 'node', script_field]
+        else:
+            prog_args = ['/bin/bash', script_field]
     else:
         prog_args = ['/bin/bash', f'{BOT_HOME}/bin/bot-cron.sh', task_id]
     
