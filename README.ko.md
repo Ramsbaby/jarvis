@@ -4,6 +4,9 @@
 > 기존 설치: `~/.jarvis` 는 **2026-10-17까지** 호환성 심링크로 유지.
 > 신규 설치: `~/jarvis/runtime/` 직접 사용. [docs/A2-MIGRATION.md](infra/docs/A2-MIGRATION.md) (작성 예정).
 
+> **🔧 리팩터링 공지 (2026-04-20)**: `career-*` / `job-*` 모듈이 커밋 `e74f168` 에서 `profile-*` / `inbox-*` 로 개명되었습니다. (오너 의존성을 제거한 일반화 네이밍)
+> 과거 커밋 메시지·클로즈된 이슈는 여전히 옛 이름을 참조할 수 있습니다. **현재 HEAD 의 네이밍이 정식입니다.**
+
 <p align="center">
   <strong>24/7 스스로 관리되는 AI 운영 플랫폼</strong><br>
   Discord 봇 + RAG 지식 베이스 + 인사이트 레이어 + 자가 복구 자동화
