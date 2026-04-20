@@ -10,11 +10,31 @@
 import * as lancedb from '@lancedb/lancedb';
 import * as arrow from 'apache-arrow';
 import { readFile, readdir, stat, readFile as readFileAsync } from 'node:fs/promises';
-import { join, extname } from 'node:path';
+import { join, extname, dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { appendFileSync, mkdirSync, rmdirSync, statSync } from 'node:fs';
+import { appendFileSync, mkdirSync, rmdirSync, statSync, readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { LANCEDB_PATH, RAG_LOCK_DIR, INFRA_HOME, ENTITY_GRAPH_PATH, ensureDirs } from './paths.mjs';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Owner companies — private/config/owner-companies.txt 에서 로드
+// 공개 저장소에는 일반 플랫폼명만 두고, 오너 개인 회사명은 gitignored 파일로 분리.
+// 형식: pipe(|) 구분 문자열. 예: "Company-A|Company-B|Company-C"
+// 파일 없으면 빈 배열 → 공개 OSS 사용자는 자체 회사명 설정 가능.
+// ─────────────────────────────────────────────────────────────────────────────
+const __rag_engine_dir = dirname(fileURLToPath(import.meta.url));
+const OWNER_COMPANIES_PATH = join(__rag_engine_dir, '..', '..', 'private', 'config', 'owner-companies.txt');
+function loadOwnerCompanies() {
+  try {
+    if (!existsSync(OWNER_COMPANIES_PATH)) return [];
+    const content = readFileSync(OWNER_COMPANIES_PATH, 'utf-8').trim();
+    return content.split('|').map(s => s.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+const OWNER_COMPANIES = loadOwnerCompanies();
 
 const EMBEDDING_MODEL = 'snowflake-arctic-embed2';
 const EMBEDDING_DIM = 1024;
@@ -484,10 +504,12 @@ export class RAGEngine {
       'Anthropic', 'OpenAI', 'Claude', 'GPT', 'LLM', 'RAG',
       'WebFlux', 'Reactor', 'RxJava',
     ];
+    // NLP 엔티티 추출용 회사명 사전.
+    // 공개 저장소엔 일반 플랫폼명만 유지. 오너 개인 근무 이력/관심 회사는
+    // private/config/owner-companies.txt 로 분리 (gitignored).
     const COMPANY_TERMS = [
-      '네이버', '쿠팡', '삼성SDS', '삼성',
-      'Company-A', 'SK', 'Company-B', 'Company-B', '토스', 'Toss', 'LINE', '배달의민족', '당근마켓',
       'Discord', 'Slack', 'Teams',
+      ...OWNER_COMPANIES,
     ];
 
     // --- Topic 매핑 (키워드 히트 수로 스코어링) ---

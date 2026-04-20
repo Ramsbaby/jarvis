@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Jarvis Job Crawler — standalone (Puppeteer + API)
- * Chrome 확장 없이 독립 실행. 크롤링 결과를 JSON + Discord로 전송.
+ * Jarvis Inbox Crawler — standalone (Puppeteer + API)
+ * Chrome 확장 없이 독립 실행. 수집 결과를 JSON + Discord로 전송.
  *
- * Usage: node job-crawl.mjs [--discord] [--json-only]
+ * Usage: node inbox-crawl.mjs [--discord] [--json-only]
  */
 
 import puppeteer from 'puppeteer-core';
@@ -13,7 +13,7 @@ import { homedir } from 'node:os';
 import { discordSend } from '../lib/discord-notify.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
-const RESULT_DIR = join(BOT_HOME, 'state', 'job-crawl');
+const RESULT_DIR = join(BOT_HOME, 'state', 'inbox-crawl');
 const RESULT_FILE = join(RESULT_DIR, 'latest.json');
 const SEEN_FILE = join(RESULT_DIR, 'seen.json');
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -23,9 +23,9 @@ const jsonOnly = process.argv.includes('--json-only');
 mkdirSync(RESULT_DIR, { recursive: true });
 
 // ─── 대상 사이트 (private/config 분리 — PII 격리) ──────────────────────────
-// SSoT: ~/jarvis/private/config/job-crawl-targets.json (gitignored)
+// SSoT: ~/jarvis/private/config/inbox-targets.json (gitignored)
 // 파일 없으면 크롤링 0건 graceful fallback — OSS 사용자는 본인 타겟을 여기에 정의
-const TARGETS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'job-crawl-targets.json');
+const TARGETS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'inbox-targets.json');
 let SITES = [];
 let GREETINGHR_SITES = [];
 let NINEHIRE_SITES = [];
@@ -37,10 +37,10 @@ try {
     NINEHIRE_SITES = Array.isArray(cfg.ninehire_sites) ? cfg.ninehire_sites : [];
     console.log(`📂 타겟 로드: ${SITES.length} sites + ${GREETINGHR_SITES.length} greetinghr + ${NINEHIRE_SITES.length} ninehire`);
   } else {
-    console.warn(`⚠️ ${TARGETS_PATH} 없음 — 크롤링 대상 0건. 샘플: private/config/job-crawl-targets.example.json 참고`);
+    console.warn(`⚠️ ${TARGETS_PATH} 없음 — 크롤링 대상 0건. 샘플: private/config/inbox-crawl-targets.example.json 참고`);
   }
 } catch (e) {
-  console.warn(`⚠️ job-crawl-targets.json 로드 실패 (${e.message}) — 크롤링 대상 0건으로 동작`);
+  console.warn(`⚠️ inbox-targets.json 로드 실패 (${e.message}) — 크롤링 대상 0건으로 동작`);
 }
 
 // ── 키워드 ─────────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ async function crawlWithBrowser(browser, site) {
 
       // auto-detect fallback
       if (results.length === 0) {
-        const JOB_KW = ['job', 'career', 'recruit', 'position', 'opening', 'hire', 'talent', '채용', '공고', 'apply'];
+        const LINK_KW = ['opening', 'position', 'apply', 'listings', 'openings', 'roles', 'opportunities'];
         document.querySelectorAll('a[href]').forEach(a => {
           const fullUrl = a.href;
           if (!fullUrl || !fullUrl.startsWith('http')) return;
@@ -168,7 +168,7 @@ async function crawlWithBrowser(browser, site) {
             if (/\.(css|js|png|jpg|gif|svg|ico|woff|pdf)$/i.test(path)) return;
             if (path.split('/').filter(Boolean).length < 2) return;
             const hasNumId = /\/\d{3,}/.test(path) || /[?&](id|seq|no|idx)=\d+/.test(u.search);
-            const hasKw = JOB_KW.some(k => (path + u.search).toLowerCase().includes(k));
+            const hasKw = LINK_KW.some(k => (path + u.search).toLowerCase().includes(k));
             if (!hasNumId && !hasKw) return;
             if (seen.has(fullUrl)) return;
             seen.add(fullUrl);
@@ -193,11 +193,11 @@ async function crawlWithBrowser(browser, site) {
 }
 
 // sendDiscordMsg → SSoT: lib/discord-notify.mjs discordSend
-const sendDiscordMsg = (content) => discordSend(content, 'jarvis-career', { username: 'Jarvis Crawler' });
+const sendDiscordMsg = (content) => discordSend(content, 'jarvis-inbox', { username: 'Jarvis Crawler' });
 
 // ── 메인 ──────────────────────────────────────────────────────────────────
 async function main() {
-  console.log(`🤖 Jarvis Job Crawler — standalone (${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })})`);
+  console.log(`🤖 Jarvis Inbox Crawler — standalone (${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })})`);
 
   const seen = loadSeen();
   const allJobs = [];

@@ -121,7 +121,7 @@
         "discordChannel": {
           "type": "string",
           "description": "monitoring.json webhooks 키. output에 discord 포함 시 필수.",
-          "examples": ["jarvis", "jarvis-system", "jarvis-market", "jarvis-career"]
+          "examples": ["jarvis", "jarvis-system", "jarvis-market", "jarvis-inbox"]
         },
         "channel": {
           "type": "string",

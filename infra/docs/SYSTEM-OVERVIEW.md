@@ -94,7 +94,7 @@ crontab → jarvis-cron.sh → tasks.json 파싱
 | `token-sync` | `0 1 * * *` | - | 토큰 동기화 |
 | `oss-docs` | `0 11 * * 3` | jarvis-blog | OSS README 갱신 제안 |
 | `oss-promo` | `0 17 * * 5` | jarvis-blog | OSS 주간 홍보 초안 생성 |
-| `career-weekly` | `0 18 * * 5` | jarvis-dev | 커리어 주간 리포트 |
+| `profile-weekly` | `0 18 * * 5` | jarvis-dev | 프로필 주간 리포트 |
 | `memory-cleanup` | `0 2 * * *` | - | 메모리 정리 |
 | `daily-summary` | `0 20 * * *` | jarvis | 일일 요약 |
 | `academy-support` | `0 20 * * 0` | jarvis-ceo | 학습팀 주간 보고 (Academy) |

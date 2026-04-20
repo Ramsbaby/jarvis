@@ -293,11 +293,11 @@ SessionStart (startup only)
 - `tasks.json`: `skill-eval` script path changed from relative (`scripts/skill-eval.sh`) to absolute (`~/.jarvis/scripts/skill-eval.sh`) — prevents ENOENT on cron execution.
 
 **Discord bot + infra 개인정보 범용화 (2026-04-10)**:
-- `claude-runner.js`: `BORAM_*` → `FAMILY_*` 전환 완료. tutor/preply 기능 완전 삭제 (`isTutorQuery`, `buildTutorSection` import 및 호출 제거, Dynamic sections 블록에서 tutor 조건부 주입 제거). Kakao Calendar 주석 → 범용 "calendar" 참조로 변경. owner preferences 주석에서 개인 서비스명 제거. Linter 복원 대응으로 2차 삭제 수행.
+- `claude-runner.js`: `BORAM_*` → `FAMILY_*` 전환 완료. tutor/preply 기능 완전 삭제 (`isTutorQuery`, `buildTutorSection` import 및 호출 제거, Dynamic sections 블록에서 tutor 조건부 주입 제거). 특정 벤더 Calendar 주석 → 범용 "calendar" 참조로 변경. owner preferences 주석에서 개인 서비스명 제거. Linter 복원 대응으로 2차 삭제 수행.
 - `rag-helper.js`: `filterBoramSources` → `filterFamilySources`, `BORAM_USER_ID` → `FAMILY_USER_ID`. TQQQ 참조 제거.
 - `handlers.js`: `isTutorQuery` import 제거, `BAD_TUTOR_SUMMARY` 로직 제거, tqqq→stock 범용화.
 - `pre-processor.js`: `TutorScheduleProcessor`, `TutorIncomeProcessor` 클래스 완전 삭제. `createPreProcessorRegistry()`에서 tutor 프로세서 등록 제거.
-- `prompt-sections.js`: `TUTOR_PATTERN`, `isTutorQuery()`, `buildTutorSection()` 완전 삭제. Kakao 참조 제거.
+- `prompt-sections.js`: `TUTOR_PATTERN`, `isTutorQuery()`, `buildTutorSection()` 완전 삭제. 특정 벤더 참조 제거.
 - `session-summarizer.mjs`: preply 수업 content check 제거.
 - `user-memory.js`: tutor 관련 키워드 (수업, 레슨, 학생, 강의, 수강생) family 카테고리에서 제거.
 - 전체 infra/: 18개 개인정보 키워드 전수 검사 → ZERO matches 달성.
@@ -315,11 +315,11 @@ SessionStart (startup only)
 - `rag-engine.mjs`: COMPANY_TERMS에서 전 직장 고유명사 제거.
 - 12개 파일 PII sanitize + `git-filter-repo`로 전체 히스토리 142건 PII 정리.
 
-**채용공고 자동 크롤링·매칭·지원 스킬 `/job-apply` (2026-04-11)**:
-- `job-crawl.mjs` (신규): Puppeteer + API 하이브리드 독립 크롤러. GreetingHR API 7사 + NineHire API 1사 + Puppeteer DOM 파싱 30사 = 38개 회사 백엔드 공고 수집. Chrome 확장 없이 CLI에서 실행. 결과 `~/.jarvis/state/job-crawl/latest.json` 저장.
-- `job-match.mjs` (신규): 이력서 키워드 vs 공고 요구사항 스코어링 엔진. `--detail` 모드에서 각 공고 상세 페이지 접속하여 정밀 매칭. 점수순 정렬 + Discord #jarvis 전송.
-- `job-apply.mjs` (신규): Puppeteer headless 분석 + `open -a "Google Chrome"` GUI 표시 하이브리드. 지원 방식 자동 감지 (폼/이메일/외부링크) → 폼 필드 자동 채움 + 이력서 PDF 첨부 + 스크린샷 Discord 전송. `--submit` 플래그로 제출 모드 전환. NineHire 지원 폼 `/job_posting/{key}/apply` 경로 자동 탐색.
-- `claude-runner.js`: 변경 없음 (job-apply는 독립 스크립트로 Claude 세션 외부에서 실행).
+**Inbox 자동 수집·스코어링·응답 스킬 `/inbox-apply` (2026-04-11)**:
+- `inbox-crawl.mjs` (신규): Puppeteer + API 하이브리드 독립 크롤러. 대상 기관 API + Puppeteer DOM 파싱으로 항목 수집. Chrome 확장 없이 CLI에서 실행. 결과 `~/.jarvis/state/inbox/latest.json` 저장. 대상 리스트는 `private/config/inbox-targets.json`에서 로드 (gitignored).
+- `inbox-match.mjs` (신규): 프로필 키워드 vs 항목 요구사항 스코어링 엔진. `--detail` 모드에서 각 항목 상세 페이지 접속하여 정밀 스코어링. 점수순 정렬 + Discord 전송.
+- `inbox-apply.mjs` (신규): Puppeteer headless 분석 + `open -a "Google Chrome"` GUI 표시 하이브리드. 폼 방식 자동 감지 → 폼 필드 자동 채움 + PDF 첨부 + 스크린샷 Discord 전송.
+- `claude-runner.js`: 변경 없음 (inbox-apply는 독립 스크립트로 Claude 세션 외부에서 실행).
 
 **MCP 설정 SSoT 정리 + ~/.mcp.json 폴백 (2026-04-11)**:
 - `claude-runner.js` MCP 로드 로직 변경: `discord-mcp.json` 없을 때 `~/.mcp.json`에서 `nexus`, `serena`만 필터링해서 폴백 로드. OSS 유저가 `discord-mcp.json` 없이도 `~/.mcp.json`만 설정하면 봇에서 Nexus 사용 가능.

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Jarvis Job Matcher — 크롤링 결과 vs 이력서 데이터 매칭
+ * Jarvis Inbox Matcher — 수집 항목 vs 프로필 데이터 스코어링
  *
- * Usage: node job-match.mjs [--discord] [--detail]
- * --detail: 각 공고 상세 페이지까지 접속하여 요구사항 정밀 매칭
+ * Usage: node inbox-match.mjs [--discord] [--detail]
+ * --detail: 각 항목 상세 페이지까지 접속하여 요구사항 정밀 스코어링
  * --discord: 결과를 #jarvis Discord 채널에 전송
  */
 
@@ -14,7 +14,7 @@ import puppeteer from 'puppeteer-core';
 import { discordSend } from '../lib/discord-notify.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
-const CRAWL_DIR = join(BOT_HOME, 'state', 'job-crawl');
+const CRAWL_DIR = join(BOT_HOME, 'state', 'inbox');
 const LATEST = join(CRAWL_DIR, 'latest.json');
 const MATCHED = join(CRAWL_DIR, 'matched.json');
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -25,26 +25,26 @@ const NOTION_TOKEN = process.env.NOTION_TOKEN || '';
 const NOTION_VERSION = '2022-06-28';
 
 // ── Private 설정 로드 (티어·Notion Page ID 등 민감 식별자) ────────────────
-// private/config/job-tiers.json은 gitignored — 회사 리터럴·Page ID는 이 파일에만 존재해야 함.
+// private/config/inbox-tiers.json은 gitignored — 기관 리터럴·Page ID는 이 파일에만 존재해야 함.
 // 파일 없거나 로드 실패 시: tier/role 가산점 0점, Notion 전송 스킵으로 graceful fallback.
-const JOB_TIERS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'job-tiers.json');
-let JOB_TIERS_CONFIG = { tiers: {}, tierBonus: {}, roleBonus: {}, notion: {} };
+const INBOX_TIERS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'inbox-tiers.json');
+let INBOX_TIERS_CONFIG = { tiers: {}, tierBonus: {}, roleBonus: {}, notion: {} };
 try {
-  if (existsSync(JOB_TIERS_PATH)) {
-    JOB_TIERS_CONFIG = JSON.parse(readFileSync(JOB_TIERS_PATH, 'utf-8'));
+  if (existsSync(INBOX_TIERS_PATH)) {
+    INBOX_TIERS_CONFIG = JSON.parse(readFileSync(INBOX_TIERS_PATH, 'utf-8'));
   } else {
-    console.warn(`⚠️ ${JOB_TIERS_PATH} 없음 — 티어/역할 가산점 0점으로 동작`);
+    console.warn(`⚠️ ${INBOX_TIERS_PATH} 없음 — 티어/역할 가산점 0점으로 동작`);
   }
 } catch (e) {
-  console.warn(`⚠️ job-tiers.json 로드 실패: ${e.message} — 가산점 0점 fallback`);
+  console.warn(`⚠️ inbox-tiers.json 로드 실패: ${e.message} — 가산점 0점 fallback`);
 }
-const NOTION_JOB_PARENT_PAGE_ID = JOB_TIERS_CONFIG.notion?.parentPageId || '';
+const NOTION_PARENT_PAGE_ID = INBOX_TIERS_CONFIG.notion?.parentPageId || '';
 
 const doDiscord = process.argv.includes('--discord');
 const doDetail = process.argv.includes('--detail');
-const doNotion = process.argv.includes('--notion') || (doDiscord && NOTION_TOKEN && NOTION_JOB_PARENT_PAGE_ID); // --discord + 설정 모두 있을 때만 자동
+const doNotion = process.argv.includes('--notion') || (doDiscord && NOTION_TOKEN && NOTION_PARENT_PAGE_ID); // --discord + 설정 모두 있을 때만 자동
 
-// ── 이력서 키워드 (resume-data.md 기반 하드코딩 — SSoT) ───────────────────
+// ── 프로필 키워드 (profile-data.md 기반 하드코딩 — SSoT) ─────────────────
 const MY_SKILLS = {
   languages: ['java', 'kotlin', 'javascript', 'typescript', 'python', 'node.js', 'nodejs'],
   frameworks: ['spring', 'spring boot', 'springboot', 'spring 6', 'webflux', 'jpa', 'mybatis', 'r2dbc'],
@@ -62,11 +62,11 @@ const MY_EXPERIENCE_YEARS = 9; // 2016.05 ~ 현재
 // 전체 스킬 키워드 flat
 const ALL_SKILLS = Object.values(MY_SKILLS).flat();
 
-// ── 회사 티어 가산점 (JOB_TIERS_CONFIG 에서 로드, fallback 0점) ───────────
-function getTierBonus(company) {
-  const tiers = JOB_TIERS_CONFIG.tiers || {};
-  const bonuses = JOB_TIERS_CONFIG.tierBonus || {};
-  const lower = (company || '').toLowerCase();
+// ── 기관 티어 가산점 (INBOX_TIERS_CONFIG 에서 로드, fallback 0점) ──────────
+function getTierBonus(org) {
+  const tiers = INBOX_TIERS_CONFIG.tiers || {};
+  const bonuses = INBOX_TIERS_CONFIG.tierBonus || {};
+  const lower = (org || '').toLowerCase();
   for (const [tier, list] of Object.entries(tiers)) {
     if (!Array.isArray(list)) continue;
     if (list.some(c => lower.includes(String(c).toLowerCase()))) {
@@ -76,9 +76,9 @@ function getTierBonus(company) {
   return { tier: null, bonus: 0 };
 }
 
-// ── 직군 정확도 보너스 (JOB_TIERS_CONFIG.roleBonus 에서 로드, fallback 0점) ─
+// ── 직군 정확도 보너스 (INBOX_TIERS_CONFIG.roleBonus 에서 로드, fallback 0점) ─
 function getRoleBonus(title) {
-  const roles = JOB_TIERS_CONFIG.roleBonus || {};
+  const roles = INBOX_TIERS_CONFIG.roleBonus || {};
   const lower = (title || '').toLowerCase();
   for (const spec of Object.values(roles)) {
     if (!spec?.pattern) continue;
@@ -89,9 +89,9 @@ function getRoleBonus(title) {
   return 0;
 }
 
-// ── 매칭 로직 ─────────────────────────────────────────────────────────────
-function matchJob(job, detailText = '') {
-  const text = `${job.title} ${detailText}`.toLowerCase();
+// ── 스코어링 로직 ─────────────────────────────────────────────────────────
+function matchItem(item, detailText = '') {
+  const text = `${item.title} ${detailText}`.toLowerCase();
 
   // 키워드 매칭
   const matched = [];
@@ -122,12 +122,12 @@ function matchJob(job, detailText = '') {
 
   // 최종 점수 (100점 만점)
   const keywordScore = Math.min(40, matched.length * 8); // 키워드당 8점, 최대 40
-  const { tier, bonus: tierBonus } = getTierBonus(job.company);
-  const roleBonus = getRoleBonus(job.title);
+  const { tier, bonus: tierBonus } = getTierBonus(item.company);
+  const roleBonus = getRoleBonus(item.title);
   const score = Math.min(100, keywordScore + yearScore + diversityBonus + tierBonus + roleBonus);
 
   return {
-    ...job,
+    ...item,
     score,
     matchedSkills: matched,
     requiredYears,
@@ -155,7 +155,7 @@ async function fetchDetailText(browser, url) {
 }
 
 // sendDiscord → SSoT: lib/discord-notify.mjs discordSend (줄경계 청킹 포함)
-const sendDiscord = (content) => discordSend(content, 'jarvis-career', { username: 'Jarvis Job Matcher' });
+const sendDiscord = (content) => discordSend(content, 'jarvis-inbox', { username: 'Jarvis Inbox Matcher' });
 
 // ── Notion DB 연동 ────────────────────────────────────────────────────────
 async function notionApi(path, method = 'GET', body = null) {
@@ -193,7 +193,7 @@ function buildReportBlocks(results) {
     }
   });
 
-  const tierLabel = { S: '🟢 S티어 (타겟 대기업)', A: '🟡 A티어 (유니콘·유망)', B: '🔵 B티어 (대기업 그룹사)', none: '⚪ 기타' };
+  const tierLabel = { S: '🟢 S티어', A: '🟡 A티어', B: '🔵 B티어', none: '⚪ 기타' };
 
   for (const tier of ['S', 'A', 'B', 'none']) {
     const list = grouped[tier];
@@ -210,7 +210,7 @@ function buildReportBlocks(results) {
         bulleted_list_item: {
           rich_text: [
             { type: 'text', text: { content: `${r.score}점 `, link: null }, annotations: { bold: true } },
-            { type: 'text', text: { content: `[${r.company}] ${r.title}`, link: r.url ? { url: r.url } : null } },
+            { type: 'text', text: { content: `[${r.org || r.company}] ${r.title}`, link: r.url ? { url: r.url } : null } },
             { type: 'text', text: { content: ` — ${skills}${yearTag}` } },
           ]
         }
@@ -229,7 +229,7 @@ async function sendNotion(results) {
   if (!results.length) return { pageUrl: null, count: 0 };
 
   const today = new Date().toISOString().slice(0, 10);
-  const title = `📋 채용 매칭 리포트 ${today} (${results.length}건)`;
+  const title = `📋 Inbox 스코어 리포트 ${today} (${results.length}건)`;
   const allBlocks = buildReportBlocks(results);
 
   // Notion은 페이지 생성 시 children 100개 이하만 허용 → 초과분은 append 로 분할
@@ -238,7 +238,7 @@ async function sendNotion(results) {
   const rest = allBlocks.slice(BATCH);
 
   const page = await notionApi('pages', 'POST', {
-    parent: { page_id: NOTION_JOB_PARENT_PAGE_ID },
+    parent: { page_id: NOTION_PARENT_PAGE_ID },
     icon: { emoji: '📋' },
     properties: {
       title: { title: [{ type: 'text', text: { content: title } }] }
@@ -258,12 +258,13 @@ async function sendNotion(results) {
 // ── 메인 ──────────────────────────────────────────────────────────────────
 async function main() {
   if (!existsSync(LATEST)) {
-    console.error('latest.json 없음. 먼저 job-crawl.mjs를 실행하세요.');
+    console.error('latest.json 없음. 먼저 inbox-crawl.mjs를 실행하세요.');
     process.exit(1);
   }
 
   const data = JSON.parse(readFileSync(LATEST, 'utf-8'));
-  console.log(`🎯 매칭 시작 — ${data.jobs.length}건 백엔드 공고\n`);
+  const items = data.jobs || data.items || [];
+  console.log(`🎯 스코어링 시작 — ${items.length}건 백엔드 항목\n`);
 
   let browser;
   if (doDetail) {
@@ -272,12 +273,12 @@ async function main() {
   }
 
   const results = [];
-  for (const job of data.jobs) {
+  for (const item of items) {
     let detailText = '';
     if (doDetail && browser) {
-      detailText = await fetchDetailText(browser, job.url);
+      detailText = await fetchDetailText(browser, item.url);
     }
-    results.push(matchJob(job, detailText));
+    results.push(matchItem(item, detailText));
   }
 
   if (browser) await browser.close();
@@ -290,12 +291,12 @@ async function main() {
 
   // 출력
   const grade = (s) => s >= 70 ? '🟢' : s >= 50 ? '🟡' : s >= 35 ? '🔵' : '⚪';
-  console.log('📊 매칭 결과 (점수순)\n');
+  console.log('📊 스코어링 결과 (점수순)\n');
   for (const r of results) {
     const skills = r.matchedSkills.slice(0, 6).map(s => `${s}✅`).join(' ');
     const yearTag = r.requiredYears > 0 ? (r.yearOk ? `경력${r.requiredYears}년+✅` : `경력${r.requiredYears}년+❌`) : '';
     const tierTag = r.tier ? `[${r.tier}티어]` : '';
-    console.log(`${grade(r.score)} ${r.score}점 ${tierTag} [${r.company}] ${r.title}`);
+    console.log(`${grade(r.score)} ${r.score}점 ${tierTag} [${r.org || r.company}] ${r.title}`);
     console.log(`   매칭: ${skills} ${yearTag}`);
     console.log(`   ${r.url}\n`);
   }
@@ -325,7 +326,7 @@ async function main() {
     const top3 = top.slice(0, 3).map(r => {
       const tierTag = r.tier ? `\`${r.tier}티어\` ` : '';
       const title = r.title.length > 45 ? r.title.slice(0, 42) + '…' : r.title;
-      return `${grade(r.score)} **${r.score}점** ${tierTag}[${r.company}] ${title}`;
+      return `${grade(r.score)} **${r.score}점** ${tierTag}[${r.org || r.company}] ${title}`;
     }).join('\n');
 
     const tierLine = `🟢 S티어 ${tierCount.S} · 🟡 A티어 ${tierCount.A} · 🔵 B티어 ${tierCount.B}`;
@@ -333,10 +334,10 @@ async function main() {
       ? `\n\n📋 **상세 전체 (${notionResult.count}건)**: <${notionResult.pageUrl}>`
       : '';
 
-    const header = `🎯 **채용 매칭** — ${data.jobs.length}건 중 **${top.length}건** 매칭 (${THRESHOLD}점+)`;
+    const header = `🎯 **Inbox 스코어링** — ${items.length}건 중 **${top.length}건** 매칭 (${THRESHOLD}점+)`;
     const msg = top.length > 0
       ? `${header}\n${tierLine}\n\n**🔝 TOP 3**\n${top3}${notionLine}`
-      : `${header}\n\n(금일 매칭 공고 없음 — 내일 다시 크롤링됩니다)`;
+      : `${header}\n\n(금일 매칭 항목 없음 — 내일 다시 수집됩니다)`;
 
     await sendDiscord(msg);
     console.log('✅ Discord 약식 전송 완료');

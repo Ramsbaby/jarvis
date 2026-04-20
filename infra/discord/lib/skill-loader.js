@@ -7,7 +7,7 @@
 //   name: <이름>
 //   description: <요약>
 //   triggers: ["키워드1", "키워드2"]   # 메시지 본문 부분일치로 활성화
-//   channels: ["jarvis-career"]        # 해당 채널에서 자동 활성화
+//   channels: ["jarvis-inbox"]         # 해당 채널에서 자동 활성화
 //   ---
 //   <본문 — 시스템 프롬프트로 주입될 내용>
 

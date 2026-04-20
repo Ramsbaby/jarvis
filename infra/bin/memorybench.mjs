@@ -42,9 +42,9 @@ const QA_CASES = [
   { query: '봇 재시작 bot-self-restart.sh setsid',             expectedSrc: '_capabilities' },
   { query: 'crontab hang launchd plist LaunchAgents 스케줄',    expectedSrc: '_capabilities' },
 
-  // career-weekly.md — 이직/커리어 정보
-  { query: '이직 백엔드 채용 포지션 대기업',                   expectedSrc: 'career-weekly' },
-  { query: 'Java Spring Boot 백엔드 개발자 채용 기술 스택',     expectedSrc: 'career-weekly' },
+  // profile-weekly.md — 프로필 동향
+  { query: '개인 목표 백엔드 기술 대기업',                     expectedSrc: 'profile-weekly' },
+  { query: 'Java Spring Boot 백엔드 개발자 기술 스택',           expectedSrc: 'profile-weekly' },
 
   // infra-daily.md — 인프라 현황
   { query: '인프라 시스템 헬스 체크 CPU 메모리 디스크',        expectedSrc: 'infra-daily' },

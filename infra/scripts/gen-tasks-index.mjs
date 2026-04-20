@@ -100,9 +100,9 @@ const TEAM_REGISTRY = [
   },
   {
     id: 'growth-lead',
-    name: '인재개발실 (커리어·학습)',
+    name: '인재개발실 (성장·학습)',
     keywords: [
-      'career', 'commitment', 'growth', 'job', 'resume', 'interview',
+      'profile', 'commitment', 'growth', 'inbox', 'career', 'job', 'resume', 'interview',
       'academy', 'learning', 'study', 'lecture', 'family',
     ],
   },

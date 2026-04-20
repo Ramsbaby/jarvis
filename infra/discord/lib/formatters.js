@@ -159,7 +159,7 @@ function renderItem(it) {
 //   ❌ memory-cleanup — FATAL: permission denied
 //
 //   ### 🟡 경고 (2)
-//   🟡 career-extractor — 실행 58초
+//   🟡 profile-extractor — 실행 58초
 //
 //   ### 🟢 정상
 //   🟢 나머지 74개 — 정상

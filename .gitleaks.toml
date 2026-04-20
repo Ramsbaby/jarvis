@@ -40,7 +40,7 @@ paths = [
   '''^runtime/''',
   '''LICENSE$''',
   '''package-lock\.json$''',
-  '''infra/scripts/job-apply\.mjs$''',
+  '''infra/scripts/inbox-apply\.mjs$''',
   # 2026-04-17 추가: worktree/node_modules/git 내부 파일 오탐 제거
   '''node_modules/''',
   '''\.claude/worktrees/''',
