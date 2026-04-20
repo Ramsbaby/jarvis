@@ -50,7 +50,7 @@ fi
 
 get_yesterday() {
   local key="$1"
-  [[ -z "$YESTERDAY_ENTRY" ]] && { echo ""; return; }
+  if [[ -z "$YESTERDAY_ENTRY" ]]; then echo ""; return; fi
   # "key":VAL 패턴 추출 → sed로 콜론 뒤 숫자만 분리
   # (주의: `fail_24h` 같은 키에 포함된 숫자가 grep에 매칭되지 않도록 sed 사용)
   echo "$YESTERDAY_ENTRY" | grep -oE "\"$key\":[0-9]+" | head -1 | sed 's/.*://'
@@ -123,7 +123,7 @@ fi
 # ── 4. 유령 crontab 엔트리 탐지 (파일 없는 스크립트 호출) ────────────────────
 PHANTOM_COUNT=0
 while IFS= read -r script; do
-  [[ -n "$script" && ! -f "$script" ]] && PHANTOM_COUNT=$((PHANTOM_COUNT+1))
+  if [[ -n "$script" && ! -f "$script" ]]; then PHANTOM_COUNT=$((PHANTOM_COUNT+1)); fi
 done < <(crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$' \
          | grep -oE '/[^[:space:]]+\.(sh|py|mjs|js)' | sort -u || true)
 if [[ "$PHANTOM_COUNT" -gt 0 ]]; then
@@ -150,7 +150,7 @@ DRY_RUN="${CRON_MASTER_DRY_RUN:-0}"
 repair_count_today() {
   local action="$1" target="$2" today count
   today=$(date +%Y-%m-%d)
-  [[ ! -f "$REPAIR_LEDGER" ]] && { echo 0; return; }
+  if [[ ! -f "$REPAIR_LEDGER" ]]; then echo 0; return; fi
   # grep -c 는 매치 0건일 때 stdout "0" + exit 1 → `|| true`로 exit만 삼키고 stdout "0" 유지
   # (`|| echo 0` 안티패턴: 이전엔 "0\n0" 출력되어 [[ ]] syntax error 유발)
   count=$(grep -cF "\"action\":\"$action\",\"target\":\"$target\",\"ts\":\"$today" "$REPAIR_LEDGER" 2>/dev/null || true)
@@ -209,7 +209,7 @@ for plist in "$LA_DIR"/com.jarvis.*.plist "$LA_DIR"/ai.jarvis.*.plist; do
   [[ -f "$plist" ]] || continue
   label=$(basename "$plist" .plist)
   pl_json=$(plutil -convert json -o - "$plist" 2>/dev/null || true)
-  [[ -z "$pl_json" ]] && continue
+  if [[ -z "$pl_json" ]]; then continue; fi
 
   has_weekday=$(echo "$pl_json" | grep -c '"Weekday"' || true)
   has_day=$(echo "$pl_json" | grep -c '"Day"' || true)
@@ -229,7 +229,7 @@ for plist in "$LA_DIR"/com.jarvis.*.plist "$LA_DIR"/ai.jarvis.*.plist; do
 
   log_path=$(echo "$pl_json" | grep -oE '"StandardOutPath"[^"]*"[^"]+"' \
     | sed -E 's/.*"StandardOutPath"[^"]*"([^"]+)".*/\1/' | head -1)
-  [[ -z "$log_path" || ! -f "$log_path" ]] && continue
+  if [[ -z "$log_path" || ! -f "$log_path" ]]; then continue; fi
 
   log_mtime=$(stat -f %m "$log_path" 2>/dev/null || echo 0)
   age_sec=$((NOW_EPOCH - log_mtime))
@@ -260,8 +260,14 @@ AUDIT_LOGS=(
 AUDIT_SUMMARY=()
 for name in "${AUDIT_LOGS[@]}"; do
   logpath="$LOG_DIR/${name}.log"
-  [[ ! -f "$logpath" ]] && continue
+  errpath="$LOG_DIR/${name}-err.log"
+  if [[ ! -f "$logpath" && ! -f "$errpath" ]]; then continue; fi
+  # stdout이 비어있어도 err.log가 최신이면 정상 실행 중 (Discord 라우팅 태스크)
   mtime=$(stat -f %m "$logpath" 2>/dev/null || echo 0)
+  if [[ -f "$errpath" ]]; then
+    err_mtime=$(stat -f %m "$errpath" 2>/dev/null || echo 0)
+    if [[ "$err_mtime" -gt "$mtime" ]]; then mtime="$err_mtime"; fi
+  fi
   age_h=$(( (NOW_EPOCH - mtime) / 3600 ))
   # 48h 이상 업데이트 없으면 stale
   if [[ "$age_h" -gt 48 ]]; then
@@ -299,7 +305,7 @@ WIKI_ROOT="${HOME}/.jarvis/wiki"
 if [[ -d "$WIKI_ROOT" ]]; then
   for i in 0 1 2 3 4 5 6; do
     day=$(date -v-${i}d +%Y-%m-%d 2>/dev/null || date -d "$i days ago" +%Y-%m-%d 2>/dev/null || echo "")
-    [[ -z "$day" ]] && continue
+    if [[ -z "$day" ]]; then continue; fi
     for f in "$WIKI_ROOT"/*/_facts.md; do
       [[ -f "$f" ]] || continue
       c=$(grep -cE "\[$day\].*source:discord" "$f" 2>/dev/null || true)
@@ -367,7 +373,7 @@ if [[ ${#REPAIRS[@]} -gt 0 ]]; then
   for r in "${REPAIRS[@]}"; do
     echo "  · ${r}"
   done
-  [[ "$DRY_RUN" == "1" ]] && echo "  ⚠️ DRY-RUN 모드: 실제 변경 없음"
+  if [[ "$DRY_RUN" == "1" ]]; then echo "  ⚠️ DRY-RUN 모드: 실제 변경 없음"; fi
   echo ""
   echo "  📝 원장: ${REPAIR_LEDGER}"
   echo "  📈 감지 원장: ${DAILY_LEDGER}"
