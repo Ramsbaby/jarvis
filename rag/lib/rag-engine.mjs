@@ -547,38 +547,68 @@ export class RAGEngine {
   // --- Embedding ---
 
   async embed(texts) {
-    const results = [];
+    // Batches를 병렬로 Ollama에 전송 — 큰 파일(150청크 이상)에서만 효과 발생.
+    // Ollama 서버의 NUM_PARALLEL(기본 auto=4)을 활용해 동시 embedding 처리.
+    // 2026-04-20: 직렬 → 병렬 (CONCURRENCY=2) 전환. 파일 단위 병렬화와 조합됨.
+    const batches = [];
     for (let i = 0; i < texts.length; i += EMBED_BATCH_SIZE) {
-      const batch = texts.slice(i, i + EMBED_BATCH_SIZE);
-      const MAX_RETRIES = 2;
-      let lastErr;
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          const res = await fetch(OLLAMA_EMBED_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: EMBEDDING_MODEL, input: batch }),
-            signal: AbortSignal.timeout(30_000),  // 30s timeout — prevents hang if Ollama stalls
-          });
-          if (!res.ok) {
-            throw new Error(`Ollama embed HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
-          }
-          const data = await res.json();
-          results.push(...data.embeddings);
-          break;
-        } catch (err) {
-          lastErr = err;
-          const msg = err.message || '';
-          if ((msg.includes('timed out') || msg.includes('timeout') || msg.includes('ECONNREFUSED')) && attempt < MAX_RETRIES) {
-            await new Promise(r => setTimeout(r, 3_000));
-            continue;
-          }
-          throw err;
-        }
-      }
-      if (lastErr && results.length < i + batch.length) throw lastErr;
+      batches.push(texts.slice(i, i + EMBED_BATCH_SIZE));
     }
-    return results;
+    if (batches.length === 0) return [];
+    if (batches.length === 1) {
+      // 단일 batch는 병렬화 의미 없음 — 기존 경로로 처리
+      return this._embedOneBatch(batches[0]);
+    }
+
+    const CONCURRENCY = Math.min(
+      Number(process.env.RAG_EMBED_BATCH_CONCURRENCY) || 2,
+      batches.length,
+    );
+    const results = new Array(batches.length);
+    let next = 0;
+    const workers = Array.from({ length: CONCURRENCY }, () => (async () => {
+      while (true) {
+        const idx = next++;
+        if (idx >= batches.length) return;
+        results[idx] = await this._embedOneBatch(batches[idx]);
+      }
+    })());
+    await Promise.all(workers);
+    return results.flat();
+  }
+
+  /**
+   * Single batch embedding with retry (ECONNREFUSED/timeout만 재시도).
+   * @param {string[]} batch - 최대 EMBED_BATCH_SIZE 텍스트
+   * @returns {Promise<number[][]>} embeddings 배열
+   */
+  async _embedOneBatch(batch) {
+    const MAX_RETRIES = 2;
+    let lastErr;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch(OLLAMA_EMBED_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: EMBEDDING_MODEL, input: batch }),
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (!res.ok) {
+          throw new Error(`Ollama embed HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+        }
+        const data = await res.json();
+        return data.embeddings;
+      } catch (err) {
+        lastErr = err;
+        const msg = err.message || '';
+        if ((msg.includes('timed out') || msg.includes('timeout') || msg.includes('ECONNREFUSED')) && attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 3_000));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastErr;
   }
 
   async _alertEmbeddingFailure(status, message) {
