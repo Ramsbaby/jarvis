@@ -186,13 +186,35 @@ function isBinaryByExt(p) {
 }
 
 // ───────────────────────── 스캔 본체 ─────────────────────────
+// pattern_file: YAML 의 pattern 대신 private 파일에서 regex 로드.
+// 파일 부재 시: pattern fallback → 둘 다 없으면 rule skip (silent).
+// 목적: owner-specific 목록(회사명 등)을 공개 저장소에서 분리.
+function resolvePattern(rule) {
+  if (rule.pattern_file) {
+    const abs = join(ROOT, rule.pattern_file);
+    if (existsSync(abs)) {
+      try {
+        const raw = readFileSync(abs, "utf8").trim();
+        if (raw) return raw;
+      } catch { /* fall through */ }
+    }
+  }
+  return rule.pattern || null;
+}
+
 function scan(files, blocklist, mode) {
   const violations = [];
-  const compiled = blocklist.rules.map((r) => ({
-    ...r,
-    re: new RegExp(r.pattern),
-    contextRe: (r.context_allow || []).map((p) => new RegExp(p)),
-  }));
+  const compiled = blocklist.rules
+    .map((r) => {
+      const pattern = resolvePattern(r);
+      if (!pattern) return null; // 패턴 미가용 → skip
+      return {
+        ...r,
+        re: new RegExp(pattern),
+        contextRe: (r.context_allow || []).map((p) => new RegExp(p)),
+      };
+    })
+    .filter(Boolean);
 
   for (const f of files) {
     if (pathMatchesAny(f, blocklist.globalIgnore)) continue;

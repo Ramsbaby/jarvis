@@ -180,7 +180,7 @@ check "rag-health cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-he
 # --- Phase 3~5 Tasks ---
 echo ""
 echo "▶ Phase 3~5 Context Files"
-for task in weekly-kpi monthly-review security-scan rag-health career-weekly cost-monitor; do
+for task in weekly-kpi monthly-review security-scan rag-health profile-weekly cost-monitor; do
   warn_check "$task context exists" test -f "$BOT_HOME/context/$task.md"
 done
 check "autonomy-levels.md exists" test -f "$BOT_HOME/config/autonomy-levels.md"

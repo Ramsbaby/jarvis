@@ -65,7 +65,7 @@ count_team() {
 TEAMS=(
     "council:Council:council-insight weekly-kpi"
     "trend:Trend:news-briefing"
-    "career:Career:career-weekly"
+    "growth:Growth:profile-weekly"
     "academy:Academy:academy-support"
     "record:Record:record-daily memory-cleanup"
     "infra:Infra:infra-daily system-health security-scan rag-health disk-alert"

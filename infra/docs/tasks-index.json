@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-04-20T03:54:23.674Z",
+  "generatedAt": "2026-04-20T09:44:00.989Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 95,
+  "totalTasks": 96,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -14,10 +14,10 @@
     "brand-lead": 4,
     "audit-lead": 17,
     "secretary": 10,
-    "uncategorized": 9
+    "uncategorized": 10
   },
   "typeDistribution": {
-    "prompt": 36,
+    "prompt": 37,
     "script": 59
   },
   "groups": [
@@ -1712,7 +1712,7 @@
     {
       "team": {
         "id": "growth-lead",
-        "name": "인재개발실 (커리어·학습)"
+        "name": "인재개발실 (성장·학습)"
       },
       "tasks": [
         {
@@ -1724,7 +1724,7 @@
           "handler": "ask-claude.sh (LLM)",
           "team": {
             "id": "growth-lead",
-            "name": "인재개발실 (커리어·학습)"
+            "name": "인재개발실 (성장·학습)"
           },
           "discordChannel": "jarvis-ceo",
           "model": "claude-sonnet-4-6",
@@ -1748,15 +1748,47 @@
           }
         },
         {
-          "id": "career-extractor",
-          "name": "커리어 인사이트 자동 추출",
+          "id": "inbox-alert",
+          "name": "Inbox 수집 & 스코어링",
+          "schedule": "0 9 * * *",
+          "scheduleHuman": "매일 09:00",
+          "type": "script",
+          "handler": "inbox-alert.sh",
+          "team": {
+            "id": "growth-lead",
+            "name": "인재개발실 (성장·학습)"
+          },
+          "discordChannel": "jarvis-inbox",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/inbox-alert.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/inbox-alert-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-inbox-alert-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "profile-extractor",
+          "name": "프로필 주제 자동 추출",
           "schedule": "30 0 * * *",
           "scheduleHuman": "매일 00:30",
           "type": "script",
-          "handler": "career-extractor.mjs",
+          "handler": "profile-extractor.mjs",
           "team": {
             "id": "growth-lead",
-            "name": "인재개발실 (커리어·학습)"
+            "name": "인재개발실 (성장·학습)"
           },
           "discordChannel": null,
           "model": null,
@@ -1766,29 +1798,29 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/jarvis/runtime/logs/career-extractor.log",
-              "exists": true
+              "path": "~/jarvis/runtime/logs/profile-extractor.log",
+              "exists": false
             },
             "stderr": {
-              "path": "~/jarvis/runtime/logs/career-extractor-err.log",
-              "exists": true
+              "path": "~/jarvis/runtime/logs/profile-extractor-err.log",
+              "exists": false
             },
             "claudeStderr": {
-              "pattern": "claude-stderr-career-extractor-*.log",
+              "pattern": "claude-stderr-profile-extractor-*.log",
               "exists": false
             }
           }
         },
         {
-          "id": "career-weekly",
-          "name": "커리어 주간 리포트",
+          "id": "profile-weekly",
+          "name": "프로필 주간 리포트",
           "schedule": "0 18 * * 5",
           "scheduleHuman": "금요일 18:00",
           "type": "prompt",
           "handler": "ask-claude.sh (LLM)",
           "team": {
             "id": "growth-lead",
-            "name": "인재개발실 (커리어·학습)"
+            "name": "인재개발실 (성장·학습)"
           },
           "discordChannel": "jarvis-dev",
           "model": "claude-sonnet-4-6",
@@ -1798,47 +1830,15 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/jarvis/runtime/logs/career-weekly.log",
-              "exists": true
+              "path": "~/jarvis/runtime/logs/profile-weekly.log",
+              "exists": false
             },
             "stderr": {
-              "path": "~/jarvis/runtime/logs/career-weekly-err.log",
-              "exists": true
+              "path": "~/jarvis/runtime/logs/profile-weekly-err.log",
+              "exists": false
             },
             "claudeStderr": {
-              "pattern": "claude-stderr-career-weekly-*.log",
-              "exists": true
-            }
-          }
-        },
-        {
-          "id": "job-alert",
-          "name": "채용 공고 크롤링 & 매칭",
-          "schedule": "0 9 * * *",
-          "scheduleHuman": "매일 09:00",
-          "type": "script",
-          "handler": "job-alert.sh",
-          "team": {
-            "id": "growth-lead",
-            "name": "인재개발실 (커리어·학습)"
-          },
-          "discordChannel": "jarvis-career",
-          "model": "claude-haiku-4-5-20251001",
-          "priority": "daily",
-          "maxBudget": "1.00",
-          "disabled": false,
-          "description": null,
-          "logs": {
-            "stdout": {
-              "path": "~/jarvis/runtime/logs/job-alert.log",
-              "exists": true
-            },
-            "stderr": {
-              "path": "~/jarvis/runtime/logs/job-alert-err.log",
-              "exists": true
-            },
-            "claudeStderr": {
-              "pattern": "claude-stderr-job-alert-*.log",
+              "pattern": "claude-stderr-profile-weekly-*.log",
               "exists": false
             }
           }
@@ -2181,7 +2181,7 @@
         },
         {
           "id": "jira-sync",
-          "name": "JIRA 커리어 히스토리 동기화",
+          "name": "JIRA 이력 동기화",
           "schedule": "0 9 * * 1",
           "scheduleHuman": "월요일 09:00",
           "type": "script",
@@ -2895,6 +2895,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-boram-daily-schedule-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "compound-review",
+          "name": "Compound Engineering 주간 복기",
+          "schedule": "30 20 * * 0",
+          "scheduleHuman": "일요일 20:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-sonnet-4-6",
+          "priority": "weekly",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": "매주 일요일 20:30 KST. wiki/meta/learned-mistakes.md(오답노트)의 90일 무재발 항목을 archive로 이동 + 본체 1,000자 상한 압축. Compound Engineering 루프의 '회수' 단계.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/compound-review.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/compound-review-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-compound-review-*.log",
               "exists": false
             }
           }

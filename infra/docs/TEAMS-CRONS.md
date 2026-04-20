@@ -125,12 +125,12 @@ RAG 프론트엔드 품질 담당 (사용자 검색 경험).
 
 ## 인재개발실 · 김서연 (`growth-lead`) — 4 crons
 
-커리어·학습 통합. 스터디·학습 스케줄이 한 팀으로 합쳐져 있다.
+개인 성장·학습 통합. 스터디·학습 스케줄이 한 팀으로 합쳐져 있다.
 
 | Task ID | Schedule | 설명 |
 |---|---|---|
-| `career-extractor` | 매일 00:30 | 커리어 추출 (jobs, resume 변경 감지) |
-| `career-weekly` | 금요일 18:00 | 주간 커리어 리포트 → `#jarvis-dev` |
+| `profile-extractor` | 매일 00:30 | 프로필 추출 (대화 기록 → 구조화 요약) |
+| `profile-weekly` | 금요일 18:00 | 주간 프로필 리포트 → `#jarvis-dev` |
 | `academy-support` | 일요일 20:00 | 학습 큐레이션 |
 | `family-daily-schedule` | 매일 07:30 | 가족 일일 스케줄 |
 

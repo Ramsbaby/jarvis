@@ -119,5 +119,10 @@ jarvis.log
 infra/office/node_modules
 infra/office/dist
 
+# Chrome Extension (오너 개인 프로토타입 — 사이트 목록/파서에 PII 결합)
+# README.md 만 공개 유지, 나머지는 private 관리
+infra/chrome-extension/*
+!infra/chrome-extension/README.md
+
 # Claude Code worktrees
 .claude/worktrees/

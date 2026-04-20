@@ -4,16 +4,16 @@
  * 왜 이 파일이 존재하는가:
  *   sendDiscord / discordSend / sendDiscordMsg 3개 함수명이 5개 파일에 각자
  *   구현되어 있었다. 구현도 다 달랐다:
- *   - job-apply.mjs: monitoring.json `jarvis` 키만 참조, 청킹 없음
+ *   - inbox-apply.mjs: monitoring.json `jarvis` 키만 참조, 청킹 없음
  *   - oss-manager.mjs: spawnSync curl, channelKey 있음, 청킹 없음
- *   - job-crawl.mjs: .env fallback + bot token 이중 구조
- *   - job-match.mjs: 2000자 줄경계 청킹 (가장 완성도 높음)
+ *   - inbox-crawl.mjs: .env fallback + bot token 이중 구조
+ *   - inbox-match.mjs: 2000자 줄경계 청킹 (가장 완성도 높음)
  *   이 파일이 하나의 정답이다.
  *
  * 사용법:
  *   import { discordSend } from '../lib/discord-notify.mjs';
  *   await discordSend('메시지 내용', 'jarvis-system');
- *   await discordSend(longText, 'jarvis-career', { username: 'Bot' });
+ *   await discordSend(longText, 'jarvis-inbox', { username: 'Bot' });
  */
 
 import { readFileSync } from 'fs';

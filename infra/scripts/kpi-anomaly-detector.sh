@@ -52,7 +52,7 @@ for t in tasks_data.get("tasks", []):
 team_tasks = {
     "council": ["council-insight", "weekly-kpi"],
     "trend":   ["news-briefing"],
-    "career":  ["career-weekly"],
+    "growth":  ["profile-weekly"],
     "academy": ["academy-support"],
     "record":  ["record-daily", "memory-cleanup"],
     "infra":   ["infra-daily", "system-health", "security-scan", "rag-health", "disk-alert"],

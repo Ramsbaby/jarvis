@@ -40,7 +40,7 @@ All cron tasks are defined in `config/tasks.json` and executed by `bin/bot-cron.
 | `ceo-weekly-digest` | Mon 09:00 | CEO weekly review digest |
 | `connections-weekly-insight` | Mon 09:45 | Cross-team pattern analysis |
 | `weekly-usage-stats` | Mon 09:00 | Discord usage statistics |
-| `career-weekly` | Fri 18:00 | Career growth report |
+| `profile-weekly` | Fri 18:00 | Profile growth report |
 | `academy-support` | Sun 20:00 | Learning team digest |
 | `brand-weekly` | Tue 08:00 | Brand/OSS growth report |
 | `recon-weekly` | Mon 09:00 | Intelligence exploration |
