@@ -19,6 +19,14 @@ set -euo pipefail
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_FILE="${BOT_HOME}/logs/task-runner.jsonl"
 
+# --- Batch mode (토큰 절감) ---
+# ask-claude.sh는 크론/배치 태스크 전용 진입점이므로 기본값 1.
+# llm-gateway.sh의 _llm_claude_cli가 이 값을 보고 claude -p에 다음 플래그 추가:
+#   --disable-slash-commands, --no-session-persistence,
+#   --exclude-dynamic-system-prompt-sections, --setting-sources ""
+# 호출자가 대화형 용도로 전환하고 싶으면 JARVIS_BATCH_MODE=0 명시 export.
+export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
+
 # --- Arguments ---
 TASK_ID="${1:?Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET]}"
 PROMPT="${2:?Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET]}"

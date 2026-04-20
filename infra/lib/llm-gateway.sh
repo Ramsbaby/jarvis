@@ -97,6 +97,25 @@ _llm_claude_cli() {
         --mcp-config "${mcp_config:-${LLM_GATEWAY_BOT_HOME}/config/empty-mcp.json}"
     )
 
+    # --- Batch mode (JARVIS_BATCH_MODE=1) ---
+    # 크론/배치 태스크 토큰 절감:
+    #   --disable-slash-commands     : 스킬 정의를 시스템 프롬프트에서 제외
+    #   --no-session-persistence     : 세션 파일 디스크 저장 생략 (일회성 실행)
+    #   --exclude-dynamic-system-prompt-sections : cwd/env/memory-paths/git-status를
+    #                                  user message로 이동 → prompt cache prefix 재사용 향상
+    #   --setting-sources ""         : user/project/local 설정 로드 차단
+    # 주의: --exclude-dynamic-system-prompt-sections는 default system prompt일 때만 적용됨
+    #       (ask-claude.sh는 --append-system-prompt만 사용하므로 호환)
+    # 주의: --bare는 OAuth 비호환 (Jarvis는 Claude Max OAuth 사용) → 미사용
+    if [[ "${JARVIS_BATCH_MODE:-0}" == "1" ]]; then
+        cmd+=(
+            --disable-slash-commands
+            --no-session-persistence
+            --exclude-dynamic-system-prompt-sections
+            --setting-sources ""
+        )
+    fi
+
     [[ -n "$system" ]]        && cmd+=(--append-system-prompt "$system")
     [[ -n "$allowed_tools" ]] && cmd+=(--allowedTools "$allowed_tools")
     [[ -n "$max_budget" ]]    && cmd+=(--max-budget-usd "$max_budget")
