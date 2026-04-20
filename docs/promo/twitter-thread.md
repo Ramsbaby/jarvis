@@ -13,7 +13,7 @@ Open source: github.com/Ramsbaby/jarvis
 The Insight Layer is what makes it different from ChatGPT Memory or Claude Memory.
 
 Every dawn, it computes metrics from 10,000+ indexed documents:
-- "Topic X surged 534x this week"
+- "Topic X surged ~100x this week"
 - "Focus shifted from infra → another domain"
 - "Troubleshooting activity up 10x"
 

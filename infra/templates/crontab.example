@@ -194,8 +194,9 @@
 0 9 1 * * /bin/bash __JARVIS_HOME__/bin/bot-cron.sh monthly-review >> __JARVIS_HOME__/logs/cron.log 2>&1
 # 스킬 평가 (일요일 04:30)
 30 4 * * 0 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh skill-eval >> __JARVIS_HOME__/logs/cron.log 2>&1
-# 커리어 위클리 (금요일 18:00)
-0 18 * * 5 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh career-weekly >> __JARVIS_HOME__/logs/cron.log 2>&1
+# 주간 활동 리포트 (금요일 18:00) — 개인 도메인 활동 요약
+# 실제 태스크 이름은 private/config/tasks-private.json 에서 오버라이드 가능.
+0 18 * * 5 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh profile-weekly >> __JARVIS_HOME__/logs/cron.log 2>&1
 # 브랜드 위클리 (화요일 08:00)
 0 8 * * 2 /bin/bash __JARVIS_HOME__/bin/bot-cron.sh brand-weekly >> __JARVIS_HOME__/logs/cron.log 2>&1
 # OSS 문서 (수요일 11:00)

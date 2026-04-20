@@ -95,6 +95,22 @@ rules:
       - ".mcp.json"
       - ".privacy-blocklist.yml"
 
+  - id: career-narratives
+    severity: medium
+    # 이직/면접/이력서/취업/연봉 같은 오너 개인 상태 서사가 공개 노출되는 것을 차단.
+    # 단어 경계 없이 부분 매칭이라 기술 용어(cron job 등)에 걸릴 수 있으나,
+    # allow_paths 로 기술 문서는 화이트리스트 — privacy 우선.
+    pattern: "이직\\s*준비|면접\\s*준비|interview\\s*prep|career\\s*topic|이력서\\s*수정|취업\\s*준비|오퍼\\s*수령|jarvis-career"
+    description: "오너 개인 활동 서사 — 일반화된 표현(topic X, domain Y 등)으로 대체"
+    context_allow:
+      - "process\\.env\\.INTERVIEW_CHANNEL"
+      - "process\\.env\\.CAREER_DOMAIN_CHANNEL"
+    allow_paths:
+      - ".privacy-blocklist.yml"
+      - "private/**"
+      - "runtime/**"
+      - ".github/**"
+
 global_ignore:
   - ".git/**"
   - "node_modules/**"

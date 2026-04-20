@@ -314,7 +314,8 @@ function _isSimulationTurn(userMsg) {
     if (existsSync(skillPath)) return true;
   }
   // 트리거 키워드 — 스킬 frontmatter triggers와 정합. 추가 스킬 생길 때 이 배열도 확장.
-  const triggers = ['모의면접', '면접 연습', '면접 답변', '면접 준비', '면접관 해줘'];
+  // privacy:allow career-narratives — mock-interview 스킬 활성 트리거 (기능 필수, 서사 아님)
+  const triggers = ['모의면접', '면접 연습', '면접 답변', '면접 준비', '면접관 해줘']; // privacy:allow career-narratives
   return triggers.some((t) => text.includes(t.toLowerCase()));
 }
 

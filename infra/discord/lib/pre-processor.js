@@ -208,8 +208,10 @@ export class SocialApiProcessor extends BasePreProcessor {
 // 개인 목표 관련 질문 → config/goals.json 자동 주입
 // 매번 목표 컨텍스트 재설명 없이 LLM이 즉시 맥락 파악.
 // ---------------------------------------------------------------------------
-// job 제거 — "cron job", "Spring Batch job" 등 개발 용어에서 goals.json 오주입 방지
-const GOALS_PATTERN = /이직|커리어|career|목표|로드맵|이력서|resume|취업|연봉|okr|kpi|분기\s*목표|goals/i;
+// GoalsProcessor 트리거 패턴 (generic).
+// job 제거 — "cron job", "Spring Batch job" 등 개발 용어에서 goals.json 오주입 방지.
+// 구체 직무·활동 키워드는 goals.json 본문에서 자동 매칭되므로 패턴은 중립화.
+const GOALS_PATTERN = /목표|로드맵|roadmap|okr|kpi|분기\s*목표|goals|마일스톤|milestone/i;
 
 export class GoalsProcessor extends BasePreProcessor {
   get name() { return 'GoalsProcessor'; }

@@ -1121,10 +1121,13 @@ ${extracted}
     // Session summary pre-injection for resume safety
     // _continueHandled=true이면 이미 "계속" 블록에서 요약을 주입했으므로 중복 방지
     // sessionId 조건 제거: compact 직후 첫 턴(sessionId=null)에도 요약 주입
-    // jarvis-career 예외: save 쪽에서 저장 안 하므로 load 해도 빈 값이지만
+    // INTERVIEW_CHANNEL 예외: save 쪽에서 저장 안 하므로 load 해도 빈 값이지만
     // 혹시 과거 오염된 파일이 남아있을 수 있으므로 명시적으로 skip.
+    // INTERVIEW_CHANNEL: 면접 전형 질문 Hard 가드 대상 채널.
+    // env 미설정 시 기능 비활성(모든 채널에서 일반 응답) — 오너별 channel id 는 env 로만 관리.
+    const INTERVIEW_CHANNEL = process.env.INTERVIEW_CHANNEL || '';
     let _summaryInjected = false;
-    if (!_continueHandled && chName !== 'jarvis-career') {
+    if (!_continueHandled && chName !== INTERVIEW_CHANNEL) {
       const summary = loadSessionSummary(sessionKey);
       if (summary) {
         // tutoring 질문인데 요약에 잘못된 MCP/캘린더 내용이 있으면 주입하지 않음
@@ -1484,9 +1487,9 @@ ${extracted}
 
           if (lastAssistantText.length > 20) {
             saveConversationTurn(originalPrompt, lastAssistantText, chName, effectiveAuthor.id);
-            // jarvis-career 는 세션 요약 저장 차단: 모의면접 시뮬 답변이 요약에 섞이면
+            // INTERVIEW_CHANNEL 은 세션 요약 저장 차단: 모의면접 시뮬 답변이 요약에 섞이면
             // 다음 턴에 pre-inject 되어 RAG·가드를 모두 우회하며 거짓 스토리 부활.
-            if (chName !== 'jarvis-career') {
+            if (chName !== INTERVIEW_CHANNEL) {
               saveSessionSummary(sessionKey, originalPrompt, lastAssistantText);
             }
             // 토큰 누적: result 이벤트의 usage.input_tokens (claude-runner.js에서 포워딩)
@@ -1585,7 +1588,7 @@ ${extracted}
     userPrompt = await _preProcessorRegistry.run(userPrompt, preCtx);
 
     // ---------------------------------------------------------------------------
-    // Hard 가드 — jarvis-career 에서 면접 전형 질문이 왔는데 mock-interview 스킬이
+    // Hard 가드 — INTERVIEW_CHANNEL 에서 면접 전형 질문이 왔는데 mock-interview 스킬이
     // 명시적으로 켜지지 않은 경우, 모델이 창작하기 전에 고정 응답으로 short-circuit.
     // 이유: 프롬프트 지시("모의면접 쓸까요?"라고 먼저 확인)만으로는 LLM이 무시하고
     // 실증 없이 STAR 답변을 만들어낸다. 코드 레벨 가드가 유일한 해결책.
@@ -1807,7 +1810,7 @@ ${ragContextBlock}
 사용자가 카드 지정 안 하면 질문 취지에 가장 맞는 카드 선택. 바로 답변 생성 시작.`;
     }
 
-    if (chName === 'jarvis-career' && hasInterviewPattern && !hasSkillTrigger && !mockActive) {
+    if (chName === INTERVIEW_CHANNEL && hasInterviewPattern && !hasSkillTrigger && !mockActive) {
       const guardMsg = `🎤 면접 전형 질문 감지됨.\n\n이 채널은 일반 커리어 상담 채널이라 자동으로 1인칭 면접 답변을 만들지 않습니다 (할루시네이션 방지).\n\n**모의면접 답변 만들려면:**\n\`/mock-interview 삼성물산\` (슬래시 커맨드)\n또는 \`면접 연습해줘: 조직 실수 경험 질문\` (자연어)\n\n**그냥 질문 자체에 대한 상담이면:** "상담 모드로 답해줘"라고 덧붙여 주세요.`;
       await message.reply(guardMsg).catch(() => message.channel.send(guardMsg));
       await streamer.finalize();

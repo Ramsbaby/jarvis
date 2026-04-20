@@ -187,8 +187,8 @@ ${dailyLines}
 - "4/1-4 소강기 후 4/5 활동 폭발 → 중요 이벤트 확정 후 집중 모드"
 
 ## 카테고리
-- life_phase: 생애 단계 전환 (이직, 학습기, 안정기)
-- goal: 단기 목표 (면접 통과, 프로젝트 완성)
+- life_phase: 생애 단계 전환 (활동기/학습기/안정기 등)
+- goal: 단기 목표 (프로젝트 완성 등)
 - concern: 우려/불안 (도메인 미경험, 시간 부족)
 - momentum: 활동 추세 변화 (증가/감소/전환)
 
@@ -206,7 +206,7 @@ ${existingSection}
 
 ## 출력 형식
 반드시 JSON 배열만 출력. 5-8개. 설명문 없이 JSON만.
-[{"insight_text":"현재 이직 활동이 면접 단계에 진입했다","category":"life_phase","confidence":0.9,"evidence_summary":"면접 준비 문서, 이력서 최종 수정, 도메인 Q&A 작성","supersedes":null}]`;
+[{"insight_text":"특정 도메인 활동이 실행 단계에 진입했다","category":"life_phase","confidence":0.9,"evidence_summary":"관련 문서 빈도 증가, 주요 문서 최종 수정, 도메인 Q&A 작성","supersedes":null}]`;
 
   try {
     // ask-claude.sh: TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT]

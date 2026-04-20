@@ -34,17 +34,20 @@ const MCP_CONFIG   = join(BOT_HOME, 'config', 'empty-mcp.json');
 // ── 도메인 정의 ──────────────────────────────────────────────────────────────
 const DOMAINS = {
   career: {
-    label: '커리어',
-    channels: ['jarvis-blog'],
-    keywords: ['이직', '면접', '이력서', '포트폴리오', '채용', '지원', '합격', '커리어', '연봉', '오퍼', '전형', '자소서'],
-    prompt: `Discord 대화에서 커리어 관련 내용만 추출해 마크다운으로 정리해줘.
+    // 도메인 id 'career' 는 기존 파일·인덱스 호환을 위해 유지.
+    // 내용은 일반 활동 추적으로 추상화 — 공개 OSS 노출 최소화.
+    // 실사용 키워드·프롬프트는 private/config/domain-overrides.json 에서 로드.
+    label: '활동',
+    channels: [process.env.CAREER_DOMAIN_CHANNEL || 'jarvis-blog'],
+    keywords: ['목표', '로드맵', '계획', '오퍼', '피드백', '마일스톤'],
+    prompt: `Discord 대화에서 개인 활동·목표 관련 내용만 추출해 마크다운으로 정리해줘.
 
 ## 추출 항목 (없으면 섹션 생략)
-1. **지원 현황** — 새로 지원/합격/불합격한 회사와 포지션, 전형 단계
-2. **면접 정보** — 면접 일정, 노트, 예상 질문
-3. **이력서/포트폴리오** — 버전 변경, 주요 수정 사항
-4. **커리어 인사이트** — 전략, 포지셔닝, 시장 관찰
-5. **회사 분석** — 특정 회사/팀/기술스택 조사 내용
+1. **진행 현황** — 새로 진입/전환한 단계
+2. **주요 일정** — 예정된 이벤트/노트/질문
+3. **산출물 변경** — 버전 변경, 주요 수정 사항
+4. **인사이트** — 전략, 포지셔닝, 관찰
+5. **대상 분석** — 특정 도메인·팀·기술스택 조사 내용
 
 핵심만 간결하게 (각 항목 5줄 이내). 수치 반드시 보존. 원문 복붙 금지.`,
   },
@@ -246,7 +249,7 @@ function shouldRegenerateSummary(domainId) {
 
   const stat = statSync(summaryFile);
   const ageDays = (Date.now() - stat.mtimeMs) / (1000 * 60 * 60 * 24);
-  // career 도메인은 오너 활성 관심사 → 매일 재생성, 그 외 도메인은 주 1회
+  // career 도메인(활동 추적)은 매일 재생성, 그 외 도메인은 주 1회
   return domainId === 'career' ? ageDays >= 1 : ageDays >= 7;
 }
 

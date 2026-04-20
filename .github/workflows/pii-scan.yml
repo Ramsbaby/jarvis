@@ -40,15 +40,14 @@ jobs:
           node scripts/privacy/scan.mjs \
             --diff=${{ steps.diff.outputs.base }}..${{ steps.diff.outputs.head }}
 
-      - name: Privacy scan (push full audit — report only)
+      - name: Privacy scan (push full audit — enforce)
         if: steps.diff.outputs.mode == 'all'
-        continue-on-error: true
         run: |
           node scripts/privacy/scan.mjs --all || {
             echo ""
-            echo "ℹ️ 잔존 위반은 main 병합 차단 대상이 아님 (PR diff 에서만 차단)."
-            echo "ℹ️ 점진 정리 대상으로 별도 이슈 추적 권장."
-            exit 0
+            echo "🚫 main HEAD 에 PII 위반 존재 — 추가 커밋 또는 revert 로 해소 필요."
+            echo "ℹ️  blocker 가 과거 커밋에서 유래한 경우 BFG/filter-repo 로 history 정화 계획 수립."
+            exit 1
           }
 
       - name: Legacy shape patterns (extra safety net)
