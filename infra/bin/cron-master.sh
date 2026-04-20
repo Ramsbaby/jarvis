@@ -84,6 +84,67 @@ if [[ "$PHANTOM_COUNT" -gt 0 ]]; then
   add_issue "crontab 유령 스크립트 호출 ${PHANTOM_COUNT}개"
 fi
 
+# ── 4.5. L2 자동 복구 — bootstrap만 (2026-04-20) ──────────────────────────────
+# 안전장치:
+#   - 원장(ledger): 모든 복구 액션을 JSONL append-only 기록 (rollback 가능)
+#   - Rate-limit: 동일 action+target 하루 3회 제한 (무한 루프 방지)
+#   - bootout → bootstrap 2단계: stale reference로 인한 Input/output error 해결
+#   - Dry-run: CRON_MASTER_DRY_RUN=1 이면 계획만 표시, 실제 실행 skip
+#
+# 스텁 배치 기능 제거 이유:
+#   ~/.jarvis/bin → ~/jarvis/infra/bin 심링크 체인으로 git 추적 디렉토리에
+#   stub이 무단 침투하는 설계 결함 발견 (2026-04-20 초기 구현에서 19개 침범).
+#   유령 스크립트는 감지만 하고 주인님이 수동으로 판단·처리한다.
+
+REPAIR_LEDGER="$BOT_HOME/state/cron-master-ledger.jsonl"
+mkdir -p "$(dirname "$REPAIR_LEDGER")"
+REPAIRS=()
+DRY_RUN="${CRON_MASTER_DRY_RUN:-0}"
+
+repair_count_today() {
+  local action="$1" target="$2" today
+  today=$(date +%Y-%m-%d)
+  [[ ! -f "$REPAIR_LEDGER" ]] && { echo 0; return; }
+  grep -cF "\"action\":\"$action\",\"target\":\"$target\",\"ts\":\"$today" "$REPAIR_LEDGER" 2>/dev/null || echo 0
+}
+
+log_repair() {
+  local action="$1" target="$2" result="$3"
+  local today
+  today=$(date +%Y-%m-%d)
+  echo "{\"action\":\"$action\",\"target\":\"$target\",\"ts\":\"${today}T$(date '+%H:%M:%S%z')\",\"result\":\"$result\",\"dry_run\":${DRY_RUN}}" >> "$REPAIR_LEDGER"
+}
+
+# [4.5.1] LaunchAgent 언로드 → bootout → bootstrap (2단계로 견고화)
+for lbl in "${UNLOADED[@]}"; do
+  count=$(repair_count_today "bootstrap" "$lbl")
+  if [[ "$count" -ge 3 ]]; then
+    REPAIRS+=("SKIP bootstrap $lbl (오늘 ${count}/3회)")
+    continue
+  fi
+  plist="$LA_DIR/$lbl.plist"
+  if [[ ! -f "$plist" ]]; then
+    REPAIRS+=("SKIP bootstrap $lbl (plist 없음)")
+    continue
+  fi
+  if [[ "$DRY_RUN" == "1" ]]; then
+    REPAIRS+=("[DRY-RUN] bootstrap $lbl")
+    log_repair "bootstrap" "$lbl" "dry-run"
+    continue
+  fi
+  # stale reference 회피: bootout 먼저 (실패해도 무시), 그 후 bootstrap
+  launchctl bootout "gui/$(id -u)/$lbl" 2>/dev/null || true
+  if bootstrap_err=$(launchctl bootstrap "gui/$(id -u)" "$plist" 2>&1); then
+    log_repair "bootstrap" "$lbl" "success"
+    REPAIRS+=("✅ bootstrap $lbl")
+  else
+    # 에러 메시지에서 따옴표 제거해 JSON 안전성 확보
+    safe_err=$(echo "$bootstrap_err" | tr -d '"' | tr '\n' ' ' | head -c 120)
+    log_repair "bootstrap" "$lbl" "failed: ${safe_err}"
+    REPAIRS+=("❌ bootstrap 실패: $lbl → $safe_err")
+  fi
+done
+
 # ── 5. 리포트 출력 (stdout → bot-cron.sh가 Discord로 라우팅) ─────────────────
 
 echo "🔍 **크론 마스터 종합 리포트** — ${NOW} KST"
@@ -106,3 +167,14 @@ echo "  · LaunchAgent 언로드: ${#UNLOADED[@]}"
 echo "  · Discord BYPASS: $(echo "$BYPASS_LIST" | wc -w | tr -d ' ')"
 echo "  · crontab 유령 스크립트: ${PHANTOM_COUNT}"
 echo "  · 리포트 생성: ${NOW} KST"
+
+if [[ ${#REPAIRS[@]} -gt 0 ]]; then
+  echo ""
+  echo "🔧 **자동 복구 (L2)** — ${#REPAIRS[@]}건"
+  for r in "${REPAIRS[@]}"; do
+    echo "  · ${r}"
+  done
+  [[ "$DRY_RUN" == "1" ]] && echo "  ⚠️ DRY-RUN 모드: 실제 변경 없음"
+  echo ""
+  echo "  📝 원장: ${REPAIR_LEDGER}"
+fi
