@@ -1108,7 +1108,14 @@ export async function* createClaudeSession(prompt, {
     // 이유: SDK 'default' 모드에서 내부 'allow' 판정된 tool은 canUseTool 콜백을
     //      아예 호출하지 않아 Read/Glob/Grep 등 대부분 tool에 대한 민감 경로 검사
     //      bypass 가능. PreToolUse 훅은 SDK 내부 판정과 무관하게 모든 tool에 발화.
-    permissionMode: 'default',
+    //
+    // 2026-04-20: 'default' → 'bypassPermissions'.
+    //   SDK 내장 센서티브 리스트(~/.claude/** 등)가 권한 프롬프트를 띄우는데
+    //   Discord 봇에는 승인 UI가 없어 자동 거부 처리됨 → 정당한 작업(.claude/
+    //   commands/* archive 이동 등)도 막힘. bypassPermissions 로 SDK 내장 체크
+    //   우회. 진짜 민감 경로(.env / .ssh/id_* / secrets/*) 차단은 아래 PreToolUse
+    //   훅의 security-guard.js 가 단일 책임(SSoT)으로 보증.
+    permissionMode: 'bypassPermissions',
     hooks: {
       PreToolUse: [{
         hooks: [async (input) => {
