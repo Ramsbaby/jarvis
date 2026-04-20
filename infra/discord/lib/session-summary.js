@@ -53,12 +53,30 @@ export function saveSessionSummary(sessionKey, userText, assistantText) {
     let existing = '';
     try { existing = readFileSync(filePath, 'utf-8'); } catch { /* new file */ }
 
-    // Keep last N turns
-    const turns = existing.split('---\n').filter(t => t.trim());
+    // compacted 블록이 있는 경우: 압축본은 보존하고 raw 턴만 별도 관리
+    // 압축본을 turns 배열에 포함하면 loadSessionSummary 주입 시 중복 발생
+    let compactedHeader = '';
+    let rawContent = existing;
+    if (existing.startsWith('<!-- compacted')) {
+      // compacted 블록과 그 뒤 raw 턴을 분리
+      const sepIdx = existing.indexOf('\n---\n[');
+      if (sepIdx >= 0) {
+        compactedHeader = existing.slice(0, sepIdx + 1); // compacted 블록만
+        rawContent = existing.slice(sepIdx + 1);          // 그 뒤 raw 턴
+      } else {
+        // raw 턴 없음 → 압축본만 있는 상태
+        compactedHeader = existing;
+        rawContent = '';
+      }
+    }
+
+    // Keep last N turns (raw 부분만 rotation)
+    const turns = rawContent.split('---\n').filter(t => t.trim());
     while (turns.length >= MAX_SUMMARY_TURNS) turns.shift();
     turns.push(entry.replace('---\n', ''));
 
-    writeFileSync(filePath, turns.join('---\n') + '---\n');
+    const rawSection = turns.join('---\n') + '---\n';
+    writeFileSync(filePath, compactedHeader ? compactedHeader + '\n' + rawSection : rawSection);
   } catch (err) {
     log('warn', 'saveSessionSummary failed', { error: err.message });
   }
