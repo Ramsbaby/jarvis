@@ -287,7 +287,8 @@ const LANG_EXT = {
 
 // ---------------------------------------------------------------------------
 // 텍스트 청크 분할 — Discord TextDisplay 4000자 메시지 합산 제한 대응.
-// 단락(\n\n) → 줄(\n) → 단어 순으로 자연스러운 경계에서 분할.
+// 우선순위: 헤딩(###) → 구분선(---) → 단락(\n\n) → 줄(\n) → 단어 순.
+// 문단 중간 끊김 최소화로 가독성 확보 (2026-04-20 정우님 요청 반영).
 // maxLen 기본 3800 (Discord 4000 제한의 95% — 안전 마진).
 // ---------------------------------------------------------------------------
 function _splitIntoChunks(text, maxLen = 3800) {
@@ -296,19 +297,37 @@ function _splitIntoChunks(text, maxLen = 3800) {
   let remaining = text;
   while (remaining.length > maxLen) {
     let splitAt = maxLen;
-    // 1차: 단락 경계 (\n\n) — 최소 절반 이상에서 발견된 경우만 사용
-    const paraIdx = remaining.lastIndexOf('\n\n', maxLen);
-    if (paraIdx > maxLen * 0.5) {
+    const headSlice = remaining.slice(0, maxLen);
+
+    // 1차: ### 헤딩 경계 — 섹션 단위 분할 (40% 이상 위치)
+    //      `\n### ` 또는 `\n## ` 패턴의 마지막 위치
+    let headingIdx = -1;
+    const headingRe = /\n(?=#{2,3} )/g;
+    let m;
+    while ((m = headingRe.exec(headSlice)) !== null) headingIdx = m.index;
+
+    // 2차: --- 구분선
+    const hrIdx = headSlice.lastIndexOf('\n---');
+
+    // 3차: 단락 경계 (\n\n)
+    const paraIdx = headSlice.lastIndexOf('\n\n');
+
+    // 우선순위 적용 — 40%를 기준점으로 (너무 앞쪽 분할 방지)
+    if (headingIdx > maxLen * 0.4) {
+      splitAt = headingIdx + 1;
+    } else if (hrIdx > maxLen * 0.4) {
+      splitAt = hrIdx + 1;
+    } else if (paraIdx > maxLen * 0.4) {
       splitAt = paraIdx + 2;
     } else {
-      // 2차: 줄 경계 (\n)
-      const lineIdx = remaining.lastIndexOf('\n', maxLen);
+      // 4차: 줄 경계 (\n) — 50% 이상
+      const lineIdx = headSlice.lastIndexOf('\n');
       if (lineIdx > maxLen * 0.5) {
         splitAt = lineIdx + 1;
       } else {
-        // 3차: 단어 경계 (공백)
-        const wordIdx = remaining.lastIndexOf(' ', maxLen);
-        if (wordIdx > maxLen * 0.5) splitAt = wordIdx + 1;
+        // 5차: 단어 경계 (공백) — 60% 이상
+        const wordIdx = headSlice.lastIndexOf(' ');
+        if (wordIdx > maxLen * 0.6) splitAt = wordIdx + 1;
         // else: 강제 분할 (maxLen 그대로)
       }
     }
@@ -882,7 +901,8 @@ export class StreamingMessage {
     }
     // Safety: formatForDiscord/convertTablesToList may expand content beyond Discord 2000 limit.
     // 트런케이션 대신 분할 전송 — 내용 유실 없음.
-    const DISCORD_LIMIT = 1990;
+    // 1990 → 1800 하향: 헤딩/단락 경계를 더 쉽게 찾도록 여유 확보 (2026-04-20).
+    const DISCORD_LIMIT = 1800;
     if (content.length > DISCORD_LIMIT) {
       log('warn', '_sendOrEdit: content exceeded Discord limit after formatting — splitting', { originalLen: content.length });
       const parts = _splitIntoChunks(content, DISCORD_LIMIT);
