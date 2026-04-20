@@ -274,7 +274,10 @@ function adaptiveInterval({ bufferLen = 0, inFence = false, hasTool = false } = 
   return 400;
 }
 
-const STREAM_MAX_CHARS = 1700; // 포맷팅 확장(URL 래핑, 테이블→리스트) 여유 확보
+// 2026-04-20 재조정: 1700 → 1900 원복
+// 1700은 문단 경계 탐색 여유 확보 명분이었으나 실제로는 1600자대 답변까지
+// 분할 발동 → orphan cleanup race 노출 증가. 원래 1990 직전까지 단일 메시지 유지가 정상.
+const STREAM_MAX_CHARS = 1900; // 포맷팅 확장(URL 래핑, 테이블→리스트) 여유 확보
 const CODE_FILE_MIN_LINES = 30;
 const LANG_EXT = {
   javascript: 'js', typescript: 'ts', python: 'py', py: 'py',
@@ -902,7 +905,7 @@ export class StreamingMessage {
     // Safety: formatForDiscord/convertTablesToList may expand content beyond Discord 2000 limit.
     // 트런케이션 대신 분할 전송 — 내용 유실 없음.
     // 1990 → 1800 하향: 헤딩/단락 경계를 더 쉽게 찾도록 여유 확보 (2026-04-20).
-    const DISCORD_LIMIT = 1800;
+    const DISCORD_LIMIT = 1990; // 2026-04-20 원복: 1800 → 1990 (split 빈도 최소화)
     if (content.length > DISCORD_LIMIT) {
       log('warn', '_sendOrEdit: content exceeded Discord limit after formatting — splitting', { originalLen: content.length });
       const parts = _splitIntoChunks(content, DISCORD_LIMIT);

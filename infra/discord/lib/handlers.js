@@ -1518,18 +1518,23 @@ ${extracted}
         const pendingOauthRestart = join(_BOT_HOME, 'state', 'pending-oauth-restart');
         const pendingDeploymentRestart = join(_BOT_HOME, 'state', 'pending-deployment-restart');
 
+        // 2026-04-20: 5초 → 15초 연장
+        // 5초는 Discord API finalize 지연 + 새 프로세스 기동(약 5~8초) + orphan cleanup
+        // 이 겹쳐 race window를 만듦. 15초는 Discord client 모든 I/O 수렴 + 헬스체크
+        // 파일 flush 여유 확보.
+        const RESTART_DELAY_MS = 15000;
         if (existsSync(pendingOauthRestart)) {
           try { rmSync(pendingOauthRestart, { force: true }); } catch { /* ok */ }
-          log('info', 'Pending OAuth restart: last session completed, restarting in 5s');
-          setTimeout(() => process.kill(process.pid, 'SIGTERM'), 5000);
+          log('info', 'Pending OAuth restart: last session completed, restarting in 15s');
+          setTimeout(() => process.kill(process.pid, 'SIGTERM'), RESTART_DELAY_MS);
         } else if (existsSync(pendingDeploymentRestart)) {
           let reason = 'deployment';
           try {
             reason = readFileSync(pendingDeploymentRestart, 'utf-8').trim() || reason;
             rmSync(pendingDeploymentRestart, { force: true });
           } catch { /* ok */ }
-          log('info', 'Pending deployment restart: last session completed, restarting in 5s', { reason });
-          setTimeout(() => process.kill(process.pid, 'SIGTERM'), 5000);
+          log('info', 'Pending deployment restart: last session completed, restarting in 15s', { reason });
+          setTimeout(() => process.kill(process.pid, 'SIGTERM'), RESTART_DELAY_MS);
         }
       }
 

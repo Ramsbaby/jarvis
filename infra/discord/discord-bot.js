@@ -226,27 +226,20 @@ client.once('clientReady', async () => {
     if (alertCh) initAlertBatcher(alertCh);
   }
 
-  // Orphaned placeholder cleanup: 이전 세션에서 남은 Stop 버튼 embed 삭제
-  try {
-    const orphans = _loadPlaceholders();
-    if (orphans.length > 0) {
-      let cleaned = 0;
-      for (const { channelId, messageId } of orphans) {
-        try {
-          const ch = client.channels.cache.get(channelId) || await client.channels.fetch(channelId).catch(() => null);
-          if (ch) {
-            const msg = await ch.messages.fetch(messageId).catch(() => null);
-            if (msg) {
-              await msg.delete().catch(() => {});
-              cleaned++;
-            }
-          }
-        } catch { /* best effort per message */ }
-      }
-      _savePlaceholders([]);
-      if (cleaned > 0) log('info', 'Cleaned orphaned placeholders', { cleaned, total: orphans.length });
-    }
-  } catch { /* ignore */ }
+  // 2026-04-20 제거: 이 블록은 streaming.js의 cleanupOrphanPlaceholders(219줄 호출)와
+  // 중복이며, 훨씬 더 위험했음 — placeholder 목록에 있는 모든 메시지를 시간·내용 무관
+  // 전량 msg.delete() 처리.
+  //
+  // 실제 버그 (07:03~07:04 KST 사례):
+  //   1. 답변 본문 1652자가 split되어 첫번째 메시지(1381자) + 두번째(347자)로 finalize
+  //   2. split 후 첫번째 메시지의 _unregisterPlaceholder 누락 (this.currentMessage가
+  //      두번째 메시지로 덮어써지면서 첫번째 ID가 finalize 경로에서 unregister 안 됨)
+  //   3. 봇 재시작 → 이 블록이 "finalized 본문이지만 placeholder 목록에 남아있는" 첫번째
+  //      메시지까지 msg.delete() → Discord UI에서 본문 전반부 소실
+  //
+  // 안전 로직인 streaming.js의 cleanupOrphanPlaceholders(219줄에서 호출)만 유지:
+  //   - 1시간 이내: survivor로 유지 (절대 건드리지 않음)
+  //   - 1시간 초과: 메시지 content는 그대로, components/embeds만 제거 (delete 아님)
 
   // 재시작 알림: 종료 사유 포함
   try {
