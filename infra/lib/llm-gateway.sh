@@ -111,7 +111,6 @@ _llm_claude_cli() {
         cmd+=(
             --disable-slash-commands
             --no-session-persistence
-            --exclude-dynamic-system-prompt-sections
             --setting-sources ""
         )
     fi
