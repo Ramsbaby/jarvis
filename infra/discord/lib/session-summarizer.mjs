@@ -191,6 +191,10 @@ function extractFacts(content) {
       if (snippet.length < 8) continue;
       // 마크다운 헤더/구분선만 있는 라인 제외
       if (/^[-#=]{3,}$/.test(snippet)) continue;
+      // 대화 로그 스니펫 오염 방지: timestamp/User:/Jarvis: 포함 시 제외
+      if (/\[20\d\d-\d\d-\d\d/.test(snippet)) continue;
+      if (/\bUser:\s/.test(snippet) || /\bJarvis:\s/.test(snippet)) continue;
+      if (/---/.test(snippet)) continue;
       candidates.add(snippet);
     }
   }
