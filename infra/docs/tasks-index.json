@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-04-20T09:44:00.989Z",
+  "generatedAt": "2026-04-20T10:17:06.803Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 96,
+  "totalTasks": 98,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -14,11 +14,11 @@
     "brand-lead": 4,
     "audit-lead": 17,
     "secretary": 10,
-    "uncategorized": 10
+    "uncategorized": 12
   },
   "typeDistribution": {
     "prompt": 37,
-    "script": 59
+    "script": 61
   },
   "groups": [
     {
@@ -3124,6 +3124,38 @@
           }
         },
         {
+          "id": "mistake-extractor",
+          "name": "오답노트 자동 추출",
+          "schedule": "15 3 * * *",
+          "scheduleHuman": "매일 03:15",
+          "type": "script",
+          "handler": "mistake-extractor.mjs",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.30",
+          "disabled": false,
+          "description": "매일 03:15 KST. session-summaries에서 오너 지적/정정을 Haiku로 추출해 wiki/meta/learned-mistakes.md에 append. Jaccard 0.65 유사도로 중복 감지. Compound Engineering 루프의 '수집' 단계.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/mistake-extractor.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/mistake-extractor-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-mistake-extractor-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "self-healing-digest",
           "name": "Self-Healing 주간 감사",
           "schedule": "0 21 * * 0",
@@ -3183,6 +3215,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-unpause-rebound-check-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "wiki-reference-report",
+          "name": "Wiki 참조 주간 리포트",
+          "schedule": "0 20 * * 0",
+          "scheduleHuman": "일요일 20:00",
+          "type": "script",
+          "handler": "wiki-reference-report.mjs",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": "0.05",
+          "disabled": false,
+          "description": "매주 일요일 20:00 KST (compound-review 직전). wiki-inject.log를 집계해 도메인별 주입 빈도 + 오답노트 참조율 + 최근 7일 vs 이전 7일 증감을 리포트. wiki/meta/metrics.jsonl에 기록. Compound Engineering 루프의 '효과 측정' 단계.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/wiki-reference-report.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/wiki-reference-report-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-wiki-reference-report-*.log",
               "exists": false
             }
           }
