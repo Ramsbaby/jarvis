@@ -1413,6 +1413,11 @@ ${extracted}
                   elapsed_s: parseFloat(elapsed),
                   input_tokens: event.usage?.input_tokens ?? 0,
                   output_tokens: event.usage?.output_tokens ?? 0,
+                  // 프롬프트 캐시 계측 (토큰 절감 효과 분석용)
+                  //   cache_read: 재사용된 prefix 토큰 (캐시 히트)
+                  //   cache_creation: 이번 턴에 새로 캐시에 기록한 토큰
+                  cache_read_input_tokens: event.usage?.cache_read_input_tokens ?? 0,
+                  cache_creation_input_tokens: event.usage?.cache_creation_input_tokens ?? 0,
                   stop_reason: event.stop_reason ?? null,
                   output_snippet: lastAssistantText.slice(0, 300),
                 }) + '\n'
@@ -1442,9 +1447,18 @@ ${extracted}
             : modelLabel.replace('claude-', '');
           const _inTk = event.usage?.input_tokens ?? 0;
           const _outTk = event.usage?.output_tokens ?? 0;
+          const _cacheRead = event.usage?.cache_read_input_tokens ?? 0;
+          const _cacheCreate = event.usage?.cache_creation_input_tokens ?? 0;
           const _tokShort = (n) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
           const footerParts = [`🤖 ${_modelShort}`, `⏱️ ${elapsed}s`];
           if (_inTk + _outTk > 0) footerParts.push(`💭 ${_tokShort(_inTk)}↑ ${_tokShort(_outTk)}↓`);
+          // 캐시 히트율: cache_read / (cache_read + cache_create + input_tokens) — 전체 prompt 기준
+          // SDK는 cache hit 시 input_tokens 에서 재사용분을 제외한 신규분만 카운트
+          const _totalPromptTok = _inTk + _cacheRead + _cacheCreate;
+          if (_cacheRead > 0 && _totalPromptTok > 0) {
+            const _cachePct = Math.round((_cacheRead / _totalPromptTok) * 100);
+            footerParts.push(`🎯 ${_cachePct}% (${_tokShort(_cacheRead)})`);
+          }
           if (toolCount > 0) footerParts.push(`🛠️ ${toolCount}`);
           footerParts.push(`📊 ${Math.round(rateStatus.pct * 100)}%`);
           const stopPrefix = event.stop_reason !== 'end_turn' ? `${stopLabel} · ` : '';
