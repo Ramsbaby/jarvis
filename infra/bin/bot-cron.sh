@@ -16,6 +16,11 @@ unset ANTHROPIC_API_KEY 2>/dev/null || true
 # Prevent nested claude detection
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
+# Batch mode: 크론 태스크는 기본적으로 토큰 절감 플래그 활성화
+# (llm-gateway.sh가 감지하여 --disable-slash-commands, --no-session-persistence,
+#  --exclude-dynamic-system-prompt-sections, --setting-sources "" 를 claude -p에 추가)
+export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
+
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 INFRA_DIR="${HOME}/jarvis/infra"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
