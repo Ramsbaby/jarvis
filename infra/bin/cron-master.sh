@@ -24,8 +24,46 @@ BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_DIR="$BOT_HOME/logs"
 LA_DIR="$HOME/Library/LaunchAgents"
 NOW=$(date '+%Y-%m-%d %H:%M:%S')
+NOW_EPOCH=$(date +%s)
+TODAY=$(date +%Y-%m-%d)
+YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d 'yesterday' +%Y-%m-%d 2>/dev/null || echo "")
 CUTOFF=$(date -v-24H '+%Y-%m-%d %H:%M:%S' 2>/dev/null \
   || date -d '24 hours ago' '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "1970-01-01 00:00:00")
+
+# 감지 원장 (일 단위 시계열 — 주간 추세 분석 기반)
+DAILY_LEDGER="$BOT_HOME/state/cron-master-daily.jsonl"
+mkdir -p "$(dirname "$DAILY_LEDGER")"
+
+# 어제 엔트리 조회
+YESTERDAY_ENTRY=""
+if [[ -n "$YESTERDAY" && -f "$DAILY_LEDGER" ]]; then
+  YESTERDAY_ENTRY=$(grep "^{\"date\":\"$YESTERDAY\"" "$DAILY_LEDGER" 2>/dev/null | tail -1 || true)
+fi
+
+get_yesterday() {
+  local key="$1"
+  [[ -z "$YESTERDAY_ENTRY" ]] && { echo ""; return; }
+  # "key":VAL 패턴 추출 → sed로 콜론 뒤 숫자만 분리
+  # (주의: `fail_24h` 같은 키에 포함된 숫자가 grep에 매칭되지 않도록 sed 사용)
+  echo "$YESTERDAY_ENTRY" | grep -oE "\"$key\":[0-9]+" | head -1 | sed 's/.*://'
+}
+
+# delta 포매터: 현재값 어제값 → 🔺/🔻/➖ 태그
+format_delta() {
+  local current="$1" yesterday="$2"
+  if [[ -z "$yesterday" ]]; then
+    echo "[첫 기록]"
+    return
+  fi
+  local diff=$((current - yesterday))
+  if [[ "$diff" -eq 0 ]]; then
+    echo "➖ 어제 $yesterday (변화 없음)"
+  elif [[ "$diff" -gt 0 ]]; then
+    echo "🔺 어제 $yesterday → +$diff"
+  else
+    echo "🔻 어제 $yesterday → $diff"
+  fi
+}
 
 ISSUES=()
 add_issue() { ISSUES+=("$1"); }
@@ -145,6 +183,46 @@ for lbl in "${UNLOADED[@]}"; do
   fi
 done
 
+# ── 4.6. 기존 감사 9개 결과 흡수 (2026-04-20 Phase 3a) ───────────────────────
+# 기존 감사 도구들의 로그에서 최근 활동 요약. 중복 알림 제거는 별도 단계에서.
+
+AUDIT_LOGS=(
+  "cron-auditor"
+  "launchagents-audit"
+  "tasks-integrity-audit"
+  "token-ledger-audit"
+  "schedule-coherence"
+  "log-size-audit"
+  "doc-sync-auditor"
+  "code-auditor"
+  "tasks-prompt-path-audit"
+)
+AUDIT_SUMMARY=()
+for name in "${AUDIT_LOGS[@]}"; do
+  logpath="$LOG_DIR/${name}.log"
+  [[ ! -f "$logpath" ]] && continue
+  mtime=$(stat -f %m "$logpath" 2>/dev/null || echo 0)
+  age_h=$(( (NOW_EPOCH - mtime) / 3600 ))
+  # 48h 이상 업데이트 없으면 stale
+  if [[ "$age_h" -gt 48 ]]; then
+    AUDIT_SUMMARY+=("${name}: stale (${age_h}h 업데이트 없음)")
+    continue
+  fi
+  # 최근 100줄에서 에러성 키워드 카운트
+  err_count=$(tail -100 "$logpath" 2>/dev/null | grep -ciE 'error|fail|warn|issue' || true)
+  if [[ "$err_count" -gt 0 ]]; then
+    AUDIT_SUMMARY+=("${name}: ${err_count}건 의심 키워드")
+  fi
+done
+
+# ── 4.7. 오늘 감지 카운트를 원장에 append (하루 1회) ─────────────────────────
+BYPASS_COUNT_NUM=$(echo "$BYPASS_LIST" | wc -w | tr -d ' ')
+UNLOADED_COUNT=${#UNLOADED[@]}
+
+if ! grep -q "^{\"date\":\"$TODAY\"" "$DAILY_LEDGER" 2>/dev/null; then
+  echo "{\"date\":\"$TODAY\",\"fail_24h\":${FAIL_COUNT:-0},\"unloaded\":${UNLOADED_COUNT},\"bypass\":${BYPASS_COUNT_NUM},\"phantom\":${PHANTOM_COUNT:-0},\"repairs\":${#REPAIRS[@]},\"ts\":\"$(date '+%H:%M:%S%z')\"}" >> "$DAILY_LEDGER"
+fi
+
 # ── 5. 리포트 출력 (stdout → bot-cron.sh가 Discord로 라우팅) ─────────────────
 
 echo "🔍 **크론 마스터 종합 리포트** — ${NOW} KST"
@@ -161,12 +239,20 @@ fi
 
 echo ""
 echo "---"
-echo "📊 **상세**"
-echo "  · FAIL 실행 (24h): ${FAIL_COUNT}"
-echo "  · LaunchAgent 언로드: ${#UNLOADED[@]}"
-echo "  · Discord BYPASS: $(echo "$BYPASS_LIST" | wc -w | tr -d ' ')"
-echo "  · crontab 유령 스크립트: ${PHANTOM_COUNT}"
+echo "📊 **상세 (어제 대비)**"
+echo "  · FAIL 실행 (24h): ${FAIL_COUNT}  $(format_delta "${FAIL_COUNT:-0}" "$(get_yesterday fail_24h)")"
+echo "  · LaunchAgent 언로드: ${UNLOADED_COUNT}  $(format_delta "$UNLOADED_COUNT" "$(get_yesterday unloaded)")"
+echo "  · Discord BYPASS: ${BYPASS_COUNT_NUM}  $(format_delta "$BYPASS_COUNT_NUM" "$(get_yesterday bypass)")"
+echo "  · crontab 유령 스크립트: ${PHANTOM_COUNT:-0}  $(format_delta "${PHANTOM_COUNT:-0}" "$(get_yesterday phantom)")"
 echo "  · 리포트 생성: ${NOW} KST"
+
+if [[ ${#AUDIT_SUMMARY[@]} -gt 0 ]]; then
+  echo ""
+  echo "🔍 **기존 감사 도구 (최근 100줄 키워드)**"
+  for a in "${AUDIT_SUMMARY[@]}"; do
+    echo "  · $a"
+  done
+fi
 
 if [[ ${#REPAIRS[@]} -gt 0 ]]; then
   echo ""
@@ -177,4 +263,5 @@ if [[ ${#REPAIRS[@]} -gt 0 ]]; then
   [[ "$DRY_RUN" == "1" ]] && echo "  ⚠️ DRY-RUN 모드: 실제 변경 없음"
   echo ""
   echo "  📝 원장: ${REPAIR_LEDGER}"
+  echo "  📈 감지 원장: ${DAILY_LEDGER}"
 fi
