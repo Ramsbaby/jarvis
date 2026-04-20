@@ -34,8 +34,8 @@ rules:
 
   - id: company-names
     severity: high
-    pattern: "SK D&D|JANDI|카카오페이"
-    description: "근무/지원 회사 — OWNER_COMPANIES 사용"
+    pattern: "SK D&D|JANDI|카카오페이|카카오뱅크|네이버|토스랩|라인플러스|쿠팡|당근마켓|무신사|우아한형제들|컬리|오늘의집|엔씨소프트|NCSoft|Kakao|Naver|Toss|Coupang|Daangn|Musinsa|Baemin|Kurly"
+    description: "근무/지원 회사 — OWNER_COMPANIES 또는 private/config/*.json 사용"
     context_allow:
       - "process\\.env\\.OWNER_COMPANIES"
     allow_paths:

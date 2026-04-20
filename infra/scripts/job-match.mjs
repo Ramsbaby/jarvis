@@ -22,12 +22,27 @@ const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrom
 // Notion 연동 상수 (SSoT)
 // DB 자체에는 integration 공유가 없어 query/insert 불가 → 부모 페이지 아래 일일 리포트 페이지로 저장
 const NOTION_TOKEN = process.env.NOTION_TOKEN || '';
-const NOTION_JOB_PARENT_PAGE_ID = 'c6871b51-bec8-4f4d-8596-5735f8acadbf';
 const NOTION_VERSION = '2022-06-28';
+
+// ── Private 설정 로드 (티어·Notion Page ID 등 민감 식별자) ────────────────
+// private/config/job-tiers.json은 gitignored — 회사 리터럴·Page ID는 이 파일에만 존재해야 함.
+// 파일 없거나 로드 실패 시: tier/role 가산점 0점, Notion 전송 스킵으로 graceful fallback.
+const JOB_TIERS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'job-tiers.json');
+let JOB_TIERS_CONFIG = { tiers: {}, tierBonus: {}, roleBonus: {}, notion: {} };
+try {
+  if (existsSync(JOB_TIERS_PATH)) {
+    JOB_TIERS_CONFIG = JSON.parse(readFileSync(JOB_TIERS_PATH, 'utf-8'));
+  } else {
+    console.warn(`⚠️ ${JOB_TIERS_PATH} 없음 — 티어/역할 가산점 0점으로 동작`);
+  }
+} catch (e) {
+  console.warn(`⚠️ job-tiers.json 로드 실패: ${e.message} — 가산점 0점 fallback`);
+}
+const NOTION_JOB_PARENT_PAGE_ID = JOB_TIERS_CONFIG.notion?.parentPageId || '';
 
 const doDiscord = process.argv.includes('--discord');
 const doDetail = process.argv.includes('--detail');
-const doNotion = process.argv.includes('--notion') || (doDiscord && NOTION_TOKEN); // --discord 시 기본 활성
+const doNotion = process.argv.includes('--notion') || (doDiscord && NOTION_TOKEN && NOTION_JOB_PARENT_PAGE_ID); // --discord + 설정 모두 있을 때만 자동
 
 // ── 이력서 키워드 (resume-data.md 기반 하드코딩 — SSoT) ───────────────────
 const MY_SKILLS = {
@@ -47,32 +62,30 @@ const MY_EXPERIENCE_YEARS = 9; // 2016.05 ~ 현재
 // 전체 스킬 키워드 flat
 const ALL_SKILLS = Object.values(MY_SKILLS).flat();
 
-// ── 회사 티어 가산점 (타겟 기업 우선순위) ─────────────────────────────────
-const COMPANY_TIERS = {
-  S: ['카카오페이', '카카오뱅크', '카카오', '네이버', '토스', '라인', '쿠팡',
-      'kakao', 'naver', 'toss', 'line', 'coupang'],
-  A: ['당근', '무신사', '배민', '우아한형제들', '컬리', '29cm', '오늘의집',
-      'daangn', 'musinsa', 'baemin', 'kurly'],
-  B: ['sk', '삼성', 'samsung', 'lg', '현대', 'hyundai', 'kt', '포스코', 'posco',
-      '하이브', 'hybe', '엔씨소프트', 'ncsoft'],
-};
-const TIER_BONUS = { S: 20, A: 12, B: 6 };
-
+// ── 회사 티어 가산점 (JOB_TIERS_CONFIG 에서 로드, fallback 0점) ───────────
 function getTierBonus(company) {
+  const tiers = JOB_TIERS_CONFIG.tiers || {};
+  const bonuses = JOB_TIERS_CONFIG.tierBonus || {};
   const lower = (company || '').toLowerCase();
-  for (const [tier, list] of Object.entries(COMPANY_TIERS)) {
-    if (list.some(c => lower.includes(c.toLowerCase()))) {
-      return { tier, bonus: TIER_BONUS[tier] };
+  for (const [tier, list] of Object.entries(tiers)) {
+    if (!Array.isArray(list)) continue;
+    if (list.some(c => lower.includes(String(c).toLowerCase()))) {
+      return { tier, bonus: bonuses[tier] || 0 };
     }
   }
   return { tier: null, bonus: 0 };
 }
 
-// ── 직군 정확도 보너스 (제목에 Backend/서버/Java/Spring 등 명시) ────────
+// ── 직군 정확도 보너스 (JOB_TIERS_CONFIG.roleBonus 에서 로드, fallback 0점) ─
 function getRoleBonus(title) {
+  const roles = JOB_TIERS_CONFIG.roleBonus || {};
   const lower = (title || '').toLowerCase();
-  if (/(backend|백엔드|서버\s*개발|\bjava\b|\bkotlin\b|\bspring\b)/.test(lower)) return 15;
-  if (/(fullstack|풀스택)/.test(lower)) return 8;
+  for (const spec of Object.values(roles)) {
+    if (!spec?.pattern) continue;
+    try {
+      if (new RegExp(spec.pattern).test(lower)) return spec.points || 0;
+    } catch { /* invalid regex → skip */ }
+  }
   return 0;
 }
 
