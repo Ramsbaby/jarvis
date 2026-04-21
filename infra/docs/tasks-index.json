@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-21T03:18:45.501Z",
+  "generatedAt": "2026-04-21T05:17:59.044Z",
   "source": "~/jarvis/runtime/config/tasks.json",
   "totalTasks": 102,
   "teamDistribution": {
@@ -954,7 +954,7 @@
           "model": "claude-haiku-4-5-20251001",
           "priority": "daily",
           "maxBudget": "0.50",
-          "disabled": true,
+          "disabled": false,
           "description": null,
           "logs": {
             "stdout": {
