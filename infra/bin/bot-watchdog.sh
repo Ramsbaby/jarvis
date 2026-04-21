@@ -25,6 +25,10 @@ COOLDOWN_FILE="$STATE_DIR/bot-watchdog-last-alert"
 
 SILENCE_THRESHOLD_SEC=900   # 15 minutes
 ALERT_COOLDOWN_SEC=900      # 15 minutes between alerts
+HEAL_CYCLE_TIMEOUT_SEC=1800 # 30 minutes — heal-cycle이 이 시간 초과 시 Discord 알람
+HEAL_START_FILE="$STATE_DIR/bot-heal-start-epoch"
+HEAL_TIMEOUT_ALERTED_FILE="$STATE_DIR/bot-heal-timeout-alerted"
+DISCORD_VISUAL="${HOME}/jarvis/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$STATE_DIR" "$(dirname "$WATCHDOG_LOG")"
 
@@ -110,6 +114,44 @@ if [[ -d "$HEALING_LOCK" ]]; then
     fi
 fi
 
+# --- Heal-cycle 30분 초과 감지 (2026-04-22 재발방지) ---
+# 재시작 시도 중이라면 heal 시작 시각을 기록하고, 30분 초과 시 Discord 알람
+# heal-start 파일이 없으면 지금을 시작 시각으로 기록
+if [[ ! -f "$HEAL_START_FILE" ]]; then
+    date +%s > "$HEAL_START_FILE"
+    log "HEAL: 재시작 사이클 시작 시각 기록 ($(TZ=Asia/Seoul date '+%F %H:%M KST'))"
+else
+    heal_start_epoch=$(cat "$HEAL_START_FILE" 2>/dev/null || echo "0")
+    heal_elapsed=$(( $(date +%s) - heal_start_epoch ))
+    log "HEAL: 재시작 사이클 경과 ${heal_elapsed}s (한계 ${HEAL_CYCLE_TIMEOUT_SEC}s)"
+
+    if (( heal_elapsed >= HEAL_CYCLE_TIMEOUT_SEC )); then
+        # 30분 초과 — 아직 알람 미발송 상태일 때만 전송
+        if [[ ! -f "$HEAL_TIMEOUT_ALERTED_FILE" ]]; then
+            log "ALERT: Heal-cycle ${heal_elapsed}s 초과 (>${HEAL_CYCLE_TIMEOUT_SEC}s). Discord 알람 전송."
+            _heal_elapsed_min=$(( heal_elapsed / 60 ))
+            _heal_start_kst=$(TZ=Asia/Seoul date -r "$heal_start_epoch" '+%F %H:%M KST' 2>/dev/null \
+                || TZ=Asia/Seoul date -d "@${heal_start_epoch}" '+%F %H:%M KST' 2>/dev/null \
+                || echo "알 수 없음")
+
+            send_ntfy "Jarvis 봇 장시간 복구 실패" \
+                "봇이 ${_heal_elapsed_min}분째 재시작 사이클을 반복 중입니다.\n시작: ${_heal_start_kst}\n\n수동 확인이 필요합니다." "urgent"
+
+            if [[ -f "$DISCORD_VISUAL" ]]; then
+                node "$DISCORD_VISUAL" --type stats \
+                  --data "{\"title\":\"🚨 봇 Heal-cycle ${_heal_elapsed_min}분 초과\",\"data\":{\"경과\":\"${_heal_elapsed_min}분\",\"시작\":\"${_heal_start_kst}\",\"조치\":\"수동 개입 필요\"},\"timestamp\":\"$(TZ=Asia/Seoul date '+%F %H:%M KST')\"}" \
+                  --channel jarvis-system 2>/dev/null \
+                  && log "Discord #jarvis-system 알람 전송 완료" \
+                  || log "Discord 알람 전송 실패 (무시)"
+            fi
+
+            date +%s > "$HEAL_TIMEOUT_ALERTED_FILE"
+        else
+            log "HEAL: 30분 초과이나 Discord 알람은 이미 발송됨 (중복 방지)"
+        fi
+    fi
+fi
+
 log "ALERT: Bot silent for ${silence_sec}s (>${SILENCE_THRESHOLD_SEC}s). Restarting."
 
 # Check if process is actually running (confirms silent death vs real crash)
@@ -139,6 +181,25 @@ if [[ "$bot_pid" == "-" || -z "$bot_pid" ]]; then
     fi
     exit 0
 fi
+
+# 봇 복구 성공 시 heal-cycle 추적 파일 리셋 (다음 장애 사이클을 새로 측정하기 위해)
+_check_heal_reset() {
+    # 봇 로그가 최근 60초 이내에 갱신됐으면 복구 성공으로 간주
+    local recent_ts
+    recent_ts=$(tail -5 "$BOT_LOG" 2>/dev/null | grep -oE '"ts":"[-0-9T:.Z]+"' | tail -1 | sed 's/"ts":"//;s/"//' || true)
+    if [[ -n "$recent_ts" ]]; then
+        local recent_clean="${recent_ts%%.*}Z"
+        local recent_epoch
+        recent_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$recent_clean" "+%s" 2>/dev/null \
+          || TZ=UTC date -d "$recent_clean" "+%s" 2>/dev/null || echo 0)
+        local age=$(( $(date +%s) - recent_epoch ))
+        if (( age < 120 )); then
+            rm -f "$HEAL_START_FILE" "$HEAL_TIMEOUT_ALERTED_FILE"
+            log "HEAL: 봇 복구 확인 — heal-cycle 추적 파일 리셋"
+        fi
+    fi
+}
+_check_heal_reset
 
 # Kill + restart
 if $IS_MACOS; then

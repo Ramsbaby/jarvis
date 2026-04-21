@@ -126,8 +126,31 @@ while IFS= read -r path; do
 
   # Merge 시도
   if git merge origin/main --no-edit --no-ff >/dev/null 2>>"$LOG_FILE"; then
-    log "  MERGED: origin/main → $cur_branch 성공"
-    MERGED=$((MERGED + 1))
+    # merge 성공 후 2026-04-22 재발방지: conflict 마커 잔존 검사
+    # git이 충돌 없이 완료했다고 보고해도 마커가 남아있는 edge case 방어
+    _conflict_marker_files=$(git diff HEAD --name-only 2>/dev/null | \
+      grep -E '\.(js|ts|json)$' | \
+      while read -r f; do
+        [[ -f "$f" ]] && grep -l '<<<<<<<' "$f" 2>/dev/null || true
+      done || true)
+    # 추가로 전체 worktree에서 마커 grep (git diff에 안 잡히는 경우 대비)
+    if [[ -z "$_conflict_marker_files" ]]; then
+      _conflict_marker_files=$(grep -rl '<<<<<<<' . \
+        --include="*.js" --include="*.ts" --include="*.json" \
+        --exclude-dir=node_modules --exclude-dir=".git" 2>/dev/null || true)
+    fi
+    if [[ -n "$_conflict_marker_files" ]]; then
+      log "  CONFLICT_MARKER: merge 완료 후 conflict 마커 발견 — safe-abort (commit 금지)"
+      _marker_list=$(echo "$_conflict_marker_files" | tr '\n' ' ')
+      log "  마커 파일: ${_marker_list}"
+      # merge 결과를 되돌림 (HEAD로 reset — merge commit 전 상태로)
+      git reset --merge 2>/dev/null || git merge --abort 2>/dev/null || true
+      CONFLICTED=$((CONFLICTED + 1))
+      CONFLICT_LIST+=("${wt_name}:${cur_branch}[marker:${_marker_list}]")
+    else
+      log "  MERGED: origin/main → $cur_branch 성공 (마커 검사 통과)"
+      MERGED=$((MERGED + 1))
+    fi
   else
     # 충돌 또는 실패 → abort
     log "  CONFLICT: merge 실패 — abort"

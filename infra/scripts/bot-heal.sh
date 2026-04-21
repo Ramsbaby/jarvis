@@ -59,6 +59,47 @@ send_ntfy "Jarvis 자동복구 시작" "$ERROR_REASON\n\n모니터링: ssh 후 t
 # ── 하드코딩 사전 패치 (Claude 없이 즉시 처리 가능한 알려진 패턴) ──────────────
 HARDCODED_FIXED=false
 
+# 패턴 0: git merge conflict 마커 검사 — handlers.js 등 .js 파일에 <<<<<<<, =======, >>>>>>> 잔존 시 즉시 실패
+# 2026-04-22 재발방지: merge conflict 마커로 인한 5시간 43분 봇 다운 사례
+DISCORD_JS_DIR="$BOT_HOME/discord"
+if [[ -d "$DISCORD_JS_DIR" ]]; then
+    CONFLICT_FILES=$(grep -rl $'<<<<<<< \|=======\n\|>>>>>>> ' "$DISCORD_JS_DIR" --include="*.js" 2>/dev/null || \
+        grep -rl $'<<<<<<< ' "$DISCORD_JS_DIR" --include="*.js" 2>/dev/null || true)
+    # fallback: 마커 3종을 개별 grep으로 교차 검사
+    if [[ -z "$CONFLICT_FILES" ]]; then
+        CONFLICT_FILES=$(grep -rl '<<<<<<<' "$DISCORD_JS_DIR" --include="*.js" 2>/dev/null | \
+            while read -r f; do
+                if grep -q '=======' "$f" 2>/dev/null || grep -q '>>>>>>>' "$f" 2>/dev/null; then
+                    echo "$f"
+                fi
+            done || true)
+    fi
+    if [[ -n "$CONFLICT_FILES" ]]; then
+        log "[hardcode] ❌ git merge conflict 마커 발견 — 자동복구 불가, 수동 개입 필요"
+        while IFS= read -r cf; do
+            [[ -z "$cf" ]] && continue
+            log "[hardcode]   conflict 파일: $cf"
+        done <<< "$CONFLICT_FILES"
+        CONFLICT_FILES_ONELINE=$(echo "$CONFLICT_FILES" | tr '\n' ' ')
+        send_ntfy "Jarvis 봇 시작 실패 — Merge Conflict 잔존" \
+            "다음 .js 파일에 git merge conflict 마커(<<<<<<<, =======, >>>>>>>)가 남아있습니다.\n${CONFLICT_FILES_ONELINE}\n\n수동으로 마커를 제거 후 봇을 재시작해 주십시오." "urgent"
+        # Discord #jarvis-system 알림
+        if [[ -f "$BOT_HOME/runtime/scripts/discord-visual.mjs" ]]; then
+            DISCORD_VISUAL_PATH="$BOT_HOME/runtime/scripts/discord-visual.mjs"
+        else
+            DISCORD_VISUAL_PATH="${HOME}/jarvis/runtime/scripts/discord-visual.mjs"
+        fi
+        if [[ -f "$DISCORD_VISUAL_PATH" ]]; then
+            node "$DISCORD_VISUAL_PATH" --type stats \
+              --data "{\"title\":\"🚨 봇 시작 실패 — Merge Conflict 마커 잔존\",\"data\":{\"파일\":\"${CONFLICT_FILES_ONELINE}\",\"조치\":\"수동 마커 제거 후 재시작 필요\"},\"timestamp\":\"$(TZ=Asia/Seoul date '+%F %H:%M KST')\"}" \
+              --channel jarvis-system 2>/dev/null || true
+        fi
+        # 서킷브레이커 원장에 기록
+        echo "${_cause_sig}|$(date '+%Y-%m-%d %H:%M')|CONFLICT_MARKER|${CONFLICT_FILES_ONELINE}" >> "$HEAL_FAIL_LEDGER" 2>/dev/null || true
+        exit 1
+    fi
+fi
+
 # 패턴 1: .env 소멸 → 백업에서 즉시 복원
 ENV_FILE="$BOT_HOME/discord/.env"
 ENV_BACKUP="$BOT_HOME/state/config-backups/.env.backup"
