@@ -94,6 +94,10 @@ for t in tasks:
     task_id = t.get('id', '')
     schedule = t.get('schedule', t.get('cron', ''))
     
+    # enabled: false 태스크는 plist 생성 안 함 (Nexus SSoT 정책)
+    if t.get('enabled') is False:
+        continue
+
     # 스케줄 없거나 manual이면 skip
     if not schedule or schedule == '(manual)':
         continue
