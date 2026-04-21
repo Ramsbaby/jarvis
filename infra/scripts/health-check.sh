@@ -80,9 +80,9 @@ check "cron-results" "ok" "today: ${success} success, ${failures} failures"
 # 7. Discord bot error log (infra 팀장용 가시성)
 # inactivity timeout은 사용자 비응답(정상 동작) — critical 카운트 제외
 bot_errors_today=$(grep "$(date +%F)" "$BOT_HOME/logs/discord-bot.jsonl" 2>/dev/null \
-    | grep '"level":"error"' \
-    | grep -v "inactivity timeout\|no_response_expected" \
-    | { wc -l || true; } | tr -d ' ')
+    | { grep '"level":"error"' || true; } \
+    | { grep -v "inactivity timeout\|no_response_expected" || true; } \
+    | wc -l | tr -d ' ') || bot_errors_today=0
 bot_errors_today=${bot_errors_today:-0}
 if [[ "$bot_errors_today" -gt 50 ]]; then
     check "bot-errors" "fail" "today: ${bot_errors_today} real errors (critical)"

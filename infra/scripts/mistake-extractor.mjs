@@ -42,7 +42,7 @@ const CLAUDE_BIN       = process.env.CLAUDE_BINARY || join(HOME, '.local/bin/cla
 const MAX_FILES_PER_RUN = 5;     // 세션 파일 상한
 const MAX_MISTAKES_PER_RUN = 5;  // 추출 건 상한
 const MIN_FILE_BYTES   = 300;    // 이보다 작은 요약은 스킵
-const DUPLICATE_THRESHOLD = 0.65; // 기존 패턴과 유사도 이상이면 skip
+const DUPLICATE_THRESHOLD = 0.4; // 기존 패턴과 유사도 이상이면 skip (Verify P3 지적에 따라 0.65→0.4 하향)
 
 const DRY_RUN = process.argv.includes('--dry-run');
 // Stop 훅 전용 단일 파일 모드: --file <path> 로 특정 세션 .md 1건만 처리하고 state 갱신 skip
