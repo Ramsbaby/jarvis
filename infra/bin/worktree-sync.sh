@@ -59,6 +59,7 @@ UP_TO_DATE=0
 MERGED=0
 CONFLICTED=0
 FAILED=0
+SKIPPED_BUSY=0  # uncommitted tracked 변경 있어 보호 차원 skip
 declare -a CONFLICT_LIST=()
 
 # ── main repo fetch (한 번만, 공유 objects) ──────────────────────────────────
@@ -113,10 +114,13 @@ while IFS= read -r path; do
     continue
   fi
 
-  # Uncommitted 변경 있으면 merge 거부 (안전)
+  # Tracked 파일의 uncommitted 변경만 보호 (untracked .bak·세션 파일은 merge 안전)
+  # `git diff --quiet` = tracked working tree vs index
+  # `git diff --cached --quiet` = index vs HEAD
+  # untracked 파일(`??`)은 git merge가 건드리지 않으므로 무시
   if ! git diff --quiet || ! git diff --cached --quiet; then
-    log "  SKIP: uncommitted 변경 있음 (사용자 작업 중)"
-    FAILED=$((FAILED + 1))
+    log "  SKIP_BUSY: tracked uncommitted 변경 있음 (주인님 작업 중 — 보호)"
+    SKIPPED_BUSY=$((SKIPPED_BUSY + 1))
     continue
   fi
 
@@ -134,7 +138,7 @@ while IFS= read -r path; do
 done < <(git -C "$REPO" worktree list --porcelain | awk '/^worktree / { print substr($0, 10) }')
 
 # ── 결과 요약 ────────────────────────────────────────────────────────────────
-SUMMARY="worktree: ${TOTAL}개 | up-to-date: ${UP_TO_DATE} | merged: ${MERGED} | conflict: ${CONFLICTED} | failed: ${FAILED}"
+SUMMARY="worktree: ${TOTAL}개 | up-to-date: ${UP_TO_DATE} | merged: ${MERGED} | conflict: ${CONFLICTED} | skipped_busy: ${SKIPPED_BUSY} | failed: ${FAILED}"
 log ""
 log "=== $SUMMARY ==="
 echo "$SUMMARY"
