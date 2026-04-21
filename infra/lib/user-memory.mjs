@@ -20,8 +20,22 @@ const CATEGORY_RULES = [
   { cat: 'work',     re: /백엔드|spring|kafka|grpc|redis|aws|이직|면접|연봉|프로젝트|업무|회사|사수|팀장|개발/i },
   { cat: 'family',   re: /아내|와이프|가족|부모님|아이|육아/i },
   { cat: 'travel',   re: /여행|destination-a|destination-b|해외|항공|숙소|노보리베쓰|휴가|출장/i },
-  { cat: 'health',   re: /건강|운동|병원|의사|약|몸무게|다이어트|수면|피로|두통/i },
+  { cat: 'health',   re: /건강|운동|병원|의사|약|몸무게|다이어트|수면|피로|두통|보험|난임|출산|임신/i },
+  { cat: 'profile',  re: /튜터|교사|강사|직업|나이|살\b|\d+세\b|학력|출신|계정|이메일/i },
+  { cat: 'students', re: /학생|수업|수업료|레슨|preply|borui|mahlee|paula|lucia|katherine|lara|alissa|marko|kaylie|nat\b/i },
 ];
+
+// 카테고리별 최대 fact 저장 한도 (초과 시 가장 오래된 것 제거)
+const CATEGORY_LIMITS = {
+  profile:  5,
+  students: 20,
+  health:   10,
+  work:     15,
+  trading:  15,
+  travel:   10,
+  family:   10,
+  general:  15,
+};
 
 function detectCategory(text) {
   for (const { cat, re } of CATEGORY_RULES) {
@@ -61,18 +75,37 @@ export const userMemory = {
     return _load(userId);
   },
 
-  addFact(userId, fact, source = 'unknown') {
+  addFact(userId, fact, source = 'unknown', importance = 'medium') {
     const data = _load(userId);
     // facts는 string 또는 {text, addedAt[, category][, source]} 혼용 허용 (하위 호환)
     const normText = (f) => (typeof f === 'string' ? f : f?.text ?? '');
     const exists = data.facts.some(f => normText(f) === fact);
     if (!exists) {
+      const category = detectCategory(fact);
       data.facts.push({
         text: fact,
         addedAt: new Date().toISOString(),
-        category: detectCategory(fact),
+        category,
+        importance,
         source,
       });
+      // 카테고리 한도 초과 시 중요도 낮은 것 → 오래된 것 순서로 제거
+      const limit = CATEGORY_LIMITS[category] ?? 20;
+      const catFacts = data.facts.filter(f => (typeof f === 'string' ? 'general' : (f?.category ?? 'general')) === category);
+      if (catFacts.length > limit) {
+        const IMPORTANCE_RANK = { high: 3, medium: 2, low: 1 };
+        // 같은 카테고리 내에서 중요도 오름차순, 날짜 오름차순 정렬 → 맨 앞 것 제거
+        const sorted = catFacts.sort((a, b) => {
+          const ia = IMPORTANCE_RANK[a?.importance ?? 'medium'] ?? 2;
+          const ib = IMPORTANCE_RANK[b?.importance ?? 'medium'] ?? 2;
+          if (ia !== ib) return ia - ib; // 중요도 낮은 것 먼저
+          const ta = a?.addedAt ? new Date(a.addedAt).getTime() : 0;
+          const tb = b?.addedAt ? new Date(b.addedAt).getTime() : 0;
+          return ta - tb; // 오래된 것 먼저
+        });
+        const toRemoveText = normText(sorted[0]);
+        data.facts = data.facts.filter(f => normText(f) !== toRemoveText);
+      }
       data.updatedAt = new Date().toISOString();
       _save(data);
       return true;
@@ -174,6 +207,9 @@ export const userMemory = {
       // 프롬프트 카테고리 감지 → 해당 카테고리 fact 부스트
       const promptCategory = detectCategory(currentPrompt);
 
+      // 중요도 → 점수 가중치
+      const IMPORTANCE_BOOST = { high: 0.5, medium: 0.2, low: 0.0 };
+
       // 각 fact에 관련성 점수 산출
       const scored = allFacts.map(f => {
         const factWords = tokenize(f.text);
@@ -193,6 +229,8 @@ export const userMemory = {
         }
         // 카테고리 매칭 부스트 — 같은 주제끼리 우선 surfacing
         if (f.category !== 'general' && f.category === promptCategory) score += 0.4;
+        // 중요도 부스트 — high importance는 항상 우선 노출
+        score += IMPORTANCE_BOOST[f?.importance ?? 'medium'] ?? 0.2;
         return { ...f, score };
       });
 
