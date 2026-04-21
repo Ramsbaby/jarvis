@@ -172,6 +172,22 @@ export function buildOwnerPreferencesSection({ botHome }) {
 }
 
 /**
+ * Builds the owner visualization policy section (Stable).
+ * Reads context/owner/visualization.md — AI Slop prevention + design defaults
+ * applied to all visual outputs (Discord cards, jarvis-board, resume, blog, HTML reports).
+ * 출처: Anthropic Opus 4.7 프롬프팅 가이드 (2025-04).
+ */
+export function buildOwnerVisualizationSection({ botHome }) {
+  try {
+    const content = readFileSync(join(botHome, 'context', 'owner', 'visualization.md'), 'utf-8');
+    if (!content.trim()) return '';
+    return `--- Visual Output Design Policy (시각 결과물에 항상 적용) ---\n${content.trim()}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Builds family channel briefing context (Dynamic — AFTER hash).
  * Reads state/family-last-briefing.json and injects today's briefing data
  * so the bot never hallucinates lesson counts or amounts after webhook delivery.

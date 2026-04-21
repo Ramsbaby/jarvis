@@ -29,7 +29,7 @@ import {
   buildPrinciplesSection, buildFormatCoreSection, buildFormatDetailSection,
   buildFormatSection, buildToolsSection,
   buildSafetySection, buildUserContextSection,
-  buildOwnerPreferencesSection, buildOwnerPersonaSection, buildFamilyBriefingContext,
+  buildOwnerPreferencesSection, buildOwnerPersonaSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
   buildWikiContextSection,
 } from './prompt-sections.js';
 import { getPromptHarness, Tier } from './prompt-harness.js';
@@ -854,6 +854,10 @@ export async function* createClaudeSession(prompt, {
     if (createClaudeSession._ownerPrefsCache) {
       systemParts.push('', createClaudeSession._ownerPrefsCache);
     }
+
+    // Visual output design policy (AI Slop prevention) — applies to Discord cards, jarvis-board, etc.
+    const visualizationSection = buildOwnerVisualizationSection({ botHome: BOT_HOME });
+    if (visualizationSection) systemParts.push('', visualizationSection);
   }
 
   // Session version check: compute hash from STABLE systemParts (persona + user context only).
