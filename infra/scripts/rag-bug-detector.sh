@@ -282,6 +282,7 @@ if [[ -d "$LANCEDB_PATH/documents.lance" ]]; then
 
     # 격리본은 별도 집계 — INFO/WARN 분리 (디스크 풀 리스크는 표시하되 issues_found 카운트 제외)
     broken_count=$(find "$LANCEDB_PATH" -maxdepth 1 -type d -name "documents.lance.broken-*" 2>/dev/null | wc -l | tr -d ' ')
+    new_broken_snapshots=0
     if [[ "$broken_count" -gt 0 ]]; then
         broken_kb=$(du -sck "$LANCEDB_PATH"/documents.lance.broken-* 2>/dev/null | tail -1 | awk '{print $1}')
         broken_gb_int=$((broken_kb / 1024 / 1024))
@@ -316,6 +317,7 @@ if [[ -d "$LANCEDB_PATH/documents.lance" ]]; then
                 '{detect_ts:$detect_ts, broken_path:$path, dir_mtime:$mtime, inode:$inode, processes:$procs, lsof:$lsof}' \
                 > "$forensic_file" 2>/dev/null
             report_lines+=("- **FORENSIC**: ${broken_name} → 스냅샷 저장 \`${forensic_file}\`")
+            new_broken_snapshots=$((new_broken_snapshots + 1))
         done < <(find "$LANCEDB_PATH" -maxdepth 1 -type d -name "documents.lance.broken-*" 2>/dev/null)
     fi
 fi
@@ -339,13 +341,29 @@ mkdir -p "$RESULTS_DIR"
 printf '%s\n' "${report_lines[@]}" > "$REPORT_FILE"
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] RAG bug detector: $issues_found issues found. Report: $REPORT_FILE"
 
-# 이슈 있으면 Discord 알림 (쿨다운 체크)
+# 이슈 있거나 신규 broken 격리본 감지 시 Discord 알림 (쿨다운 체크)
+# new_broken_snapshots > 0: 이전 실행엔 없던 broken-* 디렉토리 신규 발생 = 우선 긴급
+alert_trigger=0
 if [[ $issues_found -gt 0 ]]; then
+    alert_trigger=1
+fi
+if [[ "${new_broken_snapshots:-0}" -gt 0 ]]; then
+    alert_trigger=1
+fi
+
+if [[ $alert_trigger -gt 0 ]]; then
     if is_in_cooldown; then
         echo "Cooldown active, skipping Discord alert."
     else
-        summary="🔍 RAG Bug Detector - ${issues_found}개 이슈 감지"
+        if [[ "${new_broken_snapshots:-0}" -gt 0 ]]; then
+            summary="🚨 LanceDB 격리본 신규 감지 — ${new_broken_snapshots}개 broken-* 디렉토리 (forensic 스냅샷 저장)"
+        else
+            summary="🔍 RAG Bug Detector - ${issues_found}개 이슈 감지"
+        fi
         detail=""
+        if [[ "${new_broken_snapshots:-0}" -gt 0 ]]; then
+            detail="${detail}\n- 신규 broken 격리본 ${new_broken_snapshots}개 → \`~/jarvis/runtime/state/broken-forensic/\` 확인"
+        fi
         if [[ "$bias_issues" -gt 0 ]] 2>/dev/null; then
             detail="${detail}\n- 소스 편향 감지됨"
         fi
