@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-04-22T03:06:02.928Z",
+  "generatedAt": "2026-04-22T14:19:29.019Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 105,
+  "totalTasks": 109,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -12,13 +12,13 @@
     "library": 1,
     "growth-lead": 4,
     "brand-lead": 4,
-    "audit-lead": 17,
+    "audit-lead": 19,
     "secretary": 10,
-    "uncategorized": 16
+    "uncategorized": 18
   },
   "typeDistribution": {
     "prompt": 37,
-    "script": 68
+    "script": 72
   },
   "groups": [
     {
@@ -835,7 +835,7 @@
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/mistake-circuit-healthcheck-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-mistake-circuit-healthcheck-*.log",
@@ -1255,11 +1255,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/tqqq-monitor.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/tqqq-monitor-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-tqqq-monitor-*.log",
@@ -1591,11 +1591,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/rag-index-consume.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/rag-index-consume-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-rag-index-consume-*.log",
@@ -2084,6 +2084,38 @@
       },
       "tasks": [
         {
+          "id": "bidirectional-audit",
+          "name": "양방향 고아 감사 (4층 방어막)",
+          "schedule": "30 7 * * 0",
+          "scheduleHuman": "일요일 07:30",
+          "type": "script",
+          "handler": "bidirectional-audit.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": "일요일 07:30 KST. tasks.json ↔ LaunchAgents plist 양방향 감사. orphan/missing/mismatch 3종 감지. 4층 방어막 P4 (2026-04-22 BYPASS 사건 구조적 재발 방지).",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/bidirectional-audit.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/bidirectional-audit-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-bidirectional-audit-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "code-auditor",
           "name": "코드 품질 감사",
           "schedule": "45 4 * * *",
@@ -2335,6 +2367,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-launchagents-audit-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "legacy-plist-audit",
+          "name": "legacy LaunchAgent plist 감사 (tasks.json 미편입 탐지)",
+          "schedule": "0 4 * * 0",
+          "scheduleHuman": "일요일 04:00",
+          "type": "script",
+          "handler": "legacy-plist-audit.sh",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": "2026-04-16 카카오 토큰 갱신 크론 영구 소실 사고 재발 방지. com.jarvis.* plist 중 tasks.json에 id 없는 legacy를 주간 탐지. --notify-discord 옵션으로 경보 가능.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/legacy-plist-audit.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/legacy-plist-audit-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-legacy-plist-audit-*.log",
               "exists": false
             }
           }
@@ -3156,6 +3220,38 @@
           }
         },
         {
+          "id": "cron-sync-hourly",
+          "name": "tasks.json → plist 자동 동기화 (매 시간)",
+          "schedule": "15 * * * *",
+          "scheduleHuman": "매일 *:15",
+          "type": "script",
+          "handler": "cron-sync.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": "tasks.json 변경이 즉시 ~/Library/LaunchAgents/com.jarvis.*.plist에 반영되도록 매 시간 15분에 cron-sync 실행. 카카오 사고 재발 방지의 일부.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/cron-sync-hourly.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/cron-sync-hourly-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-cron-sync-hourly-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "dev-task-runner",
           "name": "dev-task-runner (launchd→tasks.json 이관 2026-04-16)",
           "schedule": "*/5 * * * *",
@@ -3279,6 +3375,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-jarvis-home-sync-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "kakao-token-refresh",
+          "name": "카카오 access_token 자동 갱신",
+          "schedule": "0 */5 * * *",
+          "scheduleHuman": "매일 5시간마다",
+          "type": "script",
+          "handler": "kakao-token-refresh.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0",
+          "disabled": false,
+          "description": "refresh_token으로 access_token 재발급 (6h 만료 주기 대응). 2026-04-16 LaunchAgent 정리 때 누락됐다가 2026-04-22 재등록.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/kakao-token-refresh.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/kakao-token-refresh-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-kakao-token-refresh-*.log",
               "exists": false
             }
           }
