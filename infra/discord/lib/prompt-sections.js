@@ -296,7 +296,10 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
 
   // 3. meta/learned-mistakes.md — 도메인 불문 항상 주입 (Compound Engineering)
   //    오답노트는 "실수 회피"용이므로 모든 응답 전에 참조되어야 함.
-  //    도메인 감지와 무관하게 전역 주입. 최대 800자로 제한.
+  //    도메인 감지와 무관하게 전역 주입.
+  //    [A3] 800자 단순 슬라이스 → 헤더(`## YYYY-MM-DD`) 단위 최신 5건 추출.
+  //    이유: 단순 slice(0, 800)은 frontmatter 다음 안내 블록만 잘리고 신규 등재가 누락됨.
+  //    파일은 신규가 상단(맨 위 추가)이므로 헤더 5개 분량을 그대로 노출.
   let mistakesInjected = false;
   try {
     const mistakesPath = join(wikiDir, 'meta', 'learned-mistakes.md');
@@ -304,7 +307,15 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
       let mistakes = readFileSync(mistakesPath, 'utf-8');
       mistakes = mistakes.replace(/^---[\s\S]*?---\n*/m, '').trim();
       if (mistakes.length > 100) {
-        parts.push(`### [meta/오답노트]\n${mistakes.slice(0, 800)}`);
+        // 헤더(`## YYYY-MM-DD ...`) 기준으로 split, 최신 5건만 채택
+        const sections = mistakes.split(/^(?=## \d{4}-\d{2}-\d{2})/m);
+        // sections[0] = 파일 안내 블록(헤더 없음), sections[1..N] = 각 항목
+        const headerSections = sections.filter(s => /^## \d{4}-\d{2}-\d{2}/.test(s));
+        const top5 = headerSections.slice(0, 5).map(s => s.trim()).join('\n\n');
+        const safe = top5 || mistakes.slice(0, 1500); // 헤더 0개면 폴백
+        // 안전장치: 최대 1800자로 캡 (전체 시스템 프롬프트 길이 보호)
+        const capped = safe.length > 1800 ? safe.slice(0, 1800) + '\n[...더 있음]' : safe;
+        parts.push(`### [meta/오답노트]\n${capped}`);
         mistakesInjected = true;
       }
     }
@@ -313,8 +324,9 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
   if (parts.length === 0) return '';
 
   let result = `--- 위키 컨텍스트 ---\n${parts.join('\n\n')}`;
-  if (result.length > 2000) {
-    result = result.slice(0, 2000) + '\n[...더 있음]';
+  // [A3] 캡 2000 → 3500 — 오답노트 5건(최대 1800자) + 도메인 컨텍스트 동시 수용
+  if (result.length > 3500) {
+    result = result.slice(0, 3500) + '\n[...더 있음]';
   }
 
   // 위키 주입 관찰 로그 — 실제로 주입되는지 추적

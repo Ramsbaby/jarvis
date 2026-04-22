@@ -1124,33 +1124,10 @@ export async function* createClaudeSession(prompt, {
     hooks: {
       PreToolUse: [{
         hooks: [async (input) => {
-          // ── Tool Call Guard Rail ─────────────────────────────────────────────
-          // turn당 max 8회 제한 → 루프/폭주 방지
-          const MAX_TOOL_CALLS = 8;
-          if (!createClaudeSession._toolCallCounts) createClaudeSession._toolCallCounts = new Map();
-          const _turnKey = `${threadId}:${Date.now() - (Date.now() % 60000)}`; // 1분 단위 버킷
-          const _count = (createClaudeSession._toolCallCounts.get(_turnKey) ?? 0) + 1;
-          createClaudeSession._toolCallCounts.set(_turnKey, _count);
-          // 오래된 버킷 정리 (메모리 누수 방지)
-          if (createClaudeSession._toolCallCounts.size > 200) {
-            const _now = Date.now() - (Date.now() % 60000);
-            for (const [k] of createClaudeSession._toolCallCounts) {
-              if (!k.startsWith(`${threadId}:${_now}`)) createClaudeSession._toolCallCounts.delete(k);
-            }
-          }
-          if (_count > MAX_TOOL_CALLS) {
-            log('warn', `PreToolUse: tool call limit exceeded (${_count}/${MAX_TOOL_CALLS})`, {
-              tool: input.tool_name, threadId,
-            });
-            return {
-              hookSpecificOutput: {
-                hookEventName: 'PreToolUse',
-                permissionDecision: 'deny',
-                permissionDecisionReason: `도구 호출 한도 초과 (${_count}/${MAX_TOOL_CALLS}회). 현재 요청을 텍스트로 정리해 주세요.`,
-              },
-            };
-          }
-          // ────────────────────────────────────────────────────────────────────
+          // (2026-04-22 제거) MAX_TOOL_CALLS=8 하드코딩 가드 삭제.
+          // 이유: 오너 지시로 조사형 세션에서 턴당 8회 제한이 실사용을 가로막음.
+          // handlers.js:95 주석과 SSoT 동기화 — SDK maxTurns(200) + 10분 timeout +
+          // maxBudget이 이미 폭주를 차단. 단일 책임은 MAX_CONTINUATIONS=5(handlers.js).
           try {
             const blocked = checkSensitivePath(input.tool_name, input.tool_input);
             if (blocked) {
