@@ -1,24 +1,24 @@
 {
-  "generatedAt": "2026-04-21T05:17:59.044Z",
+  "generatedAt": "2026-04-22T03:06:02.928Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 102,
+  "totalTasks": 105,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
-    "infra-lead": 16,
+    "infra-lead": 17,
     "finance": 8,
     "trend-lead": 8,
-    "record-lead": 5,
+    "record-lead": 6,
     "library": 1,
     "growth-lead": 4,
     "brand-lead": 4,
     "audit-lead": 17,
     "secretary": 10,
-    "uncategorized": 15
+    "uncategorized": 16
   },
   "typeDistribution": {
     "prompt": 37,
-    "script": 65
+    "script": 68
   },
   "groups": [
     {
@@ -114,7 +114,7 @@
           "model": null,
           "priority": "critical",
           "maxBudget": "1.20",
-          "disabled": true,
+          "disabled": false,
           "description": null,
           "logs": {
             "stdout": {
@@ -146,7 +146,7 @@
           "model": null,
           "priority": "critical",
           "maxBudget": "1.20",
-          "disabled": true,
+          "disabled": false,
           "description": null,
           "logs": {
             "stdout": {
@@ -210,7 +210,7 @@
           "model": null,
           "priority": "normal",
           "maxBudget": null,
-          "disabled": false,
+          "disabled": true,
           "description": "08:00~21:00 매시 정각 1회. 하루 최대 14슬롯 (실제 게시는 board-topic-proposer.sh 내 일일 상한 5개로 제한)",
           "logs": {
             "stdout": {
@@ -812,6 +812,38 @@
           }
         },
         {
+          "id": "mistake-circuit-healthcheck",
+          "name": "오답노트 추출기 회로 차단 감지",
+          "schedule": "0 * * * *",
+          "scheduleHuman": "매일 *:0",
+          "type": "script",
+          "handler": "mistake-circuit-healthcheck.mjs",
+          "team": {
+            "id": "infra-lead",
+            "name": "SRE실 (인프라·신뢰성)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "system",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": "매시간 정각. mistake-extractor의 circuit-state.json을 읽어 OPEN 상태이면 Discord jarvis-system 채널에 알람 (6h rate limit). 2026-04-22 18시간 마비 사고 재발 방지용.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/mistake-circuit-healthcheck.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/mistake-circuit-healthcheck-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-mistake-circuit-healthcheck-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "rag-health",
           "name": "RAG 건강 체크",
           "schedule": "0 3 * * *",
@@ -1090,7 +1122,7 @@
           "model": "claude-sonnet-4-6",
           "priority": "daily",
           "maxBudget": "1.50",
-          "disabled": false,
+          "disabled": true,
           "description": "평일 08:00 재무/시장 모니터링. finance/team.yml 기반으로 실행.",
           "logs": {
             "stdout": {
@@ -1540,6 +1572,38 @@
       },
       "tasks": [
         {
+          "id": "rag-index-consume",
+          "name": "RAG 인덱싱 큐 소비자",
+          "schedule": "30 * * * *",
+          "scheduleHuman": "매일 *:30",
+          "type": "script",
+          "handler": "rag-index-cron.sh",
+          "team": {
+            "id": "record-lead",
+            "name": "데이터실 (메모리·RAG 백엔드)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "system",
+          "maxBudget": "0.10",
+          "disabled": false,
+          "description": "매시간 30분. rag-write-queue.jsonl 적재된 인덱싱 큐 소비. 2026-04-22 트리거 부재 사고(learned-mistakes 인덱싱 0건) 재발 방지용.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/rag-index-consume.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/rag-index-consume-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-rag-index-consume-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "record-daily",
           "name": "기록팀 일일 마감 (Record)",
           "schedule": "30 22 * * *",
@@ -1623,11 +1687,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/user-memory-monitor.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/user-memory-monitor-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-user-memory-monitor-*.log",
@@ -3247,6 +3311,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-mistake-extractor-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "plist-bypass-autofix",
+          "name": "plist BYPASS 자동 복구 가드",
+          "schedule": "0 6 * * *",
+          "scheduleHuman": "매일 06:00",
+          "type": "script",
+          "handler": "plist-bypass-autofix.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": "매일 06:00 KST. tasks.json의 output:discord 태스크 중 plist가 bot-cron.sh를 우회하는 항목을 자동으로 정상 패턴으로 rewrite + reload. 2026-04-22 daily-usage-check 4일 침묵 사건 재발 방지 가드.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/plist-bypass-autofix.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/plist-bypass-autofix-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-plist-bypass-autofix-*.log",
               "exists": false
             }
           }
