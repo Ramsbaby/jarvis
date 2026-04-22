@@ -13,11 +13,11 @@ export IS_LINUX=false
 export IS_DOCKER=false
 
 case "$(uname -s)" in
-  Darwin) IS_MACOS=true ;;
-  Linux)  IS_LINUX=true ;;
+  Darwin) export IS_MACOS=true ;;
+  Linux)  export IS_LINUX=true ;;
 esac
 
-[[ -f /.dockerenv ]] && IS_DOCKER=true
+[[ -f /.dockerenv ]] && export IS_DOCKER=true
 
 # launchctl load wrapper
 launchctl_load() {
