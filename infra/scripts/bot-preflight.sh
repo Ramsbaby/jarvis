@@ -13,7 +13,6 @@ BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 BOT_SCRIPT="$BOT_HOME/discord/discord-bot.js"
 ENV_FILE="$BOT_HOME/discord/.env"
 NODE_BIN="${NODE_BIN:-/opt/homebrew/bin/node}"
-MONITORING="$BOT_HOME/config/monitoring.json"
 LOG_FILE="$BOT_HOME/logs/preflight.log"
 BACKUP_DIR="$BOT_HOME/state/config-backups"
 HEAL_ATTEMPTS_FILE="$BOT_HOME/state/heal-attempts"
@@ -30,6 +29,16 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [preflight] $*" | tee -a "$LOG_FILE
 
 # Shared ntfy function
 source "${BOT_HOME}/lib/ntfy-notify.sh"
+
+# ── Bootstrap early SIGTERM trap (RISK-A) ────────────────────────────────────
+# fail_and_heal() 내 sleep 600/300 구간 SIGTERM 사각지대 방지. node 실행 시점
+# (아래쪽)에 봇 정상 종료용 특화 trap으로 덮어씌워져 이중 안전망 역할.
+_bootstrap_sigterm() {
+    log "SIGTERM/SIGINT 수신 (bootstrap 단계) — 검증/heal 중단, 즉시 종료"
+    rm -f "$BOT_HOME/state/heal-in-progress" 2>/dev/null || true
+    exit 0
+}
+trap _bootstrap_sigterm SIGTERM SIGINT
 
 # 실패: AI 자동복구 세션 시작 → 180초 대기 → exit 1 (launchd 재시작 트리거)
 fail_and_heal() {
@@ -83,10 +92,23 @@ fail_and_heal() {
     echo $(( attempts + 1 )) > "$HEAL_ATTEMPTS_FILE"
     log "복구 시도 $(( attempts + 1 ))/${MAX_HEAL_ATTEMPTS} [일일: $(( daily_count + 1 ))/${DAILY_HEAL_MAX}]"
 
+    # ── Heal 원장 기록 (RISK-B: 파라미터 튜닝 관측 인프라) ────────────────────
+    # JSONL append-only. jq 실패해도 heal 진행은 막지 않음.
+    jq -cn \
+        --arg ts "$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M:%S+09:00')" \
+        --arg reason "$reason" \
+        --argjson attempt "$(( attempts + 1 ))" \
+        --argjson daily_count "$(( daily_count + 1 ))" \
+        --argjson daily_max "$DAILY_HEAL_MAX" \
+        --arg host "$(hostname -s)" \
+        '{ts:$ts, reason:$reason, attempt:$attempt, daily_count:$daily_count, daily_max:$daily_max, host:$host}' \
+        >> "$BOT_HOME/state/heal-ledger.jsonl" 2>/dev/null || true
+
     # ── heal-in-progress 락 확인 (watchdog과의 중복 heal 방지) ────────────────────
     local heal_lock="$BOT_HOME/state/heal-in-progress"
     if [[ -f "$heal_lock" ]]; then
         local lock_age
+        # stat -c '%Y' (Linux/GNU) → 실패 시 stat -f %m (macOS/BSD) 폴백
         lock_age=$(( $(date +%s) - $(stat -c '%Y' "$heal_lock" 2>/dev/null || stat -f %m "$heal_lock" 2>/dev/null || echo 0) ))
         if (( lock_age < 600 )); then
             log "heal 이미 진행 중 (${lock_age}s ago) — 신규 기동 생략, 완료 대기"
