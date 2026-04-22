@@ -246,6 +246,51 @@ elif [[ "$log_chunks" -eq 0 ]] && [[ "$db_chunks" -eq 0 ]]; then
 fi
 report_lines+=("")
 
+# --- (4) LanceDB 크기·Fragment 경보 (2026-04-22 18GB·15834 fragment hang 사고 재발 방지) ---
+report_lines+=("## 4. LanceDB 크기·Fragment 경보")
+report_lines+=("")
+
+if [[ -d "$LANCEDB_PATH/documents.lance" ]]; then
+    # 활성 테이블만 측정 (격리본 제외 — verify 감사에서 적발된 범위 오류 수정)
+    active_kb=$(du -sk "$LANCEDB_PATH/documents.lance" 2>/dev/null | awk '{print $1}')
+    active_gb_int=$((active_kb / 1024 / 1024))
+
+    if [[ -d "$LANCEDB_PATH/documents.lance/data" ]]; then
+        frag_count=$(find "$LANCEDB_PATH/documents.lance/data" -maxdepth 1 -type f -name "*.lance" 2>/dev/null | wc -l | tr -d ' ')
+    else
+        frag_count=0
+    fi
+
+    report_lines+=("- 활성 테이블 크기: ${active_gb_int} GB")
+    report_lines+=("- Fragment 수: $frag_count")
+
+    if [[ "$active_gb_int" -ge 10 ]]; then
+        report_lines+=("- **CRITICAL**: 활성 테이블 ${active_gb_int}GB — 즉시 compaction/rebuild 필요")
+        issues_found=$((issues_found + 1))
+    elif [[ "$active_gb_int" -ge 5 ]]; then
+        report_lines+=("- **WARNING**: 활성 테이블 ${active_gb_int}GB — compaction 권고")
+        issues_found=$((issues_found + 1))
+    fi
+
+    if [[ "$frag_count" -ge 5000 ]]; then
+        report_lines+=("- **CRITICAL**: Fragment ${frag_count}개 — compaction 실패 의심")
+        issues_found=$((issues_found + 1))
+    elif [[ "$frag_count" -ge 1000 ]]; then
+        report_lines+=("- **WARNING**: Fragment ${frag_count}개 — compaction 권고")
+        issues_found=$((issues_found + 1))
+    fi
+
+    # 격리본은 별도 집계 — INFO/WARN 분리 (디스크 풀 리스크는 표시하되 issues_found 카운트 제외)
+    broken_count=$(find "$LANCEDB_PATH" -maxdepth 1 -type d -name "documents.lance.broken-*" 2>/dev/null | wc -l | tr -d ' ')
+    if [[ "$broken_count" -gt 0 ]]; then
+        broken_kb=$(du -sck "$LANCEDB_PATH"/documents.lance.broken-* 2>/dev/null | tail -1 | awk '{print $1}')
+        broken_gb_int=$((broken_kb / 1024 / 1024))
+        report_lines+=("- **INFO**: 격리본 ${broken_count}개, 총 ${broken_gb_int}GB — 7일 관찰 후 수동 정리 권고 (자동 삭제 금지)")
+    fi
+fi
+
+report_lines+=("")
+
 # ============================================================================
 # 결과 저장 및 알림
 # ============================================================================

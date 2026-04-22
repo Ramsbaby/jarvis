@@ -1400,6 +1400,15 @@ export class RAGEngine {
           break; // 성공
         } catch (delErr) {
           attempt++;
+          // 서킷브레이커: deletion manifest 파일 부재는 refreshTable로 복구 불가
+          // (삭제할 청크 자체가 없거나, 테이블이 격리·리빌드된 상태). 즉시 noop.
+          const isMissingDeletionFile = delErr.message?.includes('Not found:') &&
+            delErr.message?.includes('_deletions/') &&
+            delErr.message?.includes('.bi');
+          if (isMissingDeletionFile) {
+            console.warn(`[rag-engine] deleteBySource circuit-break: missing deletion file for ${source.split('/').pop()} — noop`);
+            return;
+          }
           const isStaleManifest = delErr.message?.includes('Not found:') &&
             delErr.message?.includes('.lance');
           if (isStaleManifest && attempt < 3) {
