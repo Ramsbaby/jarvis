@@ -54,36 +54,85 @@ with open(TASKS_FILE) as f:
     raw = json.load(f)
 tasks = raw.get('tasks', raw) if isinstance(raw, dict) else raw
 
+def _expand_field(field, lo, hi):
+    """cron 필드 → 정수 리스트 전개. 지원 패턴:
+       '*' → None (any), '5' → [5], '1-5' → [1..5], '*/15' → [0,15,30,45],
+       '22-23' → [22,23], '1,3,5' → [1,3,5]. 실패 시 ValueError.
+    """
+    if field == '*':
+        return None
+    if field.startswith('*/'):
+        step = int(field[2:])
+        return list(range(lo, hi + 1, step))
+    if ',' in field:
+        vals = []
+        for part in field.split(','):
+            vals.extend(_expand_field(part, lo, hi) or [])
+        return sorted(set(vals))
+    if '-' in field:
+        a, b = field.split('-', 1)
+        return list(range(int(a), int(b) + 1))
+    if field.isdigit():
+        return [int(field)]
+    raise ValueError(f'지원하지 않는 필드 패턴: {field}')
+
+
 def parse_schedule(cron):
-    """cron 표현식 → launchd StartCalendarInterval 변환 (단순 패턴만 지원)"""
+    """cron 표현식 → launchd StartCalendarInterval 변환.
+    2026-04-22 확장: 범위(a-b) / 리스트(a,b,c) / */N 복합 패턴 지원.
+    반환 형태:
+      - ('interval', seconds) : StartInterval
+      - ('calendar', dict)    : 단일 StartCalendarInterval
+      - ('calendar_list', [dict, ...]) : 다중 StartCalendarInterval (배열)
+    """
     parts = cron.strip().split()
     if len(parts) != 5:
         return None
     minute, hour, dom, month, dow = parts
-    
-    # */N 패턴 (반복 간격) → StartInterval
-    if minute.startswith('*/') and hour == '*' and dom == '*' and month == '*' and dow == '*':
-        interval = int(minute[2:]) * 60
-        return ('interval', interval)
-    if minute == '*' and hour.startswith('*/') and dom == '*' and month == '*' and dow == '*':
-        interval = int(hour[2:]) * 3600
-        return ('interval', interval)
-    if minute == '*' and hour == '*' and dom == '*' and month == '*' and dow == '*' and minute.startswith('*/'):
-        pass
 
-    # 고정 시간 패턴 → StartCalendarInterval
-    result = {}
-    if minute.isdigit(): result['Minute'] = int(minute)
-    if hour.isdigit(): result['Hour'] = int(hour)
-    if dom.isdigit(): result['Day'] = int(dom)
-    if month.isdigit(): result['Month'] = int(month)
-    
-    # 요일 (1-5 같은 범위는 단순화 생략)
-    if dow.isdigit(): result['Weekday'] = int(dow)
-    
-    if not result:
+    # --- */N 단순 간격 (기존 동작 보존) ---
+    if minute.startswith('*/') and hour == '*' and dom == '*' and month == '*' and dow == '*':
+        return ('interval', int(minute[2:]) * 60)
+    if minute == '*' and hour.startswith('*/') and dom == '*' and month == '*' and dow == '*':
+        return ('interval', int(hour[2:]) * 3600)
+
+    # --- 각 필드 전개 ---
+    try:
+        minutes = _expand_field(minute, 0, 59)
+        hours = _expand_field(hour, 0, 23)
+        doms = _expand_field(dom, 1, 31)
+        months = _expand_field(month, 1, 12)
+        dows = _expand_field(dow, 0, 6)
+    except ValueError:
         return None
-    return ('calendar', result)
+
+    # 빈 결과 방지
+    def _iter_or_none(v):
+        return v if v is not None else [None]
+
+    entries = []
+    for mi in _iter_or_none(minutes):
+        for ho in _iter_or_none(hours):
+            for dm in _iter_or_none(doms):
+                for mo in _iter_or_none(months):
+                    for dw in _iter_or_none(dows):
+                        d = {}
+                        if mi is not None: d['Minute'] = mi
+                        if ho is not None: d['Hour'] = ho
+                        if dm is not None: d['Day'] = dm
+                        if mo is not None: d['Month'] = mo
+                        if dw is not None: d['Weekday'] = dw
+                        if d:
+                            entries.append(d)
+
+    if not entries:
+        return None
+    if len(entries) == 1:
+        return ('calendar', entries[0])
+    # 폭증 방어 — 500 초과 시 skip (`0 * * * *` 같은 패턴이 */N 으로 잡혔어야 함)
+    if len(entries) > 500:
+        return None
+    return ('calendar_list', entries)
 
 created = 0
 skipped = 0
@@ -149,7 +198,7 @@ for t in tasks:
     if parsed[0] == 'interval':
         schedule_block = f'''  <key>StartInterval</key>
   <integer>{parsed[1]}</integer>'''
-    else:
+    elif parsed[0] == 'calendar':
         cal = parsed[1]
         inner = ''
         for k, v in cal.items():
@@ -157,6 +206,16 @@ for t in tasks:
         schedule_block = f'''  <key>StartCalendarInterval</key>
   <dict>
 {inner}  </dict>'''
+    else:  # 'calendar_list' — 다중 시점 (2026-04-22 범위 패턴 지원)
+        dicts = ''
+        for cal in parsed[1]:
+            inner = ''
+            for k, v in cal.items():
+                inner += f'      <key>{k}</key>\n      <integer>{v}</integer>\n'
+            dicts += f'    <dict>\n{inner}    </dict>\n'
+        schedule_block = f'''  <key>StartCalendarInterval</key>
+  <array>
+{dicts}  </array>'''
     
     args_xml = '\n'.join(f'    <string>{a}</string>' for a in prog_args)
     # 🔏 1층 방어막 — plist 생성 서명 강제 (2026-04-22 P1 도입)
