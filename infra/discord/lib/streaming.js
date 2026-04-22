@@ -906,29 +906,50 @@ export class StreamingMessage {
     // 트런케이션 대신 분할 전송 — 내용 유실 없음.
     // 1990 → 1800 하향: 헤딩/단락 경계를 더 쉽게 찾도록 여유 확보 (2026-04-20).
     const DISCORD_LIMIT = 1990; // 2026-04-20 원복: 1800 → 1990 (split 빈도 최소화)
-    if (content.length > DISCORD_LIMIT) {
-      log('warn', '_sendOrEdit: content exceeded Discord limit after formatting — splitting', { originalLen: content.length });
-      const parts = _splitIntoChunks(content, DISCORD_LIMIT);
-      // 첫 번째 파트: 현재 _sendOrEdit 흐름으로 처리 (재귀)
-      // 나머지 파트: 순차 channel.send
-      for (let pi = 0; pi < parts.length; pi++) {
-        const part = parts[pi];
-        const isLast = pi === parts.length - 1;
-        const partDisplay = (!isLast || (!this.finalized && !isFinal)) ? part : part;
-        const payload = { content: partDisplay, embeds: [], components: [], flags: MessageFlags.SuppressEmbeds };
-        if (pi === 0 && this._isPlaceholder && this.currentMessage) {
-          // _unregisterPlaceholder는 finalize() 완료 시점에만 호출 (orphan cleanup이 버튼 제거할 수 있도록)
-          this._isPlaceholder = false;
-          await this.currentMessage.edit({ content: partDisplay, embeds: [], components: [], flags: MessageFlags.SuppressEmbeds });
-          this.sentLength = part.length;
-        } else if (pi === 0 && !this.currentMessage && this.replyTo) {
-          try { this.currentMessage = await this.replyTo.reply(payload); }
-          catch { this.currentMessage = await this.channel.send(payload); }
-          this.replyTo = null;
-          this.sentLength = part.length;
-        } else {
-          this.currentMessage = await this.channel.send(payload);
-          this.sentLength = part.length;
+    // [2026-04-23 핫픽스] 중복 송출 버그 수정:
+    //  기존 버그: `content.length > DISCORD_LIMIT` 조건 → 매 flush마다 전체 content를 다시
+    //   chunk로 나눠 전체 재발송 → 이전 chunk 내용이 다음 flush에서 다시 포함되어 사용자가
+    //   본 "답변 4번 중첩" 현상 발생 (2026-04-22 22:01 KST 실증).
+    //  수정: "아직 안 보낸 증분(unsent)"만 기준으로 진입 + chunk 생성도 증분 기반.
+    //   sentLength 누적 관리로 중복 제거 + 이전 메시지는 edit 대신 그대로 보존.
+    const _already = this.sentLength || 0;
+    const _unsent = Math.max(0, content.length - _already);
+    if (_unsent > DISCORD_LIMIT) {
+      log('warn', '_sendOrEdit: unsent delta exceeded Discord limit — splitting (incremental)', {
+        originalLen: content.length, sentLength: _already, unsent: _unsent
+      });
+      // 증분(unsent)만 chunk로 나눔. 이미 보낸 부분은 재편집하지 않음.
+      const _unsentContent = content.slice(_already);
+      const _unsentParts = _splitIntoChunks(_unsentContent, DISCORD_LIMIT);
+      for (let pi = 0; pi < _unsentParts.length; pi++) {
+        const part = _unsentParts[pi];
+        const isLast = pi === _unsentParts.length - 1;
+        const payload = { content: part, embeds: [], components: [], flags: MessageFlags.SuppressEmbeds };
+        // [2026-04-23 B안] split 루프 개별 try/catch — R-CRITICAL 해소:
+        //  중간 send 실패 시 sentLength를 증가시키지 않고 _resumeAsNewMessage 위임.
+        //  _resumeAsNewMessage는 content.slice(sentLength) 기준으로 재개하므로
+        //  이미 성공한 part는 스킵되고 실패한 part부터 이어감 (부분 중복/누락 방지).
+        try {
+          if (pi === 0 && this._isPlaceholder && this.currentMessage) {
+            // placeholder edit 경로 (최초 1회)
+            this._isPlaceholder = false;
+            await this.currentMessage.edit({ content: part, embeds: [], components: [], flags: MessageFlags.SuppressEmbeds });
+          } else if (pi === 0 && !this.currentMessage && this.replyTo) {
+            try { this.currentMessage = await this.replyTo.reply(payload); }
+            catch { this.currentMessage = await this.channel.send(payload); }
+            this.replyTo = null;
+          } else {
+            this.currentMessage = await this.channel.send(payload);
+          }
+          // send/edit 성공 확정 후에만 누적 (실패 시 sentLength 유지 → 재개 정확)
+          this.sentLength = (this.sentLength || _already) + part.length;
+        } catch (err) {
+          log('error', '_sendOrEdit split part failed — delegating to _resumeAsNewMessage', {
+            pi, partLen: part.length, totalParts: _unsentParts.length, err: err.message, code: err.code
+          });
+          // sentLength는 증가하지 않았으므로 _resumeAsNewMessage가 올바른 지점부터 재개
+          await this._resumeAsNewMessage(content, isFinal, err);
+          return;
         }
         if (!isLast) await new Promise(r => setTimeout(r, 300)); // rate limit 방지
       }

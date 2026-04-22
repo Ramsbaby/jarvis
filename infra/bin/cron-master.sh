@@ -386,6 +386,18 @@ for name in "${AUDIT_LOGS[@]}"; do
   age_h=$(( (NOW_EPOCH - mtime) / 3600 ))
   # 48h 이상 업데이트 없으면 stale
   if [[ "$age_h" -gt 48 ]]; then
+    # [2026-04-23 추가] tasks.json enabled=false 태스크는 stale 판정 제외
+    # 의도된 비활성 태스크에 대한 불필요한 bootstrap 루프 차단 (daily-summary I/O error 재발 방지)
+    # 주의: jq의 `// "true"`는 boolean false도 falsy로 취급해 오작동 → has("enabled") + 명시 비교 사용
+    _tasks_json="${BOT_HOME:-$HOME/.jarvis}/config/tasks.json"
+    _task_disabled=$(jq -r --arg id "$name" '
+      .tasks[]? | select(.id == $id)
+      | if has("enabled") and .enabled == false then "true" else "false" end
+    ' "$_tasks_json" 2>/dev/null | head -1)
+    if [[ "$_task_disabled" == "true" ]]; then
+      log "SKIP stale(${name}): tasks.json enabled=false — 의도된 비활성, bootstrap 건너뜀"
+      continue
+    fi
     AUDIT_SUMMARY+=("${name}: stale (${age_h}h 업데이트 없음)")
     # L2 편입: 해당 LaunchAgent가 있으면 재등록 시도
     audit_lbl="com.jarvis.${name}"
