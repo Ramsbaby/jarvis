@@ -14,6 +14,11 @@ VAULT="${HOME}/Jarvis-Vault"
 LOG_TAG="vault-auto-link"
 HOURS_AGO="${1:-24}"
 
+# Ensure HOURS_AGO is set (defensive against unbound variable errors)
+if [[ -z "${HOURS_AGO}" ]]; then
+    HOURS_AGO=24
+fi
+
 log() { echo "[$(date '+%F %T')] [${LOG_TAG}] $1"; }
 
 if [[ ! -d "$VAULT" ]]; then
@@ -95,7 +100,8 @@ while IFS= read -r -d '' file; do
 
     # 1개 이상 발견 시 추가
     if [[ "$found_count" -gt 0 ]]; then
-        trimmed=$(echo "$found_links" | sed 's/, $//')
+        # Remove trailing ", " from found_links
+        trimmed="$(echo "$found_links" | sed 's/, $//')"
 
         echo "" >> "$file"
         echo "## 자동 발견 링크" >> "$file"

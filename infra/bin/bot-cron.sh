@@ -29,7 +29,10 @@ FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
 # --- FSM 헬퍼 ---
 _fsm_ensure() {
     # cron 태스크를 FSM DB에 등록/리셋 (failed/done → queued 재시작)
-    ${NODE_SQLITE} "${FSM_STORE}" ensure "$1" "$1" "bot-cron" >/dev/null 2>&1 || true
+    # dev-queue v2 (2026-04-22): batch_id="bot-cron-<YYYYMMDD>" — 같은 날 돌린 cron 태스크 박스
+    local _batch
+    _batch="bot-cron-$(date +%Y%m%d)"
+    ${NODE_SQLITE} "${FSM_STORE}" ensure "$1" "$1" "bot-cron" "" "" "$_batch" >/dev/null 2>&1 || true
 }
 _fsm_transition() {
     local task_id="$1" to_status="$2" extra="${3:-{}}"
@@ -173,7 +176,7 @@ fi
 # 별칭 매핑: portfolio → state/portfolio.json, goals → config/goals.json
 _INJECT_PREFIX=""
 while IFS= read -r _alias; do
-    [[ -z "$_alias" ]] && continue
+    if [[ -z "$_alias" ]]; then continue; fi
     case "$_alias" in
         portfolio) _inject_path="${BOT_HOME}/state/portfolio.json" ;;
         goals)     _inject_path="${BOT_HOME}/config/goals.json" ;;

@@ -308,6 +308,12 @@ async function pushToDevQueue(items) {
 
   let added = 0;
 
+  // dev-queue v2 (2026-04-22): 같은 인사이트 추출 사이클의 항목들을 한 박스로 묶는다.
+  // batch_id = "insight-extractor-<YYYYMMDD-HHmm>" — 분 단위 그룹핑 (한 번 호출 = 한 박스)
+  const _now = new Date();
+  const _pad = (n) => String(n).padStart(2, '0');
+  const _batchId = `insight-extractor-${_now.getFullYear()}${_pad(_now.getMonth() + 1)}${_pad(_now.getDate())}-${_pad(_now.getHours())}${_pad(_now.getMinutes())}`;
+
   // 수동 개입이 필요하거나 자비스 자신의 버그/개선 항목은 dev-queue 제외
   // (dev-runner LLM이 처리 불가 → 재귀 오염 방지)
   const SKIP_PATTERNS = [
@@ -345,6 +351,7 @@ async function pushToDevQueue(items) {
       allowedTools: 'Read,Bash,Write,Edit',
       createdAt: new Date().toISOString(),
       source: 'insight-extractor',
+      batch_id: _batchId,  // dev-queue v2: 박스 단위 그룹핑용
     });
     added++;
   }

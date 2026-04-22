@@ -251,8 +251,11 @@ enqueue_to_devqueue() {
     fi
 
     # ID: title을 slug화 (중복 방지용)
+    # dev-queue v2 (2026-04-22): 기존에는 `-$(date +%s)` 타임스탬프가 붙어 매번 새 slug가 생성됨
+    # → 같은 이슈가 queued에 누적되는 잡음 원인이었음. 타임스탬프 제거로 자동 dedupe 활성화.
+    # 같은 이슈가 queued/running 상태면 enqueue CLI가 "already-pending"으로 skip한다.
     local slug
-    slug="code-fix-$(echo "$title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//' | cut -c1-40 | sed 's/-*$//')-$(date +%s)"
+    slug="code-fix-$(echo "$title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//' | cut -c1-40 | sed 's/-*$//')"
 
     local prompt_text="다음 Jarvis 코드 이슈를 분석하고 수정하라.
 
@@ -261,6 +264,11 @@ enqueue_to_devqueue() {
 
 수정 시 기존 동작 파괴 금지. 수정 후 Discord #jarvis-system에 결과 보고."
 
+    # dev-queue v2 (2026-04-22): 같은 감사 사이클의 이슈들을 한 박스(batch)로 묶는다.
+    # batch_id = "auditor-<YYYYMMDD-HH>" — 시간 단위 그룹핑
+    local batch_id
+    batch_id="auditor-$(date +%Y%m%d-%H)"
+
     local result
     result=$(node "${BOT_HOME}/lib/task-store.mjs" enqueue \
         --id "$slug" \
@@ -268,6 +276,7 @@ enqueue_to_devqueue() {
         --prompt "$prompt_text" \
         --priority "$priority" \
         --source "jarvis-auditor" \
+        --batch-id "$batch_id" \
         --type "code-fix" 2>/dev/null) || { log "WARN: dev-queue 적재 실패 (non-fatal)"; return 0; }
 
     local action

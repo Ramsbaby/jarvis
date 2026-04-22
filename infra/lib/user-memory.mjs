@@ -60,7 +60,9 @@ function _load(userId) {
     merged.plans = Array.isArray(merged.plans) ? merged.plans : [];
     return merged;
   } catch (err) {
-    console.warn(`[user-memory] JSON parse failed for userId=${userId}: ${err.message}`);
+    if (err.code !== 'ENOENT') {
+      console.warn(`[user-memory] JSON parse failed for userId=${userId}: ${err.message}`);
+    }
     return defaults;
   }
 }

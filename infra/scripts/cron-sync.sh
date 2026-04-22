@@ -119,8 +119,23 @@ for t in tasks:
         continue
     
     # script 결정 — .mjs/.js 는 node, 그 외는 bash
+    # 🔒 2층 방어막 — output:discord|both|file+discord 태스크는 bot-cron.sh 경유 강제 (2026-04-22 P2 도입)
+    # Nexus 디스패처(bot-cron.sh)를 거쳐야 output:discord 지시가 수행됨.
+    # 직접 호출 패턴이 생성 시점에 애초에 불가능하게 차단.
+    outputs = t.get('output', []) or []
+    if not isinstance(outputs, list):
+        outputs = [outputs]
+    needs_dispatcher = any(
+        isinstance(o, str) and (
+            o == 'discord' or o == 'both' or ('discord' in o)
+        ) for o in outputs
+    )
+
     script_field = t.get('script', '')
-    if script_field and script_field != '(none)':
+    if needs_dispatcher:
+        # output:discord 계열은 스크립트 필드 무관, 무조건 bot-cron.sh 경유
+        prog_args = ['/bin/bash', f'{BOT_HOME}/bin/bot-cron.sh', task_id]
+    elif script_field and script_field != '(none)':
         script_field = script_field.replace('~', os.path.expanduser('~'))
         if script_field.endswith('.mjs') or script_field.endswith('.js'):
             # node 로 실행 (launchd 가 shebang 못 읽으므로 명시)
@@ -144,8 +159,15 @@ for t in tasks:
 {inner}  </dict>'''
     
     args_xml = '\n'.join(f'    <string>{a}</string>' for a in prog_args)
+    # 🔏 1층 방어막 — plist 생성 서명 강제 (2026-04-22 P1 도입)
+    # launchagents-audit 가 이 서명 없는 plist 를 unsigned_plist 로 경보함.
+    # 서명 포맷: "JARVIS_GENERATED_BY: cron-sync.sh v1.0 @ <kst_ts> source: tasks.json#<task_id>"
+    import datetime as _dt
+    sign_ts = _dt.datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M:%S%z')
+    signature = f'<!-- JARVIS_GENERATED_BY: cron-sync.sh v1.0 @ {sign_ts} source: tasks.json#{task_id} -->'
     plist_content = f'''<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+{signature}
 <plist version="1.0">
 <dict>
   <key>Label</key>

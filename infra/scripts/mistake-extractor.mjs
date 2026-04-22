@@ -52,6 +52,12 @@ const SINGLE_FILE = FILE_ARG_IDX >= 0 && process.argv[FILE_ARG_IDX + 1]
   ? process.argv[FILE_ARG_IDX + 1]
   : null;
 
+// 2026-04-22 추가: LLM 우회 폴백 모드
+// 자기정정 신호가 명확하여 4필드를 호출자가 직접 구성한 경우, Haiku 호출 없이 즉시 등재.
+// circuit OPEN 상태에서도 동작 (오답노트 자동 파이프라인 마비 시에도 핵심 실수는 누락되지 않도록).
+// 사용: echo '[{"pattern":"...","actual":"...","evidence":"...","correction":"..."}]' | node mistake-extractor.mjs --direct-fact
+const DIRECT_FACT_MODE = process.argv.includes('--direct-fact');
+
 // ── 로거 (KST) ───────────────────────────────────────────────────────────────
 function kstNow() {
   return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' });
@@ -174,12 +180,23 @@ function budgetCheck() {
   }
 }
 
-// ── 서킷브레이커 (Haiku 연속 실패 3회 → 24h open) ────────────────────────────
-// 비용 폭주 방지: LLM 호출 반복 실패 상황에서 extractor 자체를 24h 비활성화.
+// ── 서킷브레이커 (Haiku 연속 실패 3회 → 단계적 백오프) ───────────────────────
+// 비용 폭주 방지 + 일시 ETIMEDOUT 으로 24h 마비 방지.
+// 2026-04-22 오답노트 등재: 단일 24h 쿨다운으로 자동 파이프라인이 24시간 멈춘 사고
+// → 백오프를 5min → 30min → 2h → 24h 4단계로 변경. 일시적 timeout 은 5분 후 회복 가능.
 // state: closed(정상) | open(차단) | half-open(쿨다운 후 1회 시도 허용 — 자동)
 const CIRCUIT_FILE = join(homedir(), 'jarvis/runtime/state/mistake-extractor-circuit.json');
 const CIRCUIT_FAIL_THRESHOLD = 3;
-const CIRCUIT_COOLDOWN_MS = 24 * 3600 * 1000;
+// 실패 횟수별 쿨다운(ms) — 1·2회는 즉시 재시도, 3회=5min, 4회=30min, 5회=2h, 6회+=24h
+const CIRCUIT_BACKOFF_MS = [
+  0,                         // fail 0 (placeholder)
+  0,                         // fail 1 — 즉시 재시도
+  0,                         // fail 2 — 즉시 재시도
+  5 * 60 * 1000,             // fail 3 — 5분
+  30 * 60 * 1000,            // fail 4 — 30분
+  2 * 3600 * 1000,           // fail 5 — 2시간
+  24 * 3600 * 1000,          // fail 6+ — 24시간
+];
 
 function loadCircuit() {
   try { return JSON.parse(readFileSync(CIRCUIT_FILE, 'utf-8')); }
@@ -211,9 +228,14 @@ function circuitOnFailure(errMsg) {
   c.consecutiveFails = (c.consecutiveFails || 0) + 1;
   c.lastFailTs = Date.now();
   if (c.consecutiveFails >= CIRCUIT_FAIL_THRESHOLD) {
+    const idx = Math.min(c.consecutiveFails, CIRCUIT_BACKOFF_MS.length - 1);
+    const cooldownMs = CIRCUIT_BACKOFF_MS[idx];
+    const cooldownLabel = cooldownMs >= 3600000 ? `${Math.round(cooldownMs / 3600000)}h`
+                       : cooldownMs >= 60000 ? `${Math.round(cooldownMs / 60000)}min`
+                       : `${Math.round(cooldownMs / 1000)}s`;
     c.state = 'open';
-    c.nextRetryTs = Date.now() + CIRCUIT_COOLDOWN_MS;
-    log(`circuit OPEN (연속 ${c.consecutiveFails}회 실패, 24h 쿨다운): ${errMsg?.slice(0, 120)}`);
+    c.nextRetryTs = Date.now() + cooldownMs;
+    log(`circuit OPEN (연속 ${c.consecutiveFails}회 실패, ${cooldownLabel} 쿨다운): ${errMsg?.slice(0, 120)}`);
   } else {
     log(`circuit fail ${c.consecutiveFails}/${CIRCUIT_FAIL_THRESHOLD}: ${errMsg?.slice(0, 120)}`);
   }
@@ -304,6 +326,10 @@ function buildPrompt(sessionBodies) {
 - 오너가 "틀렸다 / 잘못했다 / 그게 아니다 / 다시 해 / 제대로 해"처럼 명시적 지적
 - 오너가 대안을 제시하며 수정을 요구
 - Jarvis가 "죄송합니다 / 잘못 보고 / 확인 못했다"처럼 자체 정정한 경우
+- **Jarvis 자기검열 실패 사례**: "단언했/실측 없이/검증 전 OK 선언/추정을 사실처럼 보고" — Iron Law 6 (VERIFY BEFORE DECLARE) 위반
+- **SSoT 위반**: 기존 파일 미탐색 + 신규 중복 생성 ("~/.claude/commands/와 ~/.jarvis/ # ALLOW-DOTJARVISskills/ 양쪽에 같은 이름")
+- **자동화 파이프라인 마비 미인지**: circuit OPEN, 추출 0건, 24h 무감지 등 메타 시스템 결함을 Jarvis 본인이 놓친 경우
+- **할루시네이션 / 편향**: 파일 미열람 상태에서 코드 단언, 첫 응답 단언 편향, 가정을 사실처럼 진술
 
 ## 제외 대상
 - 오너 본인의 실수·회한
@@ -428,12 +454,105 @@ function buildStdoutSummary(added, skipped, duration) {
   return lines.join('\n');
 }
 
+// ── LLM 우회 폴백 모드 — stdin 4필드 JSON 직접 등재 ────────────────────────
+// circuit OPEN/budget 차단 우회. 호출자가 자기정정 신호를 명확히 인식했을 때만 사용.
+// 자동화 파이프라인 마비 시 핵심 실수가 누락되지 않도록 보장하는 안전망.
+async function runDirectFact() {
+  const t0 = Date.now();
+  log(`=== mistake-extractor 시작 (DIRECT-FACT) ===`);
+
+  // stdin 읽기 (Node.js 동기)
+  let stdinBuf = '';
+  try {
+    stdinBuf = readFileSync(0, 'utf-8');
+  } catch (e) {
+    log(`stdin 읽기 실패: ${e.message}`);
+    console.log(`❌ direct-fact: stdin 읽기 실패 — ${e.message}`);
+    process.exit(1);
+  }
+
+  let mistakes;
+  try {
+    const parsed = JSON.parse(stdinBuf.trim());
+    if (!Array.isArray(parsed)) throw new Error('JSON 배열이 아님');
+    mistakes = parsed.filter(item =>
+      item && typeof item === 'object' &&
+      typeof item.pattern === 'string' && item.pattern.length >= 5 &&
+      typeof item.actual === 'string' &&
+      typeof item.evidence === 'string' &&
+      typeof item.correction === 'string'
+    );
+  } catch (e) {
+    log(`JSON 파싱 실패: ${e.message}`);
+    console.log(`❌ direct-fact: JSON 파싱 실패 — ${e.message}`);
+    process.exit(1);
+  }
+
+  if (mistakes.length === 0) {
+    log('direct-fact: 유효 4필드 0건 — 종료');
+    console.log('🤖 direct-fact: 유효 4필드 0건');
+    return;
+  }
+
+  // 중복 필터링은 그대로 적용 (악의적 스팸/중복 방지)
+  const existingPatterns = loadExistingPatterns();
+  log(`direct-fact: 기존 패턴 ${existingPatterns.length}개 로드`);
+  const filtered = filterDuplicates(mistakes, existingPatterns);
+  const final = filtered.slice(0, MAX_MISTAKES_PER_RUN);
+
+  if (final.length === 0) {
+    log(`direct-fact: 모두 중복으로 skip (${mistakes.length}건)`);
+    console.log(`🤖 direct-fact: 모두 중복으로 skip (${mistakes.length}건)`);
+    return;
+  }
+
+  try {
+    appendMistakes(final);
+    log(`direct-fact: learned-mistakes.md에 ${final.length}건 append 완료`);
+  } catch (e) {
+    log(`direct-fact: append 실패: ${e.message}`);
+    console.log(`❌ direct-fact: append 실패 — ${e.message}`);
+    process.exit(1);
+  }
+
+  // ledger append (source: direct-fact — manual-direct-edit과 구분되는 신규 진입점)
+  try {
+    const ledgerFile = join(BOT_HOME, 'state', 'mistake-ledger.jsonl');
+    const ledgerLine = JSON.stringify({
+      ts: kstISO(),
+      source: 'direct-fact',
+      count: final.length,
+      titles: final.map(m => (m.pattern || '(untitled)').slice(0, 80)),
+      session_file: null,
+      duration_s: Number(((Date.now() - t0) / 1000).toFixed(1)),
+      circuit_bypassed: true,
+      llm_bypassed: true,
+    }) + '\n';
+    appendFileSync(ledgerFile, ledgerLine);
+    log(`direct-fact: ledger append: ${ledgerFile}`);
+  } catch (e) {
+    log(`direct-fact: ledger append 실패 (무시): ${e.message}`);
+  }
+
+  const summary = [
+    `🧠 오답노트 직접 등재 — **${final.length}건 추가** (LLM 우회)`,
+    ...final.map(m => `- **${m.pattern.slice(0, 60)}**`),
+    `\n📊 입력 ${mistakes.length}건, 중복 ${mistakes.length - final.length}건 skip, ${((Date.now() - t0)/1000).toFixed(1)}초`,
+  ];
+  console.log(summary.join('\n'));
+}
+
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 async function main() {
+  // LLM 우회 폴백 모드 — circuit/budget 우회하여 즉시 등재
+  if (DIRECT_FACT_MODE) {
+    return await runDirectFact();
+  }
+
   const t0 = Date.now();
   log(`=== mistake-extractor 시작${DRY_RUN ? ' (DRY-RUN)' : ''}${SINGLE_FILE ? ' (SINGLE_FILE)' : ''} ===`);
 
-  // 서킷브레이커 — Haiku 연속 실패 시 24h 차단 (DRY_RUN은 무시)
+  // 서킷브레이커 — Haiku 연속 실패 시 단계적 백오프 (DRY_RUN은 무시)
   if (!DRY_RUN) {
     const gate = circuitCheck();
     if (!gate.allow) {

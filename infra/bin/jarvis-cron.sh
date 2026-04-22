@@ -29,7 +29,10 @@ fi
 # --- FSM 헬퍼 ---
 _fsm_ensure() {
     # cron 태스크를 FSM DB에 등록/리셋 (failed/done → queued 재시작)
-    ${NODE_SQLITE} "${FSM_STORE}" ensure "$1" "$1" "bot-cron" 2>/dev/null || true
+    # dev-queue v2 (2026-04-22): batch_id="bot-cron-<YYYYMMDD>" — 같은 날 cron 태스크 박스
+    local _batch
+    _batch="bot-cron-$(date +%Y%m%d)"
+    ${NODE_SQLITE} "${FSM_STORE}" ensure "$1" "$1" "bot-cron" "" "" "$_batch" 2>/dev/null || true
 }
 _fsm_transition() {
     local task_id="$1" to_status="$2" extra="${3:-{}}"

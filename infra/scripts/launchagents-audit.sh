@@ -152,6 +152,19 @@ if [[ -f "$MTIME_LATEST" ]]; then
           CHANGES=$((CHANGES+1))
         fi
       fi
+
+      # --- 🔏 1층 방어막: plist 서명 검증 (2026-04-22 P1 도입) ---
+      # cron-sync.sh v1.0 부터 생성 plist 에 "JARVIS_GENERATED_BY:" 서명 주석 삽입.
+      # mtime 변경 후 서명이 없으면 "누가 만들었는지 추적 불가한 plist" → unsigned_plist 경보.
+      # grandfather clause: mtime_changed 이벤트 시점에만 검사 → 기존 plist 는 수정되지 않는 한 통과.
+      if [[ -f "$plist_path" ]]; then
+        if ! grep -q 'JARVIS_GENERATED_BY:' "$plist_path" 2>/dev/null; then
+          printf '{"ts":"%s","action":"unsigned_plist","entry":"%s","task":"%s","reason":"plist_edited_without_jarvis_signature"}\n' \
+            "$TS_ISO" "$entry" "$task_id" >> "$LEDGER"
+          DISCORD_LINES+=("🔏 **서명 없는 plist 편집**: \`$entry\` — cron-sync.sh 우회 생성/편집 의심 (추적 불가)")
+          CHANGES=$((CHANGES+1))
+        fi
+      fi
     done <<< "$MTIME_CHANGED"
   fi
 fi

@@ -65,6 +65,27 @@ is_in_alert_cooldown() {
     return 1
 }
 
+# --- Heal-cycle reset 함수 (Main 진입 전 정의 필수: Bash 호이스팅 없음) ---
+# 봇이 살아있을 때 heal-cycle 추적 파일을 리셋해, 다음 사건의 30분 알람이 발송되도록 보장.
+# 라인 105 (silence < threshold) 정상 복구 경로에서 반드시 호출되어야 함 — 누락 시 알람 영구 침묵 버그.
+_check_heal_reset() {
+    local recent_ts
+    recent_ts=$(tail -5 "$BOT_LOG" 2>/dev/null | grep -oE '"ts":"[-0-9T:.Z]+"' | tail -1 | sed 's/"ts":"//;s/"//' || true)
+    if [[ -n "$recent_ts" ]]; then
+        local recent_clean="${recent_ts%%.*}Z"
+        local recent_epoch
+        recent_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$recent_clean" "+%s" 2>/dev/null \
+          || TZ=UTC date -d "$recent_clean" "+%s" 2>/dev/null || echo 0)
+        local age=$(( $(date +%s) - recent_epoch ))
+        if (( age < 120 )); then
+            if [[ -f "$HEAL_START_FILE" || -f "$HEAL_TIMEOUT_ALERTED_FILE" ]]; then
+                rm -f "$HEAL_START_FILE" "$HEAL_TIMEOUT_ALERTED_FILE"
+                log "HEAL: 봇 복구 확인 — heal-cycle 추적 파일 리셋 (다음 사건 알람 부활)"
+            fi
+        fi
+    fi
+}
+
 # --- Main ---
 
 # Check if log file exists
@@ -98,7 +119,9 @@ silence_sec=$(( now_epoch - last_epoch ))
 log "Check: last_log=$last_ts silence=${silence_sec}s threshold=${SILENCE_THRESHOLD_SEC}s"
 
 if (( silence_sec < SILENCE_THRESHOLD_SEC )); then
-    # Bot is active
+    # Bot is active — heal-cycle 추적 파일 리셋 (다음 사건 알람 부활 보장)
+    # 2026-04-22 verify: 정상 복구 경로에서 reset 누락 시 HEAL_TIMEOUT_ALERTED_FILE 영구 잔존 → 다음 알람 침묵
+    _check_heal_reset
     exit 0
 fi
 
@@ -111,6 +134,23 @@ if [[ -d "$HEALING_LOCK" ]]; then
     if (( lock_age < 600 )); then
         log "SKIP: watchdog.sh healing in progress (lock age=${lock_age}s)"
         exit 0
+    fi
+fi
+
+# Check if bot-heal.sh (preflight Claude PTY 세션) 진행 중인지 확인 — 2026-04-22 버그픽스
+# bot-heal.sh는 $BOT_HOME/state/heal-in-progress 를 생성하는데,
+# 이 락을 확인하지 않으면 watchdog이 kickstart -k로 heal 세션을 강제 종료하는 버그 발생.
+# (오늘 6시간 다운 원인: heal 세션이 5분마다 watchdog에게 kill 당하는 무한 루프)
+PREFLIGHT_HEAL_LOCK="${BOT_HOME}/state/heal-in-progress"
+PREFLIGHT_HEAL_STALE_SEC=1800   # 30분 — Claude PTY 진단 시간 여유 확보 (verify 권고)
+if [[ -f "$PREFLIGHT_HEAL_LOCK" ]]; then
+    lock_age=$(( $(date +%s) - $(stat -f %m "$PREFLIGHT_HEAL_LOCK" 2>/dev/null || stat -c '%Y' "$PREFLIGHT_HEAL_LOCK" 2>/dev/null || echo 0) ))
+    if (( lock_age < PREFLIGHT_HEAL_STALE_SEC )); then
+        log "SKIP: bot-heal.sh Claude 진단 세션 진행 중 (age=${lock_age}s, 한계 ${PREFLIGHT_HEAL_STALE_SEC}s) — kickstart 보류"
+        exit 0
+    else
+        log "WARN: heal-in-progress 락이 ${lock_age}s 경과 — stale 락 제거 후 계속"
+        rm -f "$PREFLIGHT_HEAL_LOCK"
     fi
 fi
 
@@ -182,23 +222,7 @@ if [[ "$bot_pid" == "-" || -z "$bot_pid" ]]; then
     exit 0
 fi
 
-# 봇 복구 성공 시 heal-cycle 추적 파일 리셋 (다음 장애 사이클을 새로 측정하기 위해)
-_check_heal_reset() {
-    # 봇 로그가 최근 60초 이내에 갱신됐으면 복구 성공으로 간주
-    local recent_ts
-    recent_ts=$(tail -5 "$BOT_LOG" 2>/dev/null | grep -oE '"ts":"[-0-9T:.Z]+"' | tail -1 | sed 's/"ts":"//;s/"//' || true)
-    if [[ -n "$recent_ts" ]]; then
-        local recent_clean="${recent_ts%%.*}Z"
-        local recent_epoch
-        recent_epoch=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$recent_clean" "+%s" 2>/dev/null \
-          || TZ=UTC date -d "$recent_clean" "+%s" 2>/dev/null || echo 0)
-        local age=$(( $(date +%s) - recent_epoch ))
-        if (( age < 120 )); then
-            rm -f "$HEAL_START_FILE" "$HEAL_TIMEOUT_ALERTED_FILE"
-            log "HEAL: 봇 복구 확인 — heal-cycle 추적 파일 리셋"
-        fi
-    fi
-}
+# 봇 복구 성공 확인 — 함수는 라인 ~67에 이미 정의됨 (호이스팅 없는 Bash 특성상 Main 진입 전 정의 필수)
 _check_heal_reset
 
 # Kill + restart

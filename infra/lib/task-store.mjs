@@ -72,6 +72,26 @@ function getDb() {
       _db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id)');
     } catch (_) { /* parent_id already exists */ }
   }
+
+  // 마이그레이션 (2026-04-22): dev-queue v2 — batch_id, source 컬럼 추가
+  // 박스 단위 그룹핑(UI GROUP BY batch_id) + source 필터링용. 승인 게이트 없음.
+  // 이미 있으면 무시 (재실행 안전).
+  try {
+    _db.prepare('SELECT batch_id FROM tasks LIMIT 1').get();
+  } catch {
+    try {
+      _db.exec('ALTER TABLE tasks ADD COLUMN batch_id TEXT');
+      _db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_batch ON tasks(batch_id)');
+    } catch (_) { /* batch_id already exists */ }
+  }
+  try {
+    _db.prepare('SELECT source FROM tasks LIMIT 1').get();
+  } catch {
+    try {
+      _db.exec('ALTER TABLE tasks ADD COLUMN source TEXT');
+      _db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_source ON tasks(source)');
+    } catch (_) { /* source already exists */ }
+  }
   return _db;
 }
 
@@ -86,6 +106,8 @@ function deserialize(row) {
     retries:         row.retries,
     depends:         JSON.parse(row.depends || '[]'),
     parent_id:       row.parent_id || null,
+    // v2 박스 단위 그룹핑용 (dev-queue v2, 2026-04-22)
+    batch_id:        row.batch_id || null,
     // meta 편의 필드 flat-merge
     name:            meta.name,
     prompt:          meta.prompt,
@@ -95,7 +117,8 @@ function deserialize(row) {
     allowedTools:    meta.allowedTools,
     patchOnly:       meta.patchOnly,
     maxRetries:      meta.maxRetries ?? 2,
-    source:          meta.source,
+    // source: meta 우선, 없으면 컬럼 fallback (점진 이주 중)
+    source:          meta.source ?? row.source ?? null,
     skipReason:      meta.skipReason,
     completedAt:     meta.completedAt,
     failedAt:        meta.failedAt,
@@ -266,14 +289,16 @@ export function addTask(task) {
     }
   }
 
-  const { id, status = 'pending', priority = 0, retries = 0, depends = [], parent_id = null, ...rest } = task;
+  const { id, status = 'pending', priority = 0, retries = 0, depends = [], parent_id = null, batch_id = null, ...rest } = task;
   // addedAt 자동 삽입 — 없으면 오늘 날짜로 채움
   if (!rest.addedAt && !rest.meta?.addedAt) {
     rest.addedAt = new Date().toISOString().slice(0, 10);
   }
+  // v2 (2026-04-22): source는 meta에도 유지하고 컬럼에도 기록 (점진 이주)
+  const sourceCol = rest.source ?? null;
   getDb().prepare(
-    'INSERT OR IGNORE INTO tasks (id, status, priority, retries, depends, parent_id, meta, updated_at) VALUES (?,?,?,?,?,?,?,?)'
-  ).run(id, status, priority, retries, JSON.stringify(depends), parent_id, JSON.stringify(rest), Date.now());
+    'INSERT OR IGNORE INTO tasks (id, status, priority, retries, depends, parent_id, meta, updated_at, batch_id, source) VALUES (?,?,?,?,?,?,?,?,?,?)'
+  ).run(id, status, priority, retries, JSON.stringify(depends), parent_id, JSON.stringify(rest), Date.now(), batch_id, sourceCol);
 }
 
 /**
@@ -290,11 +315,15 @@ export function ensureCronTask(id, meta = {}) {
 
   if (!row) {
     // 신규 등록: queued로 바로 삽입 (cron은 항상 실행 대상이므로 pending 건너뜀)
-    const metaJson = JSON.stringify({ source: 'bot-cron', ...meta, name: meta.name ?? id });
+    const mergedMeta = { source: 'bot-cron', ...meta, name: meta.name ?? id };
+    const metaJson = JSON.stringify(mergedMeta);
     const parentId = meta.parent_id ?? null;
+    // v2 (2026-04-22): batch_id, source를 컬럼에도 기록 (UI 그룹핑용)
+    const batchId  = meta.batch_id ?? null;
+    const sourceCol = mergedMeta.source ?? null;
     db.prepare(
-      'INSERT INTO tasks (id, status, priority, retries, depends, parent_id, meta, updated_at) VALUES (?,?,?,?,?,?,?,?)'
-    ).run(id, 'queued', meta.priority ?? 0, 0, '[]', parentId, metaJson, now);
+      'INSERT INTO tasks (id, status, priority, retries, depends, parent_id, meta, updated_at, batch_id, source) VALUES (?,?,?,?,?,?,?,?,?,?)'
+    ).run(id, 'queued', meta.priority ?? 0, 0, '[]', parentId, metaJson, now, batchId, sourceCol);
     db.prepare(
       'INSERT INTO task_transitions (task_id, from_status, to_status, triggered_by, created_at) VALUES (?,?,?,?,?)'
     ).run(id, 'init', 'queued', 'bot-cron/ensure', now);
@@ -555,7 +584,7 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         for (let i = 0; i < args.length - 1; i++) {
           if (args[i].startsWith('--')) flagMap[args[i].slice(2)] = args[i + 1];
         }
-        const { id: eId, title, prompt: ePrompt, priority: ePrio = 'medium', source: eSrc = 'agent', type: eType = 'improvement', 'post-title': ePostTitle, timeout: eTimeout, maxBudget: eMaxBudget, allowedTools: eAllowedTools } = flagMap;
+        const { id: eId, title, prompt: ePrompt, priority: ePrio = 'medium', source: eSrc = 'agent', type: eType = 'improvement', 'post-title': ePostTitle, timeout: eTimeout, maxBudget: eMaxBudget, allowedTools: eAllowedTools, 'batch-id': eBatchId } = flagMap;
         if (!eId || !title) { process.stderr.write('enqueue: --id and --title required\n'); process.exit(1); }
         const db = getDb();
         const existing = db.prepare("SELECT status FROM tasks WHERE id=?").get(eId);
@@ -572,9 +601,11 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         if (eTimeout) metaObj.timeout = parseInt(eTimeout, 10);
         if (eMaxBudget) metaObj.maxBudget = eMaxBudget;
         if (eAllowedTools) metaObj.allowedTools = eAllowedTools;
+        if (eBatchId)    metaObj.batch_id = eBatchId;   // meta에도 병기 (점진 이주)
         const meta = JSON.stringify(metaObj);
-        db.prepare('INSERT OR REPLACE INTO tasks (id, status, priority, retries, depends, meta, updated_at) VALUES (?,?,?,?,?,?,?)')
-          .run(eId, 'queued', ePrioInt, 0, '[]', meta, Date.now());
+        // v2 (2026-04-22): batch_id, source를 컬럼에 기록 (UI GROUP BY용)
+        db.prepare('INSERT OR REPLACE INTO tasks (id, status, priority, retries, depends, meta, updated_at, batch_id, source) VALUES (?,?,?,?,?,?,?,?,?)')
+          .run(eId, 'queued', ePrioInt, 0, '[]', meta, Date.now(), eBatchId ?? null, eSrc ?? null);
         db.prepare('INSERT INTO task_transitions (task_id, from_status, to_status, triggered_by, created_at) VALUES (?,?,?,?,?)')
           .run(eId, existing?.status ?? 'init', 'queued', eSrc + '/enqueue', now);
         process.stdout.write(JSON.stringify({ ok: true, action: 'enqueued', id: eId, priority: ePrio }) + '\n');
@@ -588,14 +619,15 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         break;
       }
       // cron 태스크 ensure: DB에 없으면 queued로 삽입, failed/done이면 queued로 리셋
-      // Usage: node task-store.mjs ensure <id> [name] [source]
+      // Usage: node task-store.mjs ensure <id> <name> <source> <prompt> [allowedTools] [batch_id]
+      // debug-cron-* 태스크는 코드 수정이 필요하므로 allowedTools 기본값 포함
+      // v2 (2026-04-22): batch_id 6번째 선택 인자 추가 (UI 그룹핑용). 미전달 시 NULL.
       case 'ensure': {
-        // Usage: node task-store.mjs ensure <id> <name> <source> <prompt> [allowedTools]
-        // debug-cron-* 태스크는 코드 수정이 필요하므로 allowedTools 기본값 포함
-        const [id, name, source, prompt, allowedTools] = args;
+        const [id, name, source, prompt, allowedTools, batchId] = args;
         const taskMeta = { name: name ?? id, source: source ?? 'bot-cron' };
-        if (prompt) taskMeta.prompt = prompt;
+        if (prompt)  taskMeta.prompt = prompt;
         taskMeta.allowedTools = allowedTools ?? 'Bash,Read,Write,Edit';
+        if (batchId) taskMeta.batch_id = batchId;
         const result = ensureCronTask(id, taskMeta);
         process.stdout.write(JSON.stringify({ ok: true, ...result }) + '\n');
         break;

@@ -18,8 +18,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:$
 log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 
 # ── 결과 저장소 (임시 파일, subshell 안전) ─────────────────────────────────
-RESULTS_TMP=$(mktemp "/tmp/sysdr-results-$(date +%s%N)-XXXXXX.tsv")
-COUNTS_TMP=$(mktemp "/tmp/sysdr-counts-$(date +%s%N)-XXXXXX.txt")
+RESULTS_TMP=$(mktemp "/tmp/sysdr-results-XXXXXX.tsv")
+COUNTS_TMP=$(mktemp "/tmp/sysdr-counts-XXXXXX.txt")
 trap 'rm -f "$RESULTS_TMP" "$COUNTS_TMP"' EXIT
 echo "0 0" > "$COUNTS_TMP"   # ok warn_fail
 
