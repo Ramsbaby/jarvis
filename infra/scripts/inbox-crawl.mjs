@@ -13,7 +13,9 @@ import { homedir } from 'node:os';
 import { discordSend } from '../lib/discord-notify.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
-const RESULT_DIR = join(BOT_HOME, 'state', 'inbox-crawl');
+// 2026-04-23 경로 통일 — inbox-match.mjs / inbox-apply.mjs 와 SSoT 일치 ("state/inbox")
+// 기존 "state/inbox-crawl" 은 match 가 읽지 못해 3일 전 stale 파일 고정 사용 → 매일 같은 Notion 리포트 원인
+const RESULT_DIR = join(BOT_HOME, 'state', 'inbox');
 const RESULT_FILE = join(RESULT_DIR, 'latest.json');
 const SEEN_FILE = join(RESULT_DIR, 'seen.json');
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';

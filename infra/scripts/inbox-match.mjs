@@ -17,7 +17,22 @@ const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const CRAWL_DIR = join(BOT_HOME, 'state', 'inbox');
 const LATEST = join(CRAWL_DIR, 'latest.json');
 const MATCHED = join(CRAWL_DIR, 'matched.json');
+const APPS_FILE = join(CRAWL_DIR, 'applications.json');  // inbox-apply.mjs 가 기록하는 지원 이력 SSoT
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+// ── 지원 이력 차감 Set (2026-04-23 D안 도입) ──────────────────────────────
+// 이미 지원한 공고(error 없이 기록된 건)는 리포트에서 제외 — 피로 감소 + 액션 가능한 공고만 노출.
+// 파일 없거나 로드 실패 시 빈 Set 으로 graceful fallback.
+function loadAppliedUrls() {
+  try {
+    if (!existsSync(APPS_FILE)) return new Set();
+    const apps = JSON.parse(readFileSync(APPS_FILE, 'utf-8'));
+    return new Set(apps.filter(a => a && a.url && !a.error).map(a => a.url));
+  } catch (e) {
+    console.warn(`⚠️ applications.json 로드 실패 (${e.message}) — 지원 이력 차감 건너뜀`);
+    return new Set();
+  }
+}
 
 // Notion 연동 상수 (SSoT)
 // DB 자체에는 integration 공유가 없어 query/insert 불가 → 부모 페이지 아래 일일 리포트 페이지로 저장
@@ -302,8 +317,14 @@ async function main() {
   }
 
   const THRESHOLD = 35;
-  const top = results.filter(r => r.score >= THRESHOLD);
-  console.log(`\n📋 요약: ${results.length}건 중 ${top.length}건 매칭 (${THRESHOLD}점+)`);
+  // 2026-04-23 A+D 필터 — 신규 공고만 + 지원 이력 제외 (매일 같은 공고 반복 문제 해결)
+  const appliedUrls = loadAppliedUrls();
+  const rawMatched = results.filter(r => r.score >= THRESHOLD);
+  const top = rawMatched.filter(r => r.isNew && !appliedUrls.has(r.url));
+  const hiddenExisting = rawMatched.filter(r => !r.isNew).length;
+  const hiddenApplied = rawMatched.filter(r => r.isNew && appliedUrls.has(r.url)).length;
+  console.log(`\n📋 요약: ${results.length}건 중 ${rawMatched.length}건 매칭 (${THRESHOLD}점+)`);
+  console.log(`   └ 신규 노출: ${top.length}건 · 기존 숨김: ${hiddenExisting}건 · 지원완료 숨김: ${hiddenApplied}건`);
 
   // Notion 상세 저장 (먼저 실행 — Discord 에서 페이지 URL 참조)
   let notionResult = { pageUrl: null, count: 0 };
@@ -334,10 +355,17 @@ async function main() {
       ? `\n\n📋 **상세 전체 (${notionResult.count}건)**: <${notionResult.pageUrl}>`
       : '';
 
-    const header = `🎯 **Inbox 스코어링** — ${items.length}건 중 **${top.length}건** 매칭 (${THRESHOLD}점+)`;
+    // 헤더: 신규 필터링 투명성 확보 (2026-04-23 A+D 도입)
+    const hiddenParts = [];
+    if (hiddenExisting > 0) hiddenParts.push(`어제 이전 ${hiddenExisting}`);
+    if (hiddenApplied > 0) hiddenParts.push(`지원완료 ${hiddenApplied}`);
+    const hiddenSuffix = hiddenParts.length > 0 ? ` · 숨김 ${hiddenParts.join('+')}건` : '';
+    const header = `🎯 **Inbox 신규** — ${items.length}건 수집 / **${top.length}건 신규**${hiddenSuffix}`;
     const msg = top.length > 0
-      ? `${header}\n${tierLine}\n\n**🔝 TOP 3**\n${top3}${notionLine}`
-      : `${header}\n\n(금일 매칭 항목 없음 — 내일 다시 수집됩니다)`;
+      ? `${header}\n${tierLine}\n\n**🔝 신규 TOP 3**\n${top3}${notionLine}`
+      : `${header}\n\n${hiddenExisting + hiddenApplied > 0
+          ? `-# 매칭 ${rawMatched.length}건 전부 기존/지원완료 — 오늘은 신규 공고 없습니다.`
+          : '(매칭 항목 없음 — 내일 다시 수집됩니다)'}`;
 
     await sendDiscord(msg);
     console.log('✅ Discord 약식 전송 완료');
