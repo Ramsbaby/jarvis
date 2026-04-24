@@ -82,7 +82,7 @@ rules:
   - id: github-username
     severity: low
     pattern: "Ramsbaby|ramsbaby"
-    description: "GitHub username — plist/스크립트 경로·LICENSE 등 비기능 노출만 허용."
+    description: "GitHub username — plist/스크립트 경로·LICENSE·GitHub API 호출 스크립트 허용."
     allow_paths:
       - "*.md"
       - "*.toml"
@@ -91,6 +91,8 @@ rules:
       - "infra/config/*.plist"
       - "infra/scripts/*.sh"
       - "infra/scripts/*.mjs"
+      - "infra/bin/*.sh"
+      - "infra/bin/*.mjs"
       - "infra/discord/lib/*.js"
       - ".github/**"
       - ".mcp.json"

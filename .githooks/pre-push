@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Pre-push hook — CI 실패 선감지 (Privacy Guard + Syntax Check)
+#
+# 목적: pre-commit은 staged(이번 커밋)만 검사 → 기존 오염을 놓침.
+#        pre-push는 push 대상 commit range 전체를 검사 → GitHub CI와 동일 범위.
+#        따라서 push 전에 CI 빨간불을 미리 잡음.
+#
+# 우회:
+#   PRE_PUSH_SKIP=1 git push ...          — 전체 skip (비권장, 긴급 시만)
+#   PRIVACY_BYPASS_REASON='<사유>' git push ... — privacy만 medium/low 우회
+#
+# 실패 시 exit 1 → push 차단.
+
+set -euo pipefail
+
+if [ "${PRE_PUSH_SKIP:-0}" = "1" ]; then
+  echo "⚠️  PRE_PUSH_SKIP=1 — pre-push 검사 전체 skip (긴급 모드)" >&2
+  exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+# stdin: <local_ref> <local_sha> <remote_ref> <remote_sha> (각 push ref마다 한 줄)
+# 마지막 line의 remote_sha가 push 대상의 base.
+REMOTE_SHA=""
+LOCAL_SHA=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  REMOTE_SHA="$remote_sha"
+  LOCAL_SHA="$local_sha"
+done
+
+# 신규 branch or remote_sha 미상 → 전체 스캔
+ZERO_SHA="0000000000000000000000000000000000000000"
+if [ -z "$REMOTE_SHA" ] || [ "$REMOTE_SHA" = "$ZERO_SHA" ]; then
+  SCAN_MODE="--all"
+  RANGE_DESC="전체 tracked"
+else
+  SCAN_MODE="--diff=${REMOTE_SHA}..HEAD"
+  RANGE_DESC="${REMOTE_SHA:0:7}..HEAD"
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "⚠️  node 없음 — pre-push 검사 skip (경고만)" >&2
+  exit 0
+fi
+
+# ── 1. Privacy Guard ──────────────────────────────────────────────────
+echo "🔍 pre-push Privacy Guard ($RANGE_DESC)..." >&2
+set +e
+scan_out=$(node "$ROOT/scripts/privacy/scan.mjs" $SCAN_MODE 2>&1)
+rc=$?
+set -e
+
+if [ "$rc" -ne 0 ]; then
+  if [ -n "${PRIVACY_BYPASS_REASON:-}" ] && ! echo "$scan_out" | grep -qE '\[(critical|high)/'; then
+    echo "$scan_out" >&2
+    echo "⚠️  Privacy bypass (medium/low only): $PRIVACY_BYPASS_REASON" >&2
+  else
+    echo "$scan_out" >&2
+    echo "" >&2
+    echo "🚫 push 차단 — GitHub CI Privacy Guard에서 동일 실패 예상" >&2
+    echo "   해결:" >&2
+    echo "     1. 위반 라인에 '# privacy:allow <rule-id>' 주석" >&2
+    echo "     2. .privacy-blocklist.yml 의 allow_paths 확장" >&2
+    echo "     3. 긴급: PRE_PUSH_SKIP=1 git push ... (비권장)" >&2
+    exit 1
+  fi
+fi
+
+# ── 2. Syntax Check (infra/ JS/MJS) ───────────────────────────────────
+echo "🔍 pre-push Syntax Check (infra/ JS·MJS)..." >&2
+ERRORS=0
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  if ! ERR=$(node --check "$f" 2>&1); then
+    echo "❌ $f" >&2
+    echo "$ERR" | head -3 >&2
+    ERRORS=$((ERRORS + 1))
+  fi
+done < <(find "$ROOT/infra/" -type f \( -name '*.js' -o -name '*.mjs' \) 2>/dev/null | grep -v node_modules | sort)
+
+if [ "$ERRORS" -gt 0 ]; then
+  echo "" >&2
+  echo "🚫 syntax error $ERRORS건 — GitHub CI Syntax Check에서 동일 실패 예상" >&2
+  echo "   해결: 위 에러 수정 또는 (긴급) PRE_PUSH_SKIP=1 git push ..." >&2
+  exit 1
+fi
+
+echo "✅ pre-push checks PASS" >&2
+exit 0
