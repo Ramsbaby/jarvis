@@ -245,7 +245,31 @@ auto_disable_launchagent() {
 attempt_bootstrap() {
   local lbl="$1"
   local plist="$LA_DIR/$lbl.plist"
-  local count verdict bootstrap_err safe_err
+  local count verdict bootstrap_err safe_err load_status
+
+  # [2026-04-24] 이미 정상 loaded + exit=0인 agent는 bootout/bootstrap 생략.
+  # 불필요한 bootout이 "Bootstrap failed: 5: Input/output error"를 유발 (daily-summary 자정 3일 연속 실패).
+  # action "bootstrap-skip"으로 분리: classify_permanent_failure의 "action:bootstrap" 집계 오염 방지.
+  # R3: UNLOADED agent는 launchctl list에 없어 load_status 빈 문자열 → 가드 통과 → bootstrap 정상 시도.
+  # R4: crash-loop 감지 — 마지막 exit=0이어도 last exit reason이 비정상 시그널이면 bootstrap 필요.
+  local last_reason
+  load_status=$(launchctl list 2>/dev/null | awk -v lbl="$lbl" '$3==lbl {print $2; exit}')
+  if [[ -n "$load_status" && "$load_status" == "0" ]]; then
+    last_reason=$(launchctl print "gui/$(id -u)/$lbl" 2>/dev/null \
+                  | grep -E "last exit reason" | head -1 || true)
+    if [[ -n "$last_reason" ]] && echo "$last_reason" | grep -qiE "crashed|signal|killed|abort"; then
+      REPAIRS+=("⚠️ crash-loop 감지: $lbl (${last_reason}) → bootstrap 시도")
+      # fall-through: skip 안 하고 아래 bootstrap 로직 진행
+    else
+      if [[ "$DRY_RUN" == "1" ]]; then
+        REPAIRS+=("[DRY-RUN] SKIP bootstrap $lbl (이미 loaded, 최근 exit=0)")
+      else
+        REPAIRS+=("SKIP bootstrap $lbl (이미 loaded, 최근 exit=0)")
+        log_repair "bootstrap-skip" "$lbl" "success" "healthy"
+      fi
+      return
+    fi
+  fi
 
   count=$(repair_count_today "bootstrap" "$lbl")
   if [[ "$count" -ge 3 ]]; then
@@ -394,7 +418,7 @@ for name in "${AUDIT_LOGS[@]}"; do
       | if has("enabled") and .enabled == false then "true" else "false" end
     ' "$_tasks_json" 2>/dev/null | head -1)
     if [[ "$_task_disabled" == "true" ]]; then
-      log "SKIP stale(${name}): tasks.json enabled=false — 의도된 비활성, bootstrap 건너뜀"
+      echo "SKIP stale(${name}): tasks.json enabled=false — 의도된 비활성, bootstrap 건너뜀"
       continue
     fi
     AUDIT_SUMMARY+=("${name}: stale (${age_h}h 업데이트 없음)")
@@ -532,8 +556,12 @@ if [[ -f "$BYPASS_AUTOFIX_LEDGER" ]]; then
   # 오늘자 action 전수 집계 (tail -1 summary는 후속 0/0/0 실행에 가려지므로 폐기)
   today_entries=$(grep "\"ts\":\"${today_prefix}" "$BYPASS_AUTOFIX_LEDGER" 2>/dev/null || true)
   if [[ -n "$today_entries" ]]; then
-    _fix=$(echo "$today_entries" | grep -c '"action":"fixed"' || echo 0)
-    _fail=$(echo "$today_entries" | grep -c '"action":"failed"' || echo 0)
+    # grep -c는 매치 0일 때도 "0" 출력 + exit 1 → `|| echo 0`이 추가 "0" 출력 → "0\n0" → [[ syntax error.
+    # 2>/dev/null + ${var:-0} 조합으로 단일 값 보장.
+    _fix=$(echo "$today_entries" | grep -c '"action":"fixed"' 2>/dev/null || true)
+    _fail=$(echo "$today_entries" | grep -c '"action":"failed"' 2>/dev/null || true)
+    _fix=${_fix:-0}
+    _fail=${_fail:-0}
     # skip은 summary에만 남음(line-level action 아님) — 오늘의 최대 skip값 채택
     _skip=$(echo "$today_entries" | grep '"action":"summary"' \
             | grep -oE '"skip":[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1)
