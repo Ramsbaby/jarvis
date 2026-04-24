@@ -47,12 +47,26 @@ function buildSystemDoctorHTML(d) {
   const BG    = { OK: '#14532d1a', WARN: '#78350f1a', FAIL: '#7f1d1d1a' };
   const ICON  = { OK: '✅', WARN: '⚠️', FAIL: '❌' };
 
-  const okN   = d.items.filter(i => i.status === 'OK').length;
-  const warnN = d.items.filter(i => i.status === 'WARN').length;
-  const failN = d.items.filter(i => i.status === 'FAIL').length;
+  // 스키마 유연성: doctor 스킬은 summary.findings/healthy 문자열 배열을 보냄 → items로 합성
+  let items = Array.isArray(d.items) ? d.items : null;
+  if (!items && d.summary) {
+    items = [];
+    for (const f of (d.summary.findings || [])) {
+      const status = f.startsWith('🔴') ? 'FAIL' : 'WARN';
+      items.push({ item: f.replace(/^[🔴🟡⚠️❌]\s*/, ''), status, note: '' });
+    }
+    for (const h of (d.summary.healthy || [])) {
+      items.push({ item: h.replace(/^[✅]\s*/, ''), status: 'OK', note: '' });
+    }
+  }
+  items = items || [];
+
+  const okN   = items.filter(i => i.status === 'OK').length;
+  const warnN = items.filter(i => i.status === 'WARN').length;
+  const failN = items.filter(i => i.status === 'FAIL').length;
   const overIcon = failN > 0 ? '❌' : warnN > 0 ? '⚠️' : '✅';
 
-  const rows = d.items.map(({ item, status, note }) => `
+  const rows = items.map(({ item, status, note }) => `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;
                 margin-bottom:5px;background:${BG[status]||'#1e293b'};border-left:3px solid ${COLOR[status]||'#475569'}">
       <span style="flex:1;font-size:12px;color:#cbd5e1;font-family:monospace">${item}</span>
