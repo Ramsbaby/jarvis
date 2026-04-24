@@ -494,6 +494,64 @@ export async function handleMessage(message, state) {
   } catch {}
   const senderIsOwner = senderProfile?.type === 'owner' || senderProfile?.role === 'owner';
 
+  // ── 스킬 자동 트리거 감지 (2026-04-24, Phase 1) ──────────────────────────
+  // CLI UserPromptSubmit hook 방식을 Discord 표면에 이식. Jarvis 단일 뇌 완결.
+  // Owner 채널 + 자연어 키워드 매칭 시 즉시 runSkill → 응답 → return.
+  // Phase 3에서 /autoplan·/crisis·/deploy 에 버튼 결재 UX 추가 예정.
+  if (senderIsOwner && message.content) {
+    try {
+      const { detectSkillTrigger } = await import('./skill-trigger.js');
+      const trigger = detectSkillTrigger(message.content);
+      if (trigger) {
+        log('info', 'Skill trigger detected', {
+          userId: effectiveAuthor.id,
+          skill: trigger.skill,
+          confidence: trigger.confidence,
+          via: trigger.via,
+        });
+        const { runSkill } = await import('./skill-runner.js');
+        // 초기 placeholder 메시지 (SDK query는 30~60초 소요 — typing indicator만으론 부족)
+        const placeholder = await message.reply(
+          `🔍 **\`/${trigger.skill}\`** 분석 중입니다... (잠시 기다려 주십시오)`
+        ).catch(() => null);
+        // typing indicator 주기적 갱신 (10초 TTL × 6 = 최대 60초)
+        let typingInterval = setInterval(() => {
+          message.channel.sendTyping().catch(() => {});
+        }, 8000);
+        message.channel.sendTyping().catch(() => {});
+        let result;
+        try {
+          result = await runSkill(trigger.skill, message.content, {
+            context: { channelId: message.channelId, userId: effectiveAuthor.id },
+          });
+        } finally {
+          clearInterval(typingInterval);
+        }
+        const header = `🎯 **스킬 \`/${trigger.skill}\`** (${trigger.via}, conf=${trigger.confidence})\n\n`;
+        const bodyBudget = 2000 - header.length - 20;
+        const reply = result.text.length > bodyBudget
+          ? result.text.slice(0, bodyBudget) + '\n\n…(잘림)'
+          : result.text;
+        // placeholder 있으면 edit, 없으면 새 reply
+        if (placeholder) {
+          await placeholder.edit({ content: header + reply }).catch(async () => {
+            await message.reply({ content: header + reply });
+          });
+        } else {
+          await message.reply({ content: header + reply });
+        }
+        processingMsgIds.delete(message.id);
+        return;
+      }
+    } catch (e) {
+      log('error', 'Skill trigger handler failed', {
+        error: e.message,
+        stack: e.stack?.slice(0, 300),
+      });
+      // fall-through: 기존 Claude 경로 진행 (트리거 실패가 전체 봇 차단 유발 방지)
+    }
+  }
+
   // !pair <code> — Owner 전용 커맨드 (debounce 우회, 즉시 처리)
   const pairMatch = message.content.match(/^!pair\s+([A-Z2-9]{6})\s*$/i);
   if (pairMatch) {
@@ -1121,6 +1179,8 @@ ${extracted}
         streamer.setStatusMeta({ model: modelLabel, startedAt: Date.now(), turn: 0 });
       } catch { /* status bar 실패는 비차단 */ }
     }
+    // [2026-04-24 진단 로그] sendPlaceholder 호출 지점 1 (본문 스트림용)
+    log('info', '[PLACEHOLDER-ORIGIN]', { origin: 'handlers.js:1124 main-stream', streamerId: streamer._streamerId, msgId: message.id, threadId: thread.id });
     await streamer.sendPlaceholder();
     await streamer.updatePhase('🔍 요청 분석 중...');
 
@@ -1187,7 +1247,7 @@ ${extracted}
       }
     }
 
-    const MAX_CONTINUATIONS = 5;
+    const MAX_CONTINUATIONS = 10; // [2026-04-23] 5→10 상향. 이유: /verify 등 heavy skill 턴 소진으로 msg.truncated 반복 발생. 이론 상한 200×(1+10)=2200턴.
     let continuationCount = 0;
     let _autoResumeAttempts = 0; // 타임아웃 자동 재개 횟수 (최대 2회)
 
@@ -1363,7 +1423,17 @@ ${extracted}
           });
 
           // Resume failure -> retry fresh (단, 이미 응답이 완료된 경우는 재시도 안 함)
+          // [2026-04-23 중복 송출 근본 수정] hasRealContent 가드 추가.
+          //   이전 로직: finalized=false면 무조건 retry → AUP refusal로 중간 끊긴 응답이 이미 송출됐는데도 retry
+          //   결과: 이전 부분 메시지 + 새 응답 → 주인님이 본 "청킹 후 새로 씀" 중복의 근본 원인.
+          //   수정: 이미 실제 콘텐츠가 송출된 경우 sessionId만 초기화하고 retry 차단.
           if (event.is_error && sid && !streamer.finalized) {
+            if (streamer.hasRealContent) {
+              log('warn', 'Resume failed but partial content already sent — skip retry to avoid duplicate', { sessionId: sid });
+              sessions.delete(sessionKey);
+              // retryNeeded = false 유지: 중복 송출 방지
+              break;
+            }
             log('warn', 'Resume failed, retrying fresh', { sessionId: sid });
             sessions.delete(sessionKey);
             retryNeeded = true;
@@ -1555,15 +1625,29 @@ ${extracted}
         } else if (aborted && killReason !== 'restart') {
           // 타임아웃: 2회까지 자동 재개, 이후에만 사용자에게 알림
           _savePendingTask(sessionKey, originalPrompt, completedTools);
-          if (_autoResumeAttempts < 2) {
+          // [2026-04-23 중복 방지 #2] 부분 송출 후 auto-resume 차단
+          //   주인님 4회 반복 사고의 진짜 주범: AUP refusal → aborted=true → autoResumeNeeded=true
+          //   → while (autoResumeNeeded) 루프 반복 → 이미 송출된 내용을 처음부터 재작성
+          //   수정: hasRealContent면 재개 대신 truncate 안내 후 finalize.
+          if (!streamer.hasRealContent && _autoResumeAttempts < 2) {
             autoResumeNeeded = true;
             // finalize 스킵 — 외부 auto-resume 루프가 처리
           } else {
-            streamer.append('\n\n' + t('msg.timeout'));
+            // [2026-04-24] 오너 지시 — "응답이 중간에 끊겼습니다" 배너 제거.
+            // hasRealContent 일 땐 조용히 finalize. 빈 응답일 때만 timeout 안내 유지.
+            if (!streamer.hasRealContent) {
+              streamer.append('\n\n' + t('msg.timeout'));
+            }
             await streamer.finalize();
           }
         } else {
           if (streamer.hasRealContent && toolCount > 0) {
+            // [2026-04-23 관측 패치] L1585 경로 실제 발생 여부 추적
+            //   이 경로는 SDK for-await 가 result/error 없이 조용히 종료될 때 도달.
+            //   5차 감사관 응답 절단의 유력 후보. 로그 안 남기던 blind spot 이었음.
+            log('warn', 'Stream ended without result event — appending msg.truncated', {
+              threadId: thread.id, toolCount, contentLen: streamer.buffer?.length ?? 0,
+            });
             streamer.append('\n\n' + t('msg.truncated'));
           }
           await streamer.finalize();
@@ -2103,6 +2187,8 @@ export async function rerunQuery(channel, query, sessionKey, state, opts = {}) {
     const uid = parts.length >= 2 ? parts[parts.length - 1] : null;
     if (uid) streamer.setUserId(uid);
   } catch { /* 비차단 */ }
+  // [2026-04-24 진단 로그] sendPlaceholder 호출 지점 2 (슬래시/명령어 경로)
+  log('info', '[PLACEHOLDER-ORIGIN]', { origin: 'handlers.js:2130 slash-or-cmd', streamerId: streamer._streamerId, sessionKey });
   await streamer.sendPlaceholder();
 
   const abortController = new AbortController();
