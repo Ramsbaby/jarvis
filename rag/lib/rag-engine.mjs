@@ -605,6 +605,21 @@ export class RAGEngine {
    * @returns {Promise<number[][]>} embeddings 배열
    */
   async _embedOneBatch(batch) {
+    // Circuit breaker: 연속 실패 5회 → 30분 OPEN (추가 호출 즉시 차단, BM25 fallback 활성).
+    // 복구: 30분 후 HALF-OPEN 1회 시도 → 성공 시 CLOSED, 실패 시 재 OPEN.
+    if (!this._embedCircuit) this._embedCircuit = { state: 'closed', failCount: 0, openedAt: 0 };
+    const EMBED_FAIL_THRESHOLD = 5;
+    const EMBED_OPEN_DURATION_MS = 30 * 60 * 1000;
+    const now = Date.now();
+    if (this._embedCircuit.state === 'open') {
+      if (now - this._embedCircuit.openedAt < EMBED_OPEN_DURATION_MS) {
+        const remainMin = Math.max(1, Math.round((EMBED_OPEN_DURATION_MS - (now - this._embedCircuit.openedAt)) / 60000));
+        throw new Error(`Embedding circuit OPEN (${this._embedCircuit.failCount} consecutive failures, cooling down ~${remainMin}min)`);
+      }
+      this._embedCircuit.state = 'half-open';
+      console.warn('[rag] Embedding circuit HALF-OPEN — trial request');
+    }
+
     const MAX_RETRIES = 2;
     let lastErr;
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -619,6 +634,10 @@ export class RAGEngine {
           throw new Error(`Ollama embed HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
         }
         const data = await res.json();
+        if (this._embedCircuit.state !== 'closed') {
+          console.warn(`[rag] Embedding circuit CLOSED — recovered after ${this._embedCircuit.failCount} failures`);
+          this._embedCircuit = { state: 'closed', failCount: 0, openedAt: 0 };
+        }
         return data.embeddings;
       } catch (err) {
         lastErr = err;
@@ -626,6 +645,12 @@ export class RAGEngine {
         if ((msg.includes('timed out') || msg.includes('timeout') || msg.includes('ECONNREFUSED')) && attempt < MAX_RETRIES) {
           await new Promise(r => setTimeout(r, 3_000));
           continue;
+        }
+        this._embedCircuit.failCount++;
+        if (this._embedCircuit.state === 'half-open' || this._embedCircuit.failCount >= EMBED_FAIL_THRESHOLD) {
+          this._embedCircuit.state = 'open';
+          this._embedCircuit.openedAt = Date.now();
+          console.warn(`[rag] Embedding circuit OPEN — ${this._embedCircuit.failCount} consecutive failures, cooling 30min`);
         }
         throw err;
       }
