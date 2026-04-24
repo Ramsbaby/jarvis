@@ -21,10 +21,11 @@ jobs:
           echo "🔍 JavaScript/MJS 문법 검사..."
           ERRORS=0
 
-          # infra/ 하위 JS/MJS 파일 전수 검사
-          for f in $(find infra/ -name '*.js' -o -name '*.mjs' | grep -v node_modules | sort); do
-            if ! node --check "$f" 2>/dev/null; then
+          # infra/ 하위 JS/MJS 파일 전수 검사 (symlink 제외 — symlink target은 별도 경로에서 직접 검사)
+          for f in $(find infra/ -type f \( -name '*.js' -o -name '*.mjs' \) | grep -v node_modules | sort); do
+            if ! ERR=$(node --check "$f" 2>&1); then
               echo "❌ $f"
+              echo "$ERR" | head -5
               ERRORS=$((ERRORS + 1))
             fi
           done

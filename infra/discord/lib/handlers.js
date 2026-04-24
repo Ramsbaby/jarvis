@@ -1053,7 +1053,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
     }
     // Download text/document attachments from Discord CDN
     // 지원: txt, md, html, java, py, json, xml, csv, yaml, sh, sql, pdf 등
-    const MAX_TEXT_BYTES = 2_000_000; // 2MB 상한 (PDF 이력서 등 고려)
+    const MAX_TEXT_BYTES = 20_000_000; // [2026-04-24] 2MB → 20MB 상향. 2012KB PDF 거부 사고로 확대.
     for (const [, att] of message.attachments) {
       const isImg = att.contentType?.startsWith('image/') ||
         /\.(jpg|jpeg|png|gif|webp)$/i.test(att.name ?? '');
@@ -1083,7 +1083,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
           writeFileSync(pdfPath, buf);
           let usedFallback = false;
           try {
-            const { stdout } = await execFileAsync('/opt/homebrew/bin/pdftotext', [pdfPath, '-'], { maxBuffer: 2 * 1024 * 1024 });
+            const { stdout } = await execFileAsync('/opt/homebrew/bin/pdftotext', [pdfPath, '-'], { maxBuffer: 20 * 1024 * 1024 });
             const extracted = stdout.trim();
             if (extracted) {
               rmSync(pdfPath, { force: true });
