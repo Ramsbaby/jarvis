@@ -32,6 +32,7 @@ let SITES = [];
 let GREETINGHR_SITES = [];
 let NINEHIRE_SITES = [];
 let WANTED_CFG = null;
+let JUMPIT_CFG = null;
 try {
   if (existsSync(TARGETS_PATH)) {
     const cfg = JSON.parse(readFileSync(TARGETS_PATH, 'utf-8'));
@@ -39,7 +40,8 @@ try {
     GREETINGHR_SITES = Array.isArray(cfg.greetinghr_sites) ? cfg.greetinghr_sites : [];
     NINEHIRE_SITES = Array.isArray(cfg.ninehire_sites) ? cfg.ninehire_sites : [];
     WANTED_CFG = (cfg.wanted && cfg.wanted.enabled) ? cfg.wanted : null;
-    console.log(`📂 타겟 로드: ${SITES.length} sites + ${GREETINGHR_SITES.length} greetinghr + ${NINEHIRE_SITES.length} ninehire${WANTED_CFG ? ' + wanted' : ''}`);
+    JUMPIT_CFG = (cfg.jumpit && cfg.jumpit.enabled) ? cfg.jumpit : null;
+    console.log(`📂 타겟 로드: ${SITES.length} sites + ${GREETINGHR_SITES.length} greetinghr + ${NINEHIRE_SITES.length} ninehire${WANTED_CFG ? ' + wanted' : ''}${JUMPIT_CFG ? ' + jumpit' : ''}`);
   } else {
     console.warn(`⚠️ ${TARGETS_PATH} 없음 — 크롤링 대상 0건. 샘플: private/config/inbox-crawl-targets.example.json 참고`);
   }
@@ -151,6 +153,45 @@ async function crawlWanted(cfg) {
     }
   } catch (e) {
     console.error(`  [API] Wanted 실패: ${e.message}`);
+  }
+  return results;
+}
+
+// ── API 크롤링 (점핏 어그리게이터) ─────────────────────────────────────────
+// 점핏 공개 API (jumpit-api.saramin.co.kr) — 2026-04-24 실측:
+//   - jobCategory=1 = 서버/백엔드 (총 175건)
+//   - page pagination, 1페이지 16건
+//   - minCareer/maxCareer 파라미터는 **서버측 무시** → 클라이언트 필터
+async function crawlJumpit(cfg) {
+  const { job_category = 1, max_pages = 20, min_career_range = 3, max_career_range = 12 } = cfg;
+  const results = [];
+  const seenIds = new Set();
+  try {
+    for (let page = 1; page <= max_pages; page++) {
+      const url = `https://jumpit-api.saramin.co.kr/api/positions?jobCategory=${job_category}&page=${page}`;
+      const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0', 'accept': 'application/json' } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      const positions = d?.result?.positions || [];
+      if (positions.length === 0) break;
+      for (const p of positions) {
+        if (seenIds.has(p.id)) continue;
+        seenIds.add(p.id);
+        const minC = p.minCareer ?? 0;
+        const maxC = p.maxCareer ?? 99;
+        // 경력 필터: 오너(9년차) 기준 3~12년 범위와 겹치는 공고만
+        if (maxC < min_career_range) continue;
+        if (minC > max_career_range) continue;
+        results.push({
+          title: p.title || '',
+          url: `https://jumpit.saramin.co.kr/position/${p.id}`,
+          company: `[점핏] ${p.companyName || '?'}`,
+          minCareer: minC, maxCareer: maxC,
+        });
+      }
+    }
+  } catch (e) {
+    console.error(`  [API] Jumpit 실패: ${e.message}`);
   }
   return results;
 }
@@ -269,11 +310,22 @@ async function main() {
     const backend = jobs.filter(j => isBackendJob(j.title));
     const newJobs = backend.filter(j => { const id = makeId(j.url); if (seen.has(id)) return false; seen.add(id); return true; });
     allJobs.push(...backend.map(j => ({ ...j, isNew: newJobs.some(n => n.url === j.url) })));
-    // 회사별 그룹핑 통계
     const byCompany = new Map();
     for (const j of backend) byCompany.set(j.company, (byCompany.get(j.company) || 0) + 1);
     siteResults.push({ company: `원티드 (${byCompany.size}개사)`, total: jobs.length, backend: backend.length, new: newJobs.length });
     console.log(`  ✅ 원티드: 전체 ${jobs.length}건 (백엔드 ${backend.length}건 / ${byCompany.size}개사, 신규 ${newJobs.length})`);
+  }
+
+  // Jumpit 어그리게이터 (IT 전문, ~175건 백엔드)
+  if (JUMPIT_CFG) {
+    const jobs = await crawlJumpit(JUMPIT_CFG);
+    // 점핏은 이미 서버/백엔드 카테고리로 필터 완료 — 제목 매칭 스킵
+    const newJobs = jobs.filter(j => { const id = makeId(j.url); if (seen.has(id)) return false; seen.add(id); return true; });
+    allJobs.push(...jobs.map(j => ({ ...j, isNew: newJobs.some(n => n.url === j.url) })));
+    const byCompany = new Map();
+    for (const j of jobs) byCompany.set(j.company, (byCompany.get(j.company) || 0) + 1);
+    siteResults.push({ company: `점핏 (${byCompany.size}개사)`, total: jobs.length, backend: jobs.length, new: newJobs.length });
+    console.log(`  ✅ 점핏: 전체 ${jobs.length}건 (백엔드 ${jobs.length}건 / ${byCompany.size}개사, 신규 ${newJobs.length})`);
   }
 
   for (const site of GREETINGHR_SITES) {
