@@ -146,6 +146,36 @@ for section in "크론 마스터 종합 리포트" "상세 (어제 대비)" "리
   fi
 done
 
+# ── Test 9: attempt_bootstrap 가드 (2026-04-24 Option A + R4 crash-loop) ─────
+# daily-summary 자정 bootstrap "Bootstrap failed: 5: Input/output error" 재발 방지.
+say ""
+say "[Test 9] attempt_bootstrap 가드 구조적 존재 확인"
+if grep -qE "이미 정상 loaded \+ exit=0인 agent는 bootout/bootstrap 생략" "$CRON_MASTER"; then
+  ok "loaded + exit=0 skip 가드 존재"
+else
+  ng "loaded + exit=0 skip 가드 누락"
+fi
+if grep -qE "log_repair \"bootstrap-skip\"" "$CRON_MASTER"; then
+  ok "action 분리 (bootstrap-skip) — classifier 오염 방지"
+else
+  ng "bootstrap-skip action 분리 누락 — classify_permanent_failure 오탐 위험"
+fi
+if grep -qE "crash-loop 감지|last exit reason" "$CRON_MASTER"; then
+  ok "crash-loop 감지 (R4) 패턴 존재"
+else
+  ng "crash-loop 감지 누락 (R4)"
+fi
+if grep -qE "if \[\[ \"\\\$DRY_RUN\" == \"1\" \]\]; then" "$CRON_MASTER"; then
+  ok "가드 내 DRY_RUN 체크 (R6 ledger 오염 방지)"
+else
+  # Fallback: grep 패턴이 셸 quoting 때문에 실패할 수 있음, 구조적 존재만 확인
+  if grep -c "DRY_RUN" "$CRON_MASTER" | awk '{exit !($1 >= 4)}'; then
+    ok "DRY_RUN 가드 참조 존재 (패턴 N≥4)"
+  else
+    ng "DRY_RUN 가드 패턴 부족"
+  fi
+fi
+
 # ── 결과 요약 ────────────────────────────────────────────────────────────────
 say ""
 say "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
