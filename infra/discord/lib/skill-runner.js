@@ -223,10 +223,10 @@ Jarvis 환경에서는 다음으로 해석:
   }
 }
 
-// 테스트·관측용
+// 테스트·관측용 — persistent quota 파일 기반
 export function _resetQuota() {
-  skillCallCount.clear();
+  try { fsSync.unlinkSync(QUOTA_FILE); } catch {}
 }
 export function _getQuotaState() {
-  return Object.fromEntries(skillCallCount);
+  return loadQuota();
 }
