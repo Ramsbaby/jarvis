@@ -31,11 +31,11 @@ audit_mcp() {
     [ -z "$srv" ] && continue
     case "$srv" in
       workgroup|nexus)
-        pid=$(pgrep -f "mcp-${srv}" 2>/dev/null | head -1)
+        pid=$(pgrep -f "mcp-${srv}" 2>/dev/null | head -1 || true)
         if [ -n "$pid" ]; then ok "$srv: PID=$pid"; else warn "$srv: NOT_RUNNING (persistent stdio 기대)"; fi
         ;;
       serena*)
-        pid=$(pgrep -f "serena.*start-mcp-server" 2>/dev/null | head -1)
+        pid=$(pgrep -f "serena.*start-mcp-server" 2>/dev/null | head -1 || true)
         if [ -n "$pid" ]; then ok "$srv: PID=$pid"; else info "$srv: session-scoped (세션 미로드면 정상)"; fi
         ;;
       *)
