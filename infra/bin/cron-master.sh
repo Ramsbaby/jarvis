@@ -31,6 +31,10 @@ mkdir -p "$(dirname "$SELF_LOG")"
 } >> "$SELF_LOG"
 exec > >(tee -a "$SELF_LOG") 2>&1
 
+# self-log 전용 logger — stdout 오염 방지 (Test 5 dedup 회귀 해소, 2026-04-24).
+# 이전 echo 사용 시 bare stdout 4줄 누출 → Discord digest 변동 → dedup 실패.
+log() { echo "[$(date '+%H:%M:%S')] $*" >> "${SELF_LOG:-/dev/null}"; }
+
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_DIR="$BOT_HOME/logs"
 LA_DIR="$HOME/Library/LaunchAgents"
@@ -251,24 +255,18 @@ attempt_bootstrap() {
   # 불필요한 bootout이 "Bootstrap failed: 5: Input/output error"를 유발 (daily-summary 자정 3일 연속 실패).
   # action "bootstrap-skip"으로 분리: classify_permanent_failure의 "action:bootstrap" 집계 오염 방지.
   # R3: UNLOADED agent는 launchctl list에 없어 load_status 빈 문자열 → 가드 통과 → bootstrap 정상 시도.
-  # R4: crash-loop 감지 — 마지막 exit=0이어도 last exit reason이 비정상 시그널이면 bootstrap 필요.
-  local last_reason
+  # R4 제거(2026-04-24 재검증): macOS launchctl print에 "last exit reason" 필드 부재 확인.
+  # load_status(=last exit code)가 non-zero면 이미 가드 통과해 bootstrap 시도하므로 기본 crash 케이스는 포괄.
+  # exit=0 + runs 급증 crash-loop은 별도 watchdog scope (본 가드 범위 외).
   load_status=$(launchctl list 2>/dev/null | awk -v lbl="$lbl" '$3==lbl {print $2; exit}')
   if [[ -n "$load_status" && "$load_status" == "0" ]]; then
-    last_reason=$(launchctl print "gui/$(id -u)/$lbl" 2>/dev/null \
-                  | grep -E "last exit reason" | head -1 || true)
-    if [[ -n "$last_reason" ]] && echo "$last_reason" | grep -qiE "crashed|signal|killed|abort"; then
-      REPAIRS+=("⚠️ crash-loop 감지: $lbl (${last_reason}) → bootstrap 시도")
-      # fall-through: skip 안 하고 아래 bootstrap 로직 진행
+    if [[ "$DRY_RUN" == "1" ]]; then
+      REPAIRS+=("[DRY-RUN] SKIP bootstrap $lbl (이미 loaded, 최근 exit=0)")
     else
-      if [[ "$DRY_RUN" == "1" ]]; then
-        REPAIRS+=("[DRY-RUN] SKIP bootstrap $lbl (이미 loaded, 최근 exit=0)")
-      else
-        REPAIRS+=("SKIP bootstrap $lbl (이미 loaded, 최근 exit=0)")
-        log_repair "bootstrap-skip" "$lbl" "success" "healthy"
-      fi
-      return
+      REPAIRS+=("SKIP bootstrap $lbl (이미 loaded, 최근 exit=0)")
+      log_repair "bootstrap-skip" "$lbl" "success" "healthy"
     fi
+    return
   fi
 
   count=$(repair_count_today "bootstrap" "$lbl")
@@ -418,7 +416,7 @@ for name in "${AUDIT_LOGS[@]}"; do
       | if has("enabled") and .enabled == false then "true" else "false" end
     ' "$_tasks_json" 2>/dev/null | head -1)
     if [[ "$_task_disabled" == "true" ]]; then
-      echo "SKIP stale(${name}): tasks.json enabled=false — 의도된 비활성, bootstrap 건너뜀"
+      log "SKIP stale(${name}): tasks.json enabled=false — 의도된 비활성, bootstrap 건너뜀"
       continue
     fi
     AUDIT_SUMMARY+=("${name}: stale (${age_h}h 업데이트 없음)")
