@@ -33,6 +33,7 @@ let GREETINGHR_SITES = [];
 let NINEHIRE_SITES = [];
 let WANTED_CFG = null;
 let JUMPIT_CFG = null;
+let LINKEDIN_CFG = null;
 try {
   if (existsSync(TARGETS_PATH)) {
     const cfg = JSON.parse(readFileSync(TARGETS_PATH, 'utf-8'));
@@ -41,7 +42,8 @@ try {
     NINEHIRE_SITES = Array.isArray(cfg.ninehire_sites) ? cfg.ninehire_sites : [];
     WANTED_CFG = (cfg.wanted && cfg.wanted.enabled) ? cfg.wanted : null;
     JUMPIT_CFG = (cfg.jumpit && cfg.jumpit.enabled) ? cfg.jumpit : null;
-    console.log(`📂 타겟 로드: ${SITES.length} sites + ${GREETINGHR_SITES.length} greetinghr + ${NINEHIRE_SITES.length} ninehire${WANTED_CFG ? ' + wanted' : ''}${JUMPIT_CFG ? ' + jumpit' : ''}`);
+    LINKEDIN_CFG = (cfg.linkedin && cfg.linkedin.enabled) ? cfg.linkedin : null;
+    console.log(`📂 타겟 로드: ${SITES.length} sites + ${GREETINGHR_SITES.length} greetinghr + ${NINEHIRE_SITES.length} ninehire${WANTED_CFG ? ' + wanted' : ''}${JUMPIT_CFG ? ' + jumpit' : ''}${LINKEDIN_CFG ? ' + linkedin' : ''}`);
   } else {
     console.warn(`⚠️ ${TARGETS_PATH} 없음 — 크롤링 대상 0건. 샘플: private/config/inbox-crawl-targets.example.json 참고`);
   }
@@ -153,6 +155,59 @@ async function crawlWanted(cfg) {
     }
   } catch (e) {
     console.error(`  [API] Wanted 실패: ${e.message}`);
+  }
+  return results;
+}
+
+// ── API 크롤링 (LinkedIn guest API) ────────────────────────────────────────
+// LinkedIn 공개 /jobs-guest/ 엔드포인트 — 2026-04-24 실측:
+//   - HTML fragment 응답, <li> 블록 × 10/페이지
+//   - f_E=3,4,5 서버측 경력 필터 작동 (Associate/Mid-Senior/Director)
+//   - start 파라미터 pagination 확인 (start=300도 10건 반환)
+//   - 인증·로그인 불필요, user-agent만 필수
+async function crawlLinkedIn(cfg) {
+  const {
+    keywords = ['backend', 'server developer'],
+    location = 'South Korea',
+    experience_levels = '3,4,5',
+    max_start = 200,
+  } = cfg;
+  const results = [];
+  const seenIds = new Set();
+  try {
+    for (const kw of keywords) {
+      for (let start = 0; start <= max_start; start += 10) {
+        const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(kw)}&location=${encodeURIComponent(location)}&f_E=${experience_levels}&start=${start}`;
+        const r = await fetch(url, {
+          headers: {
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
+            'accept': 'text/html,application/xhtml+xml',
+          },
+        });
+        if (!r.ok) break;
+        const html = await r.text();
+        const blocks = html.match(/<li[\s\S]*?<\/li>/g) || [];
+        if (blocks.length === 0) break;
+        for (const b of blocks) {
+          const urnM = b.match(/data-entity-urn="urn:li:jobPosting:(\d+)"/);
+          const titleM = b.match(/<h3[^>]*class="base-search-card__title"[^>]*>\s*([^<]+)/);
+          const compM = b.match(/<h4[^>]*class="base-search-card__subtitle"[\s\S]*?<a[^>]*>\s*([^<]+)/);
+          if (!urnM || !titleM) continue;
+          const id = urnM[1];
+          if (seenIds.has(id)) continue;
+          seenIds.add(id);
+          const title = titleM[1].replace(/&amp;/g, '&').trim();
+          const company = compM ? compM[1].replace(/&amp;/g, '&').trim() : '?';
+          results.push({
+            title,
+            url: `https://www.linkedin.com/jobs/view/${id}`,
+            company: `[LinkedIn] ${company}`,
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.error(`  [API] LinkedIn 실패: ${e.message}`);
   }
   return results;
 }
@@ -314,6 +369,18 @@ async function main() {
     for (const j of backend) byCompany.set(j.company, (byCompany.get(j.company) || 0) + 1);
     siteResults.push({ company: `원티드 (${byCompany.size}개사)`, total: jobs.length, backend: backend.length, new: newJobs.length });
     console.log(`  ✅ 원티드: 전체 ${jobs.length}건 (백엔드 ${backend.length}건 / ${byCompany.size}개사, 신규 ${newJobs.length})`);
+  }
+
+  // LinkedIn 어그리게이터 (글로벌·대기업급 커버)
+  if (LINKEDIN_CFG) {
+    const jobs = await crawlLinkedIn(LINKEDIN_CFG);
+    const backend = jobs.filter(j => isBackendJob(j.title));
+    const newJobs = backend.filter(j => { const id = makeId(j.url); if (seen.has(id)) return false; seen.add(id); return true; });
+    allJobs.push(...backend.map(j => ({ ...j, isNew: newJobs.some(n => n.url === j.url) })));
+    const byCompany = new Map();
+    for (const j of backend) byCompany.set(j.company, (byCompany.get(j.company) || 0) + 1);
+    siteResults.push({ company: `LinkedIn (${byCompany.size}개사)`, total: jobs.length, backend: backend.length, new: newJobs.length });
+    console.log(`  ✅ LinkedIn: 전체 ${jobs.length}건 (백엔드 ${backend.length}건 / ${byCompany.size}개사, 신규 ${newJobs.length})`);
   }
 
   // Jumpit 어그리게이터 (IT 전문, ~175건 백엔드)
