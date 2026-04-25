@@ -220,7 +220,9 @@ check_cron_errors() {
   task_count=$((${task_count:-0}))
 
   local task_note=""
-  [[ "$task_count" -gt 0 ]] && task_note=" (+task ${task_count}건 제외)"
+  if [[ "$task_count" -gt 0 ]]; then
+    task_note=" (+task ${task_count}건 제외)"
+  fi
 
   if (( err_count > 10 )); then
     add_result "cron-errors" "FAIL" "24h ${err_count}건${task_note}"
@@ -306,6 +308,38 @@ check_disk
 
 read -r ok wf < "$COUNTS_TMP"
 log "점검 완료 — OK:$ok WARN/FAIL:$wf"
+
+# ── 원장 적재 (cron-scan) ─────────────────────────────────────────────────────
+# 2026-04-25 verify Agent 적발: cron 매일 06:00 실행 결과가 doctor-ledger.jsonl에
+# 안 적재되어 주간 audit이 운영 추세를 못 봄. type:"cron-scan"으로 명시 적재.
+LEDGER="${HOME}/jarvis/runtime/state/doctor-ledger.jsonl"
+if command -v jq >/dev/null 2>&1; then
+  # overall 판정: wf=0 → green / wf<3 → yellow / 그 외 → red
+  if (( wf == 0 )); then overall="green"
+  elif (( wf < 3 )); then overall="yellow"
+  else overall="red"; fi
+
+  # FAIL 항목 개수 (RESULTS_TMP에서 status==FAIL 카운트)
+  fail_count=$(awk -F'\t' '$2=="FAIL"' "$RESULTS_TMP" 2>/dev/null | wc -l | tr -d ' ')
+  warn_count=$(awk -F'\t' '$2=="WARN"' "$RESULTS_TMP" 2>/dev/null | wc -l | tr -d ' ')
+
+  if jq -cn \
+       --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+       --arg type "cron-scan" \
+       --arg overall "$overall" \
+       --arg runner "system-doctor.sh" \
+       --argjson ok "${ok:-0}" \
+       --argjson warn "${warn_count:-0}" \
+       --argjson fail "${fail_count:-0}" \
+       '{ts:$ts, type:$type, runner:$runner, overall:$overall, ok:$ok, warn:$warn, fail:$fail}' \
+       >> "$LEDGER" 2>>"$LOG"; then
+    log "ledger appended ($overall ok=$ok warn=$warn_count fail=$fail_count)"
+  else
+    log "ledger append FAILED — check $LEDGER permissions"
+  fi
+else
+  log "ledger skip — jq not found"
+fi
 
 # ── 결과 포맷팅 ───────────────────────────────────────────────────────────────
 if [[ "$wf" -eq 0 ]]; then
