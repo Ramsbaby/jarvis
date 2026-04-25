@@ -51,7 +51,15 @@ RED_TOTAL=$(echo "$ENTRIES" | jq -s '[.[].red // 0] | add // 0')
 YELLOW_TOTAL=$(echo "$ENTRIES" | jq -s '[.[].yellow // 0] | add // 0')
 AUTO_REPAIR_TOTAL=$(echo "$ENTRIES" | jq -s '[.[].auto_repairs // 0] | add // 0')
 
-log "7일 누적: 🔴 $RED_TOTAL · 🟡 $YELLOW_TOTAL · 🔧 자동조치 $AUTO_REPAIR_TOTAL건"
+# 2026-04-25 추가 (NEW-2): cron-scan entry는 .red/.yellow/.metrics 대신 .ok/.warn/.fail 스키마.
+# 기존 합산에서 0으로 빠지므로 type 별도 분리 카운트.
+CRON_SCAN_COUNT=$(echo "$ENTRIES" | jq -s '[.[] | select(.type == "cron-scan")] | length')
+CRON_FAIL_TOTAL=$(echo "$ENTRIES" | jq -s '[.[] | select(.type == "cron-scan") | .fail // 0] | add // 0')
+CRON_WARN_TOTAL=$(echo "$ENTRIES" | jq -s '[.[] | select(.type == "cron-scan") | .warn // 0] | add // 0')
+CRON_OK_TOTAL=$(echo "$ENTRIES" | jq -s '[.[] | select(.type == "cron-scan") | .ok // 0] | add // 0')
+
+log "7일 슬래시(scan): 🔴 $RED_TOTAL · 🟡 $YELLOW_TOTAL · 🔧 자동조치 $AUTO_REPAIR_TOTAL건"
+log "7일 cron(cron-scan): ${CRON_SCAN_COUNT}회 · ok=$CRON_OK_TOTAL · warn=$CRON_WARN_TOTAL · fail=$CRON_FAIL_TOTAL"
 
 if [ -n "$FAIL_AREAS" ]; then
   log "⚠️ 7일 중 3회+ 반복 FAIL 영역:"
