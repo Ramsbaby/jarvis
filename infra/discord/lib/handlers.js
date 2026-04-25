@@ -12,6 +12,9 @@
  */
 
 import { BoundedMap } from './bounded-map.js';
+// v3.3 P0-D: interview-fast-path 모듈 eager import로 RAG warmup IIFE를 봇 기동 시 트리거.
+// dynamic import 시점(첫 질의)에 warmup하면 의미 없음 — 여기서 선행 실행.
+import './interview-fast-path.js';
 import { writeFileSync, rmSync, readFileSync, existsSync, renameSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { homedir } from 'node:os';
@@ -20,7 +23,9 @@ import { promisify } from 'node:util';
 import { createReadStream } from 'node:fs';
 const execFileAsync = promisify(execFile);
 
-// OpenAI Whisper (음성 인식)
+// OpenAI STT — gpt-4o-transcribe (2026-04 업그레이드, whisper-1 대체)
+// 한국어 정확도·레이턴시 모두 우위. prompt 파라미터로 면접 도메인 힌트 주입하여
+// 기술 용어(Spring, JPA, 트랜잭션 등) 오인식 방지.
 async function transcribeVoiceMessage(att) {
   try {
     const resp = await fetch(att.url);
@@ -29,15 +34,15 @@ async function transcribeVoiceMessage(att) {
     const oggPath = join('/tmp', `voice-${att.id}.ogg`);
     const mp3Path = join('/tmp', `voice-${att.id}.mp3`);
     writeFileSync(oggPath, buf);
-    // ogg → mp3 변환 (Whisper는 mp3/wav/m4a 선호)
     await execFileAsync('ffmpeg', ['-y', '-i', oggPath, '-q:a', '4', mp3Path]);
     rmSync(oggPath, { force: true });
     const { default: OpenAI } = await import('openai');
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const transcription = await openai.audio.transcriptions.create({
       file: createReadStream(mp3Path),
-      model: 'whisper-1',
+      model: 'gpt-4o-transcribe',
       language: 'ko',
+      prompt: '한국어 대화. 기술/면접 도메인 용어: Spring Boot, WebFlux, JPA, QueryDSL, Kafka, Redis, AWS, gRPC, 트랜잭션, 데드락, 인덱스, 락, 커넥션 풀, 마이크로서비스, Kubernetes, 아키텍처, 트레이드오프, STAR, KPI, OKR, 이력서, 포트폴리오.',
     });
     rmSync(mp3Path, { force: true });
     return transcription.text?.trim() || null;
@@ -66,6 +71,7 @@ import { recordError } from './error-tracker.js';
 
 // Extracted modules
 import { PAST_REF_PATTERN, searchRagForContext } from './rag-helper.js';
+import { INTERVIEW_CHANNEL_ID } from './slash-proxy.js';
 import { saveSessionSummary, loadSessionSummary, loadSessionSummaryRecent, saveCompactionSummary, compactSessionWithAI } from './session-summary.js';
 // classifyBudget 미사용 — 전역 opusplan 모드 (claude-runner.js에서 항상 Opus+thinking:adaptive)
 import { pendingQueue, enqueue, processQueue } from './queue-processor.js';
@@ -1028,6 +1034,28 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       }
     }
 
+    // [2026-04-24] #jarvis-interview 채널 fast-path — claude-agent-sdk 우회.
+    // claude-agent-sdk의 Claude Code CLI subprocess spawn 오버헤드(60초+)를 회피하기 위해
+    // 해당 채널만 OpenAI gpt-4o-mini 직접 호출로 5초 이내 응답 보장.
+    // 세션/스킬/MCP 전부 skip — personas.json의 jarvis-interview 페르소나 + RAG만으로 답변.
+    if (message.channel.id === INTERVIEW_CHANNEL_ID) {
+      clearInterval(typingInterval);
+      const { runInterviewFastPath } = await import('./interview-fast-path.js');
+      try {
+        await runInterviewFastPath({ message, userInput: userPrompt });
+      } catch (err) {
+        log('error', 'interview-fast-path error', { error: err.message });
+      }
+      processingMsgIds.delete(message.id);
+      return;
+    }
+
+    // [2026-04-24] 첨부 영구 저장 경로 — /tmp 대신 state/attachments/YYYY-MM-DD/
+    // /tmp 는 OS 주기 정리 대상이라 분석 재시도 시 원본 유실. 영구 경로로 변경.
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const attachDir = join(_BOT_HOME, 'state', 'attachments', today);
+    mkdirSync(attachDir, { recursive: true });
+
     // Download image attachments from Discord CDN
     for (const [, att] of message.attachments) {
       const isImage = att.contentType?.startsWith('image/') ||
@@ -1043,10 +1071,10 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
           extname(att.name ?? '.jpg').slice(1) || 'jpg';
         const safeName = (att.name ?? `image_${att.id}.${ext}`)
           .replace(/[^a-zA-Z0-9._-]/g, '_');
-        const localPath = join('/tmp', `claude-img-${att.id}.${ext}`);
+        const localPath = join(attachDir, `${att.id}_${safeName}`);
         writeFileSync(localPath, buf);
         imageAttachments.push({ localPath, safeName });
-        log('info', 'Downloaded attachment', { name: safeName, bytes: buf.length });
+        log('info', 'Downloaded attachment', { name: safeName, bytes: buf.length, path: localPath });
       } catch (err) {
         log('warn', 'Failed to download attachment', { id: att.id, error: err.message });
       }
@@ -1071,7 +1099,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const contentLength = parseInt(resp.headers.get('content-length') ?? '0', 10);
         if (contentLength > MAX_TEXT_BYTES) {
-          await thread.send(`⚠️ 파일 "${fname}"이 너무 큽니다 (${(contentLength / 1024).toFixed(0)}KB, 최대 2MB).`);
+          await thread.send(`⚠️ 파일 "${fname}"이 너무 큽니다 (${(contentLength / 1024).toFixed(0)}KB, 최대 20MB).`);
           continue;
         }
         const buf = Buffer.from(await resp.arrayBuffer());
@@ -1079,16 +1107,21 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
 
         if (isPdf) {
           // PDF → pdftotext 추출 시도, 실패 또는 빈 텍스트면 Claude Read 폴백
-          const pdfPath = join('/tmp', `claude-doc-${att.id}.pdf`);
+          // [2026-04-24] 영구 경로 사용: state/attachments/YYYY-MM-DD/{id}_{name}.pdf
+          const safeFname = fname.replace(/[^a-zA-Z0-9가-힣._-]/g, '_');
+          const pdfPath = join(attachDir, `${att.id}_${safeFname}`);
           writeFileSync(pdfPath, buf);
           let usedFallback = false;
           try {
             const { stdout } = await execFileAsync('/opt/homebrew/bin/pdftotext', [pdfPath, '-'], { maxBuffer: 20 * 1024 * 1024 });
             const extracted = stdout.trim();
             if (extracted) {
-              rmSync(pdfPath, { force: true });
+              // [2026-04-24] rmSync 제거 + 영구 경로 저장. 이미지 페이지 OCR 재확인·크로스체크 대비.
+              log('info', 'PDF 텍스트 추출 완료 — 원본 영구 보존', { path: pdfPath, extractedLen: extracted.length });
               userPrompt = `[첨부 PDF: ${fname}]
 ${extracted}
+
+[원본 PDF 경로: ${pdfPath} — 이미지 페이지 OCR 필요 시 Read 도구로 페이지별 확인 가능]
 
 ` + (userPrompt || '이 파일을 분석해주세요.');
             } else {
@@ -1764,7 +1797,8 @@ ${extracted}
     for (const [type, re] of Object.entries(QUESTION_TYPES)) {
       if (re.test(_rawInput)) { questionType = type; break; }
     }
-    const isInterviewQuestion = questionType !== 'generic' || /경험|답변|설명.*해|말해/.test(_rawInput);
+    // 면접 전용 채널(jarvis-interview)에서는 모든 질문을 면접 질문으로 간주 (generic 포함)
+    const isInterviewQuestion = chName === 'jarvis-interview' || questionType !== 'generic' || /경험|답변|설명.*해|말해/.test(_rawInput);
 
     if (mockActive && isInterviewQuestion) {
       const { getMockContext } = await import('./slash-proxy.js');

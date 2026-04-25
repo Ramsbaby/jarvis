@@ -30,11 +30,19 @@ export function registerSlashProxy(channelId, userId, content) {
 const MOCK_SESSIONS = new Map(); // `${channelId}:${userId}` → expiresAt
 const MOCK_SESSION_TTL_MS = 30 * 60 * 1000; // 30분
 
+// 면접 전용 채널 — 이 채널에서는 mock session 항상 active (mockActive === true).
+// /mock-interview 슬래시 커맨드 없이도 자동으로 면접 답변 모드가 발동하며,
+// 일반 채널의 Hard Guard도 우회된다 (handlers.js 라우팅 분기).
+// 페르소나·모델 override는 personas.json + models.json에서 관리.
+export const INTERVIEW_CHANNEL_ID = '1497124568031301752'; // jarvis-interview
+
 export function activateMockSession(channelId, userId) {
   MOCK_SESSIONS.set(`${channelId}:${userId}`, Date.now() + MOCK_SESSION_TTL_MS);
 }
 
 export function isMockSessionActive(channelId, userId) {
+  // 면접 전용 채널은 상시 활성
+  if (channelId === INTERVIEW_CHANNEL_ID) return true;
   const key = `${channelId}:${userId}`;
   const expiresAt = MOCK_SESSIONS.get(key);
   if (!expiresAt) return false;

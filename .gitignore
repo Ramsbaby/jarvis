@@ -131,3 +131,8 @@ infra/chrome-extension/*
 
 # Archive directories (PII 정리 과정에서 이관된 구파일 — 절대 tracked 금지)
 _archive-*/
+
+# interview-fast-path: user-profile 어휘 다수 하드코딩.
+# repo PUBLIC이므로 commit 금지 (Iron Law 4). ~/jarvis/.local-backup/ 매시간 자동 백업.
+infra/discord/lib/interview-fast-path.js
+.local-backup/
