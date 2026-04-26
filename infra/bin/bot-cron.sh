@@ -723,5 +723,26 @@ case "$TASK_ID" in
         ;;
 esac
 
+# --- 2026-04-26 추가: council-insight Eureka 자동 적재 (Compound Engineering 복리 활성화) ---
+# council-insight prompt 끝에 EUREKA_JSON: 라인 출력 지시 → 결과 log에서 grep → eureka.jsonl append
+if [[ "$TASK_ID" == "council-insight" ]]; then
+    _eureka_log="${BOT_HOME}/logs/council-insight.log"
+    _eureka_target="${HOME}/jarvis/runtime/wiki/meta/eureka.jsonl"
+    if [[ -f "$_eureka_log" ]] && command -v jq >/dev/null 2>&1; then
+        _added=0
+        while IFS= read -r _line; do
+            if echo "$_line" | jq -e . >/dev/null 2>&1; then
+                _ts=$(TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00")
+                echo "$_line" | jq -c --arg ts "$_ts" '. + {ts: $ts, source: "council-insight"}' >> "$_eureka_target"
+                _added=$((_added + 1))
+            fi
+        done < <(tail -200 "$_eureka_log" | grep "^EUREKA_JSON:" | sed 's/^EUREKA_JSON: //')
+        if [[ $_added -gt 0 ]]; then
+            log "council-insight Eureka 적재 완료 — ${_added}건"
+        fi
+        unset _eureka_log _eureka_target _added _line _ts
+    fi
+fi
+
 _TASK_DONE=true
 log "DONE"
