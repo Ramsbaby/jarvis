@@ -149,7 +149,9 @@ function withLock(lockPath, fn) {
 // ── 예산 강제 차단 (Verify 4회차 P0-2 — max_budget_usd 메타필드만은 무의미 해소) ──
 // 오늘 누적 cost_usd >= BUDGET_DAILY_USD 면 callClaude 호출 자체 차단.
 // 환경변수 MISTAKE_EXTRACTOR_BUDGET 로 override.
-const BUDGET_DAILY_USD = Number(process.env.MISTAKE_EXTRACTOR_BUDGET || 0.10);
+// 2026-04-26 상향: 0.10 → 0.50 (SINGLE_FILE 트리거가 자주 호출돼 어제·오늘 모두 16:22 이전 차단됨)
+// Haiku-4.5 기준 일 50건+ 처리 가능 = 학습 흐름 정상화. env MISTAKE_EXTRACTOR_BUDGET로 추가 override 가능.
+const BUDGET_DAILY_USD = Number(process.env.MISTAKE_EXTRACTOR_BUDGET || 0.50);
 function budgetCheck() {
   try {
     const ledgerFile = join(homedir(), 'jarvis/runtime/state/token-ledger.jsonl');
