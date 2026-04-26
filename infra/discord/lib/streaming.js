@@ -1012,6 +1012,16 @@ export class StreamingMessage {
             catch { this.currentMessage = await this.channel.send(payload); }
             this.replyTo = null;
             this.sentLength = part.length;
+          } else if (pi === 0 && this.currentMessage && !this._isPlaceholder) {
+            // [DUP-FIX v3 2026-04-26] cumulative edit 모드 — currentMessage에 첫 chunk를 edit으로 마무리
+            // 결함 (수정 전): 이 케이스에서 else 분기로 channel.send 호출 → 기존 currentMessage 그대로 +
+            //   새 메시지 발송 = 중복 송출. 12:44~13:01 사이 10건 warn 발동 시 매번 일어난 결함.
+            // 수정: 첫 chunk는 currentMessage에 edit으로 마무리하고, 다음 chunk부터 새 메시지로 분배.
+            log('warn', 'DUP-FIX v3 split pi=0 cumulative edit 모드 — currentMessage에 edit 마무리', {
+              partLen: part.length, totalParts: parts.length, currentMessageId: this.currentMessage.id,
+            });
+            await this.currentMessage.edit(payload);
+            this.sentLength = part.length;
           } else {
             this.currentMessage = await this.channel.send(payload);
             this.sentLength = part.length;
