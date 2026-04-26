@@ -135,4 +135,6 @@ _archive-*/
 # interview-fast-path: user-profile 어휘 다수 하드코딩.
 # repo PUBLIC이므로 commit 금지 (Iron Law 4). ~/jarvis/.local-backup/ 매시간 자동 백업.
 infra/discord/lib/interview-fast-path.js
+# interview-verifier-server: SYSTEM_PROMPT few-shot에 user-profile STAR 수치 example 포함.
+infra/scripts/interview-verifier-server.mjs
 .local-backup/
