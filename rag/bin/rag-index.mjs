@@ -264,15 +264,60 @@ process.on('SIGTERM', () => { _cleanupPid(); process.exit(0); });
 process.on('SIGINT',  () => { _cleanupPid(); process.exit(0); });
 
 async function loadState() {
+  // Phase 1: 정상 파일 시도
   try {
     const raw = await readFile(STATE_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
+    const parsed = JSON.parse(raw);
+    const entries = Object.keys(parsed).length;
+
+    // 빈 state 의심 — .bak가 충실하면 손상 가능성
+    if (entries === 0) {
+      try {
+        const bakRaw = await readFile(`${STATE_FILE}.bak`, 'utf-8');
+        const bak = JSON.parse(bakRaw);
+        const bakEntries = Object.keys(bak).length;
+        if (bakEntries > 100) {
+          console.warn(`[rag-index] ⚠️ state 비어있음 (0 entries) but .bak에 ${bakEntries}개 — 손상 의심, .bak에서 복구`);
+          appendIncident('state 손상 복구', `state 0 entries → .bak ${bakEntries} entries로 복구 (4/25 풀 재인덱싱 재발 방지 가드)`);
+          return bak;
+        }
+      } catch { /* .bak 없거나 읽기 실패 — 첫 실행이면 정상 */ }
+    }
+    return parsed;
+  } catch (e) {
+    // Phase 2: JSON 손상 — .bak에서 복구 시도
+    try {
+      const bakRaw = await readFile(`${STATE_FILE}.bak`, 'utf-8');
+      const bak = JSON.parse(bakRaw);
+      const bakEntries = Object.keys(bak).length;
+      if (bakEntries > 0) {
+        console.warn(`[rag-index] ⚠️ state JSON 손상 (${e.message?.slice(0, 60)}) — .bak ${bakEntries} entries로 복구`);
+        appendIncident('state JSON 손상', `${STATE_FILE} 파싱 실패 → .bak ${bakEntries} entries로 복구`);
+        return bak;
+      }
+    } catch { /* bak도 없음/손상 — 첫 실행 또는 양쪽 손상 */ }
     return {};
   }
 }
 
 async function saveState(state) {
+  const newCount = Object.keys(state).length;
+
+  // ─── 축소 보호: 기존 state 대비 20% 이상 줄어들면 저장 거부 ────────────────────
+  // (emergency save 로직과 동일 — 4/25 07:30 풀 재인덱싱 재발 방지 가드)
+  // 합법적 전체 재구축은 REBUILD_SENTINEL 경유 — 일반 saveState() path에 진입 X.
+  try {
+    const existingRaw = readFileSync(STATE_FILE, 'utf-8');
+    const existingCount = (existingRaw.match(/"mtime"/g) || []).length;
+    if (existingCount > 100 && newCount < existingCount * 0.8) {
+      const msg = `state 축소 보호 발동 (${existingCount} → ${newCount}, 20%+ 감소)`;
+      console.warn(`[rag-index] 🛡️ ${msg} — 저장 거부, 풀 재인덱싱 차단`);
+      appendIncident('state 축소 차단', `${msg} — saveState() 거부. 의심 시나리오: index-state 손상 + 풀 재인덱싱 시도.`);
+      return; // 저장 거부 → 다음 run에서 정상 incremental 진행
+    }
+  } catch { /* 기존 파일 읽기 실패 시 그냥 저장 진행 */ }
+
+  // ─── 정상 atomic write (tmp + rename, POSIX atomic) ────────────────────────
   const tmp = `${STATE_FILE}.tmp`;
   const { rename, copyFile } = await import('node:fs/promises');
   await writeFile(tmp, JSON.stringify(state, null, 2));

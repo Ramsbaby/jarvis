@@ -1342,7 +1342,7 @@ export class RAGEngine {
     let optimizeOk = false;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        await this.table.optimize({ cleanupOlderThan: new Date(Date.now() - 14_400_000) }); // 4h 전 기준 — 2026-04-05 48h→4h 하향.
+        const optStats = await this.table.optimize({ cleanupOlderThan: new Date(Date.now() - 14_400_000) }); // 4h 전 기준 — 2026-04-05 48h→4h 하향.
         // 이유: 매일 03:00 compact 기준, 전날 04:34 compact 파편은 22h 경과 → 48h 설정으로 미삭제 → 3일치 누적.
         // 4h: rag-index 최대 실행 3분 << 4h 버퍼 → 안전. 전날 파편(22h) > 4h → 즉시 정리.
         // 안전 근거:
@@ -1352,6 +1352,16 @@ export class RAGEngine {
         // 과거 "Not found" 에러 원인: weekly 스케줄에서 48h 창 사용 → 7일 전 rebuild fragment가 orphan 판정 삭제됨.
         //   → 현재는 daily 스케줄이므로 48h 창 안전.
         console.log('[rag] compact: table.optimize() completed — fragments reclaimed');
+        // ─── 진단 로깅 (2026-04-26 추가) ───
+        // _versions/manifest 1,422개 누적 원인 진단용. cleanupOlderThan: Date 객체가 native binding에서
+        // 정상 작동하는지, oldVersionsRemoved>0이 보고되는지 다음 03:00 compact에서 즉시 확인.
+        try {
+          const pruneVer  = optStats?.prune?.oldVersionsRemoved ?? 'n/a';
+          const pruneByte = optStats?.prune?.bytesRemoved ?? 'n/a';
+          const fragRem   = optStats?.compaction?.fragmentsRemoved ?? 'n/a';
+          const fragAdd   = optStats?.compaction?.fragmentsAdded ?? 'n/a';
+          console.log(`[rag] compact stats: prune=${pruneVer} versions / ${pruneByte} bytes · compaction=−${fragRem}/+${fragAdd} fragments`);
+        } catch (_) { /* SDK 반환 구조 변경 시 silent — 진단 로깅이 메인 로직 깨뜨리지 않음 */ }
         optimizeOk = true;
         break;
       } catch (optErr) {
