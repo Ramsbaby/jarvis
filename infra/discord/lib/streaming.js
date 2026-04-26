@@ -280,7 +280,7 @@ function adaptiveInterval({ bufferLen = 0, inFence = false, hasTool = false } = 
 // [2026-04-26 RC-1 구조 수정] _sendOrEdit의 CONTENT_SAFE_LIMIT(1700)과 동기화.
 // 호출자(_flushInner)가 단일 chunk를 1700자 이하로 잘라 _sendOrEdit에 전달하면
 // _sendOrEdit 내부 split 경로(buffer 침범)는 발동되지 않음 — 책임 경계 명확화.
-const STREAM_MAX_CHARS = 1400; // [DUP-FIX v4 2026-04-26] 1700 → 1400. _sendOrEdit이 받은 후 statusBar/cursor 추가로 1700 초과해 split 자기복제 폭주(M1~M4 ▌ 잔존) 차단.
+const STREAM_MAX_CHARS = 1200; // [DUP-FIX v5 2026-04-26] 1400→1200. v4 운영 실측: 1400자 → formatForDiscord 변환 후 1744자(+344자) → split 재발동. 마진 800자로 확대.
 const CODE_FILE_MIN_LINES = 30;
 const LANG_EXT = {
   javascript: 'js', typescript: 'ts', python: 'py', py: 'py',
