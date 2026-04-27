@@ -14,13 +14,15 @@
  *   node infra/scripts/silent-error-spike-monitor.mjs --notify  # 임계 초과 시 Discord 알림
  */
 
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const LEDGER = join(BOT_HOME, 'state', 'error-ledger.jsonl');
+const COOLDOWN_FILE = join(BOT_HOME, 'state', 'silent-error-spike-cooldown.json');
+const COOLDOWN_HOURS = 6; // 같은 src는 6h 내 재알림 차단 (alert spam 방지)
 const NOTIFY = process.argv.includes('--notify');
 
 const WINDOW_HOURS = 6;
@@ -74,16 +76,42 @@ for (const [src, v] of spikes) {
 }
 
 if (NOTIFY) {
-  const notifyScript = join(homedir(), '.jarvis/scripts/discord-visual.mjs');
-  if (existsSync(notifyScript)) {
-    const data = JSON.stringify({
-      title: '🚨 Silent Error 스파이크',
-      data: Object.fromEntries(spikes.slice(0, 5).map(([src, v]) => [src.slice(0, 30), `${v.count}회 / ${WINDOW_HOURS}h`])),
-      timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
-    });
-    spawnSync('node', [notifyScript, '--type', 'stats', '--data', data, '--channel', 'jarvis-system'], {
-      timeout: 10_000, stdio: 'inherit',
-    });
+  // P0-1: cooldown — 같은 src는 6h 내 재알림 차단 (alert spam 방지)
+  let cooldown = {};
+  try { if (existsSync(COOLDOWN_FILE)) cooldown = JSON.parse(readFileSync(COOLDOWN_FILE, 'utf-8')); } catch {}
+
+  const now = Date.now();
+  const COOLDOWN_MS = COOLDOWN_HOURS * 3600_000;
+  const toAlert = spikes.filter(([src]) => {
+    const last = cooldown[src] || 0;
+    return now - last >= COOLDOWN_MS;
+  });
+
+  if (toAlert.length === 0) {
+    console.log(`\n(쿨다운 중 — 알림 ${spikes.length}건 모두 ${COOLDOWN_HOURS}h 내 발송됨, skip)`);
+  } else {
+    const notifyScript = join(homedir(), '.jarvis/scripts/discord-visual.mjs');
+    if (existsSync(notifyScript)) {
+      const data = JSON.stringify({
+        title: '🚨 Silent Error 스파이크',
+        data: Object.fromEntries(toAlert.slice(0, 5).map(([src, v]) => [src.slice(0, 30), `${v.count}회 / ${WINDOW_HOURS}h`])),
+        timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      });
+      const r = spawnSync('node', [notifyScript, '--type', 'stats', '--data', data, '--channel', 'jarvis-system'], {
+        timeout: 10_000, stdio: 'pipe', encoding: 'utf-8',
+      });
+      if (r.status === 0) {
+        for (const [src] of toAlert) cooldown[src] = now;
+        try {
+          mkdirSync(dirname(COOLDOWN_FILE), { recursive: true });
+          writeFileSync(COOLDOWN_FILE, JSON.stringify(cooldown, null, 2));
+        } catch (e) {
+          console.error(`cooldown 저장 실패: ${e.message}`);
+        }
+      } else {
+        console.error(`알림 송출 실패 (status=${r.status}): ${(r.stderr || '').slice(0, 200)}`);
+      }
+    }
   }
 }
 

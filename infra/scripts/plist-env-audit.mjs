@@ -85,7 +85,14 @@ for (const rule of RULES) {
   for (const src of rule.expectedSources) {
     const codeVal = extractCodeValue(src.file, src.pattern);
     if (!codeVal) {
+      // P0-3: unknown은 silent fallback 금지 — 정규식 미매칭이 진짜 부재인지 패턴 결함인지 모름
       checks.push({ ok: 'unknown', key: rule.envKey, file: src.file, plistVal: plistVal.value, codeVal: null });
+      violations.push({
+        key: rule.envKey,
+        reason: `code 패턴 미매칭 (file 부재 또는 정규식 결함) — silent fallback 차단`,
+        plist: rule.plistFile,
+        codeFile: src.file,
+      });
       continue;
     }
     const match = plistVal.value === codeVal;
