@@ -21,7 +21,8 @@
 set -euo pipefail
 
 # 자체 로그 (Blocker #2 대응: plist StandardOutPath는 bot-cron.sh 우회 경로라 0B.
-# tee로 화면과 파일 양쪽 기록 → cron-master 본인이 죽어도 사후 조사 가능)
+# 모든 로깅은 파일 기록 → cron-master 본인이 죽어도 사후 조사 가능)
+# stdout은 Discord 라우팅을 위해 순수하게 유지 (dedup digest 계산 영향 최소화)
 SELF_LOG="${HOME}/jarvis/runtime/logs/cron-master-self.log"
 mkdir -p "$(dirname "$SELF_LOG")"
 # 헤더는 self-log에만 기록 (stdout에 누출되면 Discord 전송 skip 시 빈 쓰레기 전송됨)
@@ -29,7 +30,6 @@ mkdir -p "$(dirname "$SELF_LOG")"
   echo ""
   echo "═══ cron-master 시작: $(date '+%Y-%m-%d %H:%M:%S %z') (PID=$$) ═══"
 } >> "$SELF_LOG"
-exec > >(tee -a "$SELF_LOG") 2>&1
 
 # self-log 전용 logger — stdout 오염 방지 (Test 5 dedup 회귀 해소, 2026-04-24).
 # 이전 echo 사용 시 bare stdout 4줄 누출 → Discord digest 변동 → dedup 실패.
@@ -536,10 +536,8 @@ fi
 echo "$current_digest" > "$LAST_DIGEST_FILE"
 
 if [[ "$should_emit" != "1" ]]; then
-  # Discord 전송 skip. self-log에만 기록하고 stdout/stderr를 /dev/null로 차단.
-  # (exec > >(tee -a "$SELF_LOG") 로 걸려있던 파이프를 끊고 stdout 차단)
-  echo "[cron-master] 변화 없음 (digest=${current_digest:0:12}…). Discord 전송 skip." >> "$SELF_LOG"
-  exec >/dev/null 2>&1
+  # Discord 전송 skip. self-log에만 기록하고 조용히 종료.
+  log "변화 없음 (digest=${current_digest:0:12}…). Discord 전송 skip."
   exit 0
 fi
 
