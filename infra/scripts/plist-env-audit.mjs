@@ -30,7 +30,23 @@ const RULES = [
     envKey: 'INTERVIEW_CHANNEL',
     expectedSources: [
       { file: join(HOME, 'jarvis/infra/discord/lib/interview-fast-path.js'), pattern: /CHANNEL_NAME\s*=\s*['"]([^'"]+)['"]/ },
-      { file: join(HOME, 'jarvis/infra/discord/lib/handlers.js'), pattern: /chName\s*===\s*['"](jarvis-interview)['"]/ },
+      { file: join(HOME, 'jarvis/infra/discord/lib/handlers.js'), pattern: /chName\s*===\s*['"]([a-z-]+)['"]/ },
+    ],
+  },
+  {
+    // R4: 채널 ID 정합성 — slash-proxy.js의 INTERVIEW_CHANNEL_ID와 plist LITE_CHANNEL_ID는 다른 채널이지만,
+    // INTERVIEW_CHANNEL_ID 자체가 코드 내부에서 일관된지 검증.
+    plistFile: join(HOME, 'jarvis/infra/discord/lib/slash-proxy.js'),
+    envKey: 'INTERVIEW_CHANNEL_ID',
+    customExtractor: (file) => {
+      if (!existsSync(file)) return { found: false, value: null };
+      const content = readFileSync(file, 'utf-8');
+      const m = content.match(/INTERVIEW_CHANNEL_ID\s*=\s*['"]([0-9]+)['"]/);
+      return m ? { found: true, value: m[1] } : { found: false, value: null };
+    },
+    expectedSources: [
+      // personas.json에 같은 채널 ID 키로 페르소나 정의 존재해야 함
+      { file: join(HOME, 'jarvis/infra/discord/personas.json'), pattern: /"(149[0-9]{16})"\s*:/ },
     ],
   },
 ];
@@ -55,7 +71,9 @@ const violations = [];
 const checks = [];
 
 for (const rule of RULES) {
-  const plistVal = extractPlistEnv(rule.plistFile, rule.envKey);
+  const plistVal = rule.customExtractor
+    ? rule.customExtractor(rule.plistFile)
+    : extractPlistEnv(rule.plistFile, rule.envKey);
   if (!plistVal.found) {
     violations.push({
       key: rule.envKey,
