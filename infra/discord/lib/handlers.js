@@ -62,7 +62,9 @@ import {
   autoExtractMemory,
   reloadUserProfiles,
   getUserProfile,
+  triggerDiscordMistakeExtract,
 } from './claude-runner.js';
+import { detectAnger, recordAngerSignal } from './anger-detector.mjs';
 import { appendFeed } from './channel-feed.js';
 import { generateCode, verifyCode } from './pairing.js';
 import { userMemory } from '../../lib/user-memory.mjs';
@@ -1668,6 +1670,31 @@ ${extracted}
             // 다음 턴에 pre-inject 되어 RAG·가드를 모두 우회하며 거짓 스토리 부활.
             if (chName !== INTERVIEW_CHANNEL) {
               saveSessionSummary(sessionKey, originalPrompt, lastAssistantText);
+              // P0 Surface Learning Equalization: turn 종료 시 mistake-extractor 비동기 fork.
+              // 디스코드 봇 학습 루프가 Claude Code CLI Stop 훅과 동등한 권한으로 작동.
+              try {
+                const sessionSummaryPath = join(_BOT_HOME, 'state', 'session-summaries',
+                  `${sessionKey.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`);
+                triggerDiscordMistakeExtract(sessionSummaryPath);
+              } catch (e) {
+                log('debug', 'triggerDiscordMistakeExtract skipped', { error: e?.message });
+              }
+              // P2 Real-time Correction Detection: 사용자 분노 키워드 감지 → 즉시 등재 + 알림
+              try {
+                const ang = detectAnger(originalPrompt);
+                if (ang.matched) {
+                  recordAngerSignal({
+                    userId: effectiveAuthor.id,
+                    channelId: effectiveChannelId,
+                    keyword: ang.keyword,
+                    userText: originalPrompt,
+                    assistantText: lastAssistantText,
+                    sessionKey,
+                  }).catch((e) => log('debug', 'recordAngerSignal outer catch', { error: e?.message }));
+                }
+              } catch (e) {
+                log('debug', 'anger-detector skipped', { error: e?.message });
+              }
             }
             // 토큰 누적: result 이벤트의 usage.input_tokens (claude-runner.js에서 포워딩)
             const inputTokens = event.usage?.input_tokens ?? 0;

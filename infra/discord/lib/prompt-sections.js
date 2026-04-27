@@ -90,7 +90,7 @@ export function buildFormatSection() {
 
 export function buildToolsSection({ botHome }) {
   return [
-    '[코드] Serena: get_symbols_overview → find_symbol(include_body=true) → search_for_pattern → find_referencing_symbols. 수정: replace_symbol_body / insert_after/before_symbol / Edit. 파일 전체 Read는 최후 수단.',
+    '[코드] **Serena MUST 우선** (Read 통째 금지): 코드 파일(.ts/.tsx/.js/.mjs/.py) 접근 시 → 먼저 mcp__serena__get_symbols_overview, 그 다음 find_symbol(include_body=true). **Read로 코드 파일 통째 읽기 금지** (1500줄 파일 = 토큰 70% 손실). 추가 탐색: search_for_pattern / find_referencing_symbols. 수정도 Serena 우선: replace_symbol_body / insert_after_symbol / insert_before_symbol. **Read 허용 범위: .md / .json / 짧은 설정 파일만**.',
     '[시스템] Nexus: exec(cmd) / scan(병렬) / cache_exec(TTL) / log_tail / health / file_peek.',
     '[기억] rag_search 호출 기준 (구체적 예시):',
     '  - ✅ 호출: "저번에 말한 여행 일정", "기억해? 그 버그", "아까 얘기한 TQQQ", 모르는 고유명사(프로젝트명·앱명·사람 이름) 등장',
@@ -98,6 +98,45 @@ export function buildToolsSection({ botHome }) {
     '  - 원칙: "모른다"고 답하기 전에 반드시 rag_search 1회 시도.',
     `[메모리 삭제] 사용자가 "잊어줘"/"삭제해"/"지워줘" + 특정 사실을 말하면 → Bash로 \`node ${botHome}/bin/remove-fact-cli.mjs <userId> <핵심 키워드>\` 실행 (argv 로 전달되므로 쉘 인용 무관). stdout 의 {removed,facts,corrections} 파싱. removed>0 면 "삭제했습니다 (facts N개 / corrections M개)" 응답, 0 이면 "해당 내용을 찾지 못했어요" 응답. node -e 인라인 쓰지 말 것(injection 서피스).`,
     `[정보탐험] "정보탐험"/"recon" 키워드 → Bash background로 \`node ${botHome}/discord/lib/company-agent.mjs --team recon --channel <현재채널명>\` 실행 후 즉시 "🔭 정보탐험 시작했습니다. 7~11분 소요, 결과는 현재 채널로 전송됩니다." 응답. await 금지(90초 타임아웃). 채널명은 시스템 프롬프트 "--- Channel: <name> ---" 에서 추출.`,
+  ].join('\n');
+}
+
+/**
+ * Tier 1 (Contextual) — 코드 작업 시에만 로드되는 Serena 풀 가이드.
+ * 2026-04-26 신설: prompt-sections.js의 [코드] 한 줄로는 baseline 본능을 못 이김
+ *  → 코드 키워드 매칭 시 5단계 워크플로우 + 자비스맵 핵심 파일 비용표 풀 주입.
+ */
+export function buildToolsCodeDetailSection() {
+  return [
+    '## 코드 작업 Serena 5단계 워크플로우 (MUST 준수)',
+    '',
+    '코드 파일 접근 시 **반드시 이 순서**. Read 통째 호출은 토큰 70~90% 손실.',
+    '',
+    '| 단계 | 도구 | 설명 | 추정 토큰 |',
+    '|:---:|---|---|---:|',
+    '| 1 | mcp__serena__get_symbols_overview | 파일 함수/컴포넌트 목록 (가장 먼저) | ~2K |',
+    '| 2 | mcp__serena__find_symbol(include_body=true) | 수정 대상 심볼만 정확히 | ~1K |',
+    '| 3 | mcp__serena__find_referencing_symbols | 호출처 파악 (blast radius) | ~0.5K |',
+    '| 4 | Read (offset+limit, .md/.json만) | 마크다운/설정 파일 부분 읽기 | 상황별 |',
+    '| 5 | mcp__serena__find_referencing_symbols | 수정 후 영향 범위 재확인 | ~0.5K |',
+    '',
+    '## 수정 도구 우선순위',
+    '- 1순위: mcp__serena__replace_symbol_body / insert_after_symbol / insert_before_symbol',
+    '- 2순위 (Serena 미인식 시만): Edit',
+    '',
+    '## 자비스맵 핵심 파일 비용 (Read vs Serena)',
+    '',
+    '| 파일 | 줄 수 | Read 비용 | Serena 비용 |',
+    '|---|---:|---:|---:|',
+    '| VirtualOffice.tsx | 2,780 | ~20K | ~2K (90% ↓) |',
+    '| TeamBriefingPopup.tsx | 1,413 | ~10K | ~1.5K (85% ↓) |',
+    '| canvas-draw.ts | 911 | ~7K | ~1K (86% ↓) |',
+    '| briefing/route.ts | 874 | ~6K | ~0.8K (87% ↓) |',
+    '',
+    '## Serena가 안 되는 경우 (Read/Grep 사용 OK)',
+    '- CSS-in-JS style 객체 내부 값 (인라인 객체 → LSP 미인식)',
+    '- 픽셀 좌표 등 숫자 리터럴 (canvas-draw.ts 좌표값)',
+    '- 마크다운/JSON/짧은 설정 파일',
   ].join('\n');
 }
 
@@ -349,6 +388,37 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
   } catch {}
 
   return result;
+}
+
+// ── 분노 신호 강제 주입 섹션 (Harness P2) ──────────────────────────────
+// anger-detector가 24h 이내 감지한 최신 분노 신호 1건을 다음 turn system prompt에
+// "🚨 직전 정정" 헤더로 강제 주입. 같은 편향 즉시 재발 차단.
+// learned-mistakes.md top5 캡 밖이라도, 사용자가 방금 정정한 신호는 무조건 LLM에 노출.
+export function buildAngerCorrectionSection({ botHome }) {
+  try {
+    const signalsFile = join(botHome, 'state', 'anger-signals.jsonl');
+    if (!existsSync(signalsFile)) return '';
+    const raw = readFileSync(signalsFile, 'utf-8').trim();
+    if (!raw) return '';
+    const lines = raw.split('\n').filter(Boolean);
+    if (lines.length === 0) return '';
+    let last;
+    try { last = JSON.parse(lines[lines.length - 1]); } catch { return ''; }
+    if (!last || !last.ts) return '';
+    // 24h retention
+    const lastMs = new Date(last.ts.replace('+09:00', 'Z')).getTime() - 9 * 3600_000;
+    const ageH = (Date.now() - lastMs) / 3600_000;
+    if (ageH > 24) return '';
+    return `🚨 직전 정정 신호 (${last.ts.slice(11, 16)} KST · 키워드: "${last.keyword}")
+주인님이 방금 직전 응답을 정정하셨습니다. 같은 편향 절대 재발 금지.
+
+[직전 사용자 발화]: ${(last.userText || '').slice(0, 300)}
+[직전 자비스 응답 일부]: ${(last.assistantText || '').slice(0, 400)}
+
+이번 응답은 위 정정을 반영하여 작성하십시오. 동일 패턴 반복 시 즉시 신뢰 붕괴.`;
+  } catch {
+    return '';
+  }
 }
 
 // ── 튜터링 플랫폼 쿼리 판별 (pre-processor, handlers 공용) ──────────────────

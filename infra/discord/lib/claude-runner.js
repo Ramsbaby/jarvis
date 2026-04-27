@@ -13,6 +13,7 @@ import {
   mkdirSync,
   appendFileSync,
   copyFileSync,
+  statSync,
 } from 'node:fs';
 import { appendFile, writeFile as writeFileAsync, rename as renameAsync } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -27,10 +28,10 @@ import {
 import {
   buildIdentitySection, buildLanguageSection, buildPersonaSection,
   buildPrinciplesSection, buildFormatCoreSection, buildFormatDetailSection,
-  buildFormatSection, buildToolsSection,
+  buildFormatSection, buildToolsSection, buildToolsCodeDetailSection,
   buildSafetySection, buildUserContextSection,
   buildOwnerPreferencesSection, buildOwnerPersonaSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
-  buildWikiContextSection,
+  buildWikiContextSection, buildAngerCorrectionSection,
 } from './prompt-sections.js';
 import { getPromptHarness, Tier } from './prompt-harness.js';
 import { loadHandoff, formatHandoffForPrompt } from './session-handoff.js';
@@ -51,6 +52,36 @@ async function wikiAddFact(userId, fact, opts = {}) {
       _addFactToWiki(userId, fact, { source: 'discord', ...opts });
     }
   } catch (err) { recordSilentError('claude-runner.wikiAddFact', err); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Discord turn → mistake-extractor 학습 루프 (Surface Learning Equalization · P0)
+// 비대칭 해소: CLI는 Stop 훅으로 추출되지만 Discord turn은 추출 안 됨 → 같은 편향 무한 재발.
+// turn 종료 직후 setImmediate로 fire-and-forget. 응답 지연 0.
+// ─────────────────────────────────────────────────────────────────────────────
+export function triggerDiscordMistakeExtract(sessionSummaryFilePath) {
+  setImmediate(async () => {
+    try {
+      const { spawn } = await import('node:child_process');
+      const NODE_BIN = process.execPath;
+      const SCRIPT = join(BOT_HOME, '..', 'infra', 'scripts', 'mistake-extractor.mjs');
+      // BOT_HOME 미설정 시 기본 경로 fallback
+      const scriptPath = existsSync(SCRIPT) ? SCRIPT : join(homedir(), 'jarvis/infra/scripts/mistake-extractor.mjs');
+      if (!existsSync(scriptPath)) {
+        recordSilentError('claude-runner.mistake-extract', new Error(`script not found: ${scriptPath}`));
+        return;
+      }
+      if (!existsSync(sessionSummaryFilePath)) return; // 세션 요약이 아직 flush 안 됐으면 skip
+      const child = spawn(NODE_BIN, [scriptPath, '--file', sessionSummaryFilePath], {
+        detached: true,
+        stdio: 'ignore',
+        env: { ...process.env, DISCORD_TURN_SOURCE: '1' }, // ledger source 구분용
+      });
+      child.unref(); // 부모 프로세스 종료와 무관하게 진행
+    } catch (err) {
+      recordSilentError('claude-runner.mistake-extract', err);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -774,6 +805,9 @@ export async function* createClaudeSession(prompt, {
     // Tier 1 — 키워드 매칭 시만 로드
     harness.register('format-detail', Tier.CONTEXTUAL, () => buildFormatDetailSection(),
       /비교|vs|차이점|장단점|표|차트|그래프|추이|트렌드|TABLE|CHART|CV2|Mermaid|다이어그램|플로우/i);
+    // 2026-04-26: 코드 키워드 시 Serena 5단계 풀 가이드 주입 (월 누수 차단)
+    harness.register('tools-code-detail', Tier.CONTEXTUAL, () => buildToolsCodeDetailSection(),
+      /코드|함수|클래스|구현|버그|디버깅|리팩터|컴포넌트|모듈|메서드|클래스|\.tsx?|\.jsx?|\.mjs|\.py|jarvis-board|VirtualOffice|TeamBriefingPopup|canvas-draw|prompt-sections|claude-runner|handlers\.js/i);
   }
 
   // 토큰 예산 모드: Progressive Compaction에서 전달
@@ -927,6 +961,13 @@ export async function* createClaudeSession(prompt, {
   if (userId && isOwner && prompt) {
     const wikiCtx = buildWikiContextSection({ prompt, botHome: BOT_HOME, userId });
     if (wikiCtx) systemParts.push('', wikiCtx);
+  }
+
+  // 🚨 직전 정정 신호 (Harness P2) — 24h 이내 분노 신호 1건 강제 주입
+  // learned-mistakes top5 캡 밖이라도 즉시 LLM에 노출하여 같은 편향 재발 차단.
+  if (isOwner) {
+    const angerSection = buildAngerCorrectionSection({ botHome: BOT_HOME });
+    if (angerSection) systemParts.push('', angerSection);
   }
 
   // Claude Max usage summary
@@ -1128,6 +1169,31 @@ export async function* createClaudeSession(prompt, {
           // 이유: 오너 지시로 조사형 세션에서 턴당 8회 제한이 실사용을 가로막음.
           // handlers.js:95 주석과 SSoT 동기화 — SDK maxTurns(200) + 10분 timeout +
           // maxBudget이 이미 폭주를 차단. 단일 책임은 MAX_CONTINUATIONS=5(handlers.js).
+          // 2026-04-26: Read on 큰 코드 파일 → Serena 강제 전환 (월 누수 차단)
+          try {
+            if (input.tool_name === 'Read' && input.tool_input?.file_path) {
+              const fp = String(input.tool_input.file_path);
+              const isCode = /\.(tsx?|jsx?|mjs|cjs|py)$/i.test(fp);
+              if (isCode) {
+                try {
+                  const st = statSync(fp);
+                  if (st.size > 80_000) { // ~1500줄 이상
+                    log('warn', 'PreToolUse: Read code 통째 차단 → Serena 권고', { fp: fp.slice(-80), size: st.size });
+                    return {
+                      hookSpecificOutput: {
+                        hookEventName: 'PreToolUse',
+                        permissionDecision: 'deny',
+                        permissionDecisionReason: `코드 파일(${st.size} bytes ≈ 1500줄 이상)은 mcp__serena__get_symbols_overview → find_symbol(include_body=true)로 접근하세요. Read는 .md/.json/짧은 설정만.`,
+                      },
+                    };
+                  }
+                } catch { /* statSync 실패 시 fail-open */ }
+              }
+            }
+          } catch (err) {
+            log('error', 'PreToolUse Read-guard threw (fail-open)', { error: err?.message });
+          }
+
           try {
             const blocked = checkSensitivePath(input.tool_name, input.tool_input);
             if (blocked) {
@@ -1167,9 +1233,10 @@ export async function* createClaudeSession(prompt, {
     mcpServers,
     maxTurns,
     model,
-    // effort: channelOverrides와 동일 방식으로 effortOverrides에서 채널별 effort 레벨 결정
+    // effort: channelName 우선 → channelId fallback (사용자가 채널 ID로 직접 등록 가능)
     ...((() => {
-      const effortKey = channelName && MODELS.effortOverrides?.[channelName];
+      const effortKey = (channelName && MODELS.effortOverrides?.[channelName])
+                       || (channelId && MODELS.effortOverrides?.[channelId]);
       return effortKey ? { effort: effortKey } : {};
     })()),
     // inference_geo: 환경변수 설정 시에만 적용 (미설정 시 Anthropic 기본 라우팅)
@@ -1244,6 +1311,36 @@ export async function* createClaudeSession(prompt, {
   effectivePrompt = sanitizeUnicode(effectivePrompt);
   if (queryOptions.systemPrompt) {
     queryOptions.systemPrompt = sanitizeUnicode(queryOptions.systemPrompt);
+  }
+
+  // Harness P1: System prompt 실측 dump
+  // 매 turn 시스템 프롬프트의 실제 char/section 통계를 snapshot 파일에 덮어쓰기.
+  // 추정 금지 — 실측 강제. dump-system-prompt.mjs 또는 grep으로 확인 가능.
+  // 비활성화: env JARVIS_PROMPT_DUMP_DISABLE=1
+  if (process.env.JARVIS_PROMPT_DUMP_DISABLE !== '1' && queryOptions.systemPrompt) {
+    try {
+      const snapPath = join(BOT_HOME, 'state', 'system-prompt-snapshot.md');
+      const sysPrompt = queryOptions.systemPrompt;
+      const ts = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' });
+      const sections = sysPrompt.split(/\n(?=---|###)/g);
+      const snapshot = `# System Prompt Snapshot (Harness P1)
+ts: ${ts} KST
+total_chars: ${sysPrompt.length}
+total_estimated_tokens: ${Math.round(sysPrompt.length / 4)}
+section_count: ${sections.length}
+prompt_chars: ${(effectivePrompt || '').length}
+user_id: ${userId || 'n/a'}
+channel_id: ${channelId || 'n/a'}
+session_key: ${sessionKey || 'n/a'}
+
+---
+
+${sysPrompt}
+`;
+      writeFileSync(snapPath, snapshot, 'utf-8');
+    } catch (err) {
+      recordSilentError('claude-runner.prompt-dump', err);
+    }
   }
 
   try {
