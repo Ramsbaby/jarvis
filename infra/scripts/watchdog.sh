@@ -761,6 +761,23 @@ HEALTHEOF
         fi
     fi
 
+    # v4.50: 디스크 사용률 감시 (85% 초과 시 Discord 경고 — 24시간 쿨다운)
+    _disk_alert_cooldown="$BOT_HOME/state/disk-usage-alert-last.txt"
+    _disk_cooldown_sec=86400  # 24시간 — 하루 1회 알림으로 제한
+    disk_pct=$(df -h / 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5+0}' || echo 0)
+    if (( disk_pct >= 85 )); then
+        _now_epoch=$(date +%s)
+        _last_alert=$(cat "$_disk_alert_cooldown" 2>/dev/null || echo "0")
+        _elapsed=$(( _now_epoch - _last_alert ))
+        if (( _elapsed >= _disk_cooldown_sec )); then
+            log "WARN: 디스크 ${disk_pct}% 사용 중 — system-cleanup / rag-compact 확인 필요"
+            echo "$_now_epoch" > "$_disk_alert_cooldown"
+            send_alert "[Watchdog] 🚨 디스크 ${disk_pct}% 사용 — 즉시 정리 필요 (LanceDB / Claude 세션 기록)" "critical" || true
+        else
+            log "INFO: 디스크 ${disk_pct}% 이나 쿨다운 중 ($(( (_disk_cooldown_sec - _elapsed) / 60 ))분 남음) — 알람 생략"
+        fi
+    fi
+
     # v4.45: 시스템 압박 체크 (swap > 70% / unused < 1GB) — 좀비 정리 트리거 + Discord 알림
     check_system_pressure >/dev/null 2>&1 || true
 
