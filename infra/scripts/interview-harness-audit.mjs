@@ -15,6 +15,7 @@
  *   C3. 동적 질문 vs 베이스 질문 점수 역전 여부
  *   C4. forbid list 패턴 품질 (너무 짧음 / 비면접 오염)
  *   C5. rounds.jsonl 구조 무결성
+ *   C6. 기획 문서 존재·버전 정합성 (INTERVIEW-BOT.md ↔ 코드 버전 태그)
  *
  * 사용:
  *   node interview-harness-audit.mjs           # 조용한 모드 (이상 시만 출력)
@@ -42,6 +43,8 @@ const SCN_PATH = join(HOME, 'jarvis/runtime/state/scenarios/samsung-cnt.json');
 const INSIGHTS = join(HOME, 'jarvis/runtime/state/ralph-insights.jsonl');
 const FORBID   = join(HOME, 'jarvis/runtime/state/ralph-forbid-list.json');
 const ROUNDS   = join(HOME, 'jarvis/runtime/state/ralph-rounds.jsonl');
+const DOC_PATH = join(HOME, 'jarvis/infra/docs/INTERVIEW-BOT.md');
+const PROF_PATH = join(HOME, 'jarvis/runtime/context/interview-bot-profile.md');
 const WEBHOOK  = process.env.DISCORD_INTERVIEW_WEBHOOK ||
                  (() => { try { return JSON.parse(readFileSync(join(HOME, 'jarvis/runtime/.env'), 'utf-8').split('\n').find(l => l.startsWith('DISCORD_WEBHOOK_INTERVIEW='))?.split('=').slice(1).join('=')); } catch { return null; } })();
 
@@ -285,6 +288,69 @@ function checkC5() {
   }
 }
 
+// ─── C6: 기획 문서 존재·버전 정합성 ─────────────────────────────────────────
+function checkC6() {
+  console.log('\n[C6] 기획 문서 존재·버전 정합성');
+
+  // C6-a: INTERVIEW-BOT.md 존재 확인
+  if (!existsSync(DOC_PATH)) {
+    fail('C6-doc', 'INTERVIEW-BOT.md 없음 — infra/docs/INTERVIEW-BOT.md 생성 필요');
+  } else {
+    pass('C6-doc', 'INTERVIEW-BOT.md 존재 확인');
+  }
+
+  // C6-b: interview-bot-profile.md 존재 확인
+  if (!existsSync(PROF_PATH)) {
+    fail('C6-profile', 'interview-bot-profile.md 없음 — runtime/context/interview-bot-profile.md 생성 필요');
+  } else {
+    pass('C6-profile', 'interview-bot-profile.md 존재 확인');
+  }
+
+  // C6-c: 기획 문서의 버전 태그와 실제 코드 최신 버전 비교
+  if (existsSync(DOC_PATH)) {
+    const docContent = readFileSync(DOC_PATH, 'utf-8');
+    const docVerMatch = docContent.match(/현재 버전:\s*(v[\d.]+)/);
+    const docVer = docVerMatch ? docVerMatch[1] : null;
+
+    const runnerPath = join(homedir(), 'jarvis/infra/scripts/interview-ralph-runner.mjs');
+    const fastPath   = join(homedir(), 'jarvis/infra/discord/lib/interview-fast-path.js');
+
+    // 버전 비교: parseFloat 금지 (v4.9 > v4.66 오판 발생).
+    // "4.66" → [4, 66], "4.9" → [4, 9] 로 쪼개 정수 비교.
+    const parseVer = v => v.split('.').map(Number);
+    const cmpVer   = (a, b) => {
+      const [aMaj, aMin] = parseVer(a);
+      const [bMaj, bMin] = parseVer(b);
+      if (aMaj !== bMaj) return bMaj - aMaj;
+      return bMin - aMin;
+    };
+
+    let codeVer = null;
+    for (const p of [runnerPath, fastPath]) {
+      if (!existsSync(p)) continue;
+      const src = readFileSync(p, 'utf-8');
+      const versions = [...src.matchAll(/\/\/ v(4\.\d+)/g)].map(m => m[1]);
+      if (versions.length > 0) {
+        const latest = versions.sort(cmpVer)[0];
+        if (!codeVer || cmpVer(latest, codeVer.replace('v', '')) < 0) {
+          codeVer = `v${latest}`;
+        }
+      }
+    }
+
+    if (!docVer) {
+      warn('C6-ver', '기획 문서에 "현재 버전: vX.XX" 항목 없음 — 문서 갱신 필요');
+    } else if (codeVer && docVer !== codeVer) {
+      fail('C6-ver',
+        `기획 문서 버전(${docVer}) ≠ 코드 최신 버전(${codeVer}) — INTERVIEW-BOT.md 갱신 필요`,
+        `문서: ${docVer} / 코드: ${codeVer}`
+      );
+    } else {
+      pass('C6-ver', `버전 정합 확인 (${docVer})`);
+    }
+  }
+}
+
 // ─── 메인 ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('🔍 interview-harness-audit — 면접봇 하네스 독립 감사');
@@ -304,6 +370,7 @@ async function main() {
   const c3Result = checkC3();
   checkC4();
   checkC5();
+  checkC6();
 
   // --fix: C1 수정 후 파일 저장
   if (FIX_MODE && c1Result?.fixed) {

@@ -13,6 +13,10 @@ Any AI agent or human touching this repo for the first time should read in this 
 5. **[infra/docs/ARCHITECTURE.md](infra/docs/ARCHITECTURE.md)** — Deep design (message flow, Discord runner, session mgmt)
 6. **[infra/docs/OPERATIONS.md](infra/docs/OPERATIONS.md)** — Incident response, cron schedules, log paths
 
+면접봇 작업 시 반드시 먼저 읽을 것:
+- **[infra/docs/INTERVIEW-BOT.md](infra/docs/INTERVIEW-BOT.md)** — 면접봇 풀 기획 문서 (아키텍처·불변식·버전 히스토리)
+- **`runtime/context/interview-bot-profile.md`** — Jarvis 세션 주입용 압축본 (불변식·파라미터·상태 파일 경로)
+
 Regenerate `TASKS-INDEX.md` + `tasks-index.json` after any `~/jarvis/runtime/config/tasks.json` change:
 
 ```bash
