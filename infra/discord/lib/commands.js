@@ -11,7 +11,7 @@ import discordPkg from 'discord.js';
 const { EmbedBuilder, MessageFlags, AttachmentBuilder } = discordPkg;
 import { log, sendNtfy } from './claude-runner.js';
 import { lastQueryStore } from './streaming.js';
-import { rerunQuery, clearProcessedId } from './handlers.js';
+import { rerunQuery, clearProcessedId, handleMessage } from './handlers.js';
 import { userMemory } from '../../lib/user-memory.mjs';
 import { t } from './i18n.js';
 import { getActivities } from './lounge.js';
@@ -923,6 +923,62 @@ export async function handleInteraction(interaction, deps) {
       await interaction.editReply(`❌ 조회 실패: ${err.message?.slice(0, 300)}`);
       log('error', '/commitments failed', { error: err.message?.slice(0, 200) });
     }
+
+  } else if (commandName === 'skill') {
+    // ---------------------------------------------------------------------------
+    // /skill <이름> [인자] — Claude Code 스킬을 Discord에서 직접 실행
+    // SSoT 자동 등록과 달리 스킬 이름이 Discord 슬래시 제약(소문자+하이픈 32자)에
+    // 걸려도 동작하며, handleMessage 파이프라인에 합성 메시지로 주입해
+    // 스트리밍 응답을 그대로 채널에 전송.
+    // ---------------------------------------------------------------------------
+    const input = (interaction.options.getString('input') || '').trim();
+    const [skillName, ...argParts] = input.split(/\s+/);
+    const skillArgs = argParts.join(' ');
+
+    if (!skillName) {
+      await interaction.reply({
+        content: '❌ 사용법: `/skill 스킬명 [인자]`\n예) `/skill anal-stock 삼성전자`',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    // Discord 인터랙션 즉시 승인 (3초 타임아웃 방지) — 실제 응답은 채널에 스트리밍
+    await interaction.reply({
+      content: `⚙️ \`${skillName}\` 스킬 실행 중...`,
+      flags: MessageFlags.Ephemeral,
+    });
+
+    // handleMessage가 기대하는 최소 Message-like 객체 합성
+    const syntheticMessage = {
+      channel: interaction.channel,
+      channelId: interaction.channelId,
+      author: {
+        id: interaction.user.id,
+        username: interaction.user.username,
+        displayName: interaction.member?.displayName ?? interaction.user.username,
+        bot: false,
+        toString: () => `<@${interaction.user.id}>`,
+      },
+      member: interaction.member,
+      // __SKILL_INVOKE__ 마커 — handlers.js _processBatch에서 감지해 Skill 도구 호출로 변환
+      content: `__SKILL_INVOKE__ name=${skillName} args=${skillArgs}`,
+      guild: interaction.guild,
+      attachments: new Map(),
+      id: interaction.id,
+      createdAt: new Date(),
+      react: async () => {},
+      // rate limit·입력 초과 시 handlers.js가 message.reply()를 호출하므로 채널 전송으로 대리
+      reply: async (content) => {
+        const text = typeof content === 'string' ? content : (content?.content ?? '');
+        return interaction.channel.send(text);
+      },
+    };
+
+    log('info', '/skill invoked', { skillName, skillArgs, userId: interaction.user.id });
+    handleMessage(syntheticMessage, deps).catch(e =>
+      log('error', '/skill handleMessage failed', { error: e?.message }),
+    );
 
   } else {
     // ---------------------------------------------------------------------------
