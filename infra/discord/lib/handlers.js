@@ -504,7 +504,7 @@ export async function handleMessage(message, state) {
 
   // ── last-activity 업데이트 (오너 채널 한정) ───────────────────────────────
   // 매 메시지마다 runtime/state/last-activity.json 갱신 → buildOwnerTimeContext 참조
-  const _OWNER_CHANNEL_IDS = ['1493563229685944543', '1493841675888623616'];
+  const _OWNER_CHANNEL_IDS = (process.env.OWNER_CHANNEL_IDS || '').split(',').filter(Boolean);
   if (senderIsOwner && _OWNER_CHANNEL_IDS.includes(message.channel.id)) {
     try {
       const _stateDir = join(_BOT_HOME, 'state');
@@ -528,7 +528,7 @@ export async function handleMessage(message, state) {
         mkdirSync(join(_BOT_HOME, 'state'), { recursive: true });
         writeFileSync(_askedPath, JSON.stringify({ asked_at: new Date().toISOString() }, null, 2));
         await message.reply(
-          '써니님, 앞으로 더 자연스럽게 대화하기 위해 보통 몇 시에 기상하시고 몇 시에 취침하시는지 알려주시면 기억해두겠습니다. (예: 기상 7시, 취침 1시)',
+          `${senderProfile?.name || effectiveAuthor?.displayName || '주인님'}, 앞으로 더 자연스럽게 대화하기 위해 보통 몇 시에 기상하시고 몇 시에 취침하시는지 알려주시면 기억해두겠습니다. (예: 기상 7시, 취침 1시)`,
         );
         processingMsgIds.delete(message.id);
         return;
