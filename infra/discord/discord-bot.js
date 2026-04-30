@@ -145,6 +145,14 @@ async function registerSlashCommands(clientId, guildId) {
     new SlashCommandBuilder()
       .setName('commitments')
       .setDescription('미이행 약속 목록 조회 (오너 전용)'),
+    new SlashCommandBuilder()
+      .setName('skill')
+      .setDescription('Claude Code 스킬 직접 실행 — SSoT 이름 제약 없이 모든 스킬 호출 가능')
+      .addStringOption(opt =>
+        opt.setName('input')
+          .setDescription('스킬명 [인자] (예: anal-stock 삼성전자 / investigate / health)')
+          .setRequired(true)
+      ),
   ];
 
   // ---------------------------------------------------------------------------
