@@ -45,8 +45,13 @@ const FORBID   = join(HOME, 'jarvis/runtime/state/ralph-forbid-list.json');
 const ROUNDS   = join(HOME, 'jarvis/runtime/state/ralph-rounds.jsonl');
 const DOC_PATH = join(HOME, 'jarvis/infra/docs/INTERVIEW-BOT.md');
 const PROF_PATH = join(HOME, 'jarvis/runtime/context/interview-bot-profile.md');
+// P5 fix: JSON.parse(URL문자열) → SyntaxError → null 버그 수정. 단순 문자열 추출로 변경.
 const WEBHOOK  = process.env.DISCORD_INTERVIEW_WEBHOOK ||
-                 (() => { try { return JSON.parse(readFileSync(join(HOME, 'jarvis/runtime/.env'), 'utf-8').split('\n').find(l => l.startsWith('DISCORD_WEBHOOK_INTERVIEW='))?.split('=').slice(1).join('=')); } catch { return null; } })();
+                 (() => { try {
+                   const line = readFileSync(join(HOME, 'jarvis/runtime/.env'), 'utf-8')
+                     .split('\n').find(l => l.startsWith('DISCORD_WEBHOOK_INTERVIEW='));
+                   return line ? line.split('=').slice(1).join('=').trim() : null;
+                 } catch { return null; } })();
 
 // ─── 유틸 ────────────────────────────────────────────────────────────────────
 let passCount = 0;
@@ -340,7 +345,10 @@ function checkC6() {
 
     if (!docVer) {
       warn('C6-ver', '기획 문서에 "현재 버전: vX.XX" 항목 없음 — 문서 갱신 필요');
-    } else if (codeVer && docVer !== codeVer) {
+    } else if (!codeVer) {
+      // P1 fix: codeVer=null(파일 없거나 버전 태그 0개)이면 silent PASS 금지
+      warn('C6-ver', '코드에서 버전 태그(// v4.XX) 감지 불가 — ralph-runner/fast-path 경로 확인 필요');
+    } else if (docVer !== codeVer) {
       fail('C6-ver',
         `기획 문서 버전(${docVer}) ≠ 코드 최신 버전(${codeVer}) — INTERVIEW-BOT.md 갱신 필요`,
         `문서: ${docVer} / 코드: ${codeVer}`
