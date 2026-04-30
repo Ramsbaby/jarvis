@@ -2,7 +2,7 @@
 
 > **SSoT**: 이 파일이 면접봇 시스템의 단일 기획 원본입니다.
 > **압축본**: `~/jarvis/runtime/context/interview-bot-profile.md` (Jarvis 세션 자동 주입용)
-> **최종 업데이트**: 2026-04-30 · 현재 버전: v4.68
+> **최종 업데이트**: 2026-04-30 · 현재 버전: v4.69
 
 ---
 
@@ -39,7 +39,7 @@
 └─────────────────────────────────────────────────────────────────┘
 
 [외부 감사관 — 런타임과 독립]
-interview-harness-audit.mjs   C1~C5 데이터 무결성 검사 (독립 실행)
+interview-harness-audit.mjs   C1~C6 데이터 무결성 검사 (독립 실행)
 ```
 
 ### 핵심 설계 결정: "fast-path는 discord 없이도 동작한다"
@@ -47,6 +47,18 @@ interview-harness-audit.mjs   C1~C5 데이터 무결성 검사 (독립 실행)
 ralph-runner가 mock Discord 메시지를 만들어 fast-path 함수를 직접 호출한다.
 Discord를 거치지 않으므로 응답 속도가 빠르고, 실제 Discord 채널에는 영향 없다.
 (fast-path가 Discord 객체 구조를 기대하므로 mock이 해당 형태를 맞춰 주입)
+
+### 핵심 설계 결정: ralph 모드 vs 채널 모드 (isRalphMode 플래그)
+
+fast-path 내부의 `isRalphMode` 플래그로 두 동작 경로를 분기한다.
+
+| 항목 | Ralph 훈련 모드 (`isRalphMode=true`) | 채널 모드 (`isRalphMode=false`) |
+|------|--------------------------------------|----------------------------------|
+| 호출 주체 | ralph-runner.mjs (mock Discord) | Discord #jarvis-interview 채널 직접 |
+| 목적 | 자동 반복 훈련, verifier 채점, 학습 피드백 | D-day 실면접 지원 — 최상의 단발 답변 |
+| 시나리오 | 시나리오 모드와 독립적으로 동작 가능 | `INTERVIEW_ACTIVE_SCENARIO` 환경변수로 활성화 |
+| ralph 학습 반영 | forbid·insights 생성 주체 | forbid·insights를 역으로 주입받아 사용 (v4.50) |
+| 채점 요청 | verifier HTTP POST 전송 | 전송 안 함 (채점 불필요) |
 
 ---
 
@@ -99,6 +111,20 @@ ralph-runner는 이를 SKIP으로 분류하며, 에러로 처리하지 않는다
 
 `STAR-J*` (Jarvis 개인 프로젝트)는 면접 대상 경험이 아니다.
 동적 질문 생성 시 약점 가중치 산출에서 제외한다.
+
+### 4-6. PDF 회사명 오출처 처리 (v4.69+)
+
+PDF 기술면접 대시보드는 면접관과 후보자가 공유하는 실시간 자료다.
+PDF에 `(회사A)`, `(회사B)` 등 회사명이 표기되어 있어도
+**실제 경험 출처 회사와 달라도 정정·사과 발언 절대 금지**.
+
+```
+❌ 금지: "그건 사실 [다른 회사] 경험인데요, PDF를 잘못 썼습니다"
+✅ 올바름: 관련 경험(STAR pool + RAG + user-profile)을 자연스럽게 이어서 답한다
+```
+
+- 면접관은 PDF를 보며 질문했을 뿐, 회사명 정정 발언은 탈락 시그널이다.
+- `companyMismatchBlock` 프롬프트 블록이 시나리오 활성 시 항상 주입된다.
 
 ---
 
@@ -154,6 +180,40 @@ daily cap 도달 시 모든 질문이 SKIP 처리됨 (라운드가 60/60 SKIP이
 최근 3라운드에서 사용한 질문 ID를 추적해 동일 질문 재출제에 페널티를 부여한다.
 페널티 적용 후에도 질문 풀이 부족하면 최근 사용 질문도 출제된다.
 
+### 6-6. ralph 모드 vs 채널 모드 분리
+
+두 모드는 `isRalphMode` 플래그 하나로 분기된다.
+
+- **Ralph 훈련 모드**: ralph-runner.mjs가 mock Discord로 호출. 자동 반복 채점·학습. forbid/insights 누적.
+- **채널 모드(D-day)**: Discord #jarvis-interview에서 직접 호출. 실면접 지원. ralph 학습 결과를 역주입해 최고 품질 단발 답변 제공 (v4.50).
+
+시나리오 모드(`INTERVIEW_ACTIVE_SCENARIO=samsung-cnt`)는 두 모드 모두에서 독립적으로 활성화 가능하다.
+채널 모드 + 시나리오 모드 조합이 D-day 실면접의 핵심 경로다.
+
+### 6-7. 경험 우선 탐색 원칙 + PDF 회사명 오출처 처리 (v4.69)
+
+**경험 탐색 순서 (pdfImprovisBlock — answerGuide 없는 자유 발화 질문)**:
+
+```
+1순위. RAG + user-profile에서 질문 키워드 매칭 경험(STAR) 탐색
+       → 있으면 즉시 그 경험 사용
+2순위. 1순위 없거나 불완전하면
+       → PDF 맥락 + user-profile 조합으로 후보자 말투 창작
+```
+
+**절대 금지**:
+- `"직접 경험 없습니다"` — 실면접 탈락 신호. 어떤 상황에도 금지.
+- PDF 회사명 정정·사과 (4-6 불변식과 동일)
+- AI 문어체 ("이를 통해", "최종적으로", "식별했습니다")
+
+**컴포넌트 구성**:
+
+| 블록 | 활성 조건 | 역할 |
+|------|-----------|------|
+| `companyMismatchBlock` | `scenarioActive` | PDF 회사명 정정 금지 — answerGuide 유무 무관 항상 주입 |
+| `pdfImprovisBlock` | `scenarioActive && !hasScenarioGuide` | 자유 발화 질문 임기응변 지침 (경험 탐색 순서 포함) |
+| `scenarioGuideBlock` | `scenarioActive && hasScenarioGuide` | SSoT 정답 가이드 + 회사명 정정 금지 (answerGuide 있을 때) |
+
 ---
 
 ## 7. 버전 히스토리 (마일스톤)
@@ -171,6 +231,7 @@ daily cap 도달 시 모든 질문이 SKIP 처리됨 (라운드가 60/60 SKIP이
 | v4.62 | 시나리오 모드에서 동적 질문 제거 (PDF 전용) |
 | v4.66 | 동적 질문 역전 신호-액션 루프, harness-audit C1~C5 신설 |
 | v4.68 | 기획 문서 체계 신설, C6 버전 정합성 감사, codeVer=null 버그 수정 |
+| v4.69 | PDF 회사명 오출처 처리 (companyMismatchBlock 신설), 경험 우선 탐색 원칙 (pdfImprovisBlock 재작성), scenarioGuideBlock 창작 허용 완화 |
 
 ---
 
@@ -217,7 +278,7 @@ node ~/jarvis/infra/scripts/interview-harness-audit.mjs --fix --notify
 
 | 파일 | 줄 수 | gitignore 여부 |
 |------|-------|---------------|
-| `interview-fast-path.js` | 3,320줄 | ✅ (PII — STAR/수치) |
+| `interview-fast-path.js` | 3,342줄 | ✅ (PII — STAR/수치) |
 | `interview-ralph-runner.mjs` | 2,164줄 | ✅ (PII — 질문 풀) |
 | `interview-verifier-server.mjs` | 660줄 | ✅ (PII — few-shot) |
 | `interview-harness-audit.mjs` | 347줄 | ❌ (커밋 대상) |
