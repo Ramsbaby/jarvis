@@ -878,6 +878,16 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
   let streamer = null; // outer scope for finalize in catch
   const originalPrompt = batchContent;    // ← 배치 결합 프롬프트
 
+  // __SKILL_INVOKE__ 감지 — /skill 슬래시 커맨드에서 주입됨
+  // Claude에게 Skill 도구를 명시적으로 호출하도록 지시문으로 변환
+  const skillMatch = userPrompt.match(/^__SKILL_INVOKE__\s+name=(\S+)\s*(?:args=(.*))?$/s);
+  if (skillMatch) {
+    const skillName = skillMatch[1];
+    const skillArgs = (skillMatch[2] || '').trim();
+    userPrompt = `다음 스킬을 즉시 실행하세요. 반드시 Skill 도구를 호출해야 합니다.\n스킬 이름: ${skillName}\n인자: ${skillArgs || '(없음)'}`;
+    log('info', '__SKILL_INVOKE__ detected', { skillName, skillArgs });
+  }
+
   // Learning feedback loop
   const feedback = processFeedback(effectiveAuthor.id, userPrompt);
   if (feedback) {
