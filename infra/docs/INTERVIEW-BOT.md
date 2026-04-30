@@ -169,7 +169,8 @@ daily cap 도달 시 모든 질문이 SKIP 처리됨 (라운드가 60/60 SKIP이
 | v4.57~v4.58 | EVAL_ERROR 격리, isInstantRisk boolean 직접 참조 (ID 불일치 수정) |
 | v4.60 | forbid-list cap(100) unshift 우회 결함 수정 |
 | v4.62 | 시나리오 모드에서 동적 질문 제거 (PDF 전용) |
-| v4.66 | 현재 (동적 질문 역전 신호-액션 루프, harness-audit 신설) |
+| v4.66 | 동적 질문 역전 신호-액션 루프, harness-audit C1~C5 신설 |
+| v4.68 | 기획 문서 체계 신설, C6 버전 정합성 감사, codeVer=null 버그 수정 |
 
 ---
 
@@ -200,6 +201,7 @@ daily cap 도달 시 모든 질문이 SKIP 처리됨 (라운드가 60/60 SKIP이
 | C3 | 동적 질문 점수 역전 감지 | 자동 캐시 삭제 |
 | C4 | forbid list 중복·오염 검사 | — |
 | C5 | rounds.jsonl 구조 무결성 | — |
+| C6 | INTERVIEW-BOT.md 존재 + 코드 버전 정합성 | — |
 
 ```bash
 # 정기 실행
