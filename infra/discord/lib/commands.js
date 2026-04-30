@@ -968,6 +968,11 @@ export async function handleInteraction(interaction, deps) {
       id: interaction.id,
       createdAt: new Date(),
       react: async () => {},
+      // rate limit·입력 초과 시 handlers.js가 message.reply()를 호출하므로 채널 전송으로 대리
+      reply: async (content) => {
+        const text = typeof content === 'string' ? content : (content?.content ?? '');
+        return interaction.channel.send(text);
+      },
     };
 
     log('info', '/skill invoked', { skillName, skillArgs, userId: interaction.user.id });

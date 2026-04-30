@@ -471,7 +471,7 @@ client.on('messageCreate', (message) => {
 });
 
 const interactionDeps = {
-  sessions, activeProcesses, rateTracker, client,
+  sessions, activeProcesses, rateTracker, semaphore, client,
   BOT_HOME, BOT_NAME, HOME,
   get lastMessageAt() { return lastMessageAt; },
   maxConcurrent: MAX_CONCURRENT,
