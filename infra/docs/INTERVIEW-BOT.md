@@ -2,7 +2,7 @@
 
 > **SSoT**: 이 파일이 면접봇 시스템의 단일 기획 원본입니다.
 > **압축본**: `~/jarvis/runtime/context/interview-bot-profile.md` (Jarvis 세션 자동 주입용)
-> **최종 업데이트**: 2026-04-30 · 현재 버전: v4.69
+> **최종 업데이트**: 2026-04-30 · 현재 버전: v4.76
 
 ---
 
@@ -232,6 +232,12 @@ daily cap 도달 시 모든 질문이 SKIP 처리됨 (라운드가 60/60 SKIP이
 | v4.66 | 동적 질문 역전 신호-액션 루프, harness-audit C1~C5 신설 |
 | v4.68 | 기획 문서 체계 신설, C6 버전 정합성 감사, codeVer=null 버그 수정 |
 | v4.69 | PDF 회사명 오출처 처리 (companyMismatchBlock 신설), 경험 우선 탐색 원칙 (pdfImprovisBlock 재작성), scenarioGuideBlock 창작 허용 완화 |
+| v4.71 | **EvalContext SSoT 정합 수정 (근본 원인 해결)**: callMetaAnalyze가 answerGuide를 verifier에 미전달 → answerGuide 기반 답변(RF=3 등)이 ssotScore 감점 → Ralph 학습 역방향 누적. 수정: answerGuide를 verifier로 전달·주입, 허용 SSoT로 인정. harness-audit C7 6-gate 감사 신설로 회귀 방어. |
+| v4.72 | **round 자동 추론 (학습 윈도우 오염 수정)**: opt.round 기본값=1 → 항상 R1~5 윈도우 조회 → 오래된 데이터 기반 학습 누적. 수정: getNextAutoRound()가 rounds.jsonl max+1 자동 산출. --round 미지정 시 자동 적용. |
+| v4.73 | **approvedAnswer 캐시 아키텍처 신설**: Ralph 훈련 루프가 각 질문별 최고점 답변을 samsung-cnt.json에 누적 (score > cached+0.2 조건). D-day 실면접 시 approvedAnswer.content 존재하면 LLM 호출 없이 즉시 서빙 (fast-path 조기 반환). Ralph→탐색, D-day→서빙 역할 분리. |
+| v4.74 | **approvedAnswer prevScore=0 버그 수정**: `scenarioQnaToQuestions()` 반환 객체에 `approvedAnswer` 필드 누락 → processQuestion에서 prevScore 항상 0으로 읽혀 하이스테리시스(+0.2) 보호 무효화, 낮은 점수로 캐시 다운그레이드 가능. replay 모드(L1820)·일반 모드(L1896) 두 곳에 `approvedAnswer: q.approvedAnswer \|\| null` 추가. |
+| v4.75 | **꼬리질문 감지 가드 2 수정**: `detectFollowUp()` 가드 2에서 `!hasHint` 예외 추가 — "Redis에서 왜 그런 선택을?" 처럼 기술명(SSoT어휘)을 포함한 꼬리질문이 새 질문으로 오분류되던 문제 수정. 히스토리 compact trim 200→300자 상향(직전 답변 맥락 손실 방지). |
+| v4.76 | **SHORT 답변 내 💬 섹션 노이즈 수정**: 프롬프트 금지어 목록에 `💬`가 누락되어 LLM이 SHORT 응답에 `💬 답변` / `💬 2분` 섹션을 추가로 생성 → Discord에 답변이 3개처럼 보이는 문제. 두 SHORT 프롬프트(STAR형·개념형) 모두 금지어에 `💬` 추가 + 후처리 정규식으로 이중 방어(`shortTextClean`). |
 
 ---
 

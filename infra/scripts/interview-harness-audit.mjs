@@ -16,6 +16,9 @@
  *   C4. forbid list 패턴 품질 (너무 짧음 / 비면접 오염)
  *   C5. rounds.jsonl 구조 무결성
  *   C6. 기획 문서 존재·버전 정합성 (INTERVIEW-BOT.md ↔ 코드 버전 태그)
+ *   C7. EvalContext SSoT 정합성 — 생성(fast-path answerGuide)·채점(verifier) 컨텍스트 일치 여부
+ *       근본 원인(2026-04-30): callMetaAnalyze가 answerGuide를 verifier에 미전달
+ *       → answerGuide 기반 답변이 ssotScore 감점 → Ralph 학습이 역방향 누적
  *
  * 사용:
  *   node interview-harness-audit.mjs           # 조용한 모드 (이상 시만 출력)
@@ -359,6 +362,129 @@ function checkC6() {
   }
 }
 
+// ─── C7: EvalContext SSoT 정합성 — answerGuide 전달 체인 감사 ────────────────
+// 근본 원인(2026-04-30): callMetaAnalyze가 answerGuide를 verifier에 미전달
+// → fast-path가 answerGuide(RF=3 등)로 생성한 답변을 verifier가 ssotScore 감점
+// → Ralph 학습 신호가 "answerGuide 내용 쓰지 마라"로 역방향 누적
+// 수정(v4.71/v1.5): answerGuide를 verifier로 전달 → 허용 SSoT로 인정 → 공정 평가
+//
+// 이 감사는 수정이 무언가에 의해 되돌려지는 상황(회귀)을 방어한다.
+// 코드 패턴 6개를 모두 만족해야 PASS — 하나라도 빠지면 즉시 역방향 학습 재발.
+function checkC7() {
+  console.log('\n[C7] EvalContext SSoT 정합성 — answerGuide 전달 체인 (6-gate)');
+
+  const RUNNER_PATH   = join(HOME, 'jarvis/infra/scripts/interview-ralph-runner.mjs');
+  const VERIFIER_PATH = join(HOME, 'jarvis/infra/scripts/interview-verifier-server.mjs');
+
+  if (!existsSync(RUNNER_PATH)) {
+    fail('C7', 'interview-ralph-runner.mjs 없음 — 감사 불가');
+    return;
+  }
+  if (!existsSync(VERIFIER_PATH)) {
+    fail('C7', 'interview-verifier-server.mjs 없음 — 감사 불가');
+    return;
+  }
+
+  const runnerSrc   = readFileSync(RUNNER_PATH, 'utf-8');
+  const verifierSrc = readFileSync(VERIFIER_PATH, 'utf-8');
+
+  // Gate 1: callMetaAnalyze 시그니처에 answerGuide 파라미터 포함
+  const gate1 = /async function callMetaAnalyze\([^)]*answerGuide/.test(runnerSrc);
+  if (gate1) {
+    pass('C7-1', 'callMetaAnalyze 시그니처에 answerGuide 파라미터 존재');
+  } else {
+    fail(
+      'C7-1',
+      'callMetaAnalyze 시그니처에 answerGuide 파라미터 누락 — verifier 미전달 근본 원인 재발',
+      '수정: async function callMetaAnalyze(..., answerGuide = \'\') 형태여야 함',
+    );
+  }
+
+  // Gate 2: callMetaAnalyze 함수 본문 내 JSON.stringify body에 answerGuide 포함
+  // v2: 함수 본문 스코프로 한정 (파일 전체 매칭 → false-negative 방어)
+  // 이전 regex /JSON\.stringify\(\s*\{[^}]*answerGuide/의 [^}]* 는 } 한 개에서 멈춰
+  //   다중 라인 body나 파일 다른 JSON.stringify와 혼동 가능. callMetaAnalyze 본문만 추출 후 검사.
+  const callMetaFnMatch = runnerSrc.match(/async function callMetaAnalyze\b[\s\S]*?\n\}/);
+  const callMetaFnBody = callMetaFnMatch ? callMetaFnMatch[0] : '';
+  const gate2 = callMetaFnBody.length > 0 &&
+                callMetaFnBody.includes('JSON.stringify') &&
+                callMetaFnBody.includes('answerGuide');
+  if (gate2) {
+    pass('C7-2', 'callMetaAnalyze 함수 본문 내 JSON.stringify + answerGuide 확인 (함수 스코프 한정)');
+  } else {
+    fail(
+      'C7-2',
+      'callMetaAnalyze 함수 본문에 JSON.stringify(answerGuide) 누락 — verifier가 answerGuide를 수신하지 못함',
+      '수정: body: JSON.stringify({ ..., answerGuide }) 형태여야 함 / callMetaAnalyze 함수 본문 확인 필요',
+    );
+  }
+
+  // Gate 3: callMetaAnalyze 호출 지점에서 q.answerGuide 전달
+  // ralph-runner processQuestion 루프에서 q.answerGuide || '' 전달 확인
+  const gate3 = /callMetaAnalyze\([^)]*q\.answerGuide/.test(runnerSrc);
+  if (gate3) {
+    pass('C7-3', 'callMetaAnalyze 호출 지점 — q.answerGuide 전달 확인');
+  } else {
+    fail(
+      'C7-3',
+      'callMetaAnalyze 호출 시 q.answerGuide 미전달 — 시나리오 PDF 가이드가 채점에 반영 안 됨',
+      '수정: meta = await callMetaAnalyze(q.text, shortText, detailText, q.star, q.answerGuide || \'\') 형태여야 함',
+    );
+  }
+
+  // Gate 4: verifier /meta-analyze 엔드포인트에서 answerGuide destructure
+  // JSON.parse(body)에서 answerGuide 추출 확인
+  const gate4 = /const\s*\{[^}]*answerGuide[^}]*\}\s*=\s*JSON\.parse\(body\)/.test(verifierSrc);
+  if (gate4) {
+    pass('C7-4', 'verifier /meta-analyze — answerGuide destructure 확인');
+  } else {
+    fail(
+      'C7-4',
+      'verifier /meta-analyze에서 answerGuide destructure 누락 — 전달돼도 undefined로 무시됨',
+      '수정: const { ..., answerGuide } = JSON.parse(body) 형태여야 함',
+    );
+  }
+
+  // Gate 5: callClaudeMetaAnalyze 시그니처에 answerGuide 파라미터
+  const gate5 = /async function callClaudeMetaAnalyze\([^)]*answerGuide/.test(verifierSrc);
+  if (gate5) {
+    pass('C7-5', 'callClaudeMetaAnalyze 시그니처에 answerGuide 파라미터 존재');
+  } else {
+    fail(
+      'C7-5',
+      'callClaudeMetaAnalyze 시그니처에 answerGuide 파라미터 누락 — 채점 프롬프트에 주입 불가',
+      '수정: async function callClaudeMetaAnalyze(..., answerGuide = \'\') 형태여야 함',
+    );
+  }
+
+  // Gate 6: 채점 프롬프트에 answerGuideBlock 주입 — user-profile.md 이후 answerGuide 블록 삽입
+  // "answerGuideBlock" 변수 정의와 프롬프트에 ${answerGuideBlock} 참조 모두 있어야 함
+  const gate6a = /const answerGuideBlock\s*=\s*answerGuide/.test(verifierSrc);
+  const gate6b = /\$\{answerGuideBlock\}/.test(verifierSrc);
+  if (gate6a && gate6b) {
+    pass('C7-6', '채점 프롬프트 answerGuideBlock 주입 확인 (정의 + 참조 모두 존재)');
+  } else {
+    fail(
+      'C7-6',
+      `채점 프롬프트 answerGuideBlock 주입 불완전 (정의=${gate6a}, 참조=${gate6b})`,
+      '수정: const answerGuideBlock = answerGuide ? `...` : \'\' 정의 후 userPrompt에 ${answerGuideBlock} 삽입',
+    );
+  }
+
+  // 전체 C7 상태 요약
+  const allPass = gate1 && gate2 && gate3 && gate4 && gate5 && gate6a && gate6b;
+  if (VERBOSE) {
+    const gateResults = [gate1, gate2, gate3, gate4, gate5, gate6a && gate6b];
+    console.log(`     C7 Gate 결과: ${gateResults.map((g, i) => `G${i+1}=${g ? '✅' : '❌'}`).join(' ')}`);
+    if (allPass) {
+      console.log('     EvalContext SSoT 정합성 완전 확인 — Ralph 학습 역방향 누적 방어 활성');
+    } else {
+      const failed = gateResults.filter(g => !g).length;
+      console.log(`     ⚠️  ${failed}개 Gate 실패 — 학습 신호 역방향 누적 위험 존재`);
+    }
+  }
+}
+
 // ─── 메인 ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('🔍 interview-harness-audit — 면접봇 하네스 독립 감사');
@@ -379,6 +505,7 @@ async function main() {
   checkC4();
   checkC5();
   checkC6();
+  checkC7();
 
   // --fix: C1 수정 후 파일 저장
   if (FIX_MODE && c1Result?.fixed) {

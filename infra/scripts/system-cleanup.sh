@@ -117,7 +117,52 @@ main() {
         _log "Claude debug 정리: ${before_count}개 삭제 → ${after_count}개 남음"
     fi
 
-    # 10. 정리 후 메모리 상태
+    # 10. Claude 세션 기록 retention — 90일 이상 비활성 프로젝트 정리 (디스크 절약)
+    local claude_projects="$HOME/.claude/projects"
+    if [[ -d "$claude_projects" ]]; then
+        local proj_deleted=0
+        local ref_file
+        ref_file=$(mktemp /tmp/jarvis-retention-XXXXXX)
+        # macOS: date -v-90d / Linux fallback
+        local cutoff_ts
+        cutoff_ts=$(date -v-90d +%Y%m%d%H%M.%S 2>/dev/null || date -d "90 days ago" +%Y%m%d%H%M.%S 2>/dev/null || echo "")
+        if [[ -n "$cutoff_ts" ]]; then
+            touch -t "$cutoff_ts" "$ref_file" 2>/dev/null || true
+            while IFS= read -r proj_dir; do
+                [[ -d "$proj_dir" ]] || continue
+                # 90일 이내 수정된 파일이 하나라도 있으면 활성 세션 — skip
+                if find "$proj_dir" -newer "$ref_file" -type f -print -quit 2>/dev/null | grep -q .; then
+                    continue
+                fi
+                local dir_size
+                dir_size=$(du -sh "$proj_dir" 2>/dev/null | cut -f1 || echo "?")
+                rm -rf "$proj_dir"
+                proj_deleted=$(( proj_deleted + 1 ))
+                _log "  삭제: $(basename "$proj_dir") (${dir_size})"
+            done < <(find "$claude_projects" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+        fi
+        rm -f "$ref_file"
+        if (( proj_deleted > 0 )); then
+            _log "Claude 세션 기록 retention: ${proj_deleted}개 정리 완료 (90일 기준)"
+        else
+            _log "Claude 세션 기록 retention: 삭제 대상 없음 (90일 기준)"
+        fi
+    fi
+
+    # 11. RAG 대화 소스 retention — 180일 이상 된 변환 파일 제거 (LanceDB 청크 순증 억제)
+    for conv_src_dir in \
+        "${BOT_HOME}/data/claude-conversations" \
+        "${BOT_HOME}/data/claude-conversations-jsonl"; do
+        if [[ -d "$conv_src_dir" ]]; then
+            local conv_deleted
+            conv_deleted=$(find "$conv_src_dir" -type f -mtime +180 -delete -print 2>/dev/null | wc -l | tr -d ' ')
+            if (( conv_deleted > 0 )); then
+                _log "RAG 대화 소스 retention: ${conv_deleted}개 삭제 ($(basename "$conv_src_dir"), 180일 기준)"
+            fi
+        fi
+    done
+
+    # 12. 정리 후 메모리 상태
     sleep 2
     local mem_after
     mem_after=$(get_mem_free_pct)
