@@ -1781,15 +1781,6 @@ ${extracted}
             }
             // 비동기 메모리 추출 — 메인 응답에 영향 없는 fire-and-forget
             autoExtractMemory(effectiveAuthor.id, originalPrompt, lastAssistantText, effectiveChannelId).catch((e) => log('debug', 'autoExtractMemory outer catch', { error: e?.message }));
-            // 마지막 활동 기록 (KST ISO)
-            try {
-              const laPath = join(_BOT_HOME, 'state', 'last-activity.json');
-              writeFileSync(laPath, JSON.stringify({
-                ts: new Date().toISOString(),
-                channel: effectiveChannelId,
-                user: effectiveAuthor?.id,
-              }, null, 2));
-            } catch {}
             // 비동기 약속 감지 — Jarvis가 "하겠습니다" 발화 시 commitments.jsonl 기록
             _trackCommitment(lastAssistantText, { channelId: effectiveChannelId, userId: effectiveAuthor.id })
               .catch((e) => log('debug', 'commitment-tracker outer catch', { error: e?.message }));
