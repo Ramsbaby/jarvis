@@ -502,6 +502,65 @@ export async function handleMessage(message, state) {
   } catch {}
   const senderIsOwner = senderProfile?.type === 'owner' || senderProfile?.role === 'owner';
 
+  // ── last-activity 업데이트 (오너 채널 한정) ───────────────────────────────
+  // 매 메시지마다 runtime/state/last-activity.json 갱신 → buildOwnerTimeContext 참조
+  const _OWNER_CHANNEL_IDS = ['1493563229685944543', '1493841675888623616'];
+  if (senderIsOwner && _OWNER_CHANNEL_IDS.includes(message.channel.id)) {
+    try {
+      const _stateDir = join(_BOT_HOME, 'state');
+      mkdirSync(_stateDir, { recursive: true });
+      const _kstOffset = 9 * 3600_000;
+      const _kstIso = new Date(Date.now() + _kstOffset).toISOString().replace('Z', '+09:00');
+      writeFileSync(
+        join(_stateDir, 'last-activity.json'),
+        JSON.stringify({ timestamp: _kstIso, channel_id: message.channel.id, user_id: effectiveAuthor.id }, null, 2),
+      );
+    } catch { /* best-effort */ }
+  }
+
+  // ── 오너 스케줄 최초 1회 질문 (owner-schedule.json 없을 때) ─────────────
+  if (senderIsOwner && _OWNER_CHANNEL_IDS.includes(message.channel.id) && message.content) {
+    const _schedPath = join(_BOT_HOME, 'state', 'owner-schedule.json');
+    const _askedPath = join(_BOT_HOME, 'state', 'owner-schedule-asked.json');
+    // owner-schedule.json이 없고, asked 플래그도 없으면 → 질문 후 return
+    if (!existsSync(_schedPath) && !existsSync(_askedPath)) {
+      try {
+        mkdirSync(join(_BOT_HOME, 'state'), { recursive: true });
+        writeFileSync(_askedPath, JSON.stringify({ asked_at: new Date().toISOString() }, null, 2));
+        await message.reply(
+          '써니님, 앞으로 더 자연스럽게 대화하기 위해 보통 몇 시에 기상하시고 몇 시에 취침하시는지 알려주시면 기억해두겠습니다. (예: 기상 7시, 취침 1시)',
+        );
+        processingMsgIds.delete(message.id);
+        return;
+      } catch { /* 실패해도 진행 */ }
+    }
+    // owner-schedule-asked.json 있고 owner-schedule.json 없으면 → 답변 파싱 시도
+    if (!existsSync(_schedPath) && existsSync(_askedPath)) {
+      const _wakeMatch = message.content.match(/기상\s*[:：]?\s*(\d{1,2})(?::(\d{2}))?시?/);
+      const _sleepMatch = message.content.match(/취침\s*[:：]?\s*(\d{1,2})(?::(\d{2}))?시?/);
+      if (_wakeMatch || _sleepMatch) {
+        try {
+          const _fmtHour = (h, m) => `${String(h).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}`;
+          const _wakeTime = _wakeMatch ? _fmtHour(parseInt(_wakeMatch[1], 10), parseInt(_wakeMatch[2] || '0', 10)) : null;
+          const _sleepTime = _sleepMatch ? _fmtHour(parseInt(_sleepMatch[1], 10), parseInt(_sleepMatch[2] || '0', 10)) : null;
+          const _schedule = {
+            wake_time: _wakeTime,
+            sleep_time: _sleepTime,
+            asked_at: (() => { try { return JSON.parse(readFileSync(_askedPath, 'utf-8')).asked_at; } catch { return new Date().toISOString(); } })(),
+            confirmed: true,
+          };
+          writeFileSync(_schedPath, JSON.stringify(_schedule, null, 2));
+          const _parts = [];
+          if (_wakeTime) _parts.push(`기상 ${_wakeTime}`);
+          if (_sleepTime) _parts.push(`취침 ${_sleepTime}`);
+          await message.reply(`✅ 기억했습니다. ${_parts.join(', ')}으로 저장해뒀어요.`);
+          processingMsgIds.delete(message.id);
+          return;
+        } catch { /* 파싱 실패 시 일반 처리로 fall-through */ }
+      }
+    }
+  }
+
   // ── 스킬 자동 트리거 감지 (2026-04-24, Phase 1) ──────────────────────────
   // CLI UserPromptSubmit hook 방식을 Discord 표면에 이식. Jarvis 단일 뇌 완결.
   // Owner 채널 + 자연어 키워드 매칭 시 즉시 runSkill → 응답 → return.
@@ -1722,6 +1781,15 @@ ${extracted}
             }
             // 비동기 메모리 추출 — 메인 응답에 영향 없는 fire-and-forget
             autoExtractMemory(effectiveAuthor.id, originalPrompt, lastAssistantText, effectiveChannelId).catch((e) => log('debug', 'autoExtractMemory outer catch', { error: e?.message }));
+            // 마지막 활동 기록 (KST ISO)
+            try {
+              const laPath = join(_BOT_HOME, 'state', 'last-activity.json');
+              writeFileSync(laPath, JSON.stringify({
+                ts: new Date().toISOString(),
+                channel: effectiveChannelId,
+                user: effectiveAuthor?.id,
+              }, null, 2));
+            } catch {}
             // 비동기 약속 감지 — Jarvis가 "하겠습니다" 발화 시 commitments.jsonl 기록
             _trackCommitment(lastAssistantText, { channelId: effectiveChannelId, userId: effectiveAuthor.id })
               .catch((e) => log('debug', 'commitment-tracker outer catch', { error: e?.message }));

@@ -33,6 +33,7 @@ import {
   buildOwnerPreferencesSection, buildOwnerPersonaSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
   buildWikiContextSection, buildAngerCorrectionSection,
   buildHarnessAutoTriggerSection, buildFactsKeywordSection, buildEvidenceMandateSection,
+  buildOwnerTimeContext,
 } from './prompt-sections.js';
 import { getPromptHarness, Tier } from './prompt-harness.js';
 import { loadHandoff, formatHandoffForPrompt } from './session-handoff.js';
@@ -893,6 +894,7 @@ export async function* createClaudeSession(prompt, {
     // Visual output design policy (AI Slop prevention) — applies to Discord cards, jarvis-board, etc.
     const visualizationSection = buildOwnerVisualizationSection({ botHome: BOT_HOME });
     if (visualizationSection) systemParts.push('', visualizationSection);
+
   }
 
   // Session version check: compute hash from STABLE systemParts (persona + user context only).
@@ -982,6 +984,15 @@ export async function* createClaudeSession(prompt, {
     try {
       const evidenceMandate = buildEvidenceMandateSection({ prompt });
       if (evidenceMandate) systemParts.push('', evidenceMandate);
+    } catch { /* best-effort */ }
+  }
+
+  // 🕐 오너 시간 컨텍스트 — KST 현재시각 + 마지막 활동 경과시간 + 수면 패턴
+  // Dynamic section: 세션 해시에 영향 없음. 파일 없어도 봇 크래시 없음.
+  if (isOwner) {
+    try {
+      const timeCtx = buildOwnerTimeContext({ botHome: BOT_HOME });
+      if (timeCtx) systemParts.push('', timeCtx);
     } catch { /* best-effort */ }
   }
 
