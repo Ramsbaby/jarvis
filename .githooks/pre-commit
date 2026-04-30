@@ -49,6 +49,19 @@ if [[ -n "$topology_violations" ]]; then
   exit 1
 fi
 
+# ─── Interview Bot SSoT Guard ────────────────────────────────────────────────
+# interview-harness-audit.mjs 가 staged 에 있는데 INTERVIEW-BOT.md 가 빠졌으면 경고.
+# 참고: fast-path.js·ralph-runner.mjs 는 gitignored → staged 불가.
+#       코드 버전 drift 는 harness C6 (weekly) 가 보완.
+_staged=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)
+if echo "$_staged" | grep -q 'interview-harness-audit\.mjs'; then
+  if ! echo "$_staged" | grep -q 'infra/docs/INTERVIEW-BOT\.md'; then
+    echo "⚠️  [Interview SSoT] interview-harness-audit.mjs 변경 감지 — INTERVIEW-BOT.md 가 staged 에 없습니다." >&2
+    echo "   설계 변경이면 infra/docs/INTERVIEW-BOT.md 도 함께 업데이트해 주십시오." >&2
+    echo "   (경고만 — 커밋은 계속 진행됩니다)" >&2
+  fi
+fi
+
 if ! command -v node >/dev/null 2>&1; then
   echo "⚠️  node 없음 — privacy scan skip (경고만)" >&2
   exit 0
