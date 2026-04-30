@@ -32,6 +32,8 @@ MODEL="${7:-}"
 # 8번째 인수: tasks.json retry.max → bot-cron.sh가 전달 (없으면 3 기본값)
 MAX_RETRIES="${8:-3}"
 BACKOFF_DELAYS=(5 10 20 40)
+# Rate limit 전용 exponential backoff (더 공격적: 60s, 300s, 900s, 1800s)
+RATE_LIMIT_DELAYS=(60 300 900 1800)
 
 mkdir -p "$(dirname "$RETRY_LOG")"
 
@@ -273,11 +275,17 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
     # Compute backoff delay
     delay="${BACKOFF_DELAYS[$((attempt - 1))]}"
     if [[ "$classification" == "rate_limited" ]]; then
-        # Rate limit은 5시간 윈도우 기반 → 짧은 재시도는 무의미
-        # 1차: 5분, 2차: 15분 대기 (크론 다음 실행까지 양보)
-        delay=$(( 300 * attempt ))
+        # Rate limit 전용 강화된 backoff: 매우 공격적 (60s → 5m → 15m → 30m)
+        # 로그: 각 재시도 시마다 상태 기록
+        delay="${RATE_LIMIT_DELAYS[$((attempt - 1))]}"
+        printf '[%s] [%s] [RATE_LIMIT_BACKOFF] attempt=%d, waiting %ds before retry (exponential backoff)\n' \
+            "$(date '+%F %H:%M:%S')" "$TASK_ID" "$attempt" "$delay" \
+            >> "${BOT_HOME}/logs/cron.log"
     fi
 
+    printf '[%s] [%s] [RETRY_BACKOFF] attempt=%d, waiting %ds\n' \
+        "$(date '+%F %H:%M:%S')" "$TASK_ID" "$attempt" "$delay" \
+        >> "${BOT_HOME}/logs/cron.log"
     sleep "$delay"
 done
 

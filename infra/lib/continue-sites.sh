@@ -104,6 +104,14 @@ _cs_can_downgrade_model() {
 #
 # stdout: 실행 결과 (성공한 stage의 출력)
 # exit code: 0=성공, 비0=모든 stage 실패
+#
+# Rate Limit Detection: stderr/stdout에서 rate limit 패턴 감지
+_detect_rate_limit() {
+    local output_file="$1"
+    [[ -f "$output_file" ]] || return 1
+    grep -qiE "rate.limit|rate_limit|429|hit your limit|you've hit|usage limit|too many|quota" "$output_file" 2>/dev/null
+}
+
 run_with_recovery() {
     local task_id="$1"
     shift
@@ -119,7 +127,9 @@ run_with_recovery() {
     local original_context_mode="${JARVIS_CONTEXT_MODE:-}"
 
     local result_tmp="/tmp/cs-recovery-${task_id}-$$.out"
+    local stderr_tmp="/tmp/cs-recovery-${task_id}-$$.err"
     local exit_code=0
+    local rate_limit_detected=false
 
     # ========================================
     # Stage 1: 원래 설정으로 실행
@@ -128,13 +138,19 @@ run_with_recovery() {
     _cs_log "$task_id" 1 "original_settings → RUNNING"
 
     exit_code=0
-    "$cmd" "${args[@]}" > "$result_tmp" 2>&1 || exit_code=$?
+    "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+
+    # Rate limit 감지 (early exit 전)
+    if _detect_rate_limit "$result_tmp" || _detect_rate_limit "$stderr_tmp"; then
+        rate_limit_detected=true
+        _cs_log "$task_id" 1 "original_settings → FAILED (RATE_LIMIT detected)"
+    fi
 
     if [[ $exit_code -eq 0 ]]; then
         _cs_log "$task_id" 1 "original_settings → SUCCESS"
         _cs_record_stat "$task_id" 1 "success"
         cat "$result_tmp"
-        rm -f "$result_tmp"
+        rm -f "$result_tmp" "$stderr_tmp"
         return 0
     fi
 
@@ -142,28 +158,58 @@ run_with_recovery() {
     _cs_record_stat "$task_id" 1 "failed"
 
     # ========================================
-    # Stage 2: 컨텍스트 축소 재시도
+    # Stage 1b (Rate Limit 특화): 길게 대기 후 재시도
+    # Rate limit이 감지되면 Stage 2를 건너뛰고 여기서 긴 대기 후 재시도
     # ========================================
-    sleep "$_CS_STAGE_DELAY"
-    export JARVIS_RECOVERY_STAGE=2
-    export JARVIS_CONTEXT_MODE="minimal"
-    _cs_log "$task_id" 2 "context_minimal → RUNNING"
+    if [[ "$rate_limit_detected" == "true" ]]; then
+        local rate_limit_wait=120  # 2분 대기 (retry-wrapper의 backoff와 보완)
+        _cs_log "$task_id" "1b" "rate_limit_wait → waiting ${rate_limit_wait}s before retry"
+        sleep "$rate_limit_wait"
 
-    exit_code=0
-    "$cmd" "${args[@]}" > "$result_tmp" 2>&1 || exit_code=$?
+        export JARVIS_RECOVERY_STAGE=2
+        export JARVIS_CONTEXT_MODE="minimal"
+        _cs_log "$task_id" 2 "context_minimal (after rate_limit_wait) → RUNNING"
 
-    if [[ $exit_code -eq 0 ]]; then
-        _cs_log "$task_id" 2 "context_minimal → SUCCESS"
-        _cs_record_stat "$task_id" 2 "recovered"
-        cat "$result_tmp"
-        rm -f "$result_tmp"
-        # 원래 환경 복원
-        export JARVIS_CONTEXT_MODE="$original_context_mode"
-        return 0
+        exit_code=0
+        "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+
+        if [[ $exit_code -eq 0 ]]; then
+            _cs_log "$task_id" 2 "context_minimal → SUCCESS (after rate_limit_wait)"
+            _cs_record_stat "$task_id" 2 "recovered"
+            cat "$result_tmp"
+            rm -f "$result_tmp" "$stderr_tmp"
+            export JARVIS_CONTEXT_MODE="$original_context_mode"
+            return 0
+        fi
+
+        _cs_log "$task_id" 2 "context_minimal → FAILED (exit=$exit_code, still rate_limited)"
+        _cs_record_stat "$task_id" 2 "failed"
+        rate_limit_detected=false  # 다음 stage로 진행하기 위해 리셋
+    else
+        # ========================================
+        # Stage 2: 컨텍스트 축소 재시도 (rate limit이 아닌 경우)
+        # ========================================
+        sleep "$_CS_STAGE_DELAY"
+        export JARVIS_RECOVERY_STAGE=2
+        export JARVIS_CONTEXT_MODE="minimal"
+        _cs_log "$task_id" 2 "context_minimal → RUNNING"
+
+        exit_code=0
+        "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+
+        if [[ $exit_code -eq 0 ]]; then
+            _cs_log "$task_id" 2 "context_minimal → SUCCESS"
+            _cs_record_stat "$task_id" 2 "recovered"
+            cat "$result_tmp"
+            rm -f "$result_tmp" "$stderr_tmp"
+            # 원래 환경 복원
+            export JARVIS_CONTEXT_MODE="$original_context_mode"
+            return 0
+        fi
+
+        _cs_log "$task_id" 2 "context_minimal → FAILED (exit=$exit_code)"
+        _cs_record_stat "$task_id" 2 "failed"
     fi
-
-    _cs_log "$task_id" 2 "context_minimal → FAILED (exit=$exit_code)"
-    _cs_record_stat "$task_id" 2 "failed"
 
     # ========================================
     # Stage 3: 모델 다운그레이드 재시도
@@ -183,13 +229,13 @@ run_with_recovery() {
         _cs_log "$task_id" 3 "model_downgrade(${original_model:-default}→${downgraded_model}) → RUNNING"
 
         exit_code=0
-        "$cmd" "${stage3_args[@]}" > "$result_tmp" 2>&1 || exit_code=$?
+        "$cmd" "${stage3_args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
 
         if [[ $exit_code -eq 0 ]]; then
             _cs_log "$task_id" 3 "model_downgrade → SUCCESS"
             _cs_record_stat "$task_id" 3 "recovered"
             cat "$result_tmp"
-            rm -f "$result_tmp"
+            rm -f "$result_tmp" "$stderr_tmp"
             export JARVIS_CONTEXT_MODE="$original_context_mode"
             return 0
         fi
@@ -215,13 +261,13 @@ run_with_recovery() {
     _cs_log "$task_id" 4 "prompt_simplified(context=none,model=${downgraded_model}) → RUNNING"
 
     exit_code=0
-    "$cmd" "${stage4_args[@]}" > "$result_tmp" 2>&1 || exit_code=$?
+    "$cmd" "${stage4_args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
 
     if [[ $exit_code -eq 0 ]]; then
         _cs_log "$task_id" 4 "prompt_simplified → SUCCESS"
         _cs_record_stat "$task_id" 4 "recovered"
         cat "$result_tmp"
-        rm -f "$result_tmp"
+        rm -f "$result_tmp" "$stderr_tmp"
         export JARVIS_CONTEXT_MODE="$original_context_mode"
         return 0
     fi
@@ -242,6 +288,6 @@ run_with_recovery() {
 
     # 마지막 실패 출력 전달 (circuit-breaker가 내용 분석에 사용할 수 있도록)
     cat "$result_tmp" 2>/dev/null || true
-    rm -f "$result_tmp"
+    rm -f "$result_tmp" "$stderr_tmp"
     return "$exit_code"
 }
