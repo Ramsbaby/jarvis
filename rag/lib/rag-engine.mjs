@@ -647,6 +647,9 @@ export class RAGEngine {
           continue;
         }
         this._embedCircuit.failCount++;
+        // [DIAG 2026-05-02] catch 블록 raw 에러 로깅 (이전엔 미기록 → 6개월 silent 누적)
+        // batch.length·err.name·err.message로 timeout vs HTTP error vs ECONNREFUSED 분류 가능.
+        console.warn(`[rag] Embed batch fail #${this._embedCircuit.failCount} (batchLen=${batch.length}): ${err.name || 'Error'}: ${(err.message || '').slice(0, 200)}`);
         if (this._embedCircuit.state === 'half-open' || this._embedCircuit.failCount >= EMBED_FAIL_THRESHOLD) {
           this._embedCircuit.state = 'open';
           this._embedCircuit.openedAt = Date.now();
