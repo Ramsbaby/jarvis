@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-04-29T21:17:05.217Z",
+  "generatedAt": "2026-05-02T05:04:41.944Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 110,
+  "totalTasks": 112,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -10,15 +10,15 @@
     "trend-lead": 8,
     "record-lead": 7,
     "library": 1,
-    "growth-lead": 5,
+    "growth-lead": 6,
     "brand-lead": 4,
-    "audit-lead": 20,
+    "audit-lead": 21,
     "secretary": 8,
     "uncategorized": 18
   },
   "typeDistribution": {
-    "prompt": 39,
-    "script": 71
+    "prompt": 40,
+    "script": 72
   },
   "groups": [
     {
@@ -1908,6 +1908,38 @@
           }
         },
         {
+          "id": "interview-harness-audit",
+          "name": "Interview Harness Audit (C1~C6)",
+          "schedule": "0 9 * * 1",
+          "scheduleHuman": "월요일 09:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "growth-lead",
+            "name": "인재개발실 (성장·학습)"
+          },
+          "discordChannel": "jarvis-interview",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "weekly",
+          "maxBudget": "0.05",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/interview-harness-audit.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/interview-harness-audit-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-interview-harness-audit-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "interview-ssot-audit",
           "name": "Interview SSoT Cross-Link Audit",
           "schedule": "0 9 * * 1",
@@ -2180,6 +2212,38 @@
           }
         },
         {
+          "id": "claude-md-audit",
+          "name": "CLAUDE.md 비대화·stale·dead-ref 일일 점검",
+          "schedule": "45 5 * * 1",
+          "scheduleHuman": "월요일 05:45",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": null,
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/claude-md-audit.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/claude-md-audit-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-claude-md-audit-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "code-auditor",
           "name": "코드 품질 감사",
           "schedule": "45 4 * * *",
@@ -2216,8 +2280,8 @@
           "name": "비용 캡 일일 감사",
           "schedule": "55 5 * * *",
           "scheduleHuman": "매일 05:55",
-          "type": "prompt",
-          "handler": "ask-claude.sh (LLM)",
+          "type": "script",
+          "handler": "cost-cap-audit.sh",
           "team": {
             "id": "audit-lead",
             "name": "QA실 (품질·감사·E2E)"
