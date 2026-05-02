@@ -405,6 +405,17 @@ async function main() {
     console.warn(`[rag-index] Pre-run refreshTable failed: ${e.message?.slice(0, 100)}`)
   );
 
+  // Pre-flight: Ollama 임베딩 가용성 검사 — 재시작 직후 모델 미로드 시 CPU/Disk 폭주 방지.
+  // 서킷브레이커 OPEN 상태로 13K+ 파일 zero-vector 인덱싱하면 CPU 100%+ + Disk 27MB/s 낭비 발생.
+  // (2026-05-02 사고: 맥미니 재시작 직후 Ollama 준비 전 실행 → 7회 연속 실패 → 서킷 OPEN → zero-vector 폭주)
+  try {
+    await engine.embed(['preflight']);
+    ragLog('[rag-index] Pre-flight: Ollama 임베딩 정상 ✓');
+  } catch (embedErr) {
+    ragLog(`[rag-index] SKIP: 임베딩 불가 (${embedErr.message.slice(0, 100)}) — Ollama 준비 전이거나 서킷브레이커 OPEN. 다음 실행 시 재시도.`);
+    process.exit(0);
+  }
+
   // Pre-run data probe: 실제 fragment 파일 접근 테스트.
   // refreshTable()은 manifest만 갱신하지만, 이 probe는 실제 데이터를 읽어봄.
   // getStats()가 놓치는 fragment 손상 (다른 fragment를 읽어서 통과) 선제 감지.

@@ -42,6 +42,16 @@ trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
 COMPACT_FLAG="${INFRA_HOME}/state/rag-compact-needed"
 COMPACT_SH="${RAG_ROOT}/scripts/rag-compact-safe.sh"
 
+# Ollama 임베딩 헬스체크 (재시작 직후 모델 미로드 시 CPU/Disk 폭주 방지)
+# 증상: 서킷브레이커 OPEN 상태로 13K+ 파일 zero-vector 인덱싱 → CPU 100%+ + Disk 27MB/s (2026-05-02 사고)
+EMBED_MODEL="snowflake-arctic-embed2"
+embed_check=$(curl -s --max-time 8 http://localhost:11434/api/embed \
+  -d "{\"model\":\"${EMBED_MODEL}\",\"input\":\"hi\"}" 2>/dev/null)
+if ! echo "$embed_check" | grep -q '"embeddings"'; then
+  echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] SKIP: Ollama 임베딩 불가 (모델 미로드 또는 서비스 다운) — 다음 실행 시 재시도" >> "$LOG"
+  exit 0
+fi
+
 # stdout은 rag-index.mjs 내부의 appendFileSync가 직접 파일에 씀.
 # 여기서 stdout도 리다이렉트하면 같은 줄이 2번 기록됨 — stderr만 연결.
 # OS 레벨 하드캡: fresh rebuild 4h + 여유 30m = 4.5h (내부 타임아웃 미발동 시 2차 방어)
