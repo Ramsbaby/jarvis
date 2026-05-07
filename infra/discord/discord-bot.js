@@ -33,6 +33,7 @@ import { initAlertBatcher, botAlerts } from './lib/alert-batcher.js';
 import { recordError, sendRecoveryApologies } from './lib/error-tracker.js';
 import { _loadPlaceholders, _savePlaceholders, cleanupOrphanPlaceholders } from './lib/streaming.js';
 import { closeRagEngine } from './lib/rag-helper.js';
+import { loadPlugins } from './lib/plugin-loader.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -185,6 +186,21 @@ async function registerSlashCommands(clientId, guildId) {
     log('warn', 'SSoT skill auto-registration failed (non-critical)', { error: err.message });
   }
 
+  // Plugin slash commands — 플러그인이 선언한 slashCommands를 기존 목록에 병합
+  // (중복 이름은 기존 커맨드가 우선)
+  {
+    const existingNames = new Set(commands.map((c) => c.name));
+    for (const p of loadedPlugins) {
+      for (const cmd of (p.slashCommands ?? [])) {
+        if (!existingNames.has(cmd.name)) {
+          commands.push(cmd);
+          existingNames.add(cmd.name);
+          log('info', `[PluginLoader] 슬래시 커맨드 등록: /${cmd.name} (플러그인: ${p.name})`);
+        }
+      }
+    }
+  }
+
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
@@ -214,9 +230,17 @@ let lastMessageAt = Date.now();
 let healthMonitorInterval = null;
 let l3PollInterval = null;
 
+// Plugin system — $BOT_HOME/plugins/ 에서 로드되는 외부 플러그인 목록
+// upstream 업데이트와 완전히 분리된 영역. loadPlugins()가 clientReady에서 채움.
+let loadedPlugins = [];
+const pluginCtx = { log, env: process.env, BOT_HOME };
+
 client.once('clientReady', async () => {
   log('info', `Logged in as ${client.user.tag}`, { id: client.user.id });
   try { rmSync('/tmp/jarvis-token-backoff', { force: true }); } catch {} // Reset token backoff on success
+
+  // Plugin system — 슬래시 커맨드 등록 전에 먼저 로드해야 plugin.slashCommands가 반영됨
+  loadedPlugins = await loadPlugins(BOT_HOME, pluginCtx);
 
   const guildId = process.env.GUILD_ID;
   if (guildId) {
@@ -452,6 +476,16 @@ client.once('clientReady', async () => {
 
   // L3 request polling (pick up bash-originated approval requests every 10s)
   l3PollInterval = setInterval(() => pollL3Requests(client), 10_000);
+
+  // Plugin onReady — 각 플러그인 초기화 (서버/폴러 시작 등)
+  for (const p of loadedPlugins) {
+    try {
+      await p.onReady?.(client, pluginCtx);
+      log('info', `[Plugin] onReady 완료: ${p.name}`);
+    } catch (e) {
+      log('error', `[Plugin] onReady 실패: ${p.name}`, { error: e.message });
+    }
+  }
 });
 
 const handlerState = { sessions, rateTracker, semaphore, activeProcesses, client };
@@ -487,6 +521,15 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // L3 approval buttons — check before slash commands
     if (await handleApprovalInteraction(interaction)) return;
+
+    // Plugin interaction handlers — true 반환 시 이후 핸들러 건너뜀
+    for (const p of loadedPlugins) {
+      try {
+        if (await p.onInteraction?.(interaction, pluginCtx)) return;
+      } catch (e) {
+        log('error', `[Plugin] onInteraction 실패: ${p.name}`, { error: e.message });
+      }
+    }
 
     await handleInteraction(interaction, interactionDeps);
   } catch (err) {
