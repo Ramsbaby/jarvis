@@ -391,6 +391,7 @@ AUDIT_LOGS=(
   "cost-cap-audit"
   "claude-md-audit"
   "mistake-pattern-analyzer"
+  "session-report"
 )
 AUDIT_SUMMARY=()
 # 감사 도구가 stale일 때 bootout → bootstrap으로 강제 재등록 시도.

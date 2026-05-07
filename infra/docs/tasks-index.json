@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-05-07T23:23:34.740Z",
+  "generatedAt": "2026-05-07T23:28:12.617Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 115,
+  "totalTasks": 116,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -14,11 +14,11 @@
     "brand-lead": 4,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 19
+    "uncategorized": 20
   },
   "typeDistribution": {
     "prompt": 42,
-    "script": 73
+    "script": 74
   },
   "groups": [
     {
@@ -3727,6 +3727,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-self-healing-digest-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "session-report",
+          "name": "토큰 사용 분석 HTML 리포트 (주간)",
+          "schedule": "50 23 * * 0",
+          "scheduleHuman": "일요일 23:50",
+          "type": "script",
+          "handler": "session-report.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": null,
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/session-report.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/session-report-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-session-report-*.log",
               "exists": false
             }
           }
