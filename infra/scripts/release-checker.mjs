@@ -141,6 +141,7 @@ function performAutoUpdate(projectRoot) {
   // live 경로 동기화
   const liveLib = join(BOT_HOME, 'discord', 'lib');
   const srcLib  = join(projectRoot, 'infra', 'discord', 'lib');
+  mkdirSync(liveLib, { recursive: true });
   execSync(`cp -R "${srcLib}/." "${liveLib}/"`, { stdio: 'pipe' });
   // npm install (의존성 변경 있을 수 있음)
   execSync('npm install --omit=dev 2>/dev/null || true', { cwd: projectRoot, stdio: 'pipe' });
