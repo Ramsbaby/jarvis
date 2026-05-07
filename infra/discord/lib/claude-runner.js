@@ -27,7 +27,7 @@ import {
 } from '../../lib/feedback-loop.mjs';
 import {
   buildIdentitySection, buildLanguageSection, buildPersonaSection,
-  buildPrinciplesSection, buildFormatCoreSection, buildFormatDetailSection,
+  buildPrinciplesSection, buildFormatCoreSection, buildFormatDetailSection, buildKarpathyChecklistSection,
   buildFormatSection, buildToolsSection, buildToolsCodeDetailSection,
   buildSafetySection, buildUserContextSection,
   buildOwnerPreferencesSection, buildOwnerPersonaSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
@@ -62,7 +62,7 @@ async function wikiAddFact(userId, fact, opts = {}) {
 // turn 종료 직후 setImmediate로 fire-and-forget. 응답 지연 0.
 // ─────────────────────────────────────────────────────────────────────────────
 export function triggerDiscordMistakeExtract(sessionSummaryFilePath) {
-  setImmediate(async () => {
+  setTimeout(async () => {
     try {
       const { spawn } = await import('node:child_process');
       const NODE_BIN = process.execPath;
@@ -552,11 +552,9 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
   ].join('\n');
 
   try {
-    // subprocess(claude -p)는 non-TTY 환경에서 무한 대기(exit 143)하므로 Anthropic API 직접 호출
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-
-    // 구독제(Claude Max) 환경: API 키 없음 → SDK query 경량 호출로 대체
-    if (!apiKey) {
+    // 2026-05-06 A안: ANTHROPIC_API_KEY fetch 경로 제거 (long-lived key 갱신 불가).
+    // SDK query 단일 경로 — Claude Code OAuth credentials.json 자동 사용.
+    {
       try {
         const { query } = await import('@anthropic-ai/claude-agent-sdk');
         let sdkResult = '';
@@ -622,74 +620,8 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
             }
           }
         }
-      } catch { /* Claude Max SDK 호출 실패 시 조용히 무시 */ }
+      } catch { /* SDK 호출 실패 시 조용히 무시 */ }
       return;
-    }
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODELS.small,
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-        output_schema: {
-          type: 'array',
-          items: { type: 'string' },
-        },
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!response.ok) throw new Error(`API ${response.status}`);
-    const data = await response.json();
-    const result = data?.content?.[0]?.text ?? '';
-
-    // Structured Outputs 또는 자유형 JSON 파싱 — [{fact, score}] 또는 ["string"] 호환
-    let facts = null;
-    try {
-      const parsed = JSON.parse(result.trim());
-      if (Array.isArray(parsed)) facts = parsed;
-    } catch { /* invalid JSON — skip */ }
-    if (!facts) {
-      log('debug', 'autoExtractMemory: no valid JSON array found', { userId, raw: result.slice(-150) });
-      return;
-    }
-
-    const FAMILY_JUNK_RE2 = /userid.*family|userid.*owner|userid.*boram|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조|\[20\d\d-\d\d-\d\d \d\d:\d\d:\d\d\]/i;
-    const IMPORTANCE_THRESHOLD2 = 3;
-    let saved = 0;
-    for (const item of facts) {
-      const fact = typeof item === 'string' ? item : item?.fact;
-      const score = typeof item === 'object' ? (item?.score ?? 5) : 5;
-      if (!fact || typeof fact !== 'string') continue;
-      if (fact.length <= 5 || fact.length >= 160) continue;
-      if (isFamilyChannel && FAMILY_JUNK_RE2.test(fact)) continue;
-      if (score < IMPORTANCE_THRESHOLD2) {
-        log('debug', 'Auto memory skipped (low importance)', { userId, fact: fact.slice(0, 60), score });
-        continue;
-      }
-      userMemory.addFact(userId, fact, 'discord-auto-extract');
-      wikiAddFact(userId, fact);
-      saved++;
-      log('info', 'Auto memory extracted', { userId, fact: fact.slice(0, 80), score });
-    }
-
-    // RAG 즉시 반영: user-memory 마크다운을 discord-history에 기록 → rag-watch 자동 감지
-    if (saved > 0) {
-      await _syncUserMemoryMarkdown(userId).catch((syncErr) =>
-        log('debug', 'User memory RAG sync failed (non-critical)', { userId, error: syncErr.message })
-      );
-      // 오너인 경우 owner-profile.md에도 자동 반영 (어느 채널이든)
-      if (OWNER_DISCORD_ID && userId === OWNER_DISCORD_ID) {
-        const savedFacts = facts.filter(f => typeof f === 'string' && f.length > 5 && f.length < 200);
-        await _syncOwnerProfileMarkdown(savedFacts).catch((e) =>
-          log('debug', 'Owner profile sync failed (non-critical)', { error: e?.message })
-        );
-      }
     }
   } catch (err) {
     log('debug', 'autoExtractMemory failed (non-critical)', { userId, error: err.message });
@@ -810,6 +742,9 @@ export async function* createClaudeSession(prompt, {
     // 2026-04-26: 코드 키워드 시 Serena 5단계 풀 가이드 주입 (월 누수 차단)
     harness.register('tools-code-detail', Tier.CONTEXTUAL, () => buildToolsCodeDetailSection(),
       /코드|함수|클래스|구현|버그|디버깅|리팩터|컴포넌트|모듈|메서드|클래스|\.tsx?|\.jsx?|\.mjs|\.py|jarvis-board|VirtualOffice|TeamBriefingPopup|canvas-draw|prompt-sections|claude-runner|handlers\.js/i);
+    // 2026-05-08: 카파시 4원칙 자기검열 (만성 결함 86+67+30+19 = 202건 직접 겨냥)
+    harness.register('karpathy-checklist', Tier.CONTEXTUAL, () => buildKarpathyChecklistSection(),
+      /코드|함수|클래스|구현|버그|디버깅|리팩터|컴포넌트|모듈|메서드|수정|고쳐|개선|배포|deploy|test|test 작성|\.tsx?|\.jsx?|\.mjs|\.py|\.sh/i);
   }
 
   // 토큰 예산 모드: Progressive Compaction에서 전달
