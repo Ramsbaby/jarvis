@@ -143,3 +143,6 @@ infra/scripts/interview-verifier-server.mjs
 infra/scripts/interview-ralph-runner.mjs
 .local-backup/
 infra/scripts/*.LOCKED.*
+
+# 2026-05-07: Topology Guard 차단 회피 (자동 백업 파일은 commit 제외)
+infra/bin/*.bak-*

@@ -39,7 +39,9 @@ const OWNER_COMPANIES = loadOwnerCompanies();
 const EMBEDDING_MODEL = 'snowflake-arctic-embed2';
 const EMBEDDING_DIM = 1024;
 const OLLAMA_EMBED_URL = 'http://localhost:11434/api/embed';
-const EMBED_BATCH_SIZE = 150;
+// 2026-05-07: batch 150 + 30s timeout 조합으로 timeout 폭주 발생 (Ollama가 150개 batch를 30초에 못 끝냄).
+// 환경변수로 튜닝 가능하게 분리, default 50 (Ollama가 60s 안에 안정 처리).
+const EMBED_BATCH_SIZE = Number(process.env.RAG_EMBED_BATCH_SIZE) || 50;
 const CHUNK_MAX_CHARS = 2000; // ~512 tokens
 const CHUNK_OVERLAP_LINES = 0.2; // 20% overlap
 const TABLE_NAME = 'documents';
@@ -628,7 +630,8 @@ export class RAGEngine {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: EMBEDDING_MODEL, input: batch }),
-          signal: AbortSignal.timeout(30_000),
+          // 2026-05-07: 30s → 60s 상향 (batch 50개 처리 안정 마진).
+          signal: AbortSignal.timeout(Number(process.env.RAG_EMBED_TIMEOUT_MS) || 60_000),
         });
         if (!res.ok) {
           throw new Error(`Ollama embed HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);

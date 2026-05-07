@@ -144,12 +144,32 @@ fi
 STAGED_FILES=$(git diff --cached --name-only | wc -l | tr -d ' ')
 
 # ── git commit ───────────────────────────────────────────────
+# 2026-05-07: pathspec 한정 commit으로 변경 + valid path 필터링.
+# 사고 사례: 사용자가 다른 작업 중에 staged한 PII 파일들(script-naturalize.py 등)이
+# 같이 commit되려 해서 Privacy Guard가 차단 → 8일 연속 실패. STAGE_PATHS 화이트리스트
+# 내부 staged 변경만 commit하도록 path 한정. 외부 staged는 영향 없음 (사용자 작업 보호).
+# git commit -- 뒤에 매칭 0개인 pathspec이 섞이면 "did not match any file(s)"로 전체 fail이라
+# staged 변경 있는 path만 commit args로 추림.
 COMMIT_MSG="[jarvis-auto] batch commit $(date '+%Y-%m-%d %H:%M')"
 
-if git commit -m "${COMMIT_MSG}" --no-gpg-sign -q 2>/dev/null; then
-    log "INFO" "커밋 완료: ${STAGED_FILES}개 파일 — \"${COMMIT_MSG}\""
+VALID_PATHS=()
+for p in "${STAGE_PATHS[@]}"; do
+    if git diff --cached --name-only -- "$p" 2>/dev/null | grep -q .; then
+        VALID_PATHS+=("$p")
+    fi
+done
+
+if [[ ${#VALID_PATHS[@]} -eq 0 ]]; then
+    log "INFO" "화이트리스트 내 staged 변경 없음 — skip (외부 staged 파일은 사용자 작업으로 보호)"
+    exit 0
+fi
+
+COMMIT_ERR=$(git commit -m "${COMMIT_MSG}" --no-gpg-sign -q -- "${VALID_PATHS[@]}" 2>&1)
+COMMIT_EXIT=$?
+if [[ ${COMMIT_EXIT} -eq 0 ]]; then
+    COMMITTED_COUNT=$(git diff HEAD~1 --name-only 2>/dev/null | wc -l | tr -d ' ')
+    log "INFO" "커밋 완료: ${COMMITTED_COUNT}개 파일 (${#VALID_PATHS[@]}개 path) — \"${COMMIT_MSG}\""
 else
-    EXIT=$?
-    log "ERROR" "git commit 실패 (exit ${EXIT})"
-    exit "${EXIT}"
+    log "ERROR" "git commit 실패 (exit ${COMMIT_EXIT}): $(echo "${COMMIT_ERR}" | head -3 | tr '\n' ' ')"
+    exit "${COMMIT_EXIT}"
 fi
