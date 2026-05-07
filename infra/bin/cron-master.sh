@@ -390,6 +390,7 @@ AUDIT_LOGS=(
   "tasks-prompt-path-audit"
   "cost-cap-audit"
   "claude-md-audit"
+  "mistake-pattern-analyzer"
 )
 AUDIT_SUMMARY=()
 # 감사 도구가 stale일 때 bootout → bootstrap으로 강제 재등록 시도.

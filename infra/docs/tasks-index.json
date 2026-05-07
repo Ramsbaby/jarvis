@@ -1,24 +1,24 @@
 {
-  "generatedAt": "2026-05-02T05:04:41.944Z",
+  "generatedAt": "2026-05-07T23:23:34.740Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 112,
+  "totalTasks": 115,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
     "infra-lead": 17,
     "finance": 8,
     "trend-lead": 8,
-    "record-lead": 7,
+    "record-lead": 8,
     "library": 1,
     "growth-lead": 6,
     "brand-lead": 4,
-    "audit-lead": 21,
+    "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 18
+    "uncategorized": 19
   },
   "typeDistribution": {
-    "prompt": 40,
-    "script": 72
+    "prompt": 42,
+    "script": 73
   },
   "groups": [
     {
@@ -1604,6 +1604,38 @@
           }
         },
         {
+          "id": "rag-lancedb-compact",
+          "name": "RAG LanceDB 주간 컴팩트",
+          "schedule": "15 4 * * 0",
+          "scheduleHuman": "일요일 04:15",
+          "type": "script",
+          "handler": "rag-lancedb-compact.sh",
+          "team": {
+            "id": "record-lead",
+            "name": "데이터실 (메모리·RAG 백엔드)"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": "매주 일요일 04:15 KST. LanceDB fragment/version 컴팩트 + prune. 2026-05-07 누적 사고(208 fragments / 169 versions / 7.7GB → 1/1/3.7GB) 재발 방지용. 검색 속도 6배 향상 부수 효과.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/rag-lancedb-compact.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/rag-lancedb-compact-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-rag-lancedb-compact-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "record-daily",
           "name": "기록팀 일일 마감 (Record)",
           "schedule": "30 22 * * *",
@@ -1927,15 +1959,15 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/interview-harness-audit.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/interview-harness-audit-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-interview-harness-audit-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },
@@ -1963,11 +1995,11 @@
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/interview-ssot-audit-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-interview-ssot-audit-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },
@@ -2235,11 +2267,11 @@
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/claude-md-audit-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-claude-md-audit-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },
@@ -2591,6 +2623,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-log-size-audit-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "qa-consistency-audit",
+          "name": "Q&A 정합성 감사 (answerGuide ↔ approvedAnswer)",
+          "schedule": "0 9 * * 1",
+          "scheduleHuman": "월요일 09:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "audit-lead",
+            "name": "QA실 (품질·감사·E2E)"
+          },
+          "discordChannel": "jarvis-interview",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "weekly",
+          "maxBudget": "0.05",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/qa-consistency-audit.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/qa-consistency-audit-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-qa-consistency-audit-*.log",
               "exists": false
             }
           }
@@ -3535,6 +3599,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-mistake-extractor-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "mistake-pattern-analyzer",
+          "name": "오답노트 반복 패턴 일일 분석",
+          "schedule": "30 3 * * *",
+          "scheduleHuman": "매일 03:30",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": null,
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/mistake-pattern-analyzer.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/mistake-pattern-analyzer-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-mistake-pattern-analyzer-*.log",
               "exists": false
             }
           }
