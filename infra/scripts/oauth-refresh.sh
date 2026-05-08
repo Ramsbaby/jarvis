@@ -128,8 +128,11 @@ if [[ -z "${ACCESS_TOKEN}" ]]; then
   log "ERROR: 갱신 실패 — 응답: ${RESPONSE:0:200}"
   # rate_limit_error는 알림 발송 (수동 재로그인 필요할 수 있음)
   if echo "${RESPONSE}" | grep -q "rate_limit_error"; then
+    # alert.sh 시그니처: <level> <title> <message> [fields_json]
     bash "${BOT_HOME}/scripts/alert.sh" \
-      "⚠️ OAuth 갱신 rate_limit — 수동 /login 필요할 수 있음 (만료: ${REMAINING_SECS}s 남음)" \
+      warning \
+      "OAuth 갱신 rate_limit" \
+      "수동 /login 필요할 수 있음 (만료까지 ${REMAINING_SECS}s 남음)" \
       2>/dev/null || true
   fi
   exit 1
