@@ -127,7 +127,7 @@ classify_error() {
     if [[ -f "$stderr_file" ]]; then check_files+=("$stderr_file"); fi
     if grep -qi "rate_limit\|rate limit\|429\|hit your limit\|you've hit\|usage limit" "${check_files[@]}" 2>/dev/null; then echo "RATE_LIMITED"
     elif grep -qi "overloaded\|503\|capacity" "${check_files[@]}" 2>/dev/null; then echo "OVERLOADED"
-    elif grep -qi "authentication\|unauthorized\|401" "${check_files[@]}" 2>/dev/null; then echo "AUTH_ERROR"
+    elif grep -qiE "authentication|unauthorized|401|invalid api key|fix external api key|not logged in" "${check_files[@]}" 2>/dev/null; then echo "AUTH_ERROR"
     elif grep -qi "context_length\|too.long\|too.large" "${check_files[@]}" 2>/dev/null; then echo "TOO_LONG"
     elif grep -qi "no such file or directory\|command not found" "${check_files[@]}" 2>/dev/null; then echo "SCRIPT_MISSING"
     elif grep -qi "budget exceeded\|max.budget\|예산 초과\|예산초과\|budget.cap" "${check_files[@]}" 2>/dev/null; then echo "BUDGET_EXCEEDED"
