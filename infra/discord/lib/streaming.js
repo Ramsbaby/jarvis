@@ -997,6 +997,21 @@ export class StreamingMessage {
       log('warn', 'Markdown table detected — converted to bullet list for Discord mobile', { channelId: this.channelId });
       content = converted;
     }
+
+    // [2026-05-08 G6 시스템 가드] chunk 분할로 테이블 경계가 잘려 위 변환이 못 잡은 경우의 최후 안전망.
+    // tableToList는 헤더+구분선+데이터 3개 라인이 한 chunk에 모여야 작동하는데
+    // streaming chunk 분할 시 일부만 들어오면 우회됨. 사고 사례: 사용자가 깨진 테이블 신고 (5/8).
+    // 이 단계에서 `|...|...|` 잔존하면 라인 단위로 강제 bullet 변환.
+    if (/^\|.+\|.+\|/m.test(content)) {
+      log('warn', 'Markdown table residue after format pipeline — forcing bullet escape', { channelId: this.channelId });
+      content = content.replace(/^\|(.+)\|$/gm, (match, inner) => {
+        if (/^[\s:|-]*-+[\s:|-]*$/.test(inner)) return '';  // 구분선 제거
+        const cells = inner.split('|').map(c => c.trim()).filter(Boolean);
+        if (cells.length === 0) return match;
+        const [first, ...rest] = cells;
+        return rest.length > 0 ? `- **${first}** · ${rest.join(' · ')}` : `- **${first}**`;
+      }).replace(/\n{3,}/g, '\n\n');
+    }
     // Safety: formatForDiscord/convertTablesToList may expand content beyond Discord 2000 limit.
     // 트런케이션 대신 분할 전송 — 내용 유실 없음.
     // 1990 → 1800 하향: 헤딩/단락 경계를 더 쉽게 찾도록 여유 확보 (2026-04-20).
