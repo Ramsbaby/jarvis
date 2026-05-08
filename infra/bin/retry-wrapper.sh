@@ -192,7 +192,22 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
     if [[ "$classification" == "retryable" && "$exit_code" -ne 0 ]]; then
         stdout_class=$(classify_error "$RESULT_TMP")
         case "$stdout_class" in
-            AUTH_ERROR|TOO_LONG)
+            AUTH_ERROR)
+                # G5 (2026-05-08): 첫 attempt AUTH_ERROR → oauth-refresh --force 동기 호출 후 재시도.
+                # 두 번째 attempt에서도 AUTH_ERROR면 진짜 인증 결함이라 non-retryable 유지.
+                # 6일 연속 morning-standup AUTH 실패의 근본 원인 차단.
+                if [[ "$attempt" -eq 1 ]]; then
+                    printf '[%s] [%s] [AUTH_ERROR] G5 — oauth-refresh.sh --force 동기 호출 (attempt=1)\n' \
+                        "$(date '+%F %H:%M:%S')" "$TASK_ID" \
+                        >> "${BOT_HOME}/logs/cron.log"
+                    /bin/bash "${BOT_HOME}/scripts/oauth-refresh.sh" --force \
+                        >> "${BOT_HOME}/logs/oauth-refresh.log" 2>&1 || true
+                    classification="retryable"
+                else
+                    classification="non-retryable"
+                fi
+                ;;
+            TOO_LONG)
                 classification="non-retryable"
                 ;;
             RATE_LIMITED)

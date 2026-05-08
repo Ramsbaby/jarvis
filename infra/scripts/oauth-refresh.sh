@@ -64,9 +64,22 @@ REMAINING_SECS=$(( (EXPIRES_AT_MS - NOW_MS) / 1000 ))
 
 log "토큰 만료까지 ${REMAINING_SECS}초 남음 (임계값: ${RENEW_THRESHOLD_SECS}초)"
 
-if (( REMAINING_SECS > RENEW_THRESHOLD_SECS )); then
+# G5 (2026-05-08): --force 플래그 시 임계값 우회 강제 갱신
+# retry-wrapper가 AUTH_ERROR 감지 후 즉시 호출하는 진입점
+FORCE_REFRESH=0
+for arg in "$@"; do
+  case "$arg" in
+    --force|-f) FORCE_REFRESH=1 ;;
+  esac
+done
+
+if (( REMAINING_SECS > RENEW_THRESHOLD_SECS )) && (( FORCE_REFRESH == 0 )); then
   log "갱신 불필요 — 여유 있음"
   exit 0
+fi
+
+if (( FORCE_REFRESH == 1 )); then
+  log "FORCE_REFRESH=1 — AUTH_ERROR 트리거로 임계값 무시 강제 갱신"
 fi
 
 log "갱신 시작 (만료 ${REMAINING_SECS}초 전)"
