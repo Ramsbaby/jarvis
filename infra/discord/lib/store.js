@@ -9,6 +9,12 @@ import { log } from './claude-runner.js';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7일
 const PERSIST_DEBOUNCE_MS = 150;
 
+// 부팅 시 자동 청소 임계 (좀비 세션 차단)
+// 사고 사례 (2026-05-08): 522d6b74 세션이 14일간 매번 재사용되며 tokenCount 13,329 누적,
+//   호출 1회당 $1,685 발생. updatedAt 갱신되어 7일 게이트로는 못 잡음 → tokenCount 게이트 필수.
+const SESSIONS_MAX_AGE_DAYS = Number(process.env.SESSIONS_MAX_AGE_DAYS || 7);
+const SESSIONS_MAX_TOKEN_COUNT = Number(process.env.SESSIONS_MAX_TOKEN_COUNT || 5000);
+
 export class SessionStore {
   constructor(filePath) {
     this.filePath = filePath;
@@ -50,6 +56,32 @@ export class SessionStore {
       } else if (v && typeof v === 'object') {
         this.data[k] = v;
       }
+    }
+
+    // 부팅 시 좀비 세션 자동 청소 (2026-05-08 신설)
+    // (1) tokenCount 임계 초과 → 컨텍스트 비대 회전 강제
+    // (2) age 임계 초과 → stale 매핑 청소
+    const now = Date.now();
+    const ageThresholdMs = SESSIONS_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+    const pruned = [];
+    for (const [k, v] of Object.entries(this.data)) {
+      const tokenCount = v.tokenCount ?? 0;
+      const ageMs = now - (v.updatedAt ?? 0);
+      if (tokenCount > SESSIONS_MAX_TOKEN_COUNT) {
+        pruned.push({ key: k, id: v.id, reason: 'tokenCount', value: tokenCount });
+        delete this.data[k];
+      } else if (ageMs > ageThresholdMs) {
+        pruned.push({ key: k, id: v.id, reason: 'age', value: `${(ageMs / 86400000).toFixed(1)}d` });
+        delete this.data[k];
+      }
+    }
+    if (pruned.length > 0) {
+      log('info', `SessionStore: ${pruned.length}개 좀비 매핑 청소 (boot prune)`, {
+        threshold_token: SESSIONS_MAX_TOKEN_COUNT,
+        threshold_age_days: SESSIONS_MAX_AGE_DAYS,
+        pruned,
+      });
+      this._flushSync();  // 즉시 디스크 반영 — 다음 _flushSync(exit)로 부활 방지
     }
   }
 
