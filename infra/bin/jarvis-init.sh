@@ -123,12 +123,13 @@ echo -e "${BOLD}Generating configuration...${NC}"
 # --- discord/.env ---
 ENV_FILE="${JARVIS_HOME}/discord/.env"
 if [[ -n "$DISCORD_TOKEN" ]]; then
+    # 2026-05-08: ANTHROPIC_API_KEY 라인 제거 — OAuth 전용 정책 (jarvis-ethos.md Iron Law 4.1)
     cat > "$ENV_FILE" <<EOF
 BOT_LOCALE=en
 DISCORD_TOKEN=${DISCORD_TOKEN}
 GUILD_ID=${GUILD_ID}
 CHANNEL_IDS=${CHANNEL_ID}
-${ANTHROPIC_KEY:+ANTHROPIC_API_KEY=${ANTHROPIC_KEY}}
+# Claude 인증: OAuth (~/.claude/.credentials.json) — ANTHROPIC_API_KEY 미사용
 EOF
     chmod 600 "$ENV_FILE"
     success "discord/.env created"

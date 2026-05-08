@@ -43,7 +43,8 @@ fi
 
 # is_error:false 매칭 (인증·실행 모두 성공)
 if echo "$RESULT" | grep -q '"is_error":false'; then
-    log "✅ 토큰 헬스 OK (key prefix: ${ANTHROPIC_API_KEY:0:18}...)"
+    # 2026-05-08: ANTHROPIC_API_KEY 출력 제거 — OAuth 전용 정책상 무의미하고 line 17에서 unset됨
+    log "✅ 토큰 헬스 OK (OAuth credentials.json 검증 통과)"
     exit 0
 fi
 
