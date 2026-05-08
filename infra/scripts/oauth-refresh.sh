@@ -26,6 +26,21 @@ fi
 echo $$ > "$_OAUTH_PID"
 trap 'rm -f "$_OAUTH_PID"' EXIT
 
+# G5/B (2026-05-08): 쿨다운 가드 — 60초 이내 재호출 차단
+# 다채널(crontab + Claude CLI 자체 + retry-wrapper G5) 동시 갱신 시도 → Anthropic rate_limit 만성 발생 차단
+# --force 플래그도 쿨다운에 막힘 (방금 갱신한 토큰을 즉시 다시 갱신할 의미 없음)
+_OAUTH_LAST_SUCCESS="/tmp/jarvis-oauth-refresh.last-success"
+_OAUTH_COOLDOWN_SECS=60
+if [[ -f "$_OAUTH_LAST_SUCCESS" ]]; then
+  _last=$(cat "$_OAUTH_LAST_SUCCESS" 2>/dev/null || echo "0")
+  _now=$(date +%s)
+  _delta=$((_now - _last))
+  if (( _delta < _OAUTH_COOLDOWN_SECS )); then
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh] 쿨다운 스킵 — 직전 성공 후 ${_delta}초 < ${_OAUTH_COOLDOWN_SECS}초 (다채널 중복 호출 방어)" >&2
+    exit 0
+  fi
+fi
+
 CREDENTIALS_FILE="${HOME}/.claude/.credentials.json"
 TOKEN_URL="https://platform.claude.com/v1/oauth/token"
 CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
@@ -138,6 +153,9 @@ renameSync(tmp, path);
 JSEOF
 
 log "✅ 갱신 완료 — 새 만료: $(node -e "process.stdout.write(new Date(${NEW_EXPIRES_AT}).toISOString())")"
+
+# 쿨다운 가드용 성공 시각 기록 (다음 호출이 60초 이내면 스킵)
+date +%s > "$_OAUTH_LAST_SUCCESS"
 
 # 봇 재시작 — 활성 세션 중이면 대화 완료 후 재시작 (graceful defer)
 ACTIVE_SESSION_FILE="${BOT_HOME}/state/active-session"
