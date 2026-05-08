@@ -134,7 +134,7 @@ async function sendDiscordNotification(token, channelId, embed) {
 
 function performAutoUpdate(projectRoot) {
   log('info', 'auto-update: git pull 시작');
-  execSync('git fetch origin && git merge --ff-only origin/main', {
+  execSync('git fetch origin && git reset --hard origin/main', {
     cwd: projectRoot, stdio: 'pipe',
   });
   log('info', 'auto-update: 파일 동기화');
