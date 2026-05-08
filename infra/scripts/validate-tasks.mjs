@@ -139,6 +139,80 @@ if (missingAddedAt.length > 0) {
   }
 }
 
+// ── G3: SSoT cross-check (2026-05-07 v1, 2026-05-08 재구현) ───────────────────
+// 외부 진입점(crontab / Library/LaunchAgents)에 tasks.json과 동일 ID 존재 시
+// 양쪽 등록 = 중복 실행 위험. 기본 WARN-only, JARVIS_VALIDATE_STRICT=1로 reject 전환.
+// 사고 사례: 2026-05-07 24건 crontab 중복 실행 → fail_24h 226건 본진. 5/7 적용 후
+// 5/8 새벽 다른 세션 작업으로 코드 사라짐 → 재구현.
+// 참조: ~/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md 4-A·4-B
+//
+// 예외 카테고리(SSoT 등재 — verify B2 fix): meta-audit / system-monitor /
+// retention/archive / bot-runner는 plist 직접 작성 OK이므로 위반에서 제외.
+
+const STRICT = process.env.JARVIS_VALIDATE_STRICT === '1';
+const violations = [];
+
+// crontab -l 스캔 — wrapper 호출(bot-cron.sh / jarvis-cron.sh) 또는 스크립트 직접 호출이
+// tasks.json ID와 매칭되면 양쪽 등록 위반.
+try {
+  const { execSync } = await import('child_process');
+  const ctOut = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8' });
+  for (const line of ctOut.split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#') || t.startsWith('@reboot')) continue;
+    if (/^\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(find|pgrep|kill|true)\b/.test(t)) continue;
+    const w = t.match(/(?:bot-cron\.sh|jarvis-cron\.sh)\s+(\S+)/);
+    if (w && ids.has(w[1])) {
+      violations.push({ source: 'crontab', id: w[1], reason: 'wrapper-call' });
+      continue;
+    }
+    const s = t.match(/\/([a-zA-Z0-9-_]+)\.(?:sh|mjs|py|js)\b/);
+    if (s && ids.has(s[1])) {
+      violations.push({ source: 'crontab', id: s[1], reason: 'script-id-match' });
+    }
+  }
+} catch (e) {
+  log(`SSoT cross-check (crontab) 스킵 — ${e.message}`);
+}
+
+// LaunchAgents 스캔 — plist 내부에 wrapper(bot-cron.sh / jarvis-cron.sh) 호출이 있으면
+// SSoT 호환(정상). wrapper 없는 직접 실행 plist는 위반.
+try {
+  const { readdirSync, readFileSync: rfs } = await import('fs');
+  const laDir = join(homedir(), 'Library/LaunchAgents');
+  for (const f of readdirSync(laDir)) {
+    const m = f.match(/^(?:ai|com)\.jarvis\.(.+)\.plist$/);
+    if (!m) continue;
+    if (!ids.has(m[1])) continue;
+    const plistPath = join(laDir, f);
+    let content = '';
+    try { content = rfs(plistPath, 'utf-8'); } catch { continue; }
+    if (/bot-cron\.sh|jarvis-cron\.sh/.test(content)) continue;
+    violations.push({ source: 'plist', id: m[1], reason: 'direct-exec-bypass-ssot' });
+  }
+} catch (e) {
+  log(`SSoT cross-check (plist) 스킵 — ${e.message}`);
+}
+
+if (violations.length > 0) {
+  log(`⚠️  SSoT cross-check — 외부 진입점에 동일 ID ${violations.length}건 발견:`);
+  const byId = {};
+  for (const v of violations) {
+    byId[v.id] = byId[v.id] || [];
+    byId[v.id].push(`${v.source}:${v.reason}`);
+  }
+  for (const [id, sources] of Object.entries(byId)) {
+    log(`  · ${id} → ${sources.join(', ')}`);
+  }
+  log(`  해결: 외부 진입점(crontab/plist)에서 제거 후 tasks.json만 유지.`);
+  log(`  참조: ~/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md`);
+  if (STRICT) {
+    log(`  STRICT 모드 — exit 1 (JARVIS_VALIDATE_STRICT=1)`);
+    process.exit(1);
+  }
+  log(`  WARN-only 모드 — 안정화 후 JARVIS_VALIDATE_STRICT=1 전환 권고.`);
+}
+
 // ── 통과 ─────────────────────────────────────────────────────────────────────
-log(`PASS — ${tasks.length}개 태스크 검증 완료`);
+log(`PASS — ${tasks.length}개 태스크 검증 완료${violations.length > 0 ? ` (cross-check 위반 ${violations.length}건 WARN)` : ''}`);
 process.exit(0);
