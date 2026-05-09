@@ -150,7 +150,7 @@ async function generateHypotheticalDoc(query, llmClient) {
   if (!llmClient) return query; // fallback
   try {
     const resp = await llmClient.chat({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama3.2:latest',
       messages: [{
         role: 'user',
         content: `다음 질문에 대한 간결한 답변을 2-3문장으로 작성하세요. 답변만 출력하세요.\n\n질문: ${query}`
