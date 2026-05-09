@@ -108,8 +108,9 @@ log "보고서 저장: $REPORT"
 # 50건 초과 시 Discord #jarvis-system 경고 (noise 방지)
 if [[ "$STALE_COUNT" -gt 50 ]] && [[ -f "$ALERT_SCRIPT" ]]; then
   bash "$ALERT_SCRIPT" \
-    "🧠 RAG 스테일 스캔: 30일 미참조 청크 ${STALE_COUNT}건 발견. 검토 권장." \
-    "jarvis-system" || true
+    "warning" \
+    "RAG 스테일 스캔" \
+    "30일 미참조 청크 ${STALE_COUNT}건 발견. 검토 권장." || true
 fi
 
 log "=== RAG 스테일 스캔 완료 ==="
