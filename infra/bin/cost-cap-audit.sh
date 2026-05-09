@@ -41,6 +41,7 @@ NO_CAP=$(jq '[.tasks[] | select(.maxBudget == null)] | length' "$TASKS_JSON")
 ZERO_CAP=$(jq --arg p "$SCRIPT_ONLY_PATTERN" '
   [.tasks[]
     | select((.maxBudget | tostring | tonumber? // null) == 0)
+    | select((.prompt // "") != "")
     | select((.prompt // "") | test($p) | not)
   ] | length
 ' "$TASKS_JSON")
@@ -50,6 +51,7 @@ NO_CAP_IDS=$(jq -r '[.tasks[] | select(.maxBudget == null) | .id] | join(", ")' 
 ZERO_CAP_IDS=$(jq -r --arg p "$SCRIPT_ONLY_PATTERN" '
   [.tasks[]
     | select((.maxBudget | tostring | tonumber? // null) == 0)
+    | select((.prompt // "") != "")
     | select((.prompt // "") | test($p) | not)
     | .id
   ] | join(", ")
