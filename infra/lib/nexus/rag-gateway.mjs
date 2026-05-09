@@ -8,6 +8,24 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { BOT_HOME, mkResult, mkError, logTelemetry } from './shared.mjs';
 
 // ---------------------------------------------------------------------------
+// HyDE: Ollama(llama3.2)로 가상 답변을 생성 후 임베딩 검색 품질 향상
+// 완전 로컬 ($0 비용). 실패 시 원본 쿼리로 자동 폴백.
+// ---------------------------------------------------------------------------
+const OLLAMA_BASE = process.env.OLLAMA_HOST || 'http://localhost:11434';
+const _ollamaHydeClient = {
+  async chat({ model = 'llama3.2:latest', messages, max_tokens = 150, temperature = 0.3 }) {
+    const resp = await fetch(`${OLLAMA_BASE}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, max_tokens, temperature, stream: false }),
+      signal: AbortSignal.timeout(5000), // 5초 타임아웃 — 검색 지연 최소화
+    });
+    if (!resp.ok) throw new Error(`Ollama HyDE HTTP ${resp.status}`);
+    return resp.json();
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Access count tracking — ~/jarvis/runtime/rag/access-log.json
 // { "source:chunkIndex": { count: N, lastAccessed: ISO } }
 // ---------------------------------------------------------------------------
@@ -83,7 +101,10 @@ export async function handle(name, args, start) {
 
   try {
     const rag = await getRAGEngine();
-    const results = await rag.search(query.trim(), Math.min(Number(limit) || 5, 10));
+    const results = await rag.search(query.trim(), Math.min(Number(limit) || 5, 10), {
+      useHyde: true,
+      llmClient: _ollamaHydeClient,
+    });
     if (results.length === 0) {
       logTelemetry('rag_search', Date.now() - start, { results: 0, query });
       return mkResult(`"${query}" 관련 기억 없음.`, { results: 0, query });

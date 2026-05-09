@@ -16,3 +16,24 @@ ultrathink
 - 최근 크론 FAILED 3건 초과: source ~/jarvis/runtime/lib/event-bus.sh && emit_event 'task.failed' '{"count":"3+"}'
 - LaunchAgent(discord-bot/watchdog) PID 없음: source ~/jarvis/runtime/lib/event-bus.sh && emit_event 'system.alert' '{"service":"discord-bot"}'
 이상 없으면 이벤트 발행 없음.
+
+## 보고서 품질 루브릭 (감사팀 자동 평가 기준)
+보고서 본문 작성 후 아래 4개 항목을 자가 체크하여 보고서 **마지막 줄**에 다음 형식으로 표기할 것:
+`루브릭: N/4 | ✅항목1 ❌항목2 ...`
+
+- **[R1]** 점검 항목 5개 모두 수치 또는 명확한 상태값 포함 (예: "디스크 63% — 정상")
+- **[R2]** WARN/HIGH 항목은 근본 원인 1줄 이상 명시 (이상 없으면 자동 ✅)
+- **[R3]** 액션 포인트 최소 1개 명시 (이상 없으면 "정상 유지" 허용)
+- **[R4]** shared-inbox 확인 결과 기재 (메시지 수 또는 "신규 없음")
+
+루브릭 4/4이면 감사팀 자동 평가 A등급. 2/4 이하이면 다음 날 재점검 대상.
+
+## 팀 간 공유 파이프라인
+이상 항목 발견 시 아래 명령으로 shared-inbox에도 기록하여 타 팀장이 참조할 수 있게 한다:
+```bash
+INBOX=~/jarvis/runtime/rag/teams/shared-inbox/infra-alerts.md
+echo "## $(date '+%Y-%m-%d %H:%M KST') [infra] 이상 감지" >> "$INBOX"
+echo "- 항목: <이상 내용 한 줄>" >> "$INBOX"
+echo "" >> "$INBOX"
+```
+정상이면 shared-inbox 기록 생략.
