@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-05-07T23:28:12.617Z",
+  "generatedAt": "2026-05-10T06:49:52.522Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 116,
+  "totalTasks": 119,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -14,11 +14,11 @@
     "brand-lead": 4,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 20
+    "uncategorized": 23
   },
   "typeDistribution": {
-    "prompt": 42,
-    "script": 74
+    "prompt": 43,
+    "script": 76
   },
   "groups": [
     {
@@ -271,7 +271,7 @@
             "name": "대표실 (CEO·이사회·KPI)"
           },
           "discordChannel": "jarvis-ceo",
-          "model": "claude-opus-4-6",
+          "model": "claude-opus-4-7",
           "priority": "daily",
           "maxBudget": "0.80",
           "disabled": true,
@@ -367,7 +367,7 @@
             "name": "대표실 (CEO·이사회·KPI)"
           },
           "discordChannel": "jarvis-ceo",
-          "model": "claude-opus-4-6",
+          "model": "claude-opus-4-7",
           "priority": "daily",
           "maxBudget": "1.00",
           "disabled": true,
@@ -1479,7 +1479,7 @@
             "name": "전략기획실 (트렌드·뉴스)"
           },
           "discordChannel": "jarvis",
-          "model": "claude-haiku-4-5-20251001",
+          "model": "claude-opus-4-7",
           "priority": "daily",
           "maxBudget": "0.50",
           "disabled": false,
@@ -1623,11 +1623,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/rag-lancedb-compact.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/rag-lancedb-compact-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-rag-lancedb-compact-*.log",
@@ -3188,6 +3188,38 @@
       },
       "tasks": [
         {
+          "id": "age-mem-discard",
+          "name": "AgeMem DISCARD — 고아/스테일 RAG 청크 정리",
+          "schedule": "0 2 * * 4",
+          "scheduleHuman": "목요일 02:00",
+          "type": "script",
+          "handler": "age-mem-discard.mjs",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-sonnet-4-6",
+          "priority": "weekly",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/age-mem-discard.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/age-mem-discard-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-age-mem-discard-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "backup-retention-daily",
           "name": "백업 보존 정책 실행",
           "schedule": "0 4 * * *",
@@ -3627,11 +3659,11 @@
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/mistake-pattern-analyzer-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-mistake-pattern-analyzer-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },
@@ -3663,6 +3695,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-plist-bypass-autofix-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "rag-stale-scan",
+          "name": "RAG 스테일 청크 주간 스캔",
+          "schedule": "0 3 * * 0",
+          "scheduleHuman": "일요일 03:00",
+          "type": "script",
+          "handler": "rag-stale-scan.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "weekly",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/rag-stale-scan.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/rag-stale-scan-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-rag-stale-scan-*.log",
               "exists": false
             }
           }
@@ -3791,6 +3855,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-unpause-rebound-check-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "weekly-dream-insight",
+          "name": "주간 패턴 드림 인사이트 (Dreams-스타일)",
+          "schedule": "0 4 * * 1",
+          "scheduleHuman": "월요일 04:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": "claude-sonnet-4-6",
+          "priority": "weekly",
+          "maxBudget": "1.50",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/weekly-dream-insight.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/weekly-dream-insight-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-weekly-dream-insight-*.log",
               "exists": false
             }
           }
