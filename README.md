@@ -7,6 +7,10 @@
 > **🔧 Refactor Notice (2026-04-20)**: Modules `career-*` / `job-*` were renamed to `profile-*` / `inbox-*` in commit `e74f168` to reflect a more generic, owner-agnostic abstraction.
 > Legacy commit messages and closed issues may still reference the old names. **Current HEAD is the canonical naming.**
 
+> **📋 Recent Updates (2026-04-22 → 2026-05-08)**: 132 commits · 370 files · +28,680 / −1,761 lines.
+> Highlights: `/verify` 7-Gate auditor harness · Privacy Guard (PII/secrets pre-push) · OAuth self-healing (G5/G6) · Iron Law 4 enforcement · Token-ledger cumulative-aware aggregation (analytics tools were inflating costs 21–4675× before fix).
+> **Verified 7-day cron LLM cost: $9.42** (theoretical API price; runs $0 on Claude Max subscription). See [CHANGELOG.md](CHANGELOG.md) for details.
+
 <p align="center">
   <strong>AI operations platform that manages itself 24/7</strong><br>
   Discord Bot + RAG Knowledge Base + Insight Layer + Self-Healing Automation
