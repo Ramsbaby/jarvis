@@ -37,7 +37,7 @@ const DEFAULT_POLICY = {
   domainPriority: ['owner', 'career', 'knowledge'],
   domainChannel: {
     owner: 'jarvis',
-    career: 'jarvis-career',
+    career: process.env.CAREER_DOMAIN_CHANNEL || 'jarvis-career',
     knowledge: 'jarvis',
     meta: 'jarvis-system',
   },
