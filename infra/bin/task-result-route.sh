@@ -67,6 +67,12 @@ if printf '%s' "$MESSAGE" | grep -q 'CV2_DATA:'; then
     MESSAGE=$(printf '%s' "$MESSAGE" | grep -v 'CV2_DATA:' || true)
 fi
 
+# --- 2026-05-12: SKILL_JSON / EUREKA_JSON 마커 제거 (이중 방어선) ---
+# bot-cron.sh 위치 B에서 이미 제거하나, route-result.sh에도 중앙 필터로 안전망 추가.
+if printf '%s' "$MESSAGE" | grep -qE '^(SKILL_JSON|EUREKA_JSON):'; then
+    MESSAGE=$(printf '%s' "$MESSAGE" | grep -vE '^(SKILL_JSON|EUREKA_JSON):' || true)
+fi
+
 # --- Message quality filter (central pre-send hook) ---
 # Strips internal debug/noise lines before sending to any external channel
 clean_message() {

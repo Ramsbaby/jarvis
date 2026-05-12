@@ -201,6 +201,22 @@ if [[ -n "$_INJECT_PREFIX" ]]; then
 fi
 unset _INJECT_PREFIX _alias _inject_path _inject_label
 
+# --- 2026-05-12: Skill Synthesis PROMPT suffix 자동 주입 (위치 A) ---
+# skillSynthesis.enabled=true 태스크에 한해 PROMPT 끝에 SKILL_JSON 출력 지시를 동적 추가.
+# 강제 출력이 아닌 선택 — LLM이 패턴 없으면 생략 가능.
+_sk_enabled_a=$(echo "$TASK_CONFIG" | jq -r '.skillSynthesis.enabled // false')
+if [[ "$_sk_enabled_a" == "true" ]]; then
+    PROMPT="${PROMPT}
+
+---
+[선택적 Skill 합성 — 재사용 가능한 패턴·인사이트 없으면 이 섹션 전체 생략]
+이번 실행에서 발견한 운영 패턴이 있다면(없으면 출력 금지):
+SKILL_JSON: {\"type\":\"pattern|insight|correction|anti-pattern\",\"domain\":\"ops\",\"title\":\"한 줄(40자 이내)\",\"context\":\"발견 맥락 1문장\",\"pattern\":\"재사용 핵심 구조(30자 이상)\",\"evidence\":[\"실제 로그·명령 출력\"],\"reusable_in\":[\"재사용 가능한 태스크·상황\"],\"gain\":\"효과 1줄\"}
+패턴이 없으면 강제 출력 금지. 있을 때만 1건."
+    log "Skill synthesis suffix 주입 (skillSynthesis.enabled=true, task=${TASK_ID})"
+fi
+unset _sk_enabled_a
+
 _PHASE="param-load"
 ALLOWED_TOOLS=$(echo "$TASK_CONFIG" | jq -r '.allowedTools // "Read"')
 TIMEOUT=$(echo "$TASK_CONFIG" | jq -r '.timeout // 180')
@@ -645,6 +661,90 @@ fi
 unset _reg_remaining
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ─── 2026-05-12: 마커 선처리 블록 (위치 B — pre-truncation, $RESULT 원본 직접 추출) ───────────
+# SKILL_JSON:  → jarvis/runtime/skills/skills.jsonl (Skill 합성 전용)
+# EUREKA_JSON: → jarvis/runtime/wiki/meta/eureka.jsonl (하위 호환)
+# 원칙: $RESULT 원본에서 추출 → 파일 적재 → RESULT에서 해당 라인 제거(Discord 오염 방지)
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
+# [B1] SKILL_JSON 처리 (skillSynthesis.enabled 태스크 한정)
+_sk_enabled_b=$(echo "$TASK_CONFIG" | jq -r '.skillSynthesis.enabled // false')
+if [[ "$_sk_enabled_b" == "true" ]] && command -v jq >/dev/null 2>&1 \
+    && printf '%s' "$RESULT" | grep -q "^SKILL_JSON:"; then
+    _sk_file="${HOME}/jarvis/runtime/skills/skills.jsonl"
+    _sk_domain=$(echo "$TASK_CONFIG" | jq -r '.skillSynthesis.domain // "ops"')
+    mkdir -p "$(dirname "$_sk_file")"
+    _sk_added=0
+    while IFS= read -r _sk_raw; do
+        # 1) JSON 유효성
+        if ! echo "$_sk_raw" | jq -e . >/dev/null 2>&1; then continue; fi
+        # 2) 필수 필드 + pattern 30자 이상
+        if ! echo "$_sk_raw" | jq -e '.type and .title and .pattern and (.pattern | length >= 30)' >/dev/null 2>&1; then
+            log "SKILL_JSON 품질 미달 — 스킵 (필수 필드 누락/pattern<30자)"
+            continue
+        fi
+        # 3) type enum 유효성
+        if ! echo "$_sk_raw" | jq -e '.type | test("^(pattern|insight|correction|anti-pattern)$")' >/dev/null 2>&1; then
+            log "SKILL_JSON type 유효성 실패 — 스킵"
+            continue
+        fi
+        # 4) 중복 방지: title 앞 4단어로 skills.jsonl grep
+        _sk_title=$(echo "$_sk_raw" | jq -r '.title // ""')
+        _sk_key=$(echo "$_sk_title" | awk '{for(i=1;i<=4&&i<=NF;i++) printf $i" "}' | sed 's/[[:space:]]*$//')
+        if [[ -f "$_sk_file" ]] && [[ -n "$_sk_key" ]] && grep -qF "$_sk_key" "$_sk_file" 2>/dev/null; then
+            log "SKILL_JSON 중복 감지 — 스킵: ${_sk_key}"
+            continue
+        fi
+        # 5) 원자 락 (mkdir 방식 — macOS flock CLI 미지원 대응)
+        _sk_lock="${_sk_file}.lock.d"
+        if ! mkdir "$_sk_lock" 2>/dev/null; then
+            log "SKILL_JSON 락 획득 실패 — 스킵 (동시 쓰기 중)"
+            continue
+        fi
+        # 6) 자동 추가 필드 주입 + append
+        _sk_ts=$(TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00")
+        _sk_date=$(TZ=Asia/Seoul date "+%Y-%m-%d %H:%M KST")
+        _sk_seq=$(( $(wc -l < "$_sk_file" 2>/dev/null || echo 0) + 1 ))
+        _sk_id="skill-$(TZ=Asia/Seoul date +%Y%m%d)-$(printf '%03d' "$_sk_seq")"
+        _sk_full=$(echo "$_sk_raw" | jq -c \
+            --arg id    "$_sk_id" \
+            --arg date  "$_sk_date" \
+            --arg ts    "$_sk_ts" \
+            --arg domain "$_sk_domain" \
+            --arg src   "auto-synthesis:${TASK_ID}" \
+            '. + {id: $id, date: $date, ts: $ts, domain: (.domain // $domain), source_session: $src, auto: true}')
+        echo "$_sk_full" >> "$_sk_file"
+        rmdir "$_sk_lock" 2>/dev/null || true
+        _sk_added=$((_sk_added + 1))
+    done < <(printf '%s\n' "$RESULT" | grep "^SKILL_JSON:" | sed 's/^SKILL_JSON:[[:space:]]*//')
+    [[ $_sk_added -gt 0 ]] && log "SKILL_JSON 자동 합성 — ${_sk_added}건 → skills.jsonl"
+    # RESULT에서 SKILL_JSON 라인 제거 (Discord 전송 오염 방지)
+    RESULT=$(printf '%s\n' "$RESULT" | grep -v "^SKILL_JSON:" || true)
+    unset _sk_file _sk_domain _sk_added _sk_raw _sk_title _sk_key _sk_lock \
+          _sk_ts _sk_date _sk_seq _sk_id _sk_full
+fi
+unset _sk_enabled_b
+
+# [B2] EUREKA_JSON 처리 (council-insight 하위 호환 — $RESULT 원본에서 직접 추출)
+if [[ "$TASK_ID" == "council-insight" ]] && command -v jq >/dev/null 2>&1 \
+    && printf '%s' "$RESULT" | grep -q "^EUREKA_JSON:"; then
+    _eu_file="${HOME}/jarvis/runtime/wiki/meta/eureka.jsonl"
+    mkdir -p "$(dirname "$_eu_file")"
+    _eu_added=0
+    while IFS= read -r _eu_line; do
+        if echo "$_eu_line" | jq -e . >/dev/null 2>&1; then
+            _eu_ts=$(TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00")
+            echo "$_eu_line" | jq -c --arg ts "$_eu_ts" '. + {ts: $ts, source: "council-insight"}' >> "$_eu_file"
+            _eu_added=$((_eu_added + 1))
+        fi
+    done < <(printf '%s\n' "$RESULT" | grep "^EUREKA_JSON:" | sed 's/^EUREKA_JSON:[[:space:]]*//')
+    [[ $_eu_added -gt 0 ]] && log "EUREKA_JSON 적재 — ${_eu_added}건 → eureka.jsonl"
+    # RESULT에서 EUREKA_JSON 라인 제거 (Discord 전송 오염 방지)
+    RESULT=$(printf '%s\n' "$RESULT" | grep -v "^EUREKA_JSON:" || true)
+    unset _eu_file _eu_added _eu_line _eu_ts
+fi
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+
 # --- Truncate result to maxChars before routing ---
 if [[ ${#RESULT} -gt $RESULT_MAX_CHARS ]]; then
     RESULT="${RESULT:0:$RESULT_MAX_CHARS}...(truncated)"
@@ -723,26 +823,10 @@ case "$TASK_ID" in
         ;;
 esac
 
-# --- 2026-04-26 추가: council-insight Eureka 자동 적재 (Compound Engineering 복리 활성화) ---
-# council-insight prompt 끝에 EUREKA_JSON: 라인 출력 지시 → 결과 log에서 grep → eureka.jsonl append
-if [[ "$TASK_ID" == "council-insight" ]]; then
-    _eureka_log="${BOT_HOME}/logs/council-insight.log"
-    _eureka_target="${HOME}/jarvis/runtime/wiki/meta/eureka.jsonl"
-    if [[ -f "$_eureka_log" ]] && command -v jq >/dev/null 2>&1; then
-        _added=0
-        while IFS= read -r _line; do
-            if echo "$_line" | jq -e . >/dev/null 2>&1; then
-                _ts=$(TZ=Asia/Seoul date "+%Y-%m-%dT%H:%M:%S+09:00")
-                echo "$_line" | jq -c --arg ts "$_ts" '. + {ts: $ts, source: "council-insight"}' >> "$_eureka_target"
-                _added=$((_added + 1))
-            fi
-        done < <(tail -200 "$_eureka_log" | grep "^EUREKA_JSON:" | sed 's/^EUREKA_JSON: //')
-        if [[ $_added -gt 0 ]]; then
-            log "council-insight Eureka 적재 완료 — ${_added}건"
-        fi
-        unset _eureka_log _eureka_target _added _line _ts
-    fi
-fi
+# --- 2026-05-12: 위 [B2] 블록으로 이전 완료 (pre-truncation 방식) — 이 블록 비활성화 ---
+# 구 방식: council-insight.log tail-200 grep (truncation 이후 log 의존, 취약)
+# 신 방식: $RESULT 원본 직접 추출 (위치 B [B2] 블록에서 truncation 이전 처리)
+# 이 주석은 이전 블록의 제거 이유를 기록하기 위해 유지.
 
 _TASK_DONE=true
 log "DONE"
