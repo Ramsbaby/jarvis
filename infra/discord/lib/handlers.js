@@ -1061,8 +1061,17 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
           _clearPendingTask(sessionKey);
           log('info', 'Pending task resumed via 계속', { threadId: thread.id, pendingLen: pending.prompt.length, checkpoints: pending.checkpoints?.length ?? 0 });
         }
-        // 프롬프트 앞에 컨텍스트 주입 (세션 요약 → pending task → 유저 원문 순)
-        userPrompt = contextParts.join('\n\n') + '\n\n' + '위 맥락을 바탕으로 중단된 작업을 이어서 진행해줘.';
+        // 프롬프트 조립: pending task만 주입. 세션 요약은 system-reminder에 이미 있으므로 재주입 금지.
+        // [계속 명령 원칙] 세션 요약 재제시·재정리 절대 금지.
+        // pending task가 있으면 바로 실행. 없으면 직전 대화의 미답 질문을 이어받아라.
+        // 새 섹션·요약·브리핑 없이 다음 단계만 출력할 것.
+        const pendingParts = contextParts.filter(p => p.startsWith('## 중단된 작업'));
+        if (pendingParts.length > 0) {
+          userPrompt = pendingParts.join('\n\n') + '\n\n[계속 명령] 위 중단된 작업을 바로 이어서 실행하라. 요약·재정리 없이 다음 단계만.';
+        } else {
+          // 세션 요약만 있고 pending 없음 → 직전 미답 질문 이어받기
+          userPrompt = '[계속 명령] 직전 대화에서 내가 아직 답하지 않은 마지막 질문이나 미완료 작업을 바로 이어받아라. 세션 요약 재제시·재정리·새 섹션 생성 절대 금지. 미답 질문만 다시 묻거나 다음 단계만 실행하라.';
+        }
         _continueHandled = true; // 아래 세션 요약 재주입 방지
       } else {
         // 2026-04-26 수정: pending·summary 없어도 fallback 메시지 대신 fall-through.
