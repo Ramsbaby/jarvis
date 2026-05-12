@@ -31,7 +31,7 @@ _CS_STAGE_DELAY=5
 # --- 로그 헬퍼 ---
 _cs_log() {
     local task_id="$1" stage="$2" action="$3"
-    printf '[%s] [%s] RECOVERY stage %d: %s\n' \
+    printf '[%s] [%s] RECOVERY stage %s: %s\n' \
         "$(date '+%F %H:%M:%S')" "$task_id" "$stage" "$action" >&2
 }
 
@@ -112,6 +112,13 @@ _detect_rate_limit() {
     grep -qiE "rate.limit|rate_limit|429|hit your limit|you've hit|usage limit|too many|quota" "$output_file" 2>/dev/null
 }
 
+# AUTH_ERROR Detection: 토큰 만료 또는 인증 실패 감지
+_detect_auth_error() {
+    local output_file="$1"
+    [[ -f "$output_file" ]] || return 1
+    grep -qiE "AUTH_ERROR|authentication|unauthorized|401|invalid api key|not logged in|invalid authentication credentials|failed to authenticate" "$output_file" 2>/dev/null
+}
+
 run_with_recovery() {
     local task_id="$1"
     shift
@@ -158,6 +165,41 @@ run_with_recovery() {
     _cs_record_stat "$task_id" 1 "failed"
 
     # ========================================
+    # Stage 1a (AUTH_ERROR 특화): OAuth 토큰 강제 갱신 후 즉시 재시도
+    # AUTH_ERROR 감지 시 retry-wrapper의 oauth-refresh가 이미 호출했을 수 있지만,
+    # continue-sites 레벨에서도 한 번 더 시도 → Stage 2-4 불필요한 반복 제거
+    # ========================================
+    local auth_error_detected=false
+    if _detect_auth_error "$result_tmp" || _detect_auth_error "$stderr_tmp"; then
+        auth_error_detected=true
+        _cs_log "$task_id" "1a" "auth_error_detected → oauth-refresh --force 호출"
+
+        # OAuth 강제 갱신 (동기 호출, 실패해도 계속 진행)
+        if [[ -x "${BOT_HOME}/scripts/oauth-refresh.sh" ]]; then
+            "${BOT_HOME}/scripts/oauth-refresh.sh" --force >> "${BOT_HOME}/logs/oauth-refresh.log" 2>&1 || true
+        fi
+
+        # 짧은 대기 후 재시도 (2초)
+        sleep 2
+        export JARVIS_RECOVERY_STAGE=1
+        _cs_log "$task_id" "1a" "oauth_refresh_retry → RUNNING"
+
+        exit_code=0
+        "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+
+        if [[ $exit_code -eq 0 ]]; then
+            _cs_log "$task_id" "1a" "oauth_refresh_retry → SUCCESS"
+            _cs_record_stat "$task_id" 1 "recovered"
+            cat "$result_tmp"
+            rm -f "$result_tmp" "$stderr_tmp"
+            return 0
+        fi
+
+        _cs_log "$task_id" "1a" "oauth_refresh_retry → FAILED (exit=$exit_code), 계속 진행"
+        _cs_record_stat "$task_id" 1 "failed"
+    fi
+
+    # ========================================
     # Stage 1b (Rate Limit 특화): 길게 대기 후 재시도
     # Rate limit이 감지되면 Stage 2를 건너뛰고 여기서 긴 대기 후 재시도
     # ========================================
@@ -187,9 +229,16 @@ run_with_recovery() {
         rate_limit_detected=false  # 다음 stage로 진행하기 위해 리셋
     else
         # ========================================
-        # Stage 2: 컨텍스트 축소 재시도 (rate limit이 아닌 경우)
+        # Stage 2: 컨텍스트 축소 재시도 (rate limit/auth_error 아닌 경우)
         # ========================================
-        sleep "$_CS_STAGE_DELAY"
+        # AUTH_ERROR 감지 시 더 긴 대기 (Stage 1a 이후에도 만료되었을 수 있음)
+        local stage2_delay="$_CS_STAGE_DELAY"
+        if [[ "$auth_error_detected" == "true" ]]; then
+            stage2_delay=10  # AUTH_ERROR의 경우 10초 대기
+            _cs_log "$task_id" 2 "context_minimal (auth_error_delay) → waiting ${stage2_delay}s"
+        fi
+        sleep "$stage2_delay"
+
         export JARVIS_RECOVERY_STAGE=2
         export JARVIS_CONTEXT_MODE="minimal"
         _cs_log "$task_id" 2 "context_minimal → RUNNING"
