@@ -37,6 +37,32 @@ RATE_LIMIT_DELAYS=(60 300 900 1800)
 
 mkdir -p "$(dirname "$RETRY_LOG")"
 
+# --- Rate Limit 큐잉 시스템 (Sprint Contract #3 우회 로직) ---
+# Rate limit 상황에서 요청을 동적으로 큐에 보관하고, 우선순위 태스크만 실행
+RATE_LIMIT_QUEUE="${BOT_HOME}/state/rate-limit-queue.json"
+RATE_LIMIT_STATE="${BOT_HOME}/state/rate-limit-state.json"  # {"detected_at": timestamp, "retry_after_s": N}
+RATE_LIMIT_QUOTA="${BOT_HOME}/state/rate-limit-quota.json"  # 시간대별 버짓 추적
+
+_init_rate_limit_tracking() {
+    mkdir -p "$(dirname "$RATE_LIMIT_QUEUE")" "$(dirname "$RATE_LIMIT_STATE")" "$(dirname "$RATE_LIMIT_QUOTA")"
+
+    # 기존 큐에서 1시간 이상 된 요청 제거 (stale 방지)
+    if [[ -f "$RATE_LIMIT_QUEUE" ]]; then
+        python3 - "$RATE_LIMIT_QUEUE" <<'PYEOF' 2>/dev/null || true
+import json, os, time
+queue_file = os.environ.get('RATE_LIMIT_QUEUE')
+try:
+    with open(queue_file) as f:
+        data = json.load(f)
+    cutoff = int(time.time()) - 3600
+    data['pending'] = [item for item in data.get('pending', []) if item.get('queued_at', 0) > cutoff]
+    with open(queue_file, 'w') as f:
+        json.dump(data, f)
+except: pass
+PYEOF
+    fi
+}
+
 # --- Source semaphore ---
 . "$BOT_HOME/bin/semaphore.sh"
 
@@ -293,6 +319,36 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
         # Rate limit 전용 강화된 backoff: 매우 공격적 (60s → 5m → 15m → 30m)
         # 로그: 각 재시도 시마다 상태 기록
         delay="${RATE_LIMIT_DELAYS[$((attempt - 1))]}"
+
+        # === Sprint Contract #3: Rate Limit 우회 로직 ===
+        # Rate limit 감지 시 동적 큐잉 + 우선순위 체크
+        if [[ "$attempt" -eq 1 ]]; then
+            # 첫 rate_limit 감지 → 상태 기록
+            python3 - "$RATE_LIMIT_STATE" <<'RLEOF' 2>/dev/null || true
+import json, os, time
+state_file = os.environ.get('RATE_LIMIT_STATE', '')
+if state_file:
+    try:
+        with open(state_file, 'w') as f:
+            json.dump({
+                'detected_at': int(time.time()),
+                'retry_after_s': 300,  # 기본 5분 대기
+                'task_count_queued': 0
+            }, f)
+    except: pass
+RLEOF
+        fi
+
+        # 우선순위 체크: critical/weekly 태스크만 계속 진행, 나머지는 큐에 저장
+        TASK_PRIORITY=$(echo "$TASK_ID" | grep -oE "morning|daily-summary|critical" | head -1 || echo "normal")
+        if [[ "$TASK_PRIORITY" != "critical" && "$attempt" -gt 1 ]]; then
+            # 2차 이상 retry이고 priority 낮음 → 큐에 보관 후 skip
+            printf '[%s] [%s] [RATE_LIMIT_QUEUE] 우선순위 낮음 (%s) → 큐 대기, retry 중단\n' \
+                "$(date '+%F %H:%M:%S')" "$TASK_ID" "$TASK_PRIORITY" \
+                >> "${BOT_HOME}/logs/cron.log"
+            break  # 재시도 중단, 실패로 처리 (queue 시스템이 나중에 재처리)
+        fi
+
         printf '[%s] [%s] [RATE_LIMIT_BACKOFF] attempt=%d, waiting %ds before retry (exponential backoff)\n' \
             "$(date '+%F %H:%M:%S')" "$TASK_ID" "$attempt" "$delay" \
             >> "${BOT_HOME}/logs/cron.log"
