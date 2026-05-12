@@ -125,43 +125,60 @@ sys.exit(1)
 " 2>/dev/null || echo "")
 
     if [[ -n "$EXPIRE_SOON" ]]; then
-        log "⚠️ 토큰 만료 임박: ${EXPIRE_SOON}분 후 (계정: $ACCOUNT_INFO) — headless 갱신 시도"
-        SWITCH_SCRIPT="${BOT_HOME}/scripts/claude-switch.sh"
+        log "⚠️ 토큰 만료 임박: ${EXPIRE_SOON}분 후 (계정: $ACCOUNT_INFO) — oauth-refresh.sh --force 호출"
+        OAUTH_SCRIPT="${BOT_HOME}/infra/scripts/oauth-refresh.sh"
+
+        # 갱신 전 expiresAt 기록 (false success 감지용)
+        BEFORE_EXP=$(python3 -c "
+import json
+d=json.load(open('${HOME}/.claude/.credentials.json'))
+v=d.get('claudeAiOauth',{})
+print(int(v.get('expiresAt',0)))
+" 2>/dev/null || echo "0")
+
         REFRESH_RESULT=""
-        if [[ -x "$SWITCH_SCRIPT" ]]; then
-            REFRESH_RESULT=$(bash "$SWITCH_SCRIPT" refresh 2>&1) && REFRESH_OK=true || REFRESH_OK=false
+        if [[ -x "$OAUTH_SCRIPT" ]]; then
+            REFRESH_RESULT=$(bash "$OAUTH_SCRIPT" --force 2>&1) && REFRESH_OK=true || REFRESH_OK=false
         else
+            log "❌ oauth-refresh.sh 없음: $OAUTH_SCRIPT"
             REFRESH_OK=false
         fi
 
-        if [[ "$REFRESH_OK" == true ]]; then
+        # 갱신 후 expiresAt 재확인 (exit 0이어도 실제 갱신 여부 검증)
+        AFTER_EXP=$(python3 -c "
+import json,datetime
+d=json.load(open('${HOME}/.claude/.credentials.json'))
+v=d.get('claudeAiOauth',{})
+ts=int(v.get('expiresAt',0))
+print(ts)
+" 2>/dev/null || echo "0")
+
+        if [[ "$REFRESH_OK" == true ]] && [[ "$AFTER_EXP" -gt "$BEFORE_EXP" ]]; then
             NEW_EXP=$(python3 -c "
 import json,datetime
 d=json.load(open('${HOME}/.claude/.credentials.json'))
-for v in d.values():
-    if isinstance(v,dict) and 'expiresAt' in v:
-        print(datetime.datetime.fromtimestamp(v['expiresAt']/1000).strftime('%H:%M'))
-        break
+v=d.get('claudeAiOauth',{})
+ts=int(v.get('expiresAt',0))
+print(datetime.datetime.fromtimestamp(ts/1000).strftime('%H:%M'))
 " 2>/dev/null || echo "?")
-            log "✅ 자동 갱신 성공 — 새 만료: ${NEW_EXP}"
+            log "✅ 자동 갱신 성공 — 새 만료: ${NEW_EXP} (이전: $(python3 -c "import datetime; print(datetime.datetime.fromtimestamp(${BEFORE_EXP}/1000).strftime('%H:%M'))" 2>/dev/null))"
             ACCOUNT_INFO=$(get_account_info)
             rm -f "$COOLDOWN_WARNING"
-            # 갱신 성공 → ntfy 불필요, Discord 조용히 기록만
             send_discord "✅ **[auth-watch]** 토큰 자동 갱신 완료 (→ ${NEW_EXP}) · 계정: \`$ACCOUNT_INFO\`"
         else
-            log "❌ 자동 갱신 실패 — 수동 로그인 필요: ${REFRESH_RESULT:0:100}"
+            # false success 또는 실제 실패 — 만료시각 변동 없음
+            local_exp=$(python3 -c "
+import json,datetime
+d=json.load(open('${HOME}/.claude/.credentials.json'))
+v=d.get('claudeAiOauth',{})
+ts=int(v.get('expiresAt',0))
+print(datetime.datetime.fromtimestamp(ts/1000).strftime('%H:%M'))
+" 2>/dev/null || echo "?")
+            log "❌ 자동 갱신 실패 (exit=${REFRESH_OK}, expiresAt 변동 없음) — ${REFRESH_RESULT:0:100}"
             if ! _check_cooldown "$COOLDOWN_WARNING" 14400; then
                 date +%s > "$COOLDOWN_WARNING"
-                local_exp=$(python3 -c "
-import json,time,datetime
-d=json.load(open('${HOME}/.claude/.credentials.json'))
-for v in d.values():
-    if isinstance(v,dict) and 'expiresAt' in v:
-        print(datetime.datetime.fromtimestamp(v['expiresAt']/1000).strftime('%H:%M'))
-        break
-" 2>/dev/null || echo "?")
-                send_ntfy "Jarvis 토큰 갱신 실패" "⚠️ ${EXPIRE_SOON}분 후 만료 (${local_exp})\n자동 갱신 실패 → 수동 claude login 필요\n계정: $ACCOUNT_INFO" "high"
-                send_discord "⚠️ **[auth-watch]** 토큰 자동 갱신 실패. **${EXPIRE_SOON}분 후 만료** (${local_exp})\n계정: \`$ACCOUNT_INFO\` → **\`claude login\`** 실행 필요"
+                send_ntfy "Jarvis 토큰 갱신 실패" "⚠️ ${EXPIRE_SOON}분 후 만료 (${local_exp})\noauth-refresh.sh 실패 → 수동 claude setup 필요\n계정: $ACCOUNT_INFO" "high"
+                send_discord "⚠️ **[auth-watch]** 토큰 자동 갱신 실패. **${EXPIRE_SOON}분 후 만료** (${local_exp})\n계정: \`$ACCOUNT_INFO\` — 갱신 재시도 중 (다음 30분 체크 시 재시도)"
             fi
         fi
     else
