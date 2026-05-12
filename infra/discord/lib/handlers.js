@@ -1069,8 +1069,19 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
         if (pendingParts.length > 0) {
           userPrompt = pendingParts.join('\n\n') + '\n\n[계속 명령] 위 중단된 작업을 바로 이어서 실행하라. 요약·재정리 없이 다음 단계만.';
         } else {
-          // 세션 요약만 있고 pending 없음 → 직전 미답 질문 이어받기
-          userPrompt = '[계속 명령] 직전 대화에서 내가 아직 답하지 않은 마지막 질문이나 미완료 작업을 바로 이어받아라. 세션 요약 재제시·재정리·새 섹션 생성 절대 금지. 미답 질문만 다시 묻거나 다음 단계만 실행하라.';
+          // 세션 요약만 있고 pending 없음 → Discord 채널 히스토리에서 직전 봇 응답 추출 → 구체적 앵커 제공
+          // 핵심: "재제시 금지" 소극적 금지 대신, 직전에 뭘 말했는지 앵커를 줘서 Claude가 summary 목록 볼 이유 자체를 제거
+          const _cachedMsgs = message.channel.messages.cache;
+          const _botId = message.client.user.id;
+          const _lastBotMsg = [..._cachedMsgs.values()]
+            .filter(m => m.author.id === _botId && m.id !== message.id)
+            .sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0];
+          if (_lastBotMsg && _lastBotMsg.content) {
+            const _excerpt = _lastBotMsg.content.slice(0, 400);
+            userPrompt = `[계속 명령] 직전에 아래 응답을 보냈다:\n"${_excerpt}"\n\n위 응답에서 멈춘 지점 또는 주인님의 직전 질문만 이어서 다음 단계를 실행하라. 세션 요약 목록 열거·재정리·새 섹션 생성 절대 금지.`;
+          } else {
+            userPrompt = '[계속 명령] 직전 대화에서 내가 아직 답하지 않은 마지막 질문이나 미완료 작업을 바로 이어받아라. 세션 요약 재제시·재정리·새 섹션 생성 절대 금지. 미답 질문만 다시 묻거나 다음 단계만 실행하라.';
+          }
         }
         _continueHandled = true; // 아래 세션 요약 재주입 방지
       } else {
