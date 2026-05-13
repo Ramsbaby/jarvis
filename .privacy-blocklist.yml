@@ -98,6 +98,7 @@ rules:
       - ".mcp.json"
       - ".privacy-blocklist.yml"
       - ".claude-plugin/marketplace.json"
+      - "plugins/**/.claude-plugin/plugin.json"
 
   - id: career-narratives
     severity: medium
