@@ -112,7 +112,15 @@ _llm_claude_cli() {
             --disable-slash-commands
             --no-session-persistence
             --setting-sources ""
+            --exclude-dynamic-system-prompt-sections
         )
+    fi
+
+    # --- xhigh effort 옵션 (Opus 4.7 전용, 2026-05-13 추가) ---
+    # LLM_EFFORT=xhigh 환경변수 또는 호출자가 명시한 경우 적용
+    # /verify, /plan-review 같은 추론 깊이가 결정적인 스킬에서 사용
+    if [[ -n "${LLM_EFFORT:-}" ]]; then
+        cmd+=(--effort "${LLM_EFFORT}")
     fi
 
     [[ -n "$system" ]]        && cmd+=(--append-system-prompt "$system")
