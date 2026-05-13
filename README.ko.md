@@ -11,6 +11,9 @@
 > 핵심 변경: `/verify` 7-게이트 감사관 하네스 · Privacy Guard (PII/시크릿 pre-push 차단) · OAuth 자가 복구 (G5/G6) · Iron Law 4 적용 (OAuth 전용) · 토큰 원장 누적-인식 집계 (분석 도구가 21~4675배 비용 부풀림 정정).
 > **실측 7일 크론 LLM 비용: $9.42** (이론값; Claude Max 구독으로 실 청구 0). 자세한 내용은 [CHANGELOG.md](CHANGELOG.md) 참조.
 
+> **🧩 Claude Code 플러그인 (2026-05-13)**: `jarvis-goal` · `jarvis-deep-interview` · `jarvis-plan-review` — Anthropic `/goal`(비가역 가드 추가) · Sorbh/interview-me(수렴형 게이팅) · gstack `/plan-ceo-review`(11섹션) 한국어 환경에서 영문 OSS-safe로 포팅.
+> 설치: `/plugin marketplace add Ramsbaby/jarvis` · 플러그인 상세는 [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) 참조.
+
 <p align="center">
   <strong>24/7 스스로 관리되는 AI 운영 플랫폼</strong><br>
   Discord 봇 + RAG 지식 베이스 + 인사이트 레이어 + 자가 복구 자동화
