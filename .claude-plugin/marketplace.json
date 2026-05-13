@@ -1,0 +1,40 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "jarvis-skills",
+  "description": "Workflow skills for AI-pair-programming and autonomous agent loops, with a focus on bias removal, irreversibility guards, and convergent requirement gating. English public bodies live in plugins/; the maintainer's Korean-persona overlays stay in private/ (gitignored).",
+  "owner": {
+    "name": "Ramsbaby",
+    "url": "https://github.com/Ramsbaby/jarvis"
+  },
+  "version": "0.1.0",
+  "plugins": [
+    {
+      "name": "jarvis-goal",
+      "description": "Goal-driven autonomous execution with built-in irreversibility guard. Port of Anthropic /goal (Claude Code v2.1.139) that automatically pauses for explicit user approval when detecting unrecoverable operations — git push, repo visibility changes, payment, secret exposure, mass data deletion.",
+      "category": "automation",
+      "source": "./plugins/jarvis-goal"
+    },
+    {
+      "name": "jarvis-deep-interview",
+      "description": "Convergent Socratic interview that turns vague requirements into a production-grade spec via 8-15 rounds with mathematical ambiguity gating. Inspired by Sorbh/interview-me, adds Contrarian/Simplifier Challenge Mode and JSONL decision log.",
+      "category": "design",
+      "source": "./plugins/jarvis-deep-interview"
+    },
+    {
+      "name": "jarvis-plan-review",
+      "description": "11-section rigorous design plan review covering problem framing, scope, architecture, security, observability, deployment, performance, reliability, testing, maintainability, and migration. Adapted from gstack /plan-ceo-review for sole-developer + AI-pair-programming workflows.",
+      "category": "design",
+      "source": "./plugins/jarvis-plan-review"
+    }
+  ],
+  "metadata": {
+    "createdAt": "2026-05-13",
+    "publishingChecklist": {
+      "secretScan": "clean",
+      "personaScrub": "complete (English-only in plugins/, Korean stays in private/)",
+      "internalPathScrub": "complete (no ~/jarvis/runtime paths in public bodies)",
+      "ironLawSampleScrub": "complete (generic principles only, no Korean-language incident samples)",
+      "ownerApproval": "pending for git push"
+    }
+  }
+}

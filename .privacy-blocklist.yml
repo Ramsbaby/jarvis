@@ -97,6 +97,7 @@ rules:
       - ".github/**"
       - ".mcp.json"
       - ".privacy-blocklist.yml"
+      - ".claude-plugin/marketplace.json"
 
   - id: career-narratives
     severity: medium
