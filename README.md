@@ -11,6 +11,9 @@
 > Highlights: `/verify` 7-Gate auditor harness · Privacy Guard (PII/secrets pre-push) · OAuth self-healing (G5/G6) · Iron Law 4 enforcement · Token-ledger cumulative-aware aggregation (analytics tools were inflating costs 21–4675× before fix).
 > **Verified 7-day cron LLM cost: $9.42** (theoretical API price; runs $0 on Claude Max subscription). See [CHANGELOG.md](CHANGELOG.md) for details.
 
+> **🧩 Claude Code Plugins (2026-05-13)**: `jarvis-goal` · `jarvis-deep-interview` · `jarvis-plan-review` — Anthropic `/goal` port with irreversibility guard, Sorbh/interview-me convergent gating port, gstack `/plan-ceo-review` 11-section port. All OSS-safe English.
+> Install: `/plugin marketplace add Ramsbaby/jarvis` · See [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) for plugin details.
+
 <p align="center">
   <strong>AI operations platform that manages itself 24/7</strong><br>
   Discord Bot + RAG Knowledge Base + Insight Layer + Self-Healing Automation
