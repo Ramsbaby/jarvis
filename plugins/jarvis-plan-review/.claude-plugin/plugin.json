@@ -1,0 +1,12 @@
+{
+  "name": "jarvis-plan-review",
+  "version": "0.1.0",
+  "description": "11-section rigorous design plan review (problem, scope, architecture, security, observability, deployment, performance, reliability, testing, maintainability, migration). Adapted from gstack /plan-ceo-review for sole-developer + AI-pair-programming workflows.",
+  "author": {
+    "name": "Ramsbaby",
+    "url": "https://github.com/Ramsbaby/jarvis"
+  },
+  "homepage": "https://github.com/Ramsbaby/jarvis/tree/main/plugins/jarvis-plan-review",
+  "license": "MIT",
+  "keywords": ["design-review", "plan-review", "architecture", "11-section"]
+}

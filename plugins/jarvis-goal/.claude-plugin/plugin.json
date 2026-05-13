@@ -1,0 +1,12 @@
+{
+  "name": "jarvis-goal",
+  "version": "0.1.0",
+  "description": "Goal-driven autonomous execution with built-in irreversibility guard. Port of Anthropic /goal (Claude Code v2.1.139) that auto-pauses on git push, repo changes, payment, secret exposure, mass data deletion.",
+  "author": {
+    "name": "Ramsbaby",
+    "url": "https://github.com/Ramsbaby/jarvis"
+  },
+  "homepage": "https://github.com/Ramsbaby/jarvis/tree/main/plugins/jarvis-goal",
+  "license": "MIT",
+  "keywords": ["autonomous", "goal", "verification", "irreversibility-guard"]
+}

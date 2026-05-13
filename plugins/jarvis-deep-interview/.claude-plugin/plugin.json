@@ -1,0 +1,12 @@
+{
+  "name": "jarvis-deep-interview",
+  "version": "0.1.0",
+  "description": "Convergent Socratic interview with mathematical ambiguity gating. 8-15 narrowing rounds + Contrarian/Simplifier Challenge Mode + JSONL decision log. Inspired by Sorbh/interview-me.",
+  "author": {
+    "name": "Ramsbaby",
+    "url": "https://github.com/Ramsbaby/jarvis"
+  },
+  "homepage": "https://github.com/Ramsbaby/jarvis/tree/main/plugins/jarvis-deep-interview",
+  "license": "MIT",
+  "keywords": ["requirements", "interview", "spec", "socratic", "ambiguity-gating"]
+}
