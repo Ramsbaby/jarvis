@@ -18,7 +18,9 @@ unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
 # Batch mode: 크론 태스크는 기본적으로 토큰 절감 플래그 활성화
 # (llm-gateway.sh가 감지하여 --disable-slash-commands, --no-session-persistence,
-#  --exclude-dynamic-system-prompt-sections, --setting-sources "" 를 claude -p에 추가)
+#  --setting-sources "" 를 claude -p에 추가)
+# 주의: --exclude-dynamic-system-prompt-sections는 2026-05-14 제거됨
+#       (Claude CLI 미지원 옵션, context-mode orphan 원인 — ajqe-dispatch.mjs L101 참조)
 export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
 
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
@@ -85,6 +87,90 @@ _cleanup() {
     fi
 }
 trap _cleanup EXIT
+
+# --- TTL Cleanup: 만료된 일회성 태스크 자동 제거 (2026-05-12) ---
+# addedAt + ttl <= today 이면 plist unload + 삭제 + tasks.json enabled: false
+# 성공 완료(L831 _TASK_DONE=true) 직전에만 호출 — 스킵·실패 경로 제외
+_ttl_cleanup() {
+    local _ttl _added _num _unit _added_ts _expiry_ts _now_ts
+    _ttl=$(echo "$TASK_CONFIG"  | jq -r '.ttl     // empty' 2>/dev/null || true)
+    _added=$(echo "$TASK_CONFIG" | jq -r '.addedAt // empty' 2>/dev/null || true)
+    [[ -z "$_ttl" || -z "$_added" ]] && return 0
+
+    # ttl 파싱: "30d" / "2w" / "1m"
+    _num=$(echo "$_ttl" | grep -oE '^[0-9]+' || true)
+    _unit=$(echo "$_ttl" | grep -oE '[dwm]$'  || true)
+    if [[ -z "$_num" || -z "$_unit" ]]; then
+        log "TTL_WARN: 파싱 실패 — ttl='$_ttl'"
+        return 0
+    fi
+
+    # addedAt → unix timestamp (macOS date -j)
+    _added_ts=$(date -j -f "%Y-%m-%d" "$_added" +%s 2>/dev/null) || {
+        log "TTL_WARN: addedAt 파싱 실패 — '$_added'"
+        return 0
+    }
+    case "$_unit" in
+        d) _expiry_ts=$(( _added_ts + _num * 86400 )) ;;
+        w) _expiry_ts=$(( _added_ts + _num * 7 * 86400 )) ;;
+        m) _expiry_ts=$(( _added_ts + _num * 30 * 86400 )) ;;
+        *) log "TTL_WARN: 알 수 없는 단위 '$_unit'"; return 0 ;;
+    esac
+
+    _now_ts=$(date +%s)
+    if (( _now_ts < _expiry_ts )); then
+        local _days_left=$(( (_expiry_ts - _now_ts) / 86400 ))
+        log "TTL: 유효 — ${_days_left}일 남음 (ttl=${_ttl}, addedAt=${_added})"
+        return 0
+    fi
+
+    # 만료됨 → cleanup
+    log "TTL_EXPIRED: ${TASK_ID} 만료 (ttl=${_ttl}, addedAt=${_added}) — 자동 제거 시작"
+
+    # 1) plist 탐색 · unload · 삭제
+    local _plist
+    for _plist in \
+        "${HOME}/Library/LaunchAgents/ai.jarvis.${TASK_ID}.plist" \
+        "${HOME}/Library/LaunchAgents/com.jarvis.${TASK_ID}.plist"; do
+        if [[ -f "$_plist" ]]; then
+            launchctl unload "$_plist" 2>/dev/null || true
+            rm -f "$_plist" 2>/dev/null || true
+            log "TTL_CLEANUP: plist 제거 완료 — $_plist"
+        fi
+    done
+
+    # 2) tasks.json enabled: false 갱신
+    local _tasks_src="${BOT_HOME}/config/tasks.json"
+    if [[ -f "$_tasks_src" ]]; then
+        local _tmp_tasks
+        _tmp_tasks=$(mktemp)
+        if jq --arg id "$TASK_ID" \
+              '(.tasks[] | select(.id == $id)) |= (. + {"enabled": false})' \
+              "$_tasks_src" > "$_tmp_tasks" 2>/dev/null; then
+            mv "$_tmp_tasks" "$_tasks_src"
+            log "TTL_CLEANUP: tasks.json enabled=false 완료 — ${TASK_ID}"
+        else
+            rm -f "$_tmp_tasks" 2>/dev/null || true
+            log "TTL_WARN: tasks.json 갱신 실패"
+        fi
+    fi
+
+    # 3) Discord 알림 (jarvis-system 우선)
+    local _webhook
+    _webhook=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' \
+        "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
+    if [[ -n "${_webhook:-}" ]]; then
+        local _today _msg _payload
+        _today=$(TZ=Asia/Seoul date '+%Y-%m-%d')
+        _msg="🗑️ **TTL 만료 자동 제거**: \`${TASK_ID}\` — ttl=${_ttl}, addedAt=${_added}, removed=${_today}"
+        _payload=$(jq -n --arg m "$_msg" '{content: $m, allowed_mentions: {parse: []}}')
+        curl -sS -X POST "$_webhook" \
+            -H "Content-Type: application/json" \
+            -d "$_payload" > /dev/null 2>&1 || true
+    fi
+
+    log "TTL_CLEANUP: 완료 — ${TASK_ID} 자동 제거됨"
+}
 
 # --- Cluster jitter: :00분 동시 실행 방지 (macOS crontab FDA 제한 우회) ---
 # crontab 스케줄은 동일하게 유지, 실제 실행은 여기서 분산
@@ -206,14 +292,19 @@ unset _INJECT_PREFIX _alias _inject_path _inject_label
 # 강제 출력이 아닌 선택 — LLM이 패턴 없으면 생략 가능.
 _sk_enabled_a=$(echo "$TASK_CONFIG" | jq -r '.skillSynthesis.enabled // false')
 if [[ "$_sk_enabled_a" == "true" ]]; then
-    PROMPT="${PROMPT}
+    # 중복 주입 방지: 프롬프트(또는 prompt_file)에 이미 SKILL_JSON 지시가 있으면 suffix 생략
+    if printf '%s' "$PROMPT" | grep -q "SKILL_JSON:"; then
+        log "Skill synthesis suffix 생략 — 프롬프트에 이미 SKILL_JSON 지시 포함 (중복 방지)"
+    else
+        PROMPT="${PROMPT}
 
 ---
 [선택적 Skill 합성 — 재사용 가능한 패턴·인사이트 없으면 이 섹션 전체 생략]
 이번 실행에서 발견한 운영 패턴이 있다면(없으면 출력 금지):
 SKILL_JSON: {\"type\":\"pattern|insight|correction|anti-pattern\",\"domain\":\"ops\",\"title\":\"한 줄(40자 이내)\",\"context\":\"발견 맥락 1문장\",\"pattern\":\"재사용 핵심 구조(30자 이상)\",\"evidence\":[\"실제 로그·명령 출력\"],\"reusable_in\":[\"재사용 가능한 태스크·상황\"],\"gain\":\"효과 1줄\"}
 패턴이 없으면 강제 출력 금지. 있을 때만 1건."
-    log "Skill synthesis suffix 주입 (skillSynthesis.enabled=true, task=${TASK_ID})"
+        log "Skill synthesis suffix 주입 (skillSynthesis.enabled=true, task=${TASK_ID})"
+    fi
 fi
 unset _sk_enabled_a
 
@@ -788,19 +879,50 @@ done
 # --- news-briefing: 인사이트 섹션 → jarvis-ceo 채널 추가 전송 ---
 case "$TASK_ID" in
     news-briefing)
-        _insight_raw=$(echo "$RESULT" | awk '/💡 Jarvis 적용 가능 인사이트/{found=1} found{print}')
-        if [[ -n "$_insight_raw" ]]; then
-            _ceo_webhook=$(jq -r '.webhooks["jarvis-ceo"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
-            if [[ -n "${_ceo_webhook:-}" ]]; then
-                _ceo_msg="📥 **뉴스 브리핑 인사이트 인계** ($(date '+%Y-%m-%d'))\n${_insight_raw}"
-                _payload=$(jq -n --arg m "$_ceo_msg" '{content: $m, allowed_mentions: {parse: []}}')
-                curl -sS -X POST "$_ceo_webhook" \
-                    -H "Content-Type: application/json" \
-                    -d "$_payload" > /dev/null 2>&1 || true
-                log "인사이트 섹션 jarvis-ceo 채널 전송 완료"
+        # 24h dedup: 같은 날 이미 전송했으면 중복 전송 차단
+        _nb_dedup="${BOT_HOME}/state/dedup/news-briefing-ceo-insight.last_sent"
+        _nb_now=$(date +%s)
+        _nb_skip=0
+        if [[ -f "$_nb_dedup" ]]; then
+            _nb_last=$(cat "$_nb_dedup" 2>/dev/null || echo 0)
+            _nb_elapsed=$(( _nb_now - _nb_last ))
+            if [[ $_nb_elapsed -lt 86400 ]]; then
+                log "news-briefing jarvis-ceo 전송 DEDUP_SKIP (${_nb_elapsed}s < 86400s)"
+                _nb_skip=1
             fi
         fi
-        unset _insight_raw _ceo_webhook _ceo_msg _payload
+
+        if [[ "$_nb_skip" -eq 0 ]]; then
+            # awk: "💡 Jarvis 적용 가능 인사이트" 이후 추출
+            _insight_raw=$(echo "$RESULT" | awk '/💡 Jarvis 적용 가능 인사이트/{found=1} found{print}')
+            # json_insights 코드블록 필터링 (raw JSON Discord 노출 방지)
+            _insight_raw=$(echo "$_insight_raw" | awk '/^```json_insights/{skip=1} skip{if(/^```$/ || /^```[[:space:]]*$/) skip=0; next} {print}')
+
+            if [[ -n "$_insight_raw" ]]; then
+                _ceo_webhook=$(jq -r '.webhooks["jarvis-ceo"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
+                if [[ -n "${_ceo_webhook:-}" ]]; then
+                    _ceo_header="📥 **뉴스 브리핑 인사이트 인계** ($(date '+%Y-%m-%d'))
+"
+                    _ceo_body="${_ceo_header}${_insight_raw}"
+                    # 1990자 청킹 전송 (Discord 2000자 제한 대응)
+                    _ceo_total=${#_ceo_body}
+                    _ceo_offset=0
+                    while [[ $_ceo_offset -lt $_ceo_total ]]; do
+                        _ceo_chunk="${_ceo_body:$_ceo_offset:1990}"
+                        _payload=$(jq -n --arg m "$_ceo_chunk" '{content: $m, allowed_mentions: {parse: []}}')
+                        curl -sS -X POST "$_ceo_webhook" \
+                            -H "Content-Type: application/json" \
+                            -d "$_payload" > /dev/null 2>&1 || true
+                        _ceo_offset=$(( _ceo_offset + 1990 ))
+                        [[ $_ceo_offset -lt $_ceo_total ]] && sleep 1
+                    done
+                    echo "$_nb_now" > "$_nb_dedup"
+                    log "인사이트 섹션 jarvis-ceo 채널 전송 완료 (${_ceo_total}자, dedup 기록)"
+                fi
+            fi
+        fi
+        unset _nb_dedup _nb_now _nb_skip _nb_last _nb_elapsed
+        unset _insight_raw _ceo_webhook _ceo_header _ceo_body _ceo_total _ceo_offset _ceo_chunk _payload
         ;;
 esac
 
@@ -827,6 +949,9 @@ esac
 # 구 방식: council-insight.log tail-200 grep (truncation 이후 log 의존, 취약)
 # 신 방식: $RESULT 원본 직접 추출 (위치 B [B2] 블록에서 truncation 이전 처리)
 # 이 주석은 이전 블록의 제거 이유를 기록하기 위해 유지.
+
+# TTL 만료 체크 — 실제 성공 완료 시에만 실행 (스킵·실패 경로는 여기까지 오지 않음)
+_ttl_cleanup
 
 _TASK_DONE=true
 log "DONE"
