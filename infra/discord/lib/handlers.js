@@ -237,7 +237,7 @@ function _triggerSessionEndSummary(sessionKey, reason) {
 // ---------------------------------------------------------------------------
 
 const INPUT_MAX_CHARS = 4000;
-const TYPING_INTERVAL_MS = 8000;
+const TYPING_INTERVAL_MS = 5000; // 2026-05-14: 8000→5000. sendTyping() 10초 소멸 기준, 8초는 2초 공백 발생.
 
 // 텍스트/문서 첨부 확장자 (handleMessage + _processBatch 공용)
 const TEXT_DOC_EXTS = /\.(txt|md|html|htm|css|js|mjs|ts|java|py|json|xml|csv|yaml|yml|sh|bash|sql|log|properties|env|conf|toml|ini|kt|go|rs|cpp|c|h|rb|php|swift|gradle|pdf)$/i;
@@ -586,7 +586,7 @@ export async function handleMessage(message, state) {
         // Discord rate limit: same message edit은 3초 간격이 안전.
         let typingInterval = setInterval(() => {
           message.channel.sendTyping().catch(() => {});
-        }, 8000);
+        }, TYPING_INTERVAL_MS);
         let elapsedInterval = null;
         if (placeholder) {
           elapsedInterval = setInterval(() => {

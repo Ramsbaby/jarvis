@@ -502,6 +502,24 @@ client.on('warn', (msg) => {
   log('warn', `Discord warning: ${msg}`);
 });
 
+// 2026-05-14: REST rate limit 모니터링 추가.
+// Discord.js v14는 429를 자동 처리하지만, 빈도가 높으면 응답 지연의 실마리.
+// global=true 면 전체 API 차단 — 즉시 경보 대상.
+client.rest.on('rateLimited', (info) => {
+  const entry = {
+    route: info.route,
+    limit: info.limit,
+    timeToReset: info.timeToReset,
+    global: info.global,
+  };
+  if (info.global) {
+    log('error', 'Discord GLOBAL rate limit hit', entry);
+    botAlerts.push({ title: `${BOT_NAME} Global Rate Limit!`, message: `route=${info.route} reset=${info.timeToReset}ms`, level: 'high' });
+  } else {
+    log('warn', 'Discord rate limit hit', entry);
+  }
+});
+
 client.on('shardDisconnect', (event, shardId) => {
   log('warn', 'Discord disconnected', { code: event.code, shardId });
   botAlerts.push({ title: `${BOT_NAME} 연결 끊김`, message: `Shard ${shardId} disconnected (code: ${event.code})`, level: 'default' });
