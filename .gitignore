@@ -146,3 +146,6 @@ infra/scripts/*.LOCKED.*
 
 # 2026-05-07: Topology Guard 차단 회피 (자동 백업 파일은 commit 제외)
 infra/bin/*.bak-*
+
+# LaunchAgent plist 백업 (사용자 경로 노출 — 로컬 보존만)
+infra/launchagents/

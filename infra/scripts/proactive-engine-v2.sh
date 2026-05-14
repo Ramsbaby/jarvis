@@ -29,16 +29,50 @@ mkdir -p "$(dirname "$LOG")" "$STATE_DIR"
 # shellcheck disable=SC1091
 source "${BOT_HOME}/lib/discord-notify-bash.sh"
 
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [proactive-v2] $*" | tee -a "$LOG"; }
+# 2026-05-14: tee 제거 — launchd 환경 stdout EPIPE 시 pipefail trigger 가능성 차단
+# launchd가 stdout을 StandardOutPath로 리다이렉트하므로 직접 append만으로 충분
+log() { printf '[%s] [proactive-v2] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG"; }
 
-# ─── CPU 가드 (2026-05-11 오답노트 영구 등재) ──────────────────────
+# ─── 싱글 인스턴스 가드 (2026-05-14 /verify 결함 1) ────────────────
+# launchd KeepAlive race로 데몬 N개 가동 방지 — mkdir 원자성 (어제 retry-wrapper 패턴 재사용)
+PID_LOCK_DIR="/tmp/jarvis-proactive-v2.lock.d"
+if ! mkdir "$PID_LOCK_DIR" 2>/dev/null; then
+    # 기존 lock 보유자가 살아있는지 확인
+    if [[ -f "$PID_LOCK_DIR/pid" ]]; then
+        _existing_pid=$(cat "$PID_LOCK_DIR/pid" 2>/dev/null || echo "")
+        if [[ -n "$_existing_pid" ]] && kill -0 "$_existing_pid" 2>/dev/null; then
+            log "🔒 다른 인스턴스 가동 중 (PID $_existing_pid) — 종료"
+            exit 0
+        fi
+        # stale lock — 제거 후 재시도
+        log "⚠️ stale lock 감지 (PID $_existing_pid 사망) — 정리 후 재진입"
+        rm -rf "$PID_LOCK_DIR"
+        mkdir "$PID_LOCK_DIR" || { log "🔴 lock dir 생성 실패 — exit"; exit 1; }
+    else
+        log "🔴 lock 디렉토리 존재하나 pid 파일 부재 — exit"
+        exit 1
+    fi
+fi
+echo $$ > "$PID_LOCK_DIR/pid"
+trap 'rm -rf "$PID_LOCK_DIR"' EXIT TERM INT
+
+# ─── CPU 가드 (2026-05-11 오답노트 영구 등재 + 2026-05-14 /verify 결함 3 강화) ──
 # 데몬 자신 CPU 폭주 시 자동 종료 → launchd가 재시작 → ThrottleInterval로 폭주 방지
+# /verify 결함 3: ps 빈 결과 시 안전 가정 불가 → 3회 연속 빈 결과 시 종료
+_CPU_EMPTY_STREAK=0
 _cpu_guard() {
     local own_cpu
     own_cpu=$(ps -o %cpu= -p $$ 2>/dev/null | tr -d ' ' | awk -F. '{print $1}')
     if [[ -z "$own_cpu" ]]; then
+        _CPU_EMPTY_STREAK=$((_CPU_EMPTY_STREAK + 1))
+        log "⚠️ CPU 측정 실패 (streak=$_CPU_EMPTY_STREAK)"
+        if (( _CPU_EMPTY_STREAK >= 3 )); then
+            log "🔴 CPU 측정 3회 연속 실패 — exit (launchd restart로 환경 리셋)"
+            exit 1
+        fi
         return 0
     fi
+    _CPU_EMPTY_STREAK=0
     if (( own_cpu > 50 )); then
         log "🔴 CPU guard: self ${own_cpu}% > 50% — exit (launchd restart)"
         exit 1
@@ -80,6 +114,24 @@ check_frequency_guard() {
         recent=$(awk -v cut="$cutoff" '$1 > cut {c++} END {print c+0}' "$FREQ_LEDGER")
     fi
     (( recent < 3 ))
+}
+
+# ─── FREQ_LEDGER 회전 (2026-05-14 /verify 결함 2) ──────────────────
+# 24h 이전 entries 자동 정리 — 1년+ 누적 시 awk scan 비용 폭증 방지
+# 매 사이클마다 호출 (비용 저렴 — 파일 크기 보통 KB 수준)
+rotate_freq_ledger() {
+    if [[ ! -f "$FREQ_LEDGER" ]]; then
+        return 0
+    fi
+    local cutoff
+    cutoff=$(($(date +%s) - 86400))  # 24h
+    local tmp="${FREQ_LEDGER}.rotate.$$"
+    awk -v cut="$cutoff" '$1 > cut' "$FREQ_LEDGER" > "$tmp" 2>/dev/null
+    if [[ -s "$tmp" ]] || [[ ! -s "$FREQ_LEDGER" ]]; then
+        mv "$tmp" "$FREQ_LEDGER"
+    else
+        rm -f "$tmp"
+    fi
 }
 
 # ─── 발화 함수 (공통 게이트) ───────────────────────────────────
@@ -157,6 +209,7 @@ _HEARTBEAT_EVERY=12  # 12 * 5min = 60min
 while true; do
     _cpu_guard
     process_event_queue
+    rotate_freq_ledger  # 24h 회전 (결함 2 — 매 사이클 비용 저렴)
 
     # 가시성 — 빈 큐 사이클에도 데몬 살아있다는 흔적
     if (( _heartbeat_cnt % _HEARTBEAT_EVERY == 0 )); then
