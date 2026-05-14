@@ -91,8 +91,10 @@ emit() {
     local mode
     mode=$(get_time_mode)
 
-    # 게이트 1 — 시간대 정책
-    if [[ "$mode" == "silent" ]]; then
+    # 게이트 1 — 시간대 정책 (critical 5개는 silent 시간에도 항상 통과 — 스펙 §3)
+    # 2026-05-14 /verify BLOCKER 수정: silent 분기에 is_critical 예외 추가
+    # 어제 토큰 사고가 새벽에 발생했으면 차단됐을 회로 → 패치
+    if [[ "$mode" == "silent" ]] && ! is_critical "$category"; then
         log "🔇 [silent] $category 차단 (수면 시간)"
         return 0
     fi
@@ -148,9 +150,20 @@ process_event_queue() {
 # ─── 메인 루프 ─────────────────────────────────────────────────
 log "=== proactive-engine v2 시작 (mode=$(get_time_mode), poll=${POLL_INTERVAL}s) ==="
 
+# 2026-05-14 /verify 추가: heartbeat 카운터 — 1시간 1회 가시성 로그
+_heartbeat_cnt=0
+_HEARTBEAT_EVERY=12  # 12 * 5min = 60min
+
 while true; do
     _cpu_guard
     process_event_queue
+
+    # 가시성 — 빈 큐 사이클에도 데몬 살아있다는 흔적
+    if (( _heartbeat_cnt % _HEARTBEAT_EVERY == 0 )); then
+        log "💓 heartbeat (mode=$(get_time_mode), uptime_cycles=${_heartbeat_cnt})"
+    fi
+    _heartbeat_cnt=$((_heartbeat_cnt + 1))
+
     # Day 2~6에 추가될 직접 체크들:
     # - mail-event-hook.sh 큐 (Day 2)
     # - calendar-event-hook.sh 큐 (Day 3)
