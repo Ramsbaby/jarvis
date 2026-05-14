@@ -263,6 +263,9 @@ async function main() {
       });
       log('info', '수동 알림 발송 완료', { tag: latestTag });
     }
+    // 알림 발송 후 버전 기록 — 다음 실행 시 중복 알림 방지
+    saveInstalledVersion(latestTag, publishedAt);
+    log('info', '알림 버전 저장 완료 (중복 알림 방지)', { tag: latestTag });
   }
 }
 
