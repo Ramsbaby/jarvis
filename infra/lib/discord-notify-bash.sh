@@ -24,3 +24,11 @@ send_discord() {
     curl -s --max-time 10 -H "Content-Type: application/json" \
         -d "$payload" "$webhook" >/dev/null 2>&1 || true
 }
+
+# discord_notify — (webhook_key, msg) 시그니처 래퍼 (2026-05-14 추가 — token-health-check 호환)
+# 24h 알림 침묵 사고 재발 방지: 호출자가 (channel, msg) 순서로 부르는 패턴 지원
+discord_notify() {
+    local webhook_key="$1"
+    local msg="$2"
+    send_discord "$msg" "$webhook_key"
+}
