@@ -112,7 +112,9 @@ _llm_claude_cli() {
             --disable-slash-commands
             --no-session-persistence
             --setting-sources ""
-            --exclude-dynamic-system-prompt-sections
+            # --exclude-dynamic-system-prompt-sections  # 2026-05-14 제거 — Claude CLI 미지원 옵션
+            # 근거: 2026-05-11 커밋 3452c43에서 ajqe-dispatch.mjs에서 이미 제거됨 (동일 이유)
+            # 재삽입 금지: context-mode orphan 54개 + system-health 84회 실패 원인
         )
     fi
 
