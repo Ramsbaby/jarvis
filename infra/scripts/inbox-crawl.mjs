@@ -31,19 +31,21 @@ const TARGETS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'inbox-targe
 let SITES = [];
 let GREETINGHR_SITES = [];
 let NINEHIRE_SITES = [];
+let LG_CAREERS_SITES = [];
 let WANTED_CFG = null;
 let JUMPIT_CFG = null;
 let LINKEDIN_CFG = null;
 try {
   if (existsSync(TARGETS_PATH)) {
     const cfg = JSON.parse(readFileSync(TARGETS_PATH, 'utf-8'));
-    SITES = Array.isArray(cfg.sites) ? cfg.sites : [];
+    SITES = Array.isArray(cfg.sites) ? cfg.sites.filter(s => !s.lgApiCrawler) : [];
     GREETINGHR_SITES = Array.isArray(cfg.greetinghr_sites) ? cfg.greetinghr_sites : [];
     NINEHIRE_SITES = Array.isArray(cfg.ninehire_sites) ? cfg.ninehire_sites : [];
+    LG_CAREERS_SITES = Array.isArray(cfg.lg_careers_sites) ? cfg.lg_careers_sites : [];
     WANTED_CFG = (cfg.wanted && cfg.wanted.enabled) ? cfg.wanted : null;
     JUMPIT_CFG = (cfg.jumpit && cfg.jumpit.enabled) ? cfg.jumpit : null;
     LINKEDIN_CFG = (cfg.linkedin && cfg.linkedin.enabled) ? cfg.linkedin : null;
-    console.log(`📂 타겟 로드: ${SITES.length} sites + ${GREETINGHR_SITES.length} greetinghr + ${NINEHIRE_SITES.length} ninehire${WANTED_CFG ? ' + wanted' : ''}${JUMPIT_CFG ? ' + jumpit' : ''}${LINKEDIN_CFG ? ' + linkedin' : ''}`);
+    console.log(`📂 타겟 로드: ${SITES.length} sites + ${GREETINGHR_SITES.length} greetinghr + ${NINEHIRE_SITES.length} ninehire + ${LG_CAREERS_SITES.length} lg${WANTED_CFG ? ' + wanted' : ''}${JUMPIT_CFG ? ' + jumpit' : ''}${LINKEDIN_CFG ? ' + linkedin' : ''}`);
   } else {
     console.warn(`⚠️ ${TARGETS_PATH} 없음 — 크롤링 대상 0건. 샘플: private/config/inbox-crawl-targets.example.json 참고`);
   }
@@ -59,6 +61,16 @@ const BACKEND_KW = [
   '서버 엔지니어', '서버엔지니어', '서버개발자', '서버 개발자',
   'kotlin', 'golang', 'go 언어', 'node.js', 'nodejs', 'python',
   '시스템 개발', '시스템개발', 'api 개발', '클라우드 엔지니어',
+  // 대기업 직무명 패턴 (LG·삼성·현대 등 직무명 관행)
+  '소프트웨어 개발', '소프트웨어개발', 'sw 개발', 'sw개발', 'sw 엔지니어', 'sw엔지니어',
+  '플랫폼 엔지니어', '플랫폼엔지니어',
+  'it 서비스 개발', 'it서비스개발', '디지털 서비스 개발',
+  '솔루션 개발', '솔루션개발', '응용 개발', '응용개발',
+  'application developer', '어플리케이션 개발',
+  // 클라우드 아키텍처 역할 (LG CNS·현대 등 대기업 IT 직무명 패턴)
+  '클라우드 아키텍트', 'cloud architect', '인프라 아키텍트', 'infrastructure architect',
+  '어플리케이션 아키텍트', 'application architect',
+  'google cloud', 'gcp',
 ];
 const EXCLUDE_KW = [
   '석사', '박사', 'phd', '석·박사', '석박사',
@@ -251,6 +263,40 @@ async function crawlJumpit(cfg) {
   return results;
 }
 
+// ── API 크롤링 (LG Careers — api.careers.lg.com) ─────────────────────────
+// 2026-05-13 실측: POST /rmk/job/retrieveJobNoticesList
+// companyCodeList: ["LGE"] | ["LGU"] | ["LGC"] 등
+// React SPA라 <a> 태그 없음 → XHR 인터셉트로 파악한 API 직접 호출
+async function crawlLGCareers(site) {
+  try {
+    const r = await fetch('https://api.careers.lg.com/rmk/job/retrieveJobNoticesList', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Referer': 'https://careers.lg.com/',
+        'Origin': 'https://careers.lg.com',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      },
+      body: JSON.stringify({
+        lnbSearch: '', hashTagText: '',
+        recDate: 'CREATION_DATE', order: 'DESC',
+        careerList: [], companyCodeList: [site.companyCode],
+        desireLocList: [], jobGroupList: [],
+      }),
+    });
+    const d = await r.json();
+    const list = d?.data?.jobNoticeList || [];
+    return list.map(j => ({
+      title: j.jobNoticeName || '',
+      url: `https://careers.lg.com/job-detail?jobNoticeId=${j.jobNoticeId}`,
+      company: site.company,
+    }));
+  } catch (e) {
+    console.error(`  [API] ${site.company} 실패: ${e.message}`);
+    return [];
+  }
+}
+
 // ── API 크롤링 (NineHire) ─────────────────────────────────────────────────
 async function crawlNineHire(site) {
   try {
@@ -271,10 +317,16 @@ async function crawlWithBrowser(browser, site) {
   try {
     await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
     await page.goto(site.url, { waitUntil: 'networkidle2', timeout: 30000 });
-    // SPA 렌더링 대기
-    await new Promise(r => setTimeout(r, 5000));
+    // SPA 렌더링 대기 (site.waitMs 설정 우선, 기본 5초)
+    const waitMs = site.waitMs || 5000;
+    await new Promise(r => setTimeout(r, waitMs));
+    // 특정 선택자 대기 (SPA 목록 로딩 완료 확인)
+    if (site.waitForSelector) {
+      try { await page.waitForSelector(site.waitForSelector, { timeout: 8000 }); } catch {}
+    }
 
     const jobs = await page.evaluate((siteData) => {
+      /* eslint-env browser */
       const results = [];
       const seen = new Set();
 
@@ -303,7 +355,7 @@ async function crawlWithBrowser(browser, site) {
             const m = onclick.match(/location\.href\s*=\s*['"]([^'"]+)['"]/);
             if (!m || !m[1].includes(siteData.linkPattern)) return;
             const title = extractTitle(el);
-            const url = m[1].startsWith('http') ? m[1] : location.origin + m[1];
+            const url = m[1].startsWith('http') ? m[1] : window.location.origin + m[1];
             if (title && title.length > 3 && !seen.has(url)) { seen.add(url); results.push({ title, url, company: siteData.company }); }
           });
         }
@@ -320,7 +372,7 @@ async function crawlWithBrowser(browser, site) {
             const path = u.pathname;
             if (/\.(css|js|png|jpg|gif|svg|ico|woff|pdf)$/i.test(path)) return;
             if (path.split('/').filter(Boolean).length < 2) return;
-            const hasNumId = /\/\d{3,}/.test(path) || /[?&](id|seq|no|idx)=\d+/.test(u.search);
+            const hasNumId = /\/\d{3,}/.test(path) || /[?&]\w*(?:id|no|seq|idx)\w*=\d+/i.test(u.search);
             const hasKw = LINK_KW.some(k => (path + u.search).toLowerCase().includes(k));
             if (!hasNumId && !hasKw) return;
             if (seen.has(fullUrl)) return;
@@ -406,6 +458,16 @@ async function main() {
 
   for (const site of NINEHIRE_SITES) {
     const jobs = await crawlNineHire(site);
+    const backend = jobs.filter(j => isBackendJob(j.title));
+    const newJobs = backend.filter(j => { const id = makeId(j.url); if (seen.has(id)) return false; seen.add(id); return true; });
+    allJobs.push(...backend.map(j => ({ ...j, isNew: newJobs.some(n => n.url === j.url) })));
+    siteResults.push({ company: site.company, total: jobs.length, backend: backend.length, new: newJobs.length });
+    console.log(`  ✅ ${site.company}: ${jobs.length}건 (백엔드 ${backend.length}, 신규 ${newJobs.length})`);
+  }
+
+  // LG Careers API (LGE/LGU/LGC 등 채널별 직접 API 호출)
+  for (const site of LG_CAREERS_SITES) {
+    const jobs = await crawlLGCareers(site);
     const backend = jobs.filter(j => isBackendJob(j.title));
     const newJobs = backend.filter(j => { const id = makeId(j.url); if (seen.has(id)) return false; seen.add(id); return true; });
     allJobs.push(...backend.map(j => ({ ...j, isNew: newJobs.some(n => n.url === j.url) })));

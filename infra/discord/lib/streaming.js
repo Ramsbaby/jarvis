@@ -383,9 +383,11 @@ function _splitIntoChunks(text, maxLen = 3800) {
 // Discord TextDisplay는 ## 헤딩을 렌더링하지 않으므로 볼드 텍스트로 대체.
 // ---------------------------------------------------------------------------
 function _preprocessMarkdown(text) {
+  // 2026-05-14: ##/### 헤더는 Discord 네이티브 마크다운으로 보존.
+  // 기존 볼드 변환(## → **── X ──**, ### → **▸ X**)은 Discord가 헤더를 미지원하던 시절 레거시.
+  // Discord는 2023년부터 # ## ### 공식 지원. 네이티브 헤더가 시각적으로 훨씬 낫다.
+  // #### 이하는 Discord 미지원이므로 볼드로 대체.
   return text
-    .replace(/^## (.+)$/mg, '\n**── $1 ──**\n')
-    .replace(/^### (.+)$/mg, '**▸ $1**')
     .replace(/^#### (.+)$/mg, '**$1**')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
@@ -912,7 +914,7 @@ export class StreamingMessage {
     const key = _cacheKey(chartJson);
     if (_imageCacheGet(key)) return; // 이미 캐시됨
     // 백그라운드 렌더링 — 메인 flush 루프 차단 금지
-    setImmediate(async () => {
+    setTimeout(async () => {
       try {
         const { type = 'line', title, labels = [], datasets = [] } = chartJson;
         const palette = ['#5865f2', '#57f287', '#fee75c', '#ed4245', '#eb459e', '#faa61a'];
@@ -947,7 +949,7 @@ export class StreamingMessage {
       } catch (err) {
         log('debug', 'CHART_DATA prefetch failed (non-blocking)', { error: err.message });
       }
-    });
+    }, 0);
   }
 
   _findSplitPoint(text, maxLen) {
@@ -1416,9 +1418,9 @@ export class StreamingMessage {
       this.buffer = this.buffer.replace(hit.raw, '').replace(/^\n/m, '');
       this._markerEarlySent.add(hit.name);
       // 실제 이미지 렌더·전송은 비동기로 띄워 다음 flush 흐름을 막지 않음
-      setImmediate(() => this._renderAndSendEarlyMarker(hit).catch(err => {
+      setTimeout(() => this._renderAndSendEarlyMarker(hit).catch(err => {
         log('warn', 'early marker render failed (non-critical)', { name: hit.name, error: err.message });
-      }));
+      }), 0);
     } catch (err) {
       log('debug', '_tryEarlyMarkerSend skipped', { error: err.message });
     }
