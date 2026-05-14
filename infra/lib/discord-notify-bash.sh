@@ -21,8 +21,18 @@ send_discord() {
 
     local payload
     payload=$(jq -cn --arg content "$msg" '{"content":$content}')
-    curl -s --max-time 10 -H "Content-Type: application/json" \
-        -d "$payload" "$webhook" >/dev/null 2>&1 || true
+    # 2026-05-14: || true 제거 — caller가 success/fail 인지하도록 반환값 명시
+    # 어제 사고: send_discord 항상 0 반환 → token-health-check fail 분기 dead code → 24h 침묵
+    # 재발 방지: HTTP 응답 헤더로 2xx 확인 후 명시적 return
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+        -H "Content-Type: application/json" \
+        -d "$payload" "$webhook" 2>/dev/null)
+    if [[ "$http_code" =~ ^2[0-9][0-9]$ ]]; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # discord_notify — (webhook_key, msg) 시그니처 래퍼 (2026-05-14 추가 — token-health-check 호환)
