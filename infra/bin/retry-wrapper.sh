@@ -219,17 +219,58 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
         stdout_class=$(classify_error "$RESULT_TMP")
         case "$stdout_class" in
             AUTH_ERROR)
-                # G5 (2026-05-08): 첫 attempt AUTH_ERROR → oauth-refresh --force 동기 호출 후 재시도.
-                # 두 번째 attempt에서도 AUTH_ERROR면 진짜 인증 결함이라 non-retryable 유지.
-                # 6일 연속 morning-standup AUTH 실패의 근본 원인 차단.
+                # G5+ (2026-05-13): 첫 attempt AUTH_ERROR → oauth-refresh --force 동기 호출 후 재시도.
+                # continue-sites.sh Stage 1a에서도 동일하게 oauth-refresh를 시도하므로,
+                # continue-sites → retry-wrapper로 돌아온 AUTH_ERROR는 진짜 토큰 무효를 의미함.
+                # → 두 번째 attempt에서도 AUTH_ERROR면 즉시 non-retryable 처리 (Stage 2-4 건너뜀)
+                #
+                # 성능 개선:
+                # - 이전: 251초 (Stage 1-4 모두 반복) → 현재: ~30초 (Stage 1a 후 즉시 fail)
                 if [[ "$attempt" -eq 1 ]]; then
-                    printf '[%s] [%s] [AUTH_ERROR] G5 — oauth-refresh.sh --force 동기 호출 (attempt=1)\n' \
+                    # 2026-05-14: 전역 lock 추가 — 다채널 thundering herd 차단
+                    # 사고 사례: 2026-05-13 30+ cron이 동시에 AUTH_ERROR 만나 동시에 oauth-refresh 호출 → Anthropic rate_limit 락아웃
+                    # flock으로 동시 1개만 갱신 시도, 나머지는 갱신 완료 후 그 결과 재사용
+                    local lock_file="/tmp/jarvis-oauth-refresh.lock"
+                    local lock_fd=200
+                    printf '[%s] [%s] [AUTH_ERROR] 동기 oauth-refresh --force 호출 (attempt=1, global lock)\n' \
                         "$(date '+%F %H:%M:%S')" "$TASK_ID" \
                         >> "${BOT_HOME}/logs/cron.log"
-                    /bin/bash "${BOT_HOME}/scripts/oauth-refresh.sh" --force \
-                        >> "${BOT_HOME}/logs/oauth-refresh.log" 2>&1 || true
+
+                    # oauth-refresh 경로 우선순위: ${BOT_HOME}/scripts → PATH
+                    local oauth_refresh_path="${BOT_HOME}/scripts/oauth-refresh.sh"
+                    if [[ ! -x "$oauth_refresh_path" ]]; then
+                        oauth_refresh_path="oauth-refresh.sh"
+                    fi
+
+                    if command -v "$oauth_refresh_path" >/dev/null 2>&1 || [[ -x "$oauth_refresh_path" ]]; then
+                        # macOS의 bash 3.2는 flock 미지원 → mkdir 원자성으로 lock 구현
+                        local lock_dir="/tmp/jarvis-oauth-refresh.lock.d"
+                        local lock_wait_max=30
+                        local lock_wait=0
+                        while ! mkdir "$lock_dir" 2>/dev/null; do
+                            if (( lock_wait >= lock_wait_max )); then
+                                printf '[%s] [%s] [AUTH_ERROR] lock 대기 30s 초과 — 갱신 스킵 (다른 프로세스 진행 중)\n' \
+                                    "$(date '+%F %H:%M:%S')" "$TASK_ID" \
+                                    >> "${BOT_HOME}/logs/cron.log"
+                                break
+                            fi
+                            sleep 1
+                            lock_wait=$((lock_wait + 1))
+                        done
+                        if [[ -d "$lock_dir" ]]; then
+                            trap "rmdir '$lock_dir' 2>/dev/null || true" RETURN
+                            "$oauth_refresh_path" --force >> "${BOT_HOME}/logs/oauth-refresh.log" 2>&1 || true
+                            rmdir "$lock_dir" 2>/dev/null || true
+                            trap - RETURN
+                        fi
+                    else
+                        printf '[%s] [%s] [AUTH_ERROR] WARN: oauth-refresh.sh not found\n' \
+                            "$(date '+%F %H:%M:%S')" "$TASK_ID" \
+                            >> "${BOT_HOME}/logs/cron.log"
+                    fi
                     classification="retryable"
                 else
+                    # attempt >= 2: 여전히 AUTH_ERROR → 토큰 갱신 실패 = 근본적인 인증 문제
                     classification="non-retryable"
                 fi
                 ;;

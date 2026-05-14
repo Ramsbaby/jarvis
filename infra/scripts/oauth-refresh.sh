@@ -41,6 +41,31 @@ if [[ -f "$_OAUTH_LAST_SUCCESS" ]]; then
   fi
 fi
 
+# 2026-05-14: 실패 backoff 가드 — 연속 실패 시 지수 backoff
+# 사고 사례: 2026-05-13 rate_limit_error로 모든 갱신 실패 → 쿨다운 가드는 성공 케이스만 기록 → 무한 재시도 → rate_limit 영구화
+# 실패 기록과 별도 backoff 트래커로 실패 케이스에도 호출 빈도 제어
+_OAUTH_LAST_FAIL="/tmp/jarvis-oauth-refresh.last-fail"
+_OAUTH_FAIL_COUNT="/tmp/jarvis-oauth-refresh.fail-count"
+if [[ -f "$_OAUTH_LAST_FAIL" ]]; then
+  _last_fail=$(cat "$_OAUTH_LAST_FAIL" 2>/dev/null || echo "0")
+  _fail_count=$(cat "$_OAUTH_FAIL_COUNT" 2>/dev/null || echo "0")
+  _now=$(date +%s)
+  _delta=$((_now - _last_fail))
+  if (( _fail_count > 6 )); then _fail_count_clamped=6; else _fail_count_clamped=$_fail_count; fi
+  _backoff=$(( (1 << _fail_count_clamped) * 60 ))
+  if (( _backoff > 3600 )); then _backoff=3600; fi
+  if (( _delta < _backoff )); then
+    _force_bypass=0
+    for arg in "$@"; do
+      case "$arg" in --force|-f) _force_bypass=1 ;; esac
+    done
+    if (( _force_bypass == 0 )); then
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh] backoff 스킵 — ${_fail_count}회 연속 실패 후 ${_delta}초 < ${_backoff}초 (rate_limit 보호)" >&2
+      exit 0
+    fi
+  fi
+fi
+
 CREDENTIALS_FILE="${HOME}/.claude/.credentials.json"
 TOKEN_URL="https://platform.claude.com/v1/oauth/token"
 CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
@@ -126,13 +151,17 @@ EXPIRES_IN=$(echo "${RESPONSE}" | node -e "
 
 if [[ -z "${ACCESS_TOKEN}" ]]; then
   log "ERROR: 갱신 실패 — 응답: ${RESPONSE:0:200}"
+  # 2026-05-14: 실패 backoff 카운터 기록 — rate_limit 영구화 방지
+  date +%s > "$_OAUTH_LAST_FAIL"
+  _prev_count=$(cat "$_OAUTH_FAIL_COUNT" 2>/dev/null || echo "0")
+  echo $((_prev_count + 1)) > "$_OAUTH_FAIL_COUNT"
   # rate_limit_error는 알림 발송 (수동 재로그인 필요할 수 있음)
   if echo "${RESPONSE}" | grep -q "rate_limit_error"; then
     # alert.sh 시그니처: <level> <title> <message> [fields_json]
     bash "${BOT_HOME}/scripts/alert.sh" \
       warning \
       "OAuth 갱신 rate_limit" \
-      "수동 /login 필요할 수 있음 (만료까지 ${REMAINING_SECS}s 남음)" \
+      "수동 /login 필요할 수 있음 (만료까지 ${REMAINING_SECS}s 남음, 실패 ${_prev_count}회 누적, backoff 활성)" \
       2>/dev/null || true
   fi
   exit 1
@@ -159,6 +188,9 @@ log "✅ 갱신 완료 — 새 만료: $(node -e "process.stdout.write(new Date(
 
 # 쿨다운 가드용 성공 시각 기록 (다음 호출이 60초 이내면 스킵)
 date +%s > "$_OAUTH_LAST_SUCCESS"
+
+# 2026-05-14: 성공 시 실패 카운터 리셋
+rm -f "$_OAUTH_LAST_FAIL" "$_OAUTH_FAIL_COUNT"
 
 # 봇 재시작 — 활성 세션 중이면 대화 완료 후 재시작 (graceful defer)
 ACTIVE_SESSION_FILE="${BOT_HOME}/state/active-session"
