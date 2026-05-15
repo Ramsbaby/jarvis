@@ -111,7 +111,11 @@ _llm_claude_cli() {
         cmd+=(
             --disable-slash-commands
             --no-session-persistence
-            --exclude-dynamic-system-prompt-sections
+            # --exclude-dynamic-system-prompt-sections  # 2026-05-15 재제거 — claude 2.1.x 미지원 (unknown option)
+            # 사고 이력: fafa0aa(제거) → 450a136(복구) → 현재(재제거)
+            # 증거: claude -p --exclude-dynamic-system-prompt-sections → "error: unknown option" (exit 0 + empty output)
+            # 결과: false-success guard → claude_exit=1 → needs_tools=true → "no fallback" → system-health 연속 실패
+            # 복구 조건: claude --help에서 이 플래그가 확인되면 그때 재추가
             --setting-sources ""
         )
     fi
