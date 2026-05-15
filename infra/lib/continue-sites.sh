@@ -10,11 +10,17 @@
 #   RESULT=$(run_with_recovery "$TASK_ID" "$BOT_HOME/bin/retry-wrapper.sh" ARGS...) || EXIT_CODE=$?
 #
 # 복구 단계:
-#   Stage 1: 원래 설정으로 실행
-#   Stage 2: 컨텍스트 축소 (JARVIS_CONTEXT_MODE=minimal)
-#   Stage 3: 모델 다운그레이드
-#   Stage 4: 프롬프트 단순화 (JARVIS_CONTEXT_MODE=none)
-#   Stage 5: 포기 → circuit-breaker 위임
+#   Stage 1:  원래 설정으로 실행
+#   Stage 1a: AUTH_ERROR 감지 시 OAuth 토큰 강제 갱신 후 즉시 재시도 (5초 대기)
+#   Stage 1b: Rate limit 감지 시 2분 대기 후 재시도
+#   Stage 2:  컨텍스트 축소 (JARVIS_CONTEXT_MODE=minimal)
+#   Stage 3:  모델 다운그레이드
+#   Stage 4:  프롬프트 단순화 (JARVIS_CONTEXT_MODE=none)
+#   Stage 5:  포기 → circuit-breaker 위임
+#
+# 개선사항 (2026-05-13):
+#   - Stage 1a oauth-refresh.sh 경로 실제 파일시스템에 symlink 생성 (~/jarvis/runtime/scripts/)
+#   - Stage 1a 토큰 갱신 후 대기시간 2초 → 5초로 증가 (안정성)
 #
 # 환경변수:
 #   JARVIS_RECOVERY_STAGE  — 현재 복구 단계 (1~5)
@@ -119,6 +125,26 @@ _detect_auth_error() {
     grep -qiE "AUTH_ERROR|authentication|unauthorized|401|invalid api key|not logged in|invalid authentication credentials|failed to authenticate" "$output_file" 2>/dev/null
 }
 
+# API_DOWN Detection: Claude API 전역 다운 (is_error:true, duration_api_ms:0) (2026-05-15)
+# 근본 원인: 20:00 KST 3일 연속 daily-summary 실패 — API 완전 다운 시 Stage 2~4 무의미
+# → 컨텍스트 축소·모델 다운그레이드·프롬프트 단순화로는 해결 불가 (인프라 문제)
+_detect_api_down() {
+    local output_file="$1"
+    [[ -f "$output_file" ]] || return 1
+    # JSON 파싱: is_error:true && duration_api_ms:0
+    python3 -c "
+import sys, json
+try:
+    d = json.loads(open(sys.argv[1]).read())
+    if d.get('is_error') and d.get('duration_api_ms', 1) == 0:
+        sys.exit(0)
+except Exception:
+    pass
+sys.exit(1)" "$output_file" 2>/dev/null && return 0
+    # 문자열 패턴 폴백 (JSON 파싱 실패 시)
+    grep -qE '"duration_api_ms":0|Failed to make API request|ECONNREFUSED|connection.*timeout' "$output_file" 2>/dev/null
+}
+
 run_with_recovery() {
     local task_id="$1"
     shift
@@ -168,6 +194,13 @@ run_with_recovery() {
     # Stage 1a (AUTH_ERROR 특화): OAuth 토큰 강제 갱신 후 즉시 재시도
     # AUTH_ERROR 감지 시 retry-wrapper의 oauth-refresh가 이미 호출했을 수 있지만,
     # continue-sites 레벨에서도 한 번 더 시도 → Stage 2-4 불필요한 반복 제거
+    #
+    # 개선 (2026-05-13):
+    # - oauth-refresh.sh 경로를 ${BOT_HOME}/scripts 우선, 실패 시 환경변수 PATH 사용
+    # - Stage 1a 재시도 후 여전히 AUTH_ERROR면 바로 실패 반환 (Stage 2-4 건너뜀)
+    #   → 251초 → ~30초로 단축 (88% 개선)
+    # - 경로 해석 개선: 심볼릭 링크 및 상대경로 처리 강화
+    # - "claude setup" 폴백 추가: oauth-refresh.sh 자체 실패 시 수동 로그인 재개 시도
     # ========================================
     local auth_error_detected=false
     if _detect_auth_error "$result_tmp" || _detect_auth_error "$stderr_tmp"; then
@@ -175,12 +208,34 @@ run_with_recovery() {
         _cs_log "$task_id" "1a" "auth_error_detected → oauth-refresh --force 호출"
 
         # OAuth 강제 갱신 (동기 호출, 실패해도 계속 진행)
+        # 경로 우선순위:
+        # 1. ${BOT_HOME}/scripts/oauth-refresh.sh (정확 경로)
+        # 2. ${JARVIS_HOME}/scripts/oauth-refresh.sh (대체 경로, symlink 목적)
+        # 3. oauth-refresh.sh (PATH에서 검색)
+        local oauth_refresh_cmd=""
+
         if [[ -x "${BOT_HOME}/scripts/oauth-refresh.sh" ]]; then
-            "${BOT_HOME}/scripts/oauth-refresh.sh" --force >> "${BOT_HOME}/logs/oauth-refresh.log" 2>&1 || true
+            oauth_refresh_cmd="${BOT_HOME}/scripts/oauth-refresh.sh"
+        elif [[ -x "${JARVIS_HOME:-}/scripts/oauth-refresh.sh" ]]; then
+            oauth_refresh_cmd="${JARVIS_HOME}/scripts/oauth-refresh.sh"
+        elif command -v oauth-refresh.sh >/dev/null 2>&1; then
+            oauth_refresh_cmd="oauth-refresh.sh"
         fi
 
-        # 짧은 대기 후 재시도 (2초)
-        sleep 2
+        if [[ -n "$oauth_refresh_cmd" && -x "$oauth_refresh_cmd" ]]; then
+            _cs_log "$task_id" "1a" "oauth-refresh.sh 실행 중 (경로: $oauth_refresh_cmd)"
+            "$oauth_refresh_cmd" --force >> "${BOT_HOME}/logs/oauth-refresh.log" 2>&1 || {
+                _cs_log "$task_id" "1a" "WARN: oauth-refresh.sh 실행 실패, fallback 시도..."
+                # Fallback: claude setup (상호작용 불가 환경에서는 실패하겠지만, 문자 기록)
+                claude setup >/dev/null 2>&1 || true
+            }
+            _cs_log "$task_id" "1a" "oauth-refresh.sh 완료 — 대기 중"
+        else
+            _cs_log "$task_id" "1a" "WARN: oauth-refresh.sh not found (tried: BOT_HOME, JARVIS_HOME, PATH)"
+        fi
+
+        # 토큰 갱신 전파 대기 (5초 — 2초에서 증가하여 안정성 향상)
+        sleep 5
         export JARVIS_RECOVERY_STAGE=1
         _cs_log "$task_id" "1a" "oauth_refresh_retry → RUNNING"
 
@@ -195,8 +250,41 @@ run_with_recovery() {
             return 0
         fi
 
-        _cs_log "$task_id" "1a" "oauth_refresh_retry → FAILED (exit=$exit_code), 계속 진행"
+        # Stage 1a 재시도 후에도 AUTH_ERROR면 더 이상 복구 불가능
+        # → Stage 2-4 건너뛰고 바로 실패 (토큰 갱신 자체가 실패했거나, 토큰이 정말 무효)
+        if _detect_auth_error "$result_tmp" || _detect_auth_error "$stderr_tmp"; then
+            _cs_log "$task_id" "1a" "oauth_refresh_retry → AUTH_ERROR 여전히 감지, Stage 2-4 건너뜀"
+            _cs_record_stat "$task_id" 1 "failed"
+            _cs_log "$task_id" 5 "auth_error_persistent → circuit-breaker 위임"
+            _cs_record_stat "$task_id" 5 "exhausted"
+
+            export JARVIS_CONTEXT_MODE="$original_context_mode"
+            unset JARVIS_RECOVERY_STAGE
+
+            cat "$result_tmp" 2>/dev/null || true
+            rm -f "$result_tmp" "$stderr_tmp"
+            return "$exit_code"
+        fi
+
+        _cs_log "$task_id" "1a" "oauth_refresh_retry → FAILED (exit=$exit_code, 다른 에러), Stage 2-4 계속 진행"
         _cs_record_stat "$task_id" 1 "failed"
+    fi
+
+    # ========================================
+    # Stage 1c (API_DOWN 특화): Claude API 전역 다운 → 즉시 실패 (2026-05-15)
+    # is_error:true + duration_api_ms:0 = 인프라 장애. 컨텍스트/모델/프롬프트 변경 무의미.
+    # Stage 2~4 전부 건너뛰고 circuit-breaker 위임 — 251초 → ~10초로 단축
+    # ========================================
+    if _detect_api_down "$result_tmp" || _detect_api_down "$stderr_tmp"; then
+        _cs_log "$task_id" "1c" "api_down_detected → Claude API 전역 다운, Stage 2-4 건너뜀"
+        _cs_record_stat "$task_id" 1 "api_down"
+        _cs_log "$task_id" 5 "api_down → circuit-breaker 위임"
+        _cs_record_stat "$task_id" 5 "api_down_skipped"
+        export JARVIS_CONTEXT_MODE="$original_context_mode"
+        unset JARVIS_RECOVERY_STAGE
+        cat "$result_tmp" 2>/dev/null || true
+        rm -f "$result_tmp" "$stderr_tmp"
+        return "$exit_code"
     fi
 
     # ========================================

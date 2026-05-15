@@ -48,6 +48,15 @@ _check_cooldown() {
 
 log "Claude 인증 사전 확인 시작"
 
+# context-mode 좀비 가드 (2026-05-14 추가)
+# 단일 프로세스 50% 기준이 아닌 누적 개수 기준 — 각 13~15%씩 54개 폭주 사례 반영
+_CM_COUNT=$(pgrep -c -f "context-mode" 2>/dev/null || echo 0)
+if (( _CM_COUNT > 5 )); then
+    log "⚠️ context-mode 좀비 ${_CM_COUNT}개 감지 — 전체 SIGKILL"
+    pkill -9 -f "context-mode" 2>/dev/null || true
+    log "✅ context-mode 좀비 제거 완료"
+fi
+
 # PATH 설정 (크론 환경)
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
@@ -59,7 +68,7 @@ _TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null
 # 훅 negative pattern '_safe_claude' 매칭으로 통과시키며 의미·동작 변경 없음
 _safe_claude_auth_test() {
     if [[ -n "${_TIMEOUT_CMD:-}" ]]; then
-        ${_TIMEOUT_CMD} 30 claude -p "ok" --output-format json 2>&1
+        ${_TIMEOUT_CMD} 60 claude -p "ok" --output-format json 2>&1
     else
         claude -p "ok" --output-format json 2>&1  # _safe_claude_auth_test fallback (no timeout binary, brew install coreutils 권고)
     fi
@@ -89,7 +98,7 @@ sys.exit(1)" 2>/dev/null && return 0
 }
 
 if (( AUTH_EXIT == 124 )); then
-    log "인증 타임아웃 (30s) — 네트워크 또는 클로드 서비스 이상"
+    log "인증 타임아웃 (60s) — 네트워크 또는 클로드 서비스 이상"
     if ! _check_cooldown "$COOLDOWN_EXPIRED" 1800; then
         date +%s > "$COOLDOWN_EXPIRED"
         send_ntfy "Jarvis Claude 타임아웃" "⚠️ claude -p 30s 타임아웃. 네트워크 확인 필요. 계정: $ACCOUNT_INFO" "high"
