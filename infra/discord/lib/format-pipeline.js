@@ -98,9 +98,10 @@ const tableToList = withCodeFenceGuard((text) =>
   ),
 );
 
-/** Downshift headings: # → ##, ## → ###. Discord only renders up to ###. */
+/** Downshift H1 → H2 only. Discord natively renders ##/### since 2023 — do NOT downshift further.
+ *  2026-05-14: 기존 H2→H3 downshift 제거. ## ### 네이티브 헤더 보존. */
 const normalizeHeadings = withCodeFenceGuard((text) =>
-  text.replace(/^(#{1,2}) /gm, (_, hashes) => '#' + hashes + ' '),
+  text.replace(/^# /gm, '## '),
 );
 
 /** Collapse 3+ consecutive blank lines to 2. */

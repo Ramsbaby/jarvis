@@ -71,8 +71,8 @@ report_lines+=("")
 report_lines+=("## 1. 소스 편향 감지")
 report_lines+=("")
 
-bias_result=$(LANCEDB_DIR="$LANCEDB_PATH" node -e "
-const lancedb = require('@lancedb/lancedb');
+bias_result=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/.jarvis/discord/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
+const lancedb = (await import(process.env.LANCE_MOD)).default;
 (async () => {
     const db = await lancedb.connect(process.env.LANCEDB_DIR);
     const table = await db.openTable('documents');
@@ -214,8 +214,8 @@ else
 fi
 
 # LanceDB 실제 행 수
-db_chunks=$(LANCEDB_DIR="$LANCEDB_PATH" node -e "
-const lancedb = require('@lancedb/lancedb');
+db_chunks=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/.jarvis/discord/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
+const lancedb = (await import(process.env.LANCE_MOD)).default;
 (async () => {
     const db = await lancedb.connect(process.env.LANCEDB_DIR);
     const table = await db.openTable('documents');

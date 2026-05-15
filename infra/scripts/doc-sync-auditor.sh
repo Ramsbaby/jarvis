@@ -119,7 +119,7 @@ get_today_changed_files() {
         fi
     done
 
-    printf '%s\n' "${today_files[@]}"
+    [[ ${#today_files[@]} -gt 0 ]] && printf '%s\n' "${today_files[@]}" || true
 }
 
 # Get documentation files changed today
@@ -138,7 +138,7 @@ get_today_changed_docs() {
         fi
     done
 
-    printf '%s\n' "${today_docs[@]}"
+    [[ ${#today_docs[@]} -gt 0 ]] && printf '%s\n' "${today_docs[@]}" || true
 }
 
 # HTTP request with error handling and logging
@@ -378,7 +378,7 @@ step_5_cleanup_pending() {
 
     # Check for failures
     local failed_count
-    failed_count=$(grep -c '"status":"failed"' "$RESULTS_FILE" 2>/dev/null || echo "0")
+    failed_count=$(grep -c '"status":"failed"' "$RESULTS_FILE" 2>/dev/null | tr -d ' \n' || echo "0")
 
     if (( failed_count == 0 )); then
         log "INFO: All updates succeeded, cleaning pending file"

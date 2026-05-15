@@ -1,0 +1,702 @@
+{
+  "generatedAt": "2026-05-14T19:00:05.798Z",
+  "totalChannels": 12,
+  "totalTasks": 122,
+  "source": "runtime/config/tasks.json + infra/config/models.json",
+  "channels": {
+    "jarvis-system": {
+      "taskCount": 38,
+      "tasks": [
+        {
+          "id": "schedule-coherence",
+          "schedule": "0 4 * * 1",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "system-health",
+          "schedule": "*/60 * * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "github-monitor",
+          "schedule": "0 * * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "disk-alert",
+          "schedule": "10 * * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "security-scan",
+          "schedule": "30 2 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "rag-health",
+          "schedule": "0 3 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "code-auditor",
+          "schedule": "45 4 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "doc-supervisor",
+          "schedule": "0 5 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "doc-sync-auditor",
+          "schedule": "20 23 * * *",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "weekly-code-review",
+          "schedule": "0 5 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "memory-sync",
+          "schedule": "30 4 * * 1",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "dev-runner",
+          "schedule": "55 22 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "bot-quality-check",
+          "schedule": "30 2 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "weekly-usage-stats",
+          "schedule": "0 9 * * 1",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "bot-self-critique",
+          "schedule": "45 2 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "cron-auditor",
+          "schedule": "30 5 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "system-doctor",
+          "schedule": "0 6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "bot-crash-classifier",
+          "schedule": "(adhoc)",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "env-restore-notifier",
+          "schedule": "(adhoc)",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "log-cleanup",
+          "schedule": "(adhoc)",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "weekly-perf-agent",
+          "schedule": "0 21 * * 0",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "geeknews-bench-crawl",
+          "schedule": "30 10 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "self-healing-digest",
+          "schedule": "0 21 * * 0",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "tasks-integrity-audit",
+          "schedule": "7 10 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "unpause-rebound-check",
+          "schedule": "23 9 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "log-size-audit",
+          "schedule": "17 13 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "cron-master",
+          "schedule": "*/30 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "cron-master-smoke",
+          "schedule": "15 9 * * 1",
+          "model": "<default>"
+        },
+        {
+          "id": "user-memory-monitor",
+          "schedule": "0 8 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "bidirectional-audit",
+          "schedule": "30 7 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "cost-cap-audit",
+          "schedule": "55 5 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "interview-ssot-audit",
+          "schedule": "0 9 * * 1",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "claude-md-audit",
+          "schedule": "45 5 * * 1",
+          "model": "<default>"
+        },
+        {
+          "id": "rag-lancedb-compact",
+          "schedule": "15 4 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "mistake-pattern-analyzer",
+          "schedule": "30 3 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "session-report",
+          "schedule": "50 23 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "rag-stale-scan",
+          "schedule": "0 3 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "age-mem-discard",
+          "schedule": "0 2 * * 4",
+          "model": "claude-sonnet-4-6"
+        }
+      ],
+      "modelOverride": "opusplan",
+      "effortOverride": "max"
+    },
+    "<no-channel>": {
+      "taskCount": 38,
+      "tasks": [
+        {
+          "id": "memory-cleanup",
+          "schedule": "0 2 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "rate-limit-check",
+          "schedule": "*/30 * * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "update-usage-cache",
+          "schedule": "*/30 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "token-sync",
+          "schedule": "0 1 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "agent-batch-commit",
+          "schedule": "30 8 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "session-sync",
+          "schedule": "*/15 * * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "memory-expire",
+          "schedule": "0 3 * * 1",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "dev-event-bus",
+          "schedule": "50 22 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "dev-event-watcher",
+          "schedule": "0 23 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "stale-task-watcher",
+          "schedule": "*/30 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "gen-system-overview",
+          "schedule": "5 4 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "gen-gotchas",
+          "schedule": "0 3 * * 1",
+          "model": "<default>"
+        },
+        {
+          "id": "boram-daily-schedule",
+          "schedule": "30 7 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "rag-bench",
+          "schedule": "0 3 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "vault-sync",
+          "schedule": "0 */6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "vault-auto-link",
+          "schedule": "30 6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "jira-sync",
+          "schedule": "0 9 * * 1",
+          "model": "<default>"
+        },
+        {
+          "id": "profile-extractor",
+          "schedule": "30 0 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "context-extractor",
+          "schedule": "0 1 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "dev-task-runner",
+          "schedule": "*/5 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "entity-graph",
+          "schedule": "45 3 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "gen-indexes",
+          "schedule": "17 6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "jarvis-home-sync",
+          "schedule": "0 4 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "token-ledger-audit",
+          "schedule": "30 8 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "tune-task-params",
+          "schedule": "35 8 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "launchagents-audit",
+          "schedule": "13 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "tasks-prompt-path-audit",
+          "schedule": "23 3 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "mistake-extractor",
+          "schedule": "15 3 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "mistake-circuit-healthcheck",
+          "schedule": "0 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "backup-retention-daily",
+          "schedule": "0 4 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "runtime-rag-backup",
+          "schedule": "0 3 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "plist-bypass-autofix",
+          "schedule": "0 6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "rag-index-consume",
+          "schedule": "30 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "kakao-token-refresh",
+          "schedule": "0 */5 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "legacy-plist-audit",
+          "schedule": "0 4 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "cron-sync-hourly",
+          "schedule": "15 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "session-summaries-rotate",
+          "schedule": "30 3 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "followup-sync",
+          "schedule": "30 8 * * *",
+          "model": "<default>"
+        }
+      ],
+      "modelOverride": null,
+      "effortOverride": null
+    },
+    "jarvis-ceo": {
+      "taskCount": 25,
+      "tasks": [
+        {
+          "id": "weekly-report",
+          "schedule": "5 20 * * 0",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "weekly-kpi",
+          "schedule": "30 8 * * 1",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "weekly-roi",
+          "schedule": "55 23 * * 0",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "connections-weekly-insight",
+          "schedule": "45 9 * * 1",
+          "model": "claude-opus-4-7"
+        },
+        {
+          "id": "monthly-review",
+          "schedule": "0 9 1 * *",
+          "model": "claude-opus-4-7"
+        },
+        {
+          "id": "cost-monitor",
+          "schedule": "0 9 * * 0",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "council-insight",
+          "schedule": "5 23 * * *",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "academy-support",
+          "schedule": "0 20 * * 0",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "record-daily",
+          "schedule": "30 22 * * *",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "brand-weekly",
+          "schedule": "0 8 * * 2",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "infra-daily",
+          "schedule": "0 9 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "board-meeting-am",
+          "schedule": "5 6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "board-meeting-pm",
+          "schedule": "55 21 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "recon-weekly",
+          "schedule": "0 9 * * 1",
+          "model": "<default>"
+        },
+        {
+          "id": "ceo-daily-digest",
+          "schedule": "15 23 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "skill-eval",
+          "schedule": "30 4 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "board-conclude",
+          "schedule": "*/5 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "board-topic-proposer",
+          "schedule": "0 8-21 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "board-perf-review",
+          "schedule": "0 18 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "geeknews-bench-report",
+          "schedule": "0 9 * * 1",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "finance-monitor",
+          "schedule": "0 8 * * 1-5",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "compound-review",
+          "schedule": "30 20 * * 0",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "wiki-reference-report",
+          "schedule": "0 20 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "weekly-dream-insight",
+          "schedule": "0 4 * * 1",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "skill-synthesis-verify",
+          "schedule": "15 23 * * *",
+          "model": "<default>"
+        }
+      ],
+      "modelOverride": "opusplan",
+      "effortOverride": "high"
+    },
+    "jarvis": {
+      "taskCount": 5,
+      "tasks": [
+        {
+          "id": "morning-standup",
+          "schedule": "30 7 * * *",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "daily-summary",
+          "schedule": "0 20 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "news-briefing",
+          "schedule": "0 6 * * *",
+          "model": "claude-opus-4-6"
+        },
+        {
+          "id": "calendar-alert",
+          "schedule": "*/5 * * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "proactive-engine",
+          "schedule": "0 9,14,19 * * *",
+          "model": "<default>"
+        }
+      ],
+      "modelOverride": "opusplan",
+      "effortOverride": "high"
+    },
+    "jarvis-blog": {
+      "taskCount": 4,
+      "tasks": [
+        {
+          "id": "oss-recon",
+          "schedule": "30 10 * * 1",
+          "model": "<default>"
+        },
+        {
+          "id": "oss-maintenance",
+          "schedule": "15 9 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "oss-promo",
+          "schedule": "0 17 * * 5",
+          "model": "<default>"
+        },
+        {
+          "id": "oss-docs",
+          "schedule": "0 11 * * 3",
+          "model": "<default>"
+        }
+      ],
+      "modelOverride": null,
+      "effortOverride": null
+    },
+    "jarvis-market": {
+      "taskCount": 3,
+      "tasks": [
+        {
+          "id": "market-alert",
+          "schedule": "5 9,13,16 * * 1-5",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "macro-briefing",
+          "schedule": "30 23 * * 0-4",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "tqqq-monitor",
+          "schedule": "*/15 22-23 * * 1-5",
+          "model": "claude-sonnet-4-6"
+        }
+      ],
+      "modelOverride": "opusplan",
+      "effortOverride": "high"
+    },
+    "jarvis-dev": {
+      "taskCount": 2,
+      "tasks": [
+        {
+          "id": "profile-weekly",
+          "schedule": "0 18 * * 5",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "github-pr-handler",
+          "schedule": "(adhoc)",
+          "model": "claude-sonnet-4-6"
+        }
+      ],
+      "modelOverride": "opusplan",
+      "effortOverride": "high"
+    },
+    "jarvis-alerts": {
+      "taskCount": 2,
+      "tasks": [
+        {
+          "id": "discord-mention-handler",
+          "schedule": "(adhoc)",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "cost-alert-handler",
+          "schedule": "(adhoc)",
+          "model": "claude-sonnet-4-6"
+        }
+      ],
+      "modelOverride": null,
+      "effortOverride": null
+    },
+    "jarvis-interview": {
+      "taskCount": 2,
+      "tasks": [
+        {
+          "id": "qa-consistency-audit",
+          "schedule": "0 9 * * 1",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "interview-harness-audit",
+          "schedule": "0 9 * * 1",
+          "model": "claude-haiku-4-5-20251001"
+        }
+      ],
+      "modelOverride": "fast",
+      "effortOverride": "low"
+    },
+    "jarvis-boram": {
+      "taskCount": 1,
+      "tasks": [
+        {
+          "id": "personal-schedule-daily",
+          "schedule": "30 7 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        }
+      ],
+      "modelOverride": "opusplan",
+      "effortOverride": "high"
+    },
+    "jarvis-lite": {
+      "taskCount": 1,
+      "tasks": [
+        {
+          "id": "daily-usage-check",
+          "schedule": "55 5 * * *",
+          "model": "<default>"
+        }
+      ],
+      "modelOverride": null,
+      "effortOverride": null
+    },
+    "jarvis-inbox": {
+      "taskCount": 1,
+      "tasks": [
+        {
+          "id": "inbox-alert",
+          "schedule": "0 9 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        }
+      ],
+      "modelOverride": null,
+      "effortOverride": null
+    }
+  }
+}

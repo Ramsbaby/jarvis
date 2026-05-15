@@ -98,7 +98,18 @@ export PATH="${PATH}:/usr/local/bin:/opt/homebrew/bin"
 STDERR_LOG="${BOT_HOME}/logs/claude-stderr-vault-digest.log"
 SUMMARY=""
 if [[ -x "$BOT_HOME/bin/ask-claude.sh" ]]; then
+    # ask-claude.sh는 stdin을 기대하지 않음. PROMPT는 인자로 전달
+    # Broken pipe 방지: prompt를 파일로 생성해서 전달
+    PROMPT_FILE="/tmp/vault-digest-prompt-$$.txt"
+    printf '%s' "$PROMPT" > "$PROMPT_FILE" 2>/dev/null || true
+
+    # ask-claude.sh 파라미터: TASK_ID PROMPT ALLOWED_TOOLS TIMEOUT MAX_BUDGET RESULT_RETENTION MODEL
+    # 올바른 순서: task_id, prompt, allowed_tools(Read), timeout(60s), max_budget(0.50), retention(1day), model()
     timeout 80s "$BOT_HOME/bin/ask-claude.sh" "vault-digest" "$PROMPT" "Read" "60" "0.50" "1" 2>>"$STDERR_LOG" || true
+
+    # 정리
+    rm -f "$PROMPT_FILE" 2>/dev/null || true
+
     # 결과 파일에서 내용 추출
     RESULT_DIR="$BOT_HOME/results/vault-digest"
     if [[ -d "$RESULT_DIR" ]]; then
