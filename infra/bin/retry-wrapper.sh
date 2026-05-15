@@ -146,12 +146,14 @@ classify_exit_code() {
 # --- Error classification by stdout+stderr content ---
 # Phase 1 (2026-04-17): 실패 관측가능성 확보 — UNKNOWN 비율을 줄이는 게 목표.
 # 신규 카테고리: SCRIPT_MISSING / BUDGET_EXCEEDED / NETWORK_ERROR
+# Sprint Contract #1: Rate limit 감지 패턴 확장
 classify_error() {
     local result_file="$1"
     local stderr_file="${result_file}.stderr"
     local check_files=("$result_file")
     if [[ -f "$stderr_file" ]]; then check_files+=("$stderr_file"); fi
-    if grep -qi "rate_limit\|rate limit\|429\|hit your limit\|you've hit\|usage limit" "${check_files[@]}" 2>/dev/null; then echo "RATE_LIMITED"
+    # Rate limit 패턴: ask-claude.sh에서 추가한 "[SUBTYPE]" 마커도 감지
+    if grep -qiE "rate_limit|rate limit|error_rate_limit|RATE_LIMIT_ERROR|429|hit your limit|you've hit|usage limit|\[SUBTYPE\].*rate" "${check_files[@]}" 2>/dev/null; then echo "RATE_LIMITED"
     elif grep -qi "overloaded\|503\|capacity" "${check_files[@]}" 2>/dev/null; then echo "OVERLOADED"
     elif grep -qiE "authentication|unauthorized|401|invalid api key|fix external api key|not logged in" "${check_files[@]}" 2>/dev/null; then echo "AUTH_ERROR"
     elif grep -qi "context_length\|too.long\|too.large" "${check_files[@]}" 2>/dev/null; then echo "TOO_LONG"
@@ -361,8 +363,8 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
         # 로그: 각 재시도 시마다 상태 기록
         delay="${RATE_LIMIT_DELAYS[$((attempt - 1))]}"
 
-        # === Sprint Contract #3: Rate Limit 우회 로직 ===
-        # Rate limit 감지 시 동적 큐잉 + 우선순위 체크
+        # === Sprint Contract #1,5: Rate Limit 우회 로직 + Graceful Degradation ===
+        # Rate limit 감지 시 동적 큐잉 + 우선순위 체크 + 프롬프트 간소화
         if [[ "$attempt" -eq 1 ]]; then
             # 첫 rate_limit 감지 → 상태 기록
             python3 - "$RATE_LIMIT_STATE" <<'RLEOF' 2>/dev/null || true
@@ -374,13 +376,15 @@ if state_file:
             json.dump({
                 'detected_at': int(time.time()),
                 'retry_after_s': 300,  # 기본 5분 대기
-                'task_count_queued': 0
+                'task_count_queued': 0,
+                'graceful_degradation_active': False
             }, f)
     except: pass
 RLEOF
         fi
 
         # 우선순위 체크: critical/weekly 태스크만 계속 진행, 나머지는 큐에 저장
+        # morning-standup은 critical 우선순위로 분류
         TASK_PRIORITY=$(echo "$TASK_ID" | grep -oE "morning|daily-summary|critical" | head -1 || echo "normal")
         if [[ "$TASK_PRIORITY" != "critical" && "$attempt" -gt 1 ]]; then
             # 2차 이상 retry이고 priority 낮음 → 큐에 보관 후 skip
@@ -388,6 +392,16 @@ RLEOF
                 "$(date '+%F %H:%M:%S')" "$TASK_ID" "$TASK_PRIORITY" \
                 >> "${BOT_HOME}/logs/cron.log"
             break  # 재시도 중단, 실패로 처리 (queue 시스템이 나중에 재처리)
+        fi
+
+        # Graceful Degradation: critical 태스크인데 2차+ retry도 rate limit
+        # → continue-sites.sh가 Stage 1b (2분 대기)를 수행할 텐데,
+        #   여기서는 추가로 프롬프트 간소화 플래그를 설정
+        if [[ "$attempt" -gt 1 && "$TASK_PRIORITY" == "critical" ]]; then
+            printf '[%s] [%s] [RATE_LIMIT_GRACEFUL_DEGRADE] attempt=%d, setting JARVIS_CONTEXT_MODE=minimal\n' \
+                "$(date '+%F %H:%M:%S')" "$TASK_ID" "$attempt" \
+                >> "${BOT_HOME}/logs/cron.log"
+            export JARVIS_CONTEXT_MODE="${JARVIS_CONTEXT_MODE:-minimal}"
         fi
 
         printf '[%s] [%s] [RATE_LIMIT_BACKOFF] attempt=%d, waiting %ds before retry (exponential backoff)\n' \

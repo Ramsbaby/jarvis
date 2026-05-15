@@ -198,9 +198,21 @@ if [[ "$SUBTYPE" == error_* ]] || [[ "$IS_ERROR" == "true" ]]; then
     log_jsonl "error" "claude error: ${SUBTYPE} is_error=${IS_ERROR}" "$DURATION"
     echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-error.json"
     record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
+
+    # Sprint Contract #1: Rate limit 에러 명확히 감지 및 전파
+    # SUBTYPE: error_rate_limit_exceeded, error_overloaded 등을 stderr에 명시
+    if [[ "$SUBTYPE" == *"rate_limit"* ]] || [[ "$SUBTYPE" == *"overload"* ]]; then
+        printf '[%s] RATE_LIMIT_ERROR: subtype=%s\n' "$(date '+%F %H:%M:%S')" "$SUBTYPE" >&2
+    fi
+
     # retry-wrapper.sh의 classify_error가 인증/rate-limit 오류를 감지할 수 있도록
     # result 필드를 stdout으로 출력 (빈 RESULT_TMP로 인한 UNKNOWN 분류 방지)
-    echo "$RAW_OUTPUT" | jq -r '.result // ""' 2>/dev/null || true
+    _error_msg=$(echo "$RAW_OUTPUT" | jq -r '.result // ""' 2>/dev/null || true)
+    if [[ -n "$_error_msg" ]]; then
+        echo "$_error_msg"
+    fi
+    # Subtype도 stderr로 출력 (continue-sites.sh가 감지 용이)
+    printf '[SUBTYPE] %s\n' "$SUBTYPE" >&2
     exit 1
 fi
 
