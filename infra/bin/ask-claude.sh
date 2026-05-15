@@ -132,8 +132,9 @@ run_with_retry() {
 source "${BOT_HOME}/lib/insight-recorder.sh"
 
 # --- Execute LLM call (claude -p with multi-provider fallback) ---
-# Prevent nested claude detection (required for cron + Claude Code CLI sessions)
-unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+# Prevent nested claude detection (but preserve CLAUDECODE for OAuth credential inheritance)
+# NOTE: Unsetting CLAUDECODE breaks OAuth authentication in cron environments
+unset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 cd "$WORK_DIR"
 
 # Source LLM Gateway (ADR-006)

@@ -13,8 +13,10 @@ export HOME="${HOME:-/Users/$(id -un)}"  # macOS default; Linux: /home/$(id -un)
 # claude -p는 구독 인증으로 실행, ANTHROPIC_API_KEY가 있으면 API 크레딧을 소모하므로 명시적 unset
 unset ANTHROPIC_API_KEY 2>/dev/null || true
 
-# Prevent nested claude detection
-unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+# Prevent nested claude detection (but preserve CLAUDECODE for OAuth credential inheritance)
+# NOTE: CLAUDECODE unset causes OAuth authentication failure. Keep it to inherit
+# credentials from the parent Claude Code session running cron-master.sh
+unset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
 # Batch mode: 크론 태스크는 기본적으로 토큰 절감 플래그 활성화
 # (llm-gateway.sh가 감지하여 --disable-slash-commands, --no-session-persistence,
