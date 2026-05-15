@@ -112,10 +112,12 @@ _cs_can_downgrade_model() {
 # exit code: 0=성공, 비0=모든 stage 실패
 #
 # Rate Limit Detection: stderr/stdout에서 rate limit 패턴 감지
+# Sprint Contract #1: 강화된 감지 로직
 _detect_rate_limit() {
     local output_file="$1"
     [[ -f "$output_file" ]] || return 1
-    grep -qiE "rate.limit|rate_limit|429|hit your limit|you've hit|usage limit|too many|quota" "$output_file" 2>/dev/null
+    # 패턴 확장: error_rate_limit, RATE_LIMIT_ERROR, overload 등 포함
+    grep -qiE "rate.limit|rate_limit|error_rate_limit|RATE_LIMIT_ERROR|429|hit your limit|you've hit|usage limit|too many|quota|overload|overloaded|503.*capacity" "$output_file" 2>/dev/null
 }
 
 # AUTH_ERROR Detection: 토큰 만료 또는 인증 실패 감지
