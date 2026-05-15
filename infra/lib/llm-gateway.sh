@@ -145,17 +145,17 @@ _llm_claude_cli() {
         cmd=("${cmd[@]/--output-format json/--output-format stream-json}")
         local stream_forwarder="${LLM_GATEWAY_BOT_HOME}/lib/stream-to-board.sh"
         if [[ -x "$stream_forwarder" ]]; then
-            ANTHROPIC_API_KEY="" CLAUDECODE="" "${cmd[@]}" < /dev/null 2>"$stderr_tmp" \
+            ANTHROPIC_API_KEY="" "${cmd[@]}" < /dev/null 2>"$stderr_tmp" \
                 | bash "$stream_forwarder" "$DEV_TASK_ID" "$output"
             exit_code=${PIPESTATUS[0]}
         else
             # forwarder 없으면 기존 json 모드로 폴백
             cmd=("${cmd[@]/--output-format stream-json/--output-format json}")
-            ANTHROPIC_API_KEY="" CLAUDECODE="" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
+            ANTHROPIC_API_KEY="" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
             exit_code=$?
         fi
     else
-        ANTHROPIC_API_KEY="" CLAUDECODE="" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
+        ANTHROPIC_API_KEY="" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
         exit_code=$?
     fi
     if [[ $exit_code -ne 0 ]]; then
