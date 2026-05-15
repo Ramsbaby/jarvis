@@ -1,0 +1,21 @@
+{
+  "$schema": "https://github.com/jarvis/claude-model-audit/schema/v1.json",
+  "version": "1.0.0",
+  "updatedAt": "2026-05-08",
+  "description": "Anthropic Claude 모델 정책. Deprecated 모델 사용을 audit이 검출.",
+  "currentLatest": {
+    "opus": "claude-opus-4-7",
+    "sonnet": "claude-sonnet-4-6",
+    "haiku": "claude-haiku-4-5-20251001"
+  },
+  "deprecated": [
+    "claude-opus-4-6",
+    "claude-opus-4-5",
+    "claude-sonnet-4-5",
+    "claude-haiku-3-5"
+  ],
+  "policy": {
+    "useLatestOnIntroduce": true,
+    "comment": "새 코드 도입 시 currentLatest의 ID만 사용. deprecated 발견 시 webhook 알림."
+  }
+}

@@ -203,6 +203,11 @@ if [[ "$SUBTYPE" == error_* ]] || [[ "$IS_ERROR" == "true" ]]; then
     # SUBTYPE: error_rate_limit_exceeded, error_overloaded 등을 stderr에 명시
     if [[ "$SUBTYPE" == *"rate_limit"* ]] || [[ "$SUBTYPE" == *"overload"* ]]; then
         printf '[%s] RATE_LIMIT_ERROR: subtype=%s\n' "$(date '+%F %H:%M:%S')" "$SUBTYPE" >&2
+        # Record rate limit detection for circuit-breaker and graceful degradation
+        _RATE_LIMIT_MARKER="${BOT_HOME}/state/rate-limit-detected.json"
+        mkdir -p "$(dirname "$_RATE_LIMIT_MARKER")"
+        jq -cn --arg ts "$(date -u +%FT%TZ)" --arg task "$TASK_ID" --arg subtype "$SUBTYPE" \
+            '{timestamp: $ts, task: $task, subtype: $subtype, attempts: 1}' > "$_RATE_LIMIT_MARKER" 2>/dev/null || true
     fi
 
     # retry-wrapper.sh의 classify_error가 인증/rate-limit 오류를 감지할 수 있도록

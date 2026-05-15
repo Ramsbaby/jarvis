@@ -1,0 +1,609 @@
+{
+  "generatedAt": "2026-05-14T07:33:45.095Z",
+  "totalLaunchAgents": 60,
+  "activeCount": 60,
+  "inactiveCount": 0,
+  "source": "~/Library/LaunchAgents/ai.jarvis.*.plist + launchctl list",
+  "agents": [
+    {
+      "label": "ai.jarvis.action-dispatch",
+      "file": "ai.jarvis.action-dispatch.plist",
+      "schedule": "매일 03:45 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/action-dispatch.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.audit-dashboard",
+      "file": "ai.jarvis.audit-dashboard.plist",
+      "schedule": "매주 월요일 09:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/audit-dashboard.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.board",
+      "file": "ai.jarvis.board.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis-board/.next/standalone/jarvis-board/server.js",
+      "active": true,
+      "pid": "958",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.board-watchdog",
+      "file": "ai.jarvis.board-watchdog.plist",
+      "schedule": "300s 주기",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/board-watchdog.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.boot-auth-check",
+      "file": "ai.jarvis.boot-auth-check.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/boot-auth-check.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.boram-briefing",
+      "file": "ai.jarvis.boram-briefing.plist",
+      "schedule": "매일 07:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/boram-briefing-update.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.claude-zombie-cleanup",
+      "file": "ai.jarvis.claude-zombie-cleanup.plist",
+      "schedule": "매일 00:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/claude-zombie-cleanup.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.cloudflared-tunnel",
+      "file": "ai.jarvis.cloudflared-tunnel.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/opt/homebrew/bin/cloudflared tunnel",
+      "active": true,
+      "pid": "952",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.commitment-check",
+      "file": "ai.jarvis.commitment-check.plist",
+      "schedule": "3600s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/commitment-check.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.daily-restart",
+      "file": "ai.jarvis.daily-restart.plist",
+      "schedule": "매일 05:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/bot-daily-restart.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.discord-bot",
+      "file": "ai.jarvis.discord-bot.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/bot-preflight.sh",
+      "active": true,
+      "pid": "98716",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.docs-daily-regen",
+      "file": "ai.jarvis.docs-daily-regen.plist",
+      "schedule": "매일 04:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash -c",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.docs-freshness-audit",
+      "file": "ai.jarvis.docs-freshness-audit.plist",
+      "schedule": "매주 월요일 09:10 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/docs-freshness-audit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.doctor-weekly-audit",
+      "file": "ai.jarvis.doctor-weekly-audit.plist",
+      "schedule": "매주 일요일 04:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/bin/doctor-ledger-audit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.error-ledger-rotate",
+      "file": "ai.jarvis.error-ledger-rotate.plist",
+      "schedule": "매일 03:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/error-ledger-rotate.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.event-watcher",
+      "file": "ai.jarvis.event-watcher.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/event-watcher.sh",
+      "active": true,
+      "pid": "975",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.external-detect",
+      "file": "ai.jarvis.external-detect.plist",
+      "schedule": "매일 03:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/external-detect.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.github-actions-monitor",
+      "file": "ai.jarvis.github-actions-monitor.plist",
+      "schedule": "600s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/bin/github-actions-monitor.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.github-runner",
+      "file": "ai.jarvis.github-runner.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/Users/ramsbaby/actions-runner/run.sh",
+      "active": true,
+      "pid": "984",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.insight-extractor",
+      "file": "ai.jarvis.insight-extractor.plist",
+      "schedule": "매일 03:33 KST",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/infra/lib/insight-extractor.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "1"
+    },
+    {
+      "label": "ai.jarvis.interview-ssot-audit",
+      "file": "ai.jarvis.interview-ssot-audit.plist",
+      "schedule": "매주 월요일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/infra/scripts/interview-ssot-audit.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.interview-verifier",
+      "file": "ai.jarvis.interview-verifier.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/infra/scripts/interview-verifier-server.mjs",
+      "active": true,
+      "pid": "12134",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.launchagents-watcher",
+      "file": "ai.jarvis.launchagents-watcher.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/launchagents-watcher.sh",
+      "active": true,
+      "pid": "980",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.llm-cost-cap-monitor",
+      "file": "ai.jarvis.llm-cost-cap-monitor.plist",
+      "schedule": "3600s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/llm-cost-cap-monitor.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.meta-audit",
+      "file": "ai.jarvis.meta-audit.plist",
+      "schedule": "매주 월요일 09:40 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/jarvis-meta-audit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.mistake-to-skill",
+      "file": "ai.jarvis.mistake-to-skill.plist",
+      "schedule": "매일 00:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/mistake-to-skill-pipeline.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.model-version-audit",
+      "file": "ai.jarvis.model-version-audit.plist",
+      "schedule": "매주 월요일 09:05 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/model-version-audit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.orchestrator",
+      "file": "ai.jarvis.orchestrator.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/runtime/discord/lib/orchestrator.mjs",
+      "active": true,
+      "pid": "953",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.personal-snapshot",
+      "file": "ai.jarvis.personal-snapshot.plist",
+      "schedule": "매일 22:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/personal-snapshot.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.plist-env-audit",
+      "file": "ai.jarvis.plist-env-audit.plist",
+      "schedule": "매주 월요일 09:10 KST",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/infra/scripts/plist-env-audit.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.post-news-briefing",
+      "file": "ai.jarvis.post-news-briefing.plist",
+      "schedule": "매일 06:10 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/bin/post-news-briefing-enqueue.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "1"
+    },
+    {
+      "label": "ai.jarvis.proactive-v2",
+      "file": "ai.jarvis.proactive-v2.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/proactive-engine-v2.sh",
+      "active": true,
+      "pid": "37937",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.rag-compact",
+      "file": "ai.jarvis.rag-compact.plist",
+      "schedule": "매일 03:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/rag-compact-wrapper.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.rag-watcher",
+      "file": "ai.jarvis.rag-watcher.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/opt/homebrew/bin/node --max-old-space-size=150",
+      "active": true,
+      "pid": "40227",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.release-checker",
+      "file": "ai.jarvis.release-checker.plist",
+      "schedule": "매일 03:00 KST",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/runtime/infra/scripts/release-checker.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.repeat-pattern-detector",
+      "file": "ai.jarvis.repeat-pattern-detector.plist",
+      "schedule": "매주 일요일 21:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/repeat-pattern-detector.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.report-daily",
+      "file": "ai.jarvis.report-daily.plist",
+      "schedule": "매일 23:50 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/report-generate.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.report-healthcheck",
+      "file": "ai.jarvis.report-healthcheck.plist",
+      "schedule": "매일 06:05 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/report-healthcheck.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.report-monthly",
+      "file": "ai.jarvis.report-monthly.plist",
+      "schedule": "매월 1일 00:05 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/report-generate.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.report-weekly",
+      "file": "ai.jarvis.report-weekly.plist",
+      "schedule": "매주 토요일 23:50 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/report-generate.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.resilience-guard",
+      "file": "ai.jarvis.resilience-guard.plist",
+      "schedule": "300s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/resilience-guard.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.retention",
+      "file": "ai.jarvis.retention.plist",
+      "schedule": "매월 1일 03:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/jarvis-retention.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.scorecard-enforcer",
+      "file": "ai.jarvis.scorecard-enforcer.plist",
+      "schedule": "매일 23:20 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/scorecard-enforcer.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.self-monitor-snapshot",
+      "file": "ai.jarvis.self-monitor-snapshot.plist",
+      "schedule": "매주 월요일 09:35 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/self-monitor-snapshot.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.session-summarizer",
+      "file": "ai.jarvis.session-summarizer.plist",
+      "schedule": "매일 03:00 KST",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/runtime/discord/lib/session-summarizer.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.silent-error-spike",
+      "file": "ai.jarvis.silent-error-spike.plist",
+      "schedule": "3600s 주기",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/infra/scripts/silent-error-spike-monitor.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.skill-dead-archive",
+      "file": "ai.jarvis.skill-dead-archive.plist",
+      "schedule": "매주 월요일 09:25 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/skill-dead-archive.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.skill-dryrun-auto-activate",
+      "file": "ai.jarvis.skill-dryrun-auto-activate.plist",
+      "schedule": "매주 일요일 21:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/skill-dryrun-auto-activate.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.skill-usage-audit",
+      "file": "ai.jarvis.skill-usage-audit.plist",
+      "schedule": "매주 월요일 09:15 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/skill-usage-audit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.stabilization-review",
+      "file": "ai.jarvis.stabilization-review.plist",
+      "schedule": "매월 15일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/stabilization-review.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.supervisor",
+      "file": "ai.jarvis.supervisor.plist",
+      "schedule": "300s 주기",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/supervisor/supervisor-tick.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.surface-learning-gap",
+      "file": "ai.jarvis.surface-learning-gap.plist",
+      "schedule": "매주 월요일 09:05 KST",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/infra/scripts/weekly-surface-learning-gap.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.symlink-audit",
+      "file": "ai.jarvis.symlink-audit.plist",
+      "schedule": "600s 주기",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/symlink-topology-audit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.sync-system-metrics",
+      "file": "ai.jarvis.sync-system-metrics.plist",
+      "schedule": "300s 주기",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/sync-system-metrics.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.system-memory-trend",
+      "file": "ai.jarvis.system-memory-trend.plist",
+      "schedule": "매일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/system-memory-trend.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.watchdog",
+      "file": "ai.jarvis.watchdog.plist",
+      "schedule": "(없음)",
+      "runAtLoad": true,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/runtime/scripts/watchdog.sh",
+      "active": true,
+      "pid": "930",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.weekly-self-retro",
+      "file": "ai.jarvis.weekly-self-retro.plist",
+      "schedule": "매주 일요일 22:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/scripts/weekly-self-retrospective.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.wiki-ingest",
+      "file": "ai.jarvis.wiki-ingest.plist",
+      "schedule": "매일 03:30 KST",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/infra/scripts/wiki-ingest.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.wiki-lint",
+      "file": "ai.jarvis.wiki-lint.plist",
+      "schedule": "매주 일요일 04:00 KST",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node /Users/ramsbaby/jarvis/infra/scripts/wiki-lint.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.worktree-sync",
+      "file": "ai.jarvis.worktree-sync.plist",
+      "schedule": "매일 00:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash /Users/ramsbaby/jarvis/infra/bin/worktree-sync.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    }
+  ]
+}

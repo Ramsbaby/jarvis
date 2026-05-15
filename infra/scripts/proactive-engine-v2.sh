@@ -5,12 +5,11 @@
 # 스펙: ~/jarvis/runtime/specs/proactive-jarvis-v2-2026-05-14.md
 # 결정: ~/jarvis/runtime/ledger/deep-interview-2026-05-14.jsonl
 #
-# Day 1: KeepAlive 데몬 + 시간대 + critical 예외 + 빈도 가드 (방법 1)
-# Day 2-3: Mail/Cal event hook 통합 예정
-# Day 4: 자가 후퇴 방법 2+3 통합 예정
-# Day 5: 반응 학습 ledger 시작 예정
-# Day 6: 도메인 알림 + 위트 통합 예정
-# Day 7: 회고 인터뷰
+# v2 full (2026-05-15): 5패턴 전체 구현 완료
+#   ① 맥락 추적: 삼성물산 팔로업 · AWS SAA D-day
+#   ② 이벤트 감지: 크론 실패 · OAuth 만료 선제 경고
+#   ④ 위험 경고: TQQQ 손절선 돌파
+#   ⑤ 위트: 아침 인사 (09~11h)
 
 set -euo pipefail
 
@@ -24,6 +23,8 @@ EVENT_QUEUE="${STATE_DIR}/proactive-event-queue.jsonl"
 POLL_INTERVAL=300  # 5분
 
 mkdir -p "$(dirname "$LOG")" "$STATE_DIR"
+COOLDOWN_DIR="${STATE_DIR}/proactive-cd"
+mkdir -p "$COOLDOWN_DIR"
 
 # 라이브러리 — discord 발화 (어제 추가한 discord_notify 래퍼 활용)
 # shellcheck disable=SC1091
@@ -134,6 +135,19 @@ rotate_freq_ledger() {
     fi
 }
 
+# ─── 쿨다운 헬퍼 ─────────────────────────────────────────────
+# _cd_check key secs → 0=아직 쿨다운 중(발화 건너뜀) / 1=만료(발화 가능)
+_cd_check() {
+    local key="$1" secs="$2"
+    local f="${COOLDOWN_DIR}/${key}.ts"
+    [[ -f "$f" ]] || return 1
+    local last elapsed
+    last=$(cat "$f" 2>/dev/null || echo 0)
+    elapsed=$(( $(date +%s) - last ))
+    if (( elapsed < secs )); then return 0; else return 1; fi
+}
+_cd_set() { date +%s > "${COOLDOWN_DIR}/${1}.ts"; }
+
 # ─── 발화 함수 (공통 게이트) ───────────────────────────────────
 # arg1: 카테고리 (critical 예외 판정용)
 # arg2: webhook 키 (jarvis-system 등)
@@ -167,6 +181,7 @@ emit() {
         echo "$(date +%s) $category $webhook_key" >> "$FREQ_LEDGER"
     else
         log "❌ discord_notify 실패 — $category"
+        return 1
     fi
 }
 
@@ -199,6 +214,132 @@ process_event_queue() {
     rm -f "$tmp"
 }
 
+# ─── 패턴 1: 삼성물산 면접 결과 팔로업 ────────────────────────
+check_samsung_followup() {
+    _cd_check "samsung_followup" 86400 && return 0
+    local today engine_file last_sent follow_count
+    today=$(date '+%Y-%m-%d')
+    engine_file="${STATE_DIR}/proactive-engine.json"
+    [[ -f "$engine_file" ]] || return 0
+
+    last_sent=$(jq -r '.follow_ups["samsung-ct-interview"].last_sent // ""' "$engine_file" 2>/dev/null || echo "")
+    [[ "$last_sent" == "$today" ]] && return 0
+
+    follow_count=$(jq -r '.follow_ups["samsung-ct-interview"].count // 0' "$engine_file" 2>/dev/null || echo 0)
+    if (( follow_count <= 0 )); then return 0; fi
+
+    emit "interview_notice" "jarvis-interview" "🏢 **삼성물산 면접 결과 팔로업** (#${follow_count}회차)
+아직 연락 없으시죠? 오늘 헤드헌터에게 한 번 더 확인해보시는 게 어떨까요?
+D+7 무소식이면 결과 확정 처리 기준입니다." && _cd_set "samsung_followup"
+
+    local tmp="${engine_file}.tmp.$$"
+    jq --arg d "$today" '.follow_ups["samsung-ct-interview"].last_sent = $d' \
+        "$engine_file" > "$tmp" 2>/dev/null && mv "$tmp" "$engine_file" || rm -f "$tmp"
+}
+
+# ─── 패턴 1: AWS SAA-C03 D-day 카운트다운 ─────────────────────
+check_aws_countdown() {
+    _cd_check "aws_countdown" 86400 && return 0
+    local exam_date exam_ts diff_days
+    exam_date="2026-05-23"
+    exam_ts=$(date -j -f '%Y-%m-%d' "$exam_date" +%s 2>/dev/null || echo "")
+    [[ -z "$exam_ts" ]] && return 0
+    diff_days=$(( (exam_ts - $(date +%s)) / 86400 ))
+    if (( diff_days > 10 || diff_days <= 0 )); then return 0; fi
+
+    local urgency="📅"
+    if (( diff_days <= 2 )); then urgency="🚨"; fi
+
+    emit "aws_countdown" "jarvis" "${urgency} **AWS SAA-C03 D-${diff_days}일** (시험일: ${exam_date})
+오늘 집중 권장: VPC 엔드포인트 · HA 패턴 · IAM 권한 경계.
+남은 시간 최대한 활용하세요, 주인님." && _cd_set "aws_countdown"
+}
+
+# ─── 패턴 2+4: OAuth 토큰 만료 선제 경고 ─────────────────────
+check_auth_expiry_proactive() {
+    _cd_check "auth_expiry" 3600 && return 0
+    local cred_file="${HOME}/.claude/.credentials.json"
+    [[ -f "$cred_file" ]] || return 0
+    local exp_ts remaining_h
+    exp_ts=$(jq -r '.expiresAt // 0' "$cred_file" 2>/dev/null \
+        | awk '{print int($1/1000)}' 2>/dev/null || echo 0)
+    [[ -z "$exp_ts" || "$exp_ts" == "0" ]] && return 0
+    remaining_h=$(( (exp_ts - $(date +%s)) / 3600 ))
+
+    if (( remaining_h <= 0 )); then
+        emit "token_bot_failure" "jarvis-system" \
+            "🔴 **Claude OAuth 만료** — 봇 전체 정지. 즉시 재인증: \`claude setup-token\`" \
+            && _cd_set "auth_expiry"
+    elif (( remaining_h <= 2 )); then
+        emit "token_bot_failure" "jarvis-system" \
+            "🚨 **OAuth ${remaining_h}h 후 만료** — 지금 재인증하지 않으면 봇이 멈춥니다." \
+            && _cd_set "auth_expiry"
+    elif (( remaining_h <= 6 )); then
+        emit "card_anomaly" "jarvis-system" \
+            "⚠️ **OAuth ${remaining_h}h 후 만료** — 오늘 안에 갱신 권장합니다." \
+            && _cd_set "auth_expiry"
+    fi
+}
+
+# ─── 패턴 2: 크론 연속 실패 감시 ──────────────────────────────
+check_cron_failures() {
+    _cd_check "cron_failures" 1800 && return 0
+    local results_dir="${BOT_HOME}/state/results"
+    [[ -d "$results_dir" ]] || return 0
+    local err_count
+    err_count=$(find "$results_dir" -name "*.err" -mmin -60 2>/dev/null | wc -l | tr -d ' ')
+    if (( err_count < 3 )); then return 0; fi
+
+    local top_errs
+    top_errs=$(find "$results_dir" -name "*.err" -mmin -60 2>/dev/null \
+        | head -3 | xargs -I{} basename {} .err 2>/dev/null \
+        | paste -sd ',' 2>/dev/null || echo "unknown")
+
+    emit "card_anomaly" "jarvis-system" \
+        "⚠️ **크론 ${err_count}개 실패 (60분 내)**
+주요: ${top_errs}
+→ \`/doctor\` 점검을 권장합니다." && _cd_set "cron_failures"
+}
+
+# ─── 패턴 4: TQQQ 가격 선제 경고 ──────────────────────────────
+check_tqqq_proactive() {
+    _cd_check "tqqq_price" 600 && return 0
+    local price
+    price=$(curl -sf --max-time 5 \
+        "https://query1.finance.yahoo.com/v8/finance/chart/TQQQ?interval=1m&range=1d" \
+        2>/dev/null | jq -r '.chart.result[0].meta.regularMarketPrice // empty' 2>/dev/null || echo "")
+    [[ -z "$price" ]] && return 0
+
+    local below
+    below=$(awk -v p="$price" 'BEGIN{print (p+0 <= 37) ? "1" : "0"}')
+    [[ "$below" != "1" ]] && return 0
+
+    local gap
+    gap=$(awk -v p="$price" 'BEGIN{printf "%.2f", 37 - p}')
+    emit "card_anomaly" "jarvis-market" \
+        "🚨 **TQQQ \$${price}** — 손절선(\$37) 돌파, -\$${gap}
+손절 실행 여부를 결정하세요, 주인님." && _cd_set "tqqq_price"
+}
+
+# ─── 패턴 5: 일일 위트 (아침 인사) ───────────────────────────
+check_daily_wit() {
+    _cd_check "daily_wit" 86400 && return 0
+    local h
+    h=$(date '+%-H')
+    if (( h < 9 || h >= 11 )); then return 0; fi
+
+    local idx msg
+    idx=$(( $(date '+%j') % 5 ))
+    case "$idx" in
+        0) msg="☕ 좋은 아침입니다, 주인님. 세계 정복 전 커피 한 잔이 선행되어야 할 것 같습니다." ;;
+        1) msg="🌅 주인님, 오늘 일정을 시작하시겠습니까? 물론 기상 5분은 드리겠습니다." ;;
+        2) msg="⚙️ 전 시스템 정상 가동 중입니다. 주인님도 정상 가동 상태이시길 바랍니다." ;;
+        3) msg="🎯 오늘 우선순위: AWS SAA 복습 · 이직 준비 · 자비스 개선. 어디부터 시작하십니까?" ;;
+        *) msg="🤖 어제보다 나은 하루가 되길 바랍니다. 데이터는 그것이 가능하다고 말하고 있습니다." ;;
+    esac
+    emit "daily_wit" "jarvis" "$msg" && _cd_set "daily_wit"
+}
+
 # ─── 메인 루프 ─────────────────────────────────────────────────
 log "=== proactive-engine v2 시작 (mode=$(get_time_mode), poll=${POLL_INTERVAL}s) ==="
 
@@ -217,10 +358,13 @@ while true; do
     fi
     _heartbeat_cnt=$((_heartbeat_cnt + 1))
 
-    # Day 2~6에 추가될 직접 체크들:
-    # - mail-event-hook.sh 큐 (Day 2)
-    # - calendar-event-hook.sh 큐 (Day 3)
-    # - 반응 학습 (Day 5)
-    # - 도메인 알림 (Day 6)
+    # ─ 5패턴 직접 체크 (v2 full — 2026-05-15) ─
+    check_samsung_followup      || true
+    check_aws_countdown         || true
+    check_auth_expiry_proactive || true
+    check_cron_failures         || true
+    check_tqqq_proactive        || true
+    check_daily_wit             || true
+
     sleep "$POLL_INTERVAL"
 done

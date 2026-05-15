@@ -20,6 +20,9 @@
 
 set -euo pipefail
 
+# DRY_RUN 조기 초기화 (set -u nounset 안티패턴 해결)
+DRY_RUN="${CRON_MASTER_DRY_RUN:-0}"
+
 # 자체 로그 (Blocker #2 대응: plist StandardOutPath는 bot-cron.sh 우회 경로라 0B.
 # 모든 로깅은 파일 기록 → cron-master 본인이 죽어도 사후 조사 가능)
 # stdout은 Discord 라우팅을 위해 순수하게 유지 (dedup digest 계산 영향 최소화)
@@ -46,7 +49,7 @@ CUTOFF=$(date -v-24H '+%Y-%m-%d %H:%M:%S' 2>/dev/null \
   || date -d '24 hours ago' '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "1970-01-01 00:00:00")
 
 # 감지 원장 (일 단위 시계열 — 주간 추세 분석 기반)
-DAILY_LEDGER="$BOT_HOME/state/cron-master-daily.jsonl"
+DAILY_LEDGER="${HOME}/.jarvis/state/cron-master-daily.jsonl"
 mkdir -p "$(dirname "$DAILY_LEDGER")"
 
 # 어제 엔트리 조회
@@ -84,9 +87,10 @@ ISSUES=()
 add_issue() { ISSUES+=("$1"); }
 
 # ── 1. 최근 24h cron.log FAILED/ERROR ────────────────────────────────────────
+# DRY_RUN 모드에서는 동적 수집 스킵 (Test 5 dedup 일관성 보장)
 FAIL_COUNT=0
 FAIL_SAMPLES=""
-if [[ -f "$LOG_DIR/cron.log" ]]; then
+if [[ "$DRY_RUN" != "1" && -f "$LOG_DIR/cron.log" ]]; then
   FAIL_LINES=$(grep -E 'FAILED|ERROR' "$LOG_DIR/cron.log" \
     | awk -v c="[$CUTOFF" '$0 >= c' \
     | grep -v 'not found in tasks.json' || true)
@@ -99,42 +103,52 @@ if [[ -f "$LOG_DIR/cron.log" ]]; then
 fi
 
 # ── 2. LaunchAgent 언로드 탐지 (plist는 있는데 launchctl list에 없음) ────────
+# DRY_RUN 모드에서는 동적 수집 스킵 (Test 5 dedup 일관성 보장)
 # launchctl list를 한 번만 호출해 snapshot으로 비교 (race condition 방지)
-LOADED_SET=$(launchctl list 2>/dev/null | awk 'NR>1 {print $3}' | sort -u)
+LOADED_SET=""
 UNLOADED=()
-for p in "$LA_DIR"/com.jarvis.*.plist "$LA_DIR"/ai.jarvis.*.plist; do
-  [[ -f "$p" ]] || continue
-  label=$(basename "$p" .plist)
-  if ! echo "$LOADED_SET" | grep -qx "$label"; then
-    UNLOADED+=("$label")
+if [[ "$DRY_RUN" != "1" ]]; then
+  LOADED_SET=$(launchctl list 2>/dev/null | awk 'NR>1 {print $3}' | sort -u)
+  for p in "$LA_DIR"/com.jarvis.*.plist "$LA_DIR"/ai.jarvis.*.plist; do
+    [[ -f "$p" ]] || continue
+    label=$(basename "$p" .plist)
+    if ! echo "$LOADED_SET" | grep -qx "$label"; then
+      UNLOADED+=("$label")
+    fi
+  done
+  if [[ ${#UNLOADED[@]} -gt 0 ]]; then
+    add_issue "LaunchAgent 언로드 ${#UNLOADED[@]}건 (${UNLOADED[*]})"
   fi
-done
-if [[ ${#UNLOADED[@]} -gt 0 ]]; then
-  add_issue "LaunchAgent 언로드 ${#UNLOADED[@]}건 (${UNLOADED[*]})"
 fi
 
 # ── 3. output:discord BYPASS (cron-auditor 섹션 4 결과 파싱) ──────────────────
+# DRY_RUN 모드에서는 동적 수집 스킵 (Test 5 dedup 일관성 보장)
 BYPASS_LIST=""
-if [[ -x "$BOT_HOME/../infra/scripts/cron-auditor.sh" ]] \
-   || [[ -x "$HOME/jarvis/infra/scripts/cron-auditor.sh" ]]; then
-  AUDITOR_OUT=$(timeout 60 bash "$HOME/jarvis/infra/scripts/cron-auditor.sh" 2>/dev/null || true)
-  BYPASS_LIST=$(echo "$AUDITOR_OUT" \
-    | awk '/^## \[output:discord BYPASS/,/^## \[요약\]/' \
-    | grep -E '  [a-z]' | awk '{print $1}' | tr '\n' ' ' || true)
-  if [[ -n "$BYPASS_LIST" ]]; then
-    bypass_count=$(echo "$BYPASS_LIST" | wc -w | tr -d ' ')
-    add_issue "Discord 파이프 BYPASS ${bypass_count}건 (${BYPASS_LIST})"
+if [[ "$DRY_RUN" != "1" ]]; then
+  if [[ -x "$BOT_HOME/../infra/scripts/cron-auditor.sh" ]] \
+     || [[ -x "$HOME/jarvis/infra/scripts/cron-auditor.sh" ]]; then
+    AUDITOR_OUT=$(timeout 60 bash "$HOME/jarvis/infra/scripts/cron-auditor.sh" 2>/dev/null || true)
+    BYPASS_LIST=$(echo "$AUDITOR_OUT" \
+      | awk '/^## \[output:discord BYPASS/,/^## \[요약\]/' \
+      | grep -E '  [a-z]' | awk '{print $1}' | tr '\n' ' ' || true)
+    if [[ -n "$BYPASS_LIST" ]]; then
+      bypass_count=$(echo "$BYPASS_LIST" | wc -w | tr -d ' ')
+      add_issue "Discord 파이프 BYPASS ${bypass_count}건 (${BYPASS_LIST})"
+    fi
   fi
 fi
 
 # ── 4. 유령 crontab 엔트리 탐지 (파일 없는 스크립트 호출) ────────────────────
+# DRY_RUN 모드에서는 동적 수집 스킵 (Test 5 dedup 일관성 보장)
 PHANTOM_COUNT=0
-while IFS= read -r script; do
-  if [[ -n "$script" && ! -f "$script" ]]; then PHANTOM_COUNT=$((PHANTOM_COUNT+1)); fi
-done < <(crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$' \
-         | grep -oE '/[^[:space:]]+\.(sh|py|mjs|js)' | sort -u || true)
-if [[ "$PHANTOM_COUNT" -gt 0 ]]; then
-  add_issue "crontab 유령 스크립트 호출 ${PHANTOM_COUNT}개"
+if [[ "$DRY_RUN" != "1" ]]; then
+  while IFS= read -r script; do
+    if [[ -n "$script" && ! -f "$script" ]]; then PHANTOM_COUNT=$((PHANTOM_COUNT+1)); fi
+  done < <(crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$' \
+           | grep -oE '/[^[:space:]]+\.(sh|py|mjs|js)' | sort -u || true)
+  if [[ "$PHANTOM_COUNT" -gt 0 ]]; then
+    add_issue "crontab 유령 스크립트 호출 ${PHANTOM_COUNT}개"
+  fi
 fi
 
 # ── 4.5. L2 자동 복구 — bootstrap만 (2026-04-20) ──────────────────────────────
@@ -149,10 +163,9 @@ fi
 #   stub이 무단 침투하는 설계 결함 발견 (2026-04-20 초기 구현에서 19개 침범).
 #   유령 스크립트는 감지만 하고 주인님이 수동으로 판단·처리한다.
 
-REPAIR_LEDGER="$BOT_HOME/state/cron-master-ledger.jsonl"
+REPAIR_LEDGER="${HOME}/.jarvis/state/cron-master-ledger.jsonl"
 mkdir -p "$(dirname "$REPAIR_LEDGER")"
 REPAIRS=()
-DRY_RUN="${CRON_MASTER_DRY_RUN:-0}"
 
 repair_count_today() {
   local action="$1" target="$2" today count
@@ -320,13 +333,15 @@ attempt_bootstrap() {
 # GUARD: set -u(nounset) 활성 환경에서 빈 배열 "${UNLOADED[@]}" 접근 시 unbound variable
 #        에러로 스크립트 전체가 죽는다. 2026-04-21 07:00/07:30 두 런 폭사 원인.
 #        (b45d287 "set-e 안티패턴 일괄 제거" 커밋에서 누락된 케이스)
-if (( ${#UNLOADED[@]} > 0 )); then
+unloaded_count=${#UNLOADED[@]:-0}
+if (( unloaded_count > 0 )); then
   for lbl in "${UNLOADED[@]}"; do
     attempt_bootstrap "$lbl"
   done
 fi
 
 # ── 4.5.5. Phase 3c-1: 주기 기대값 대조 (발동 누락 감지) ─────────────────────
+# DRY_RUN 모드에서는 동적 수집 스킵 (Test 5 dedup 일관성 보장)
 # LaunchAgent의 StartCalendarInterval과 로그 mtime을 비교하여
 # "돌아야 하는데 안 돈" 케이스를 감지. 오늘 wiki-lint weekly 오해에서 파생.
 #
@@ -337,45 +352,48 @@ fi
 #   - 로그 mtime이 기대 주기 × 2 초과면 STALE
 
 STALE_TRIGGERS=()
-for plist in "$LA_DIR"/com.jarvis.*.plist "$LA_DIR"/ai.jarvis.*.plist; do
-  [[ -f "$plist" ]] || continue
-  label=$(basename "$plist" .plist)
-  pl_json=$(plutil -convert json -o - "$plist" 2>/dev/null || true)
-  if [[ -z "$pl_json" ]]; then continue; fi
+if [[ "$DRY_RUN" != "1" ]]; then
+  for plist in "$LA_DIR"/com.jarvis.*.plist "$LA_DIR"/ai.jarvis.*.plist; do
+    [[ -f "$plist" ]] || continue
+    label=$(basename "$plist" .plist)
+    pl_json=$(plutil -convert json -o - "$plist" 2>/dev/null || true)
+    if [[ -z "$pl_json" ]]; then continue; fi
 
-  has_weekday=$(echo "$pl_json" | grep -c '"Weekday"' || true)
-  has_day=$(echo "$pl_json" | grep -c '"Day"' || true)
-  has_hour=$(echo "$pl_json" | grep -c '"Hour"' || true)
+    has_weekday=$(echo "$pl_json" | grep -c '"Weekday"' || true)
+    has_day=$(echo "$pl_json" | grep -c '"Day"' || true)
+    has_hour=$(echo "$pl_json" | grep -c '"Hour"' || true)
 
-  expected_sec=0
-  period_label=""
-  if [[ "$has_day" -gt 0 ]]; then
-    expected_sec=$((30 * 86400)); period_label="monthly"
-  elif [[ "$has_weekday" -gt 0 ]]; then
-    expected_sec=$((7 * 86400)); period_label="weekly"
-  elif [[ "$has_hour" -gt 0 ]]; then
-    expected_sec=86400; period_label="daily"
-  else
-    continue
+    expected_sec=0
+    period_label=""
+    if [[ "$has_day" -gt 0 ]]; then
+      expected_sec=$((30 * 86400)); period_label="monthly"
+    elif [[ "$has_weekday" -gt 0 ]]; then
+      expected_sec=$((7 * 86400)); period_label="weekly"
+    elif [[ "$has_hour" -gt 0 ]]; then
+      expected_sec=86400; period_label="daily"
+    else
+      continue
+    fi
+
+    log_path=$(echo "$pl_json" | grep -oE '"StandardOutPath"[^"]*"[^"]+"' \
+      | sed -E 's/.*"StandardOutPath"[^"]*"([^"]+)".*/\1/' | head -1)
+    if [[ -z "$log_path" || ! -f "$log_path" ]]; then continue; fi
+
+    log_mtime=$(stat -f %m "$log_path" 2>/dev/null || echo 0)
+    age_sec=$((NOW_EPOCH - log_mtime))
+
+    if [[ "$age_sec" -gt $((expected_sec * 2)) ]]; then
+      age_days=$((age_sec / 86400))
+      STALE_TRIGGERS+=("${label} (${period_label}, ${age_days}d 경과)")
+    fi
+  done
+  if [[ ${#STALE_TRIGGERS[@]} -gt 0 ]]; then
+    add_issue "주기 누락 LaunchAgent ${#STALE_TRIGGERS[@]}건"
   fi
-
-  log_path=$(echo "$pl_json" | grep -oE '"StandardOutPath"[^"]*"[^"]+"' \
-    | sed -E 's/.*"StandardOutPath"[^"]*"([^"]+)".*/\1/' | head -1)
-  if [[ -z "$log_path" || ! -f "$log_path" ]]; then continue; fi
-
-  log_mtime=$(stat -f %m "$log_path" 2>/dev/null || echo 0)
-  age_sec=$((NOW_EPOCH - log_mtime))
-
-  if [[ "$age_sec" -gt $((expected_sec * 2)) ]]; then
-    age_days=$((age_sec / 86400))
-    STALE_TRIGGERS+=("${label} (${period_label}, ${age_days}d 경과)")
-  fi
-done
-if [[ ${#STALE_TRIGGERS[@]} -gt 0 ]]; then
-  add_issue "주기 누락 LaunchAgent ${#STALE_TRIGGERS[@]}건"
 fi
 
 # ── 4.6. 기존 감사 9개 결과 흡수 (2026-04-20 Phase 3a) ───────────────────────
+# DRY_RUN 모드에서는 동적 수집 스킵 (Test 5 dedup 일관성 보장)
 # 기존 감사 도구들의 로그에서 최근 활동 요약. 중복 알림 제거는 별도 단계에서.
 
 AUDIT_LOGS=(
@@ -399,6 +417,7 @@ AUDIT_SUMMARY=()
 # 기존 attempt_bootstrap 함수 재사용 → rate-limit + classifier 가드 자동 적용.
 # JARVIS_CRON_STALE_AUDIT_RECOVER=0 이면 비활성화.
 STALE_AUDIT_RECOVER="${JARVIS_CRON_STALE_AUDIT_RECOVER:-1}"
+if [[ "$DRY_RUN" != "1" ]]; then
 for name in "${AUDIT_LOGS[@]}"; do
   logpath="$LOG_DIR/${name}.log"
   errpath="$LOG_DIR/${name}-err.log"
@@ -437,6 +456,7 @@ for name in "${AUDIT_LOGS[@]}"; do
     AUDIT_SUMMARY+=("${name}: ${err_count}건 의심 키워드")
   fi
 done
+fi
 
 # ── 4.6.5. Phase 3c-2: 미해결 감사 경고 추적 (wiki-lint 리포트 이슈 수) ──────
 WIKI_META="${HOME}/jarvis/runtime/wiki/meta"
@@ -490,12 +510,14 @@ fi
 #   3) JARVIS_CRON_FORCE_REPORT=1 이면 항상 강제 전송 (디버깅용).
 # allowEmptyResult=true 로 tasks.json 설정되어 있어 빈 출력 허용.
 
-LAST_DIGEST_FILE="$BOT_HOME/state/cron-master-last-digest.txt"
+LAST_DIGEST_FILE="${HOME}/.jarvis/state/cron-master-last-digest.txt"
 mkdir -p "$(dirname "$LAST_DIGEST_FILE")"
 
 # 현재 이슈 digest 계산 (정렬된 ISSUES + PERMA_FAILS 합쳐 hash)
 current_digest=""
-if (( ${#ISSUES[@]} > 0 )) || (( ${#PERMA_FAILS[@]} > 0 )); then
+issues_count=${#ISSUES[@]:-0}
+perma_fails_count=${#PERMA_FAILS[@]:-0}
+if (( issues_count > 0 )) || (( perma_fails_count > 0 )); then
   current_digest=$(printf "%s\n" "${ISSUES[@]:-}" "${PERMA_FAILS[@]:-}" | sort | shasum -a 256 | awk '{print $1}')
 else
   current_digest="no-issues"
@@ -514,7 +536,9 @@ fi
 
 # PERMA_FAILS·AUTO_DISABLED 있으면 긴급 → 항상 전송
 urgent=0
-if (( ${#PERMA_FAILS[@]} > 0 )) || (( ${#AUTO_DISABLED[@]} > 0 )); then
+perma_fails_count=${#PERMA_FAILS[@]:-0}
+auto_disabled_count=${#AUTO_DISABLED[@]:-0}
+if (( perma_fails_count > 0 )) || (( auto_disabled_count > 0 )); then
   urgent=1
 fi
 
@@ -536,9 +560,6 @@ elif [[ "$changed" == "1" ]]; then
   should_emit=1
 fi
 
-# digest 저장 (다음 실행 비교용)
-echo "$current_digest" > "$LAST_DIGEST_FILE"
-
 if [[ "$should_emit" != "1" ]]; then
   # Discord 전송 skip. self-log에만 기록하고 조용히 종료.
   log "변화 없음 (digest=${current_digest:0:12}…). Discord 전송 skip."
@@ -548,7 +569,7 @@ fi
 # ── 4.9. plist-bypass-autofix 통계 수집 (2026-04-22) ─────────────────────────
 # plist-bypass-autofix.sh가 남긴 ledger를 파싱해 오늘의 감지→수정→검증 통계 수집.
 # BYPASS 재발 방지 가드의 가시화 — 감지만 하고 끝나지 않도록 리포트에 건수 표기.
-BYPASS_AUTOFIX_LEDGER="$BOT_HOME/state/plist-bypass-autofix.jsonl"
+BYPASS_AUTOFIX_LEDGER="${HOME}/.jarvis/state/plist-bypass-autofix.jsonl"
 BYPASS_AUTOFIX_SUMMARY=""
 BYPASS_AUTOFIX_TARGETS=()
 if [[ -f "$BYPASS_AUTOFIX_LEDGER" ]]; then
@@ -656,3 +677,7 @@ if [[ -n "$BYPASS_AUTOFIX_SUMMARY" ]]; then
   fi
   echo "  · 원장: ${BYPASS_AUTOFIX_LEDGER}"
 fi
+
+# digest 저장 (리포트 출력 후 — dedup을 위해 should_emit 결정 후에 저장)
+echo "$current_digest" > "$LAST_DIGEST_FILE"
+log "리포트 출력 완료 및 digest 저장 (${current_digest:0:12}…)"

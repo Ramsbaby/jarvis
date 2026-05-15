@@ -326,6 +326,21 @@
           "type": "string",
           "pattern": "^\\d+[dwm]$",
           "description": "태스크 유효 기간 (예: 30d, 2w, 1m). 만료 시 자동 비활성화."
+        },
+        "skillSynthesis": {
+          "type": "object",
+          "description": "Skill 자동 합성 설정 (Hermes Agent 벤치마킹 — /learn v2). enabled=true 태스크에 SKILL_JSON 출력 지시 자동 주입.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "true: bot-cron.sh가 PROMPT suffix에 SKILL_JSON 지시 자동 주입"
+            },
+            "domain": {
+              "type": "string",
+              "description": "skills.jsonl에 적재할 도메인 분류 (예: ops, market, infra)"
+            }
+          },
+          "additionalProperties": false
         }
       }
     }

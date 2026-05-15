@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-05-10T06:49:52.522Z",
+  "generatedAt": "2026-05-12T05:20:37.936Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 119,
+  "totalTasks": 122,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -14,11 +14,11 @@
     "brand-lead": 4,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 23
+    "uncategorized": 26
   },
   "typeDistribution": {
     "prompt": 43,
-    "script": 76
+    "script": 79
   },
   "groups": [
     {
@@ -2647,15 +2647,15 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/qa-consistency-audit.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/qa-consistency-audit-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-qa-consistency-audit-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },
@@ -3508,6 +3508,38 @@
           }
         },
         {
+          "id": "followup-sync",
+          "name": "Follow-up 자동 동기화",
+          "schedule": "30 8 * * *",
+          "scheduleHuman": "매일 08:30",
+          "type": "script",
+          "handler": "followup-sync.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/followup-sync.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/followup-sync-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-followup-sync-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "gen-indexes",
           "name": "gen-indexes (launchd→tasks.json 이관 2026-04-16)",
           "schedule": "17 6 * * *",
@@ -3700,6 +3732,38 @@
           }
         },
         {
+          "id": "proactive-engine",
+          "name": "선제적 말걸기 엔진",
+          "schedule": "0 9,14,19 * * *",
+          "scheduleHuman": "매일 9,14,19시 :00",
+          "type": "script",
+          "handler": "proactive-engine.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis",
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/proactive-engine.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/proactive-engine-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-proactive-engine-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "rag-stale-scan",
           "name": "RAG 스테일 청크 주간 스캔",
           "schedule": "0 3 * * 0",
@@ -3819,10 +3883,42 @@
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/session-report-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-session-report-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "skill-synthesis-verify",
+          "name": "SKILL 합성 검증",
+          "schedule": "15 23 * * *",
+          "scheduleHuman": "매일 23:15",
+          "type": "script",
+          "handler": "skill-synthesis-verify.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-ceo",
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/skill-synthesis-verify.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/skill-synthesis-verify-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-skill-synthesis-verify-*.log",
               "exists": false
             }
           }
@@ -3879,15 +3975,15 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/weekly-dream-insight.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/weekly-dream-insight-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-weekly-dream-insight-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },

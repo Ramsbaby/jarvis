@@ -4,8 +4,8 @@
 set -euo pipefail
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 NOW=$(date +%s)
-TASKS_TMP=$(mktemp /tmp/cron-audit-tasks-XXXXXX.tsv)
-COUNTS_TMP=$(mktemp /tmp/cron-audit-counts-XXXXXX.txt)
+TASKS_TMP=$(mktemp /tmp/cron-audit-tasks-XXXXXX)
+COUNTS_TMP=$(mktemp /tmp/cron-audit-counts-XXXXXX)
 trap 'rm -f "$TASKS_TMP" "$COUNTS_TMP"' EXIT
 echo "0 0" > "$COUNTS_TMP"   # ok issue
 
