@@ -55,14 +55,12 @@ if [[ -f "$_OAUTH_LAST_FAIL" ]]; then
   _backoff=$(( (1 << _fail_count_clamped) * 60 ))
   if (( _backoff > 3600 )); then _backoff=3600; fi
   if (( _delta < _backoff )); then
-    _force_bypass=0
-    for arg in "$@"; do
-      case "$arg" in --force|-f) _force_bypass=1 ;; esac
-    done
-    if (( _force_bypass == 0 )); then
-      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh] backoff 스킵 — ${_fail_count}회 연속 실패 후 ${_delta}초 < ${_backoff}초 (rate_limit 보호)" >&2
-      exit 0
-    fi
+    # 2026-05-15: --force도 rate_limit backoff 우회 불가 — 치명적 버그 수정
+    # 사고 사례: --force 우회 허용 → pre-cron/retry-wrapper가 AUTH_ERROR 감지 후 --force 재호출
+    #            → rate_limit 무한루프 (2026-05-14 23:00~23:30 연쇄 실패 실증)
+    # --force의 역할: RENEW_THRESHOLD_SECS 임계값 우회만. rate_limit backoff는 절대 우회 불가.
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh] backoff 스킵 — ${_fail_count}회 연속 실패 후 ${_delta}초 < ${_backoff}초 (rate_limit 보호, --force 포함)" >&2
+    exit 0
   fi
 fi
 
@@ -73,7 +71,7 @@ BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG="${BOT_HOME}/logs/oauth-refresh.log"
 RENEW_THRESHOLD_SECS=10800  # 만료 3시간 전부터 갱신 (2시간 간격 cron 기준)
 
-log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh] $*" | tee -a "${LOG}"; }
+log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh] $*" >> "${LOG}"; }
 
 # credentials.json 존재 확인
 if [[ ! -f "${CREDENTIALS_FILE}" ]]; then
