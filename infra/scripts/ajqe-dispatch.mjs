@@ -98,7 +98,7 @@ function readContext(ssotPath, lineNumber, radius) {
 // 자비스 다른 스크립트(context-extractor.mjs 등)와 동일 패턴:
 //   ANTHROPIC_API_KEY='', CLAUDECODE='' 비워서 키체인/구독제 인증 우선.
 //   --strict-mcp-config + empty-mcp.json으로 MCP 비활성화 (가벼운 호출).
-//   --exclude-dynamic-system-prompt-sections로 cwd/git 등 제거 (캐시 효율 ↑).
+//   주의: --exclude-dynamic-system-prompt-sections는 claude 2.1.x 미지원 (unknown option).
 function refineWithLLM(q, refinerCfg) {
   if (!existsSync(EMPTY_MCP)) {
     throw new Error(`empty-mcp.json 없음: ${EMPTY_MCP}`);
