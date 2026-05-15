@@ -83,15 +83,19 @@ ACCOUNT_INFO=$(get_account_info)
 
 # ── 인증 실패 분류 ─────────────────────────────────────────────────────────
 _is_real_auth_failure() {
-    # is_error:true + duration_api_ms:0 → API 호출조차 못한 실제 인증 실패
-    # "Not logged in" 문자열도 동일 처리
+    # "Not logged in" 명시 문자열 → 확실한 인증 만료
     echo "$AUTH_RESULT" | grep -q "Not logged in" && return 0
+    # 2026-05-15: is_error:true + duration_api_ms:0 → transient 처리 (수정)
+    # 이전: sys.exit(0) → return 0 → 인증 실패 판정 → FORCE_REFRESH 트리거 → rate_limit 루프
+    # 수정: sys.exit(1) → return 1 → 일시적 오류로 처리 (rate_limit/서비스 지연 포함)
+    # 근거: zombie 버그(--exclude-dynamic-system-prompt-sections) 수정 후 이 패턴은
+    #        OAuth 만료가 아닌 일시적 실패로 봐도 안전. "Not logged in"이 실제 만료 감지 담당.
     echo "$AUTH_RESULT" | python3 -c "
 import sys, json
 try:
     d = json.loads(sys.stdin.read())
     if d.get('is_error') and d.get('duration_api_ms', 1) == 0:
-        sys.exit(0)
+        sys.exit(1)  # transient — 인증 실패 아님
 except: pass
 sys.exit(1)" 2>/dev/null && return 0
     return 1
