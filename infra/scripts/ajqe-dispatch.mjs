@@ -271,7 +271,7 @@ async function main() {
   console.log(`정책: dailyLimit=${policy.dailyLimit}, cooldown=${policy.perDomainCooldownDays}일, quiet=${policy.quietHours || '없음'}`);
 
   if (!FORCE && isQuietHour(policy.quietHours)) {
-    const h = nowKST().getUTCHours();
+    const h = nowKSTDate().getUTCHours();
     console.log(`🌙 조용한 시간 (KST ${h}시) — 발송 건너뜀`);
     return;
   }
