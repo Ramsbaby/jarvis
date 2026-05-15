@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euo
+# pipefail 제거: SIGPIPE로 인한 조기 종료 방지
+# 파이프라인 내 일부 커맨드 실패 시 앞단 커맨드의 SIGPIPE를 무시
 
 # vault-daily-digest.sh — 일일 다이제스트 자동 생성
 # Usage: crontab에서 매일 23:50 실행
 # 로직: 오늘 수정/생성된 노트를 수집하여 claude -p로 요약 → digest 노트 생성
 
-BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.jarvis}" # ALLOW-DOTJARVIS
 VAULT="${HOME}/Jarvis-Vault"
 LOG_TAG="vault-daily-digest"
 TODAY=$(date '+%Y-%m-%d')
@@ -44,7 +46,8 @@ while IFS= read -r -d '' file; do
     title=$(grep -m1 '^title:' "$file" 2>/dev/null | sed 's/^title: *"*//;s/"*$//' || basename "$file" .md)
 
     # 본문 미리보기 (frontmatter 제외, 첫 200자)
-    preview=$(sed '1,/^---$/d' "$file" 2>/dev/null | sed '1{/^$/d;}' | head -5 | tr '\n' ' ' | cut -c1-200)
+    # SIGPIPE 방지: cut 대신 printf 사용
+    preview=$(sed '1,/^---$/d' "$file" 2>/dev/null | sed '1{/^$/d;}' | head -5 | tr '\n' ' ' | sed 's/^\(.\{1,200\}\).*/\1/')
 
     changed_files="${changed_files}
 ## [[${relpath%.md}|${title}]]
@@ -91,15 +94,17 @@ ${changed_files}
 export PATH="${PATH}:/usr/local/bin:/opt/homebrew/bin"
 
 # ask-claude.sh 시도 (80초 타임아웃으로 제한)
+# 실패해도 대체 방식으로 진행하도록 변경
 STDERR_LOG="${BOT_HOME}/logs/claude-stderr-vault-digest.log"
 SUMMARY=""
-if timeout 80s "$BOT_HOME/bin/ask-claude.sh" "vault-digest" "$PROMPT" "Read" "60" "0.50" "1" 2>>"$STDERR_LOG"; then
+if [[ -x "$BOT_HOME/bin/ask-claude.sh" ]]; then
+    timeout 80s "$BOT_HOME/bin/ask-claude.sh" "vault-digest" "$PROMPT" "Read" "60" "0.50" "1" 2>>"$STDERR_LOG" || true
     # 결과 파일에서 내용 추출
     RESULT_DIR="$BOT_HOME/results/vault-digest"
     if [[ -d "$RESULT_DIR" ]]; then
         LATEST_RESULT=$(find "$RESULT_DIR" -name "*.md" -type f 2>/dev/null | sort -r | head -1)
         if [[ -n "$LATEST_RESULT" && -s "$LATEST_RESULT" ]]; then
-            SUMMARY=$(cat "$LATEST_RESULT")
+            SUMMARY=$(cat "$LATEST_RESULT" 2>/dev/null || true)
         fi
     fi
 fi
