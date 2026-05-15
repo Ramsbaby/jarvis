@@ -37,8 +37,16 @@ set +e  # timeout 124 등 비정상 종료에도 RESULT 할당 보장
 RESULT=$(timeout 60 claude -p "ok" --output-format json 2>&1)
 RC=$?
 set -e
+
+# 2026-05-15: RC=124(타임아웃)은 인증 실패 아님 — Claude 서비스 지연으로 처리
+# 사고 사례: 타임아웃 시 "/login 필요" 허위 알람 반복 발송 → 오너 불필요한 수동 개입
+if [[ $RC -eq 124 ]]; then
+    log "⚠️ claude -p 60s 타임아웃 — Claude 서비스 지연 (인증 실패 아님). 조용히 종료."
+    exit 0
+fi
+
 if [[ $RC -ne 0 && -z "$RESULT" ]]; then
-    RESULT='{"is_error":true,"error":"timeout_or_crash","exit_code":'"$RC"'}'
+    RESULT='{"is_error":true,"error":"crashed","exit_code":'"$RC"'}'
 fi
 
 # is_error:false 매칭 (인증·실행 모두 성공)
