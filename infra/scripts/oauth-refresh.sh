@@ -73,6 +73,29 @@ RENEW_THRESHOLD_SECS=10800  # 만료 3시간 전부터 갱신 (2시간 간격 cr
 
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh] $*" >> "${LOG}"; }
 
+# 2026-05-17: 하드 서킷브레이커 — refresh 엔드포인트가 외부(Anthropic)에서 장기 차단(HTTP 429)될 때
+# 지수 backoff(상한 1h)는 4h 주기 cron을 한 번도 못 막음 → 10일간 199회 무의미 호출 + 차단창 리셋 → 영구 차단.
+# 사고: 2026-05-07 이후 refresh_token grant 100% rate_limit_error. 고립 단일 호출도 거부됨(계정/엔드포인트 레벨).
+# 동작: 연속 N회 실패 시 curl 호출 자체를 24h 완전 봉쇄(--force 포함) + 에스컬레이션 알림 1회만.
+#       차단창이 비워질 시간을 확보(두드림 중단) + 로그/알림 폭격 차단. 24h 후 1회 자동 재시도(self-heal).
+_OAUTH_STATE_DIR="${BOT_HOME}/state"
+_OAUTH_CIRCUIT_UNTIL="${_OAUTH_STATE_DIR}/oauth-circuit-until"
+_OAUTH_CIRCUIT_THRESHOLD=8       # 연속 실패 임계값 (현재 backoff clamp와 동일선)
+_OAUTH_CIRCUIT_COOLDOWN=86400    # 24h 완전 봉쇄
+mkdir -p "${_OAUTH_STATE_DIR}" 2>/dev/null || true
+
+if [[ -f "${_OAUTH_CIRCUIT_UNTIL}" ]]; then
+  _circuit_until=$(cat "${_OAUTH_CIRCUIT_UNTIL}" 2>/dev/null || echo "0")
+  _now=$(date +%s)
+  if (( _now < _circuit_until )); then
+    _remain_h=$(( (_circuit_until - _now) / 3600 ))
+    log "🛑 서킷 OPEN — refresh 엔드포인트 차단 상태. curl 호출 봉쇄 (재시도까지 약 ${_remain_h}h, 수동 /login 필요)"
+    exit 0
+  fi
+  # 봉쇄 시간 경과 → self-heal 1회 시도 (실패 시 아래 실패분기에서 재무장)
+  log "서킷 HALF-OPEN — 봉쇄 ${_OAUTH_CIRCUIT_COOLDOWN}s 경과, 1회 자동 재시도 진입"
+fi
+
 # credentials.json 존재 확인
 if [[ ! -f "${CREDENTIALS_FILE}" ]]; then
   log "ERROR: ${CREDENTIALS_FILE} 없음 — 로그인 필요"
@@ -152,15 +175,27 @@ if [[ -z "${ACCESS_TOKEN}" ]]; then
   # 2026-05-14: 실패 backoff 카운터 기록 — rate_limit 영구화 방지
   date +%s > "$_OAUTH_LAST_FAIL"
   _prev_count=$(cat "$_OAUTH_FAIL_COUNT" 2>/dev/null || echo "0")
-  echo $((_prev_count + 1)) > "$_OAUTH_FAIL_COUNT"
-  # rate_limit_error는 알림 발송 (수동 재로그인 필요할 수 있음)
-  if echo "${RESPONSE}" | grep -q "rate_limit_error"; then
-    # alert.sh 시그니처: <level> <title> <message> [fields_json]
-    bash "${BOT_HOME}/scripts/alert.sh" \
-      warning \
-      "OAuth 갱신 rate_limit" \
-      "수동 /login 필요할 수 있음 (만료까지 ${REMAINING_SECS}s 남음, 실패 ${_prev_count}회 누적, backoff 활성)" \
-      2>/dev/null || true
+  _new_count=$((_prev_count + 1))
+  echo "${_new_count}" > "$_OAUTH_FAIL_COUNT"
+
+  # 2026-05-17: 하드 서킷브레이커 무장 — 연속 실패가 임계값 도달 시 24h 완전 봉쇄.
+  # 알림은 서킷이 새로 OPEN 될 때 단 1회만 (기존: 매 실패마다 발송 → 199회 폭격의 원인).
+  if (( _new_count >= _OAUTH_CIRCUIT_THRESHOLD )); then
+    _now=$(date +%s)
+    _existing_until=0
+    [[ -f "${_OAUTH_CIRCUIT_UNTIL}" ]] && _existing_until=$(cat "${_OAUTH_CIRCUIT_UNTIL}" 2>/dev/null || echo "0")
+    if (( _now >= _existing_until )); then
+      # 새 트립(또는 직전 봉쇄창 만료 후 재실패) → 재무장 + 에스컬레이션 1회
+      echo $(( _now + _OAUTH_CIRCUIT_COOLDOWN )) > "${_OAUTH_CIRCUIT_UNTIL}"
+      log "🛑 서킷 OPEN 무장 — 연속 ${_new_count}회 실패, 향후 ${_OAUTH_CIRCUIT_COOLDOWN}s 자동 갱신 봉쇄"
+      bash "${BOT_HOME}/scripts/alert.sh" \
+        critical \
+        "🛑 OAuth 자동갱신 차단 — 수동 /login 필요" \
+        "refresh 엔드포인트가 ${_new_count}회 연속 거부(외부 차단 추정). 자동 재시도를 24h 봉쇄합니다. 그동안 하루 1회 'claude /login' 필요. 24h 후 1회 자동 재시도(self-heal)." \
+        2>/dev/null || true
+    else
+      log "서킷 이미 OPEN — 알림 중복 억제 (재시도까지 $(( (_existing_until - _now) / 3600 ))h)"
+    fi
   fi
   exit 1
 fi
@@ -188,7 +223,21 @@ log "✅ 갱신 완료 — 새 만료: $(node -e "process.stdout.write(new Date(
 date +%s > "$_OAUTH_LAST_SUCCESS"
 
 # 2026-05-14: 성공 시 실패 카운터 리셋
-rm -f "$_OAUTH_LAST_FAIL" "$_OAUTH_FAIL_COUNT"
+# 2026-05-17: 서킷브레이커도 함께 해제 (정상 복귀 → self-heal 완료)
+# 직전이 실패/서킷 상태였는지 판정 (회복 알림 1회 발송용 — 평시 성공은 무알림으로 폭격 방지)
+_was_recovering=0
+if [[ -f "$_OAUTH_FAIL_COUNT" || -f "$_OAUTH_CIRCUIT_UNTIL" ]]; then _was_recovering=1; fi
+rm -f "$_OAUTH_LAST_FAIL" "$_OAUTH_FAIL_COUNT" "$_OAUTH_CIRCUIT_UNTIL"
+
+# 2026-05-17: 실패/서킷차단에서 복귀한 경우에만 정상 복귀 알림 1회
+if (( _was_recovering == 1 )); then
+  log "🟢 정상 복귀 — 직전 실패/서킷 상태에서 갱신 성공, 알림 발송"
+  bash "${BOT_HOME}/scripts/alert.sh" \
+    info \
+    "🟢 OAuth 자동갱신 정상 복귀" \
+    "refresh 엔드포인트 차단이 해제되어 자동 갱신이 재개됐습니다. 서킷브레이커 해제 완료. 수동 /login 불필요." \
+    2>/dev/null || true
+fi
 
 # 봇 재시작 — 활성 세션 중이면 대화 완료 후 재시작 (graceful defer)
 ACTIVE_SESSION_FILE="${BOT_HOME}/state/active-session"
