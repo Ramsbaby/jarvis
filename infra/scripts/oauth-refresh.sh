@@ -224,7 +224,20 @@ date +%s > "$_OAUTH_LAST_SUCCESS"
 
 # 2026-05-14: 성공 시 실패 카운터 리셋
 # 2026-05-17: 서킷브레이커도 함께 해제 (정상 복귀 → self-heal 완료)
+# 직전이 실패/서킷 상태였는지 판정 (회복 알림 1회 발송용 — 평시 성공은 무알림으로 폭격 방지)
+_was_recovering=0
+if [[ -f "$_OAUTH_FAIL_COUNT" || -f "$_OAUTH_CIRCUIT_UNTIL" ]]; then _was_recovering=1; fi
 rm -f "$_OAUTH_LAST_FAIL" "$_OAUTH_FAIL_COUNT" "$_OAUTH_CIRCUIT_UNTIL"
+
+# 2026-05-17: 실패/서킷차단에서 복귀한 경우에만 정상 복귀 알림 1회
+if (( _was_recovering == 1 )); then
+  log "🟢 정상 복귀 — 직전 실패/서킷 상태에서 갱신 성공, 알림 발송"
+  bash "${BOT_HOME}/scripts/alert.sh" \
+    info \
+    "🟢 OAuth 자동갱신 정상 복귀" \
+    "refresh 엔드포인트 차단이 해제되어 자동 갱신이 재개됐습니다. 서킷브레이커 해제 완료. 수동 /login 불필요." \
+    2>/dev/null || true
+fi
 
 # 봇 재시작 — 활성 세션 중이면 대화 완료 후 재시작 (graceful defer)
 ACTIVE_SESSION_FILE="${BOT_HOME}/state/active-session"
