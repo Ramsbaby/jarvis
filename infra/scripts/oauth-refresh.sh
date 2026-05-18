@@ -81,19 +81,37 @@ log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh] $*" >> "${LOG}"; 
 _OAUTH_STATE_DIR="${BOT_HOME}/state"
 _OAUTH_CIRCUIT_UNTIL="${_OAUTH_STATE_DIR}/oauth-circuit-until"
 _OAUTH_CIRCUIT_THRESHOLD=8       # 연속 실패 임계값 (현재 backoff clamp와 동일선)
-_OAUTH_CIRCUIT_COOLDOWN=86400    # 24h 완전 봉쇄
+_OAUTH_CIRCUIT_COOLDOWN=7200     # 2h 봉쇄 (2026-05-18: 86400→7200 — 토큰 수명(~6h)보다 긴 차단은 서비스 전단 사고 원인)
 mkdir -p "${_OAUTH_STATE_DIR}" 2>/dev/null || true
 
 if [[ -f "${_OAUTH_CIRCUIT_UNTIL}" ]]; then
   _circuit_until=$(cat "${_OAUTH_CIRCUIT_UNTIL}" 2>/dev/null || echo "0")
   _now=$(date +%s)
-  if (( _now < _circuit_until )); then
+  # 🔄 외부 갱신 자동 감지 — Claude Code CLI 등이 credentials.json을 갱신한 경우 서킷 자동 해제
+  _creds_mtime=$(python3 -c "import os; print(int(os.path.getmtime('${CREDENTIALS_FILE}')))" 2>/dev/null || echo 0)
+  _circuit_armed_at=$(( _circuit_until - _OAUTH_CIRCUIT_COOLDOWN ))
+  if (( _creds_mtime > _circuit_armed_at )); then
+    log "🔄 외부 갱신 감지 — credentials.json이 서킷 설정 이후 갱신됨. 서킷/fail-count 자동 해제"
+    rm -f "${_OAUTH_FAIL_COUNT}" "${_OAUTH_LAST_FAIL}" "${_OAUTH_CIRCUIT_UNTIL}"
+    unset _circuit_until
+  elif (( _now < _circuit_until )); then
     _remain_h=$(( (_circuit_until - _now) / 3600 ))
-    log "🛑 서킷 OPEN — refresh 엔드포인트 차단 상태. curl 호출 봉쇄 (재시도까지 약 ${_remain_h}h, 수동 /login 필요)"
-    exit 0
+    # ⚡ 긴급 오버라이드: 토큰 15분 이내 만료 시 서킷 무시 1회 시도
+    _exp_ms=$(python3 -c "
+import json
+d=json.load(open('${CREDENTIALS_FILE}'))
+print(d.get('claudeAiOauth',{}).get('expiresAt',0))
+" 2>/dev/null || echo 0)
+    _exp_s=$((_exp_ms / 1000))
+    if (( _exp_s > 0 && _now > _exp_s - 900 )); then
+      log "⚡ 긴급 오버라이드 — 토큰 $((_exp_s > _now ? _exp_s - _now : 0))초 후 만료, 서킷 무시 갱신 시도"
+    else
+      log "🛑 서킷 OPEN — refresh 엔드포인트 차단 상태. curl 호출 봉쇄 (재시도까지 약 ${_remain_h}h, 수동 /login 필요)"
+      exit 0
+    fi
+  else
+    log "서킷 HALF-OPEN — 봉쇄 ${_OAUTH_CIRCUIT_COOLDOWN}s 경과, 1회 자동 재시도 진입"
   fi
-  # 봉쇄 시간 경과 → self-heal 1회 시도 (실패 시 아래 실패분기에서 재무장)
-  log "서킷 HALF-OPEN — 봉쇄 ${_OAUTH_CIRCUIT_COOLDOWN}s 경과, 1회 자동 재시도 진입"
 fi
 
 # credentials.json 존재 확인
@@ -183,7 +201,7 @@ if [[ -z "${ACCESS_TOKEN}" ]]; then
   if (( _new_count >= _OAUTH_CIRCUIT_THRESHOLD )); then
     _now=$(date +%s)
     _existing_until=0
-    [[ -f "${_OAUTH_CIRCUIT_UNTIL}" ]] && _existing_until=$(cat "${_OAUTH_CIRCUIT_UNTIL}" 2>/dev/null || echo "0")
+    if [[ -f "${_OAUTH_CIRCUIT_UNTIL}" ]]; then _existing_until=$(cat "${_OAUTH_CIRCUIT_UNTIL}" 2>/dev/null || echo "0"); fi
     if (( _now >= _existing_until )); then
       # 새 트립(또는 직전 봉쇄창 만료 후 재실패) → 재무장 + 에스컬레이션 1회
       echo $(( _now + _OAUTH_CIRCUIT_COOLDOWN )) > "${_OAUTH_CIRCUIT_UNTIL}"
