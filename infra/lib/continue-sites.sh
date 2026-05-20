@@ -224,7 +224,12 @@ run_with_recovery() {
             oauth_refresh_cmd="oauth-refresh.sh"
         fi
 
-        if [[ -n "$oauth_refresh_cmd" && -x "$oauth_refresh_cmd" ]]; then
+        # 2026-05-20: G5 force 호출 비활성화 (rate_limit 영구화 악화 경로 차단).
+        # Claude CLI 자체 갱신을 백업 경로로 사용. cron 자동 갱신 1회 성공 후 재활성화.
+        DISABLE_G5_FORCE_CS=1
+        if [[ "${DISABLE_G5_FORCE_CS:-0}" == "1" ]]; then
+            _cs_log "$task_id" "1a" "G5 force 호출 비활성화 상태 — sleep 5 후 재시도만"
+        elif [[ -n "$oauth_refresh_cmd" && -x "$oauth_refresh_cmd" ]]; then
             _cs_log "$task_id" "1a" "oauth-refresh.sh 실행 중 (경로: $oauth_refresh_cmd)"
             "$oauth_refresh_cmd" --force >> "${BOT_HOME}/logs/oauth-refresh.log" 2>&1 || {
                 _cs_log "$task_id" "1a" "WARN: oauth-refresh.sh 실행 실패, fallback 시도..."

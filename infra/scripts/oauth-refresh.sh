@@ -190,6 +190,11 @@ EXPIRES_IN=$(echo "${RESPONSE}" | node -e "
 
 if [[ -z "${ACCESS_TOKEN}" ]]; then
   log "ERROR: 갱신 실패 — 응답: ${RESPONSE:0:200}"
+  # 2026-05-20: ledger append (감사·통계용 append-only)
+  _LEDGER="${BOT_HOME:-${HOME}/jarvis/runtime}/ledger/oauth-refresh-ledger.jsonl"
+  mkdir -p "$(dirname "$_LEDGER")"
+  _err_type=$(echo "${RESPONSE}" | node -e "try{const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));process.stdout.write(d.error?.type||'unknown')}catch(e){process.stdout.write('parse_error')}" 2>/dev/null || echo "unknown")
+  printf '{"ts":"%s","result":"fail","trigger":"%s","err_type":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${FORCE_REFRESH:-cron}" "${_err_type}" >> "$_LEDGER"
   # 2026-05-14: 실패 backoff 카운터 기록 — rate_limit 영구화 방지
   date +%s > "$_OAUTH_LAST_FAIL"
   _prev_count=$(cat "$_OAUTH_FAIL_COUNT" 2>/dev/null || echo "0")
@@ -236,6 +241,11 @@ renameSync(tmp, path);
 JSEOF
 
 log "✅ 갱신 완료 — 새 만료: $(node -e "process.stdout.write(new Date(${NEW_EXPIRES_AT}).toISOString())")"
+
+# 2026-05-20: ledger append (성공)
+_LEDGER="${BOT_HOME:-${HOME}/jarvis/runtime}/ledger/oauth-refresh-ledger.jsonl"
+mkdir -p "$(dirname "$_LEDGER")"
+printf '{"ts":"%s","result":"success","trigger":"%s","new_expires_at":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${FORCE_REFRESH:-cron}" "${NEW_EXPIRES_AT}" >> "$_LEDGER"
 
 # 쿨다운 가드용 성공 시각 기록 (다음 호출이 60초 이내면 스킵)
 date +%s > "$_OAUTH_LAST_SUCCESS"
