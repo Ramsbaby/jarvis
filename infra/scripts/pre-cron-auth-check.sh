@@ -146,7 +146,19 @@ except: pass
 sys.exit(1)
 " 2>/dev/null || echo "")
 
-    if [[ -n "$EXPIRE_SOON" ]]; then
+    # 2026-05-20 가드: oauth-refresh.sh --force는 2026-05-08부터 100% rate_limit_error.
+    # G5 force 호출이 Anthropic rate_limit을 영구화하는 악화 경로 → 일시 비활성화.
+    # Claude Code CLI 자체 갱신이 백업 경로로 동작 중. 1시간 임박 시 Discord 알림만 발송.
+    # 복구 조건: oauth-refresh.log에서 cron 자동 갱신이 1회 이상 성공 후 재활성화.
+    DISABLE_FORCE_REFRESH=1
+
+    if [[ -n "$EXPIRE_SOON" ]] && [[ "${DISABLE_FORCE_REFRESH:-0}" == "1" ]]; then
+        log "⚠️ 토큰 만료 임박: ${EXPIRE_SOON}분 후 (계정: $ACCOUNT_INFO) — FORCE 갱신 비활성화 상태, Discord 알림만 발송"
+        if ! _check_cooldown "$COOLDOWN_WARNING" 3600; then
+            date +%s > "$COOLDOWN_WARNING"
+            send_discord "⚠️ **[auth-watch]** 토큰 **${EXPIRE_SOON}분 후 만료** · 계정: \`$ACCOUNT_INFO\`\nFORCE 갱신은 rate_limit 회피를 위해 비활성화 상태. Claude CLI 세션을 한 번 띄워 자동 갱신 유도해 주십시오."
+        fi
+    elif [[ -n "$EXPIRE_SOON" ]]; then
         log "⚠️ 토큰 만료 임박: ${EXPIRE_SOON}분 후 (계정: $ACCOUNT_INFO) — oauth-refresh.sh --force 호출"
         OAUTH_SCRIPT="${BOT_HOME}/infra/scripts/oauth-refresh.sh"
 

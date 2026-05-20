@@ -228,7 +228,18 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
                 #
                 # 성능 개선:
                 # - 이전: 251초 (Stage 1-4 모두 반복) → 현재: ~30초 (Stage 1a 후 즉시 fail)
-                if [[ "$attempt" -eq 1 ]]; then
+                # 2026-05-20: G5 force 호출 비활성화 (rate_limit 영구화 악화 경로 차단).
+                # 2026-05-08 이후 oauth-refresh.sh --force는 100% rate_limit_error로 실패하며
+                # Anthropic refresh 엔드포인트를 계속 자극하여 차단 상태를 유지시킨다.
+                # Claude CLI 자체 갱신이 백업 경로로 동작 중이므로 force 호출 제거.
+                # 복구 조건: oauth-refresh.log에서 cron 자동 갱신 1회 이상 성공 후 재활성화.
+                local DISABLE_G5_FORCE=1
+                if [[ "$attempt" -eq 1 ]] && [[ "${DISABLE_G5_FORCE:-0}" == "1" ]]; then
+                    printf '[%s] [%s] [AUTH_ERROR] G5 force 호출 비활성화 상태 — 재시도만 진행\n' \
+                        "$(date '+%F %H:%M:%S')" "$TASK_ID" \
+                        >> "${BOT_HOME}/logs/cron.log"
+                    classification="retryable"
+                elif [[ "$attempt" -eq 1 ]]; then
                     # 2026-05-14: 전역 lock 추가 — 다채널 thundering herd 차단
                     # 사고 사례: 2026-05-13 30+ cron이 동시에 AUTH_ERROR 만나 동시에 oauth-refresh 호출 → Anthropic rate_limit 락아웃
                     # flock으로 동시 1개만 갱신 시도, 나머지는 갱신 완료 후 그 결과 재사용
