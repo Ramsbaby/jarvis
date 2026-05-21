@@ -774,7 +774,16 @@ export async function* createClaudeSession(prompt, {
   // [2026-05-21] 상담·감정 채널은 형식·금지 룰 제외 — 모델이 자유롭게 깊이·개인화·비유 선택.
   // 사고: jarvis-career에서 답변이 무료 Gemini보다 얕음. 진단: 누적 형식 룰이 모델 손발 묶음.
   // 조치: format-core·principles 제외 (페르소나·identity·language·tools·safety는 유지).
-  const _LIGHTWEIGHT_CHANNELS = new Set(['jarvis-career', 'jarvis-boram']);
+  // [2026-05-21] 비-코드/비-시스템 채널은 모두 lightweight — 형식 강제·금지 룰 약화.
+  // jarvis-career 사고와 동일 패턴이 ceo/market/preply 등에서 재발할 가능성 선제 차단.
+  // (jarvis-dev·jarvis-system·jarvis-interview는 형식 룰이 적합하므로 유지)
+  const _LIGHTWEIGHT_CHANNELS = new Set([
+    'jarvis-career',
+    'jarvis-boram',
+    'jarvis-ceo',
+    'jarvis-market',
+    'jarvis-preply-tutor',
+  ]);
   const _excludeSections = (channelName && _LIGHTWEIGHT_CHANNELS.has(channelName))
     ? ['format-core', 'principles']
     : [];
