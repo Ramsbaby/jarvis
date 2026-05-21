@@ -14,9 +14,15 @@ import { readFileSync, existsSync, readdirSync, appendFileSync, statSync } from 
 import { join } from 'node:path';
 
 // ── 채널 타입 감지 패턴 ─────────────────────────────────────────────────────
-// career 채널: STAR 16종 + 면접 라우팅 룰 등 full profile 주입
-// ops/일반 채널: core profile만 (기본 정보 + 기술 스택까지, STAR 이전)
-const CAREER_CHANNEL_PATTERN = /career|면접|interview|이력서|resume|mock/i;
+// [2026-05-21] 면접 모드 ↔ 일상 상담 모드 분리.
+// 사고: jarvis-career(감정 상담)가 jarvis-interview(면접 준비)와 같은 패턴에 묶여
+//      `user-profile.md` 첫 줄 "🚨 면접 답변 강제 라우팅 룰 (Owner LOCKED · 최우선)"이
+//      감정 상담 시스템 프롬프트에도 주입 → 모델이 면접 모드로 인식 → 짧고 정형화된 답.
+//
+// INTERVIEW_CHANNEL_PATTERN: 면접 준비 전용 — full profile (STAR 16 + 면접 라우팅 룰)
+// CAREER_CHANNEL_PATTERN: 진로·일상 상담 — core profile만, 면접 룰 strip
+const INTERVIEW_CHANNEL_PATTERN = /interview|mock|이력서|resume|면접/i;
+const CAREER_CHANNEL_PATTERN = INTERVIEW_CHANNEL_PATTERN; // legacy alias (isCareerChannel용)
 // visualization 관련 채널: owner/visualization.md 주입
 const VISUAL_CHANNEL_PATTERN = /system|ops|stats|board|chart|visual|시각|trading|tqqq|monitor|서버|infra/i;
 
@@ -216,17 +222,34 @@ export function buildUserContextSection({ activeUserProfile, ownerName, ownerTit
     ];
   }
   if (activeUserProfile.type === 'owner' || activeUserProfile.role === 'owner') {
-    // 채널 타입에 따라 profile 섹션 결정
+    // [2026-05-21] 채널 타입별 profile 슬라이싱 — 3단계:
+    //   1. INTERVIEW_CHANNEL_PATTERN 매칭(jarvis-interview/mock 등): full profile (면접 라우팅 + STAR 16)
+    //   2. 일반/상담/분석/일상 채널(jarvis-career·jarvis·ceo·market·boram·preply 등):
+    //      면접 라우팅 룰(L3-12) strip + STAR 섹션 strip → core profile만 (기본 정보 ~ 5년 목표)
+    //   3. 게스트/비-owner: 별도 경로
+    //
+    // 사고: jarvis-career(감정 상담)에 면접 라우팅 룰 + STAR 디테일 36KB 주입돼
+    //      모델이 면접 모드로 인식 → 짧고 정형화된 답 (무료 Gemini보다 얕음).
     let effectiveProfile = profileCache;
-    if (profileCache && channelName && !CAREER_CHANNEL_PATTERN.test(channelName)) {
-      // career/interview 채널이 아닐 때: STAR 섹션 이전까지만 주입 (약 29KB 절감)
-      const starMarker = '\n## 핵심 STAR 경험';
-      const starIdx = profileCache.indexOf(starMarker);
-      if (starIdx > 0) {
-        effectiveProfile = profileCache.slice(0, starIdx).trimEnd();
-        // 소프트스킬 STAR, 이직 현황도 이후에 있으나 핵심 STAR 섹션이 대부분이므로
-        // starMarker 이전까지로 충분. career 채널에서만 full profile 사용.
+    if (profileCache && channelName) {
+      const isInterviewMode = INTERVIEW_CHANNEL_PATTERN.test(channelName);
+      // STAR 섹션 strip (interview 모드가 아니면 항상)
+      if (!isInterviewMode) {
+        const starMarker = '\n## 핵심 STAR 경험';
+        const starIdx = profileCache.indexOf(starMarker);
+        if (starIdx > 0) {
+          effectiveProfile = profileCache.slice(0, starIdx).trimEnd();
+        }
+        // 면접 답변 라우팅 룰 strip — '🚨 면접 답변 강제 라우팅' 섹션부터 '## 기본 정보' 직전까지 제거
+        const routingStartMarker = '## 🚨 면접 답변 강제 라우팅';
+        const routingEndMarker = '## 기본 정보';
+        const routingStart = effectiveProfile.indexOf(routingStartMarker);
+        const routingEnd = effectiveProfile.indexOf(routingEndMarker);
+        if (routingStart >= 0 && routingEnd > routingStart) {
+          effectiveProfile = effectiveProfile.slice(0, routingStart) + effectiveProfile.slice(routingEnd);
+        }
       }
+      // isInterviewMode === true 면 full profile 그대로 (면접 라우팅 + STAR 보존)
     }
     return [
       '--- Owner Context ---',
