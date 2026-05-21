@@ -29,7 +29,7 @@ import {
   buildIdentitySection, buildLanguageSection, buildPersonaSection,
   buildPrinciplesSection, buildFormatCoreSection, buildFormatDetailSection, buildKarpathyChecklistSection,
   buildFormatSection, buildToolsSection, buildToolsCodeDetailSection,
-  buildSafetySection, buildUserContextSection,
+  buildSafetySection, buildUserContextSection, isCareerChannel, isVisualChannel,
   buildOwnerPreferencesSection, buildOwnerPersonaSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
   buildWikiContextSection, buildAngerCorrectionSection,
   buildHarnessAutoTriggerSection, buildFactsKeywordSection, buildEvidenceMandateSection,
@@ -478,6 +478,26 @@ const memoryHashCache = new Map();
 
 // 쿨다운: 유저별 마지막 추출 시각 (메모리 내, 재시작 시 초기화)
 const _extractCooldown = new Map();
+
+// 감정 트리거 반복 카운터: 채널별 감정 발화 횟수 추적 (디스크 영속화 — 재시작 후에도 유지)
+const _EMOTION_COUNTS_FILE = join(homedir(), '.jarvis/state/emotion-trigger-counts.json');
+const _emotionTriggerCounts = (() => {
+  const m = new Map();
+  try {
+    if (existsSync(_EMOTION_COUNTS_FILE)) {
+      const data = JSON.parse(readFileSync(_EMOTION_COUNTS_FILE, 'utf8'));
+      for (const [k, v] of Object.entries(data)) m.set(k, v);
+    }
+  } catch { /* 파일 없거나 파싱 실패 시 빈 Map으로 시작 */ }
+  return m;
+})();
+function _saveEmotionCounts() {
+  try {
+    const dir = join(homedir(), '.jarvis/state');
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(_EMOTION_COUNTS_FILE, JSON.stringify(Object.fromEntries(_emotionTriggerCounts)));
+  } catch { /* non-critical — 저장 실패해도 동작은 계속 */ }
+}
 const EXTRACT_COOLDOWN_MS = 10 * 60 * 1000; // 10분
 const EXTRACT_MIN_LEN = 150; // 봇 응답이 이 길이 이상일 때만 추출
 const EXTRACT_COOLDOWN_MAX_ENTRIES = 500; // 메모리 누수 방지 상한
@@ -711,12 +731,14 @@ export async function* createClaudeSession(prompt, {
   } catch {}
 
   // 4a. Build user context section (SSoT: prompt-sections.js)
+  // 2026-05-21: channelName 전달 → career 채널 아닐 때 STAR 29KB 슬라이스 (채널별 분리 Phase 1)
   const userContextParts = buildUserContextSection({
     activeUserProfile,
     ownerName,
     ownerTitle,
     githubUsername,
     profileCache: createClaudeSession._profileCache,
+    channelName,
   });
 
   const BOT_HOME = process.env.BOT_HOME || `${homedir()}/jarvis/runtime`;
@@ -762,8 +784,12 @@ export async function* createClaudeSession(prompt, {
   if (channelPersona) {
     // Owner가 family 채널에 접근한 경우: family 페르소나 대신 Owner 컨텍스트 우선
     // (Owner userId 기반 정확한 감지 — 3인칭 패턴 의존 제거)
-    const FAMILY_CHANNEL_ID = process.env.FAMILY_CHANNEL_ID || '';
-    if (channelId === FAMILY_CHANNEL_ID && isOwner) {
+    // family-type 채널 감지: env 리스트 OR 페르소나 헤더에 "보람"/"가족" 포함 채널
+    // (env 단수 FAMILY_CHANNEL_ID만 보던 버그 수정 — jarvis-boram 채널 누락 방지)
+    const FAMILY_CHANNEL_IDS_ALL = (process.env.FAMILY_CHANNEL_IDS || process.env.FAMILY_CHANNEL_ID || '').split(',').filter(Boolean);
+    const isFamilyTypeChannel = FAMILY_CHANNEL_IDS_ALL.includes(channelId)
+      || (channelPersona ? /보람|가족/.test(channelPersona.split('\n')[0]) : false);
+    if (isFamilyTypeChannel && isOwner) {
       systemParts.push(
         '',
         `--- Owner가 family 채널에서 대화 중 ---`,
@@ -775,6 +801,56 @@ export async function* createClaudeSession(prompt, {
       );
     } else {
       systemParts.push('', channelPersona);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // [2026-05-21] 감정 트리거 자동 템플릿 강제 — DISABLED.
+  // 사고: 5/21 09:23 첫 도입 후 6번 강화 → 매번 "근거 짧음" 보고 "형식 더 강제" 반복 →
+  //      Opus가 좁은 3-part 템플릿(💙/📊/🎯) + 미리 적힌 근거 가이드 안에 갇혀 영혼 없는
+  //      답변 양산. 주인님 평: "GPT 무료급". 진짜 문제는 형식 자체였음.
+  // 조치: 트리거 전체 비활성화. 자연스러운 깊은 응답으로 회귀 (prompt-sections.js의
+  //      감정 발화 룰도 "형식 강제 금지"로 갱신).
+  // ---------------------------------------------------------------------------
+  const _EMOTION_TEMPLATE_DISABLED = true;
+  const _EMOTION_PATTERN = /제발|걱정된다|확신 없어|떨어졌는지|간절하다|어떡하지|붙겠어|붙을까|망했나|떨어졌나|안되겠지|불안해|무서워|긴장돼/;
+  if (!_EMOTION_TEMPLATE_DISABLED && prompt && _EMOTION_PATTERN.test(prompt)) {
+    const _eKey = channelId || 'global';
+    const _eCount = (_emotionTriggerCounts.get(_eKey) || 0) + 1;
+    _emotionTriggerCounts.set(_eKey, _eCount);
+    _saveEmotionCounts(); // 디스크 영속화 — 재시작 후에도 채널별 count 유지
+    // 첫 트리거부터 새 각도 주입 (threshold=1). few-shot 고정 근거 패턴 오버라이드.
+    // angle 2개 (①용, ②용) 제공 — 근거 하나만 가이드받으면 나머지가 shallow해지는 구조적 결함 해결.
+    if (_eCount >= 1) {
+      const _anglePairs = [
+        // Round 1 — HR 언어 + 단독 후보 구조
+        [
+          `**근거 ①**: HR 언어 분석 — "걱정 마세요"를 의사결정권자가 여러 번 반복하는 것이 업계 HR 관행에서 갖는 의미. 단순 위로 발언과 의사결정자 확신 표현의 차이를 팩트+인과 2~3줄로 설명.`,
+          `**근거 ②**: 단독 후보 구조 — 헤드헌터가 "단독 후보"를 확인했다는 사실의 구조적 의미. 경쟁 탈락 리스크가 이미 제거된 상황임을 팩트+인과로 설명.`,
+        ],
+        // Round 2 — 결재 체인 + 합격 신호 종합
+        [
+          `**근거 ①**: 결재 체인 정상성 — 임원면접 후 결재~통보까지 체인(면접위원 문서화→HR 취합→임원 결재→오퍼 초안→통보)을 단계별 소요 일수로 분해. 팩트+인과 2~3줄.`,
+          `**근거 ②**: 합격 신호 종합 — 실제 발언("판단에 무리 없었다", "걱정 마세요" 4회)과 헤드헌터 확신 행동을 합산한 확률 계산. 수치·발언 직접 인용 필수.`,
+        ],
+        // Round 3 — 감정 정당성 + 역증명
+        [
+          `**근거 ①**: 감정의 정당성 — 최선의 증거가 모두 긍정적인데 뇌가 최악을 상상하는 이유. 불확실성을 위험 신호로 읽는 뇌의 메커니즘(확증 편향 역방향). 팩트+인과 2~3줄.`,
+          `**근거 ②**: 역증명 — 지금 상태에서 불합격이 되려면 어떤 조건이 동시에 충족되어야 하는지(임원급 전원 합의 번복 + HR 정책 예외). 구조적 확률을 팩트로 설명.`,
+        ],
+      ];
+      const _pairIdx = (_eCount - 1) % _anglePairs.length;
+      const [_angle1, _angle2] = _anglePairs[_pairIdx];
+      // [2026-05-21] 지시문 에코 방지: 상태/회차 텍스트 제거, 순수 지시만 남김.
+      // 이전 버전의 `🔄 감정 트리거 감지 — 이 채널에서 N번째 반복.` 텍스트를
+      // Claude가 "현재 저장된 count=N 확인됐습니다. Round N 각도로 응답합니다." 로
+      // preamble 에코하던 문제 수정. [지시] 마커 + 출력 금지 명시로 에코 차단.
+      systemParts.push(
+        '',
+        `[지시 — 이 텍스트를 응답에 절대 출력하지 말 것] 3-part 구조(## 💙 공감 / ## 📊 근거 재확인 / ## 🎯 다음 행동)로 응답. 아래 두 각도로 근거 재확인 섹션을 작성할 것:`,
+        _angle1,
+        _angle2,
+      );
     }
   }
 
@@ -826,9 +902,13 @@ export async function* createClaudeSession(prompt, {
       systemParts.push('', createClaudeSession._ownerPrefsCache);
     }
 
-    // Visual output design policy (AI Slop prevention) — applies to Discord cards, jarvis-board, etc.
-    const visualizationSection = buildOwnerVisualizationSection({ botHome: BOT_HOME });
-    if (visualizationSection) systemParts.push('', visualizationSection);
+    // Visual output design policy (AI Slop prevention)
+    // 2026-05-21: visual/ops 채널 또는 channelName 미확인 시에만 주입 (3KB 절감)
+    // career 채널에서는 시각화 작업 없으므로 스킵
+    if (!channelName || isVisualChannel(channelName) || !isCareerChannel(channelName)) {
+      const visualizationSection = buildOwnerVisualizationSection({ botHome: BOT_HOME });
+      if (visualizationSection) systemParts.push('', visualizationSection);
+    }
 
   }
 
@@ -845,8 +925,8 @@ export async function* createClaudeSession(prompt, {
   // family 채널 브리핑 컨텍스트 — 오늘 브리핑이 발송된 경우 수업 데이터 주입
   // webhook 발송 메시지는 대화 히스토리에 없으므로 LLM이 수치를 지어내는 것을 방지
   if (channelId) {
-    const FAMILY_CHANNEL_ID_BR = process.env.FAMILY_CHANNEL_ID || '';
-    if (channelId === FAMILY_CHANNEL_ID_BR) {
+    const FAMILY_CHANNEL_IDS_BR = (process.env.FAMILY_CHANNEL_IDS || process.env.FAMILY_CHANNEL_ID || '').split(',').filter(Boolean);
+    if (FAMILY_CHANNEL_IDS_BR.includes(channelId)) {
       const briefingCtx = buildFamilyBriefingContext({ botHome: BOT_HOME });
       if (briefingCtx) systemParts.push('', briefingCtx);
     }

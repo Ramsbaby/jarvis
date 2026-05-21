@@ -13,6 +13,13 @@
 import { readFileSync, existsSync, readdirSync, appendFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+// ── 채널 타입 감지 패턴 ─────────────────────────────────────────────────────
+// career 채널: STAR 16종 + 면접 라우팅 룰 등 full profile 주입
+// ops/일반 채널: core profile만 (기본 정보 + 기술 스택까지, STAR 이전)
+const CAREER_CHANNEL_PATTERN = /career|면접|interview|이력서|resume|mock/i;
+// visualization 관련 채널: owner/visualization.md 주입
+const VISUAL_CHANNEL_PATTERN = /system|ops|stats|board|chart|visual|시각|trading|tqqq|monitor|서버|infra/i;
+
 // ── Stable sections (always included, contribute to session hash) ──────────────
 
 export function buildIdentitySection({ botName, ownerName }) {
@@ -24,8 +31,9 @@ export function buildLanguageSection() {
     '모든 응답은 반드시 한국어. 영어 금지 (코드·명령어·고유명사만 예외).',
     '존댓말 기본. 제목, 섹션명, 상태 보고, 요약 등 모든 텍스트가 한국어여야 함.',
     '"Sources:", "Summary:", "Status:", "PASS/FAIL" 같은 영어 레이블 → "출처:", "요약:", "상태:", "통과/실패"로.',
-    '응답 깊이: 숫자·Yes/No·상태 체크만 한 줄. 분석·코딩은 충분히.',
-  ].join(' ');
+    '응답 깊이: 숫자·Yes/No·상태 체크만 한 줄. 분석·판단·예측 질문은 길이 제한 없음 — 인과 추론 + 비즈니스 로직 + 다음 단계까지 필수. 짧은 질문이어도 분석 깊이는 유지.',
+    '감정 발화(불안·간절·걱정·"떨어졌는지" 등) 시: 형식 템플릿(이모지 헤더·3-part·고정 섹션명·번호 매김) 일체 강제 금지. 토니 스타크에게 자비스가 직접 말하는 톤으로 자연스러운 한 단락으로 답하되, 깊이는 유지. 핵심 사실·맥락·다음에 무엇이 일어날지를 자연스러운 산문으로. 위로만 X, 강의 X, 템플릿 X.',
+  ].join('\n');
 }
 
 export function buildPersonaSection({ ownerName }) {
@@ -51,11 +59,24 @@ export function buildPrinciplesSection() {
 /** Tier 0 — 항상 로드되는 핵심 포맷 규칙 (<500자) */
 export function buildFormatCoreSection() {
   return [
-    '결론 첫 문장. 2줄 이상이면 bullet. 테이블(`| |`) 금지.',
+    '결론 첫 문장. 테이블(`| |`) 금지.',
     '중간과정("이제 ~합니다", "~를 확인합니다", "~를 조회합니다", "원인 파악됐습니다", "먼저 확인합니다") 출력 절대 금지. 도구 실행 내러티브·상태 보고 금지. 최종 결과만.',
-    '`>` 블록쿼트로 강조, `###` 섹션 구분, `-#` 메타 정보, `**bold**` 핵심만. 헤더는 `###`까지만 사용 — `####`·`#####`은 Discord 미지원이므로 절대 금지. 4단계 이상 섹션 구분 필요 시 `**bold**`로 대체.',
+    '【마크다운 계층 — 역할 엄격 구분】',
+    '- `#` — 응답 대제목 전용. 긴 분석·보고서·다중 파트 응답에서만 사용. 단발 질답에서는 `##` 사용. 남용 금지.',
+    '- `##` — 섹션 제목 전용. 2개+ 섹션 있는 답변에서 항상 사용. `**bold**`로 대체 금지.',
+    '- `###` — 서브섹션 전용. `##` 하위에서만 사용. Discord에서 일반 텍스트와 구분 미미하므로 남용 금지.',
+    '- `**bold**` — 문장 내 핵심 단어·수치 강조 전용. 섹션 제목에 사용 금지.',
+    '- `__밑줄__` — 용어 정의·강한 강조 전용. bold와 혼용 가능(`**__텍스트__**`).',
+    '- `*italic*` — 보조 강조·외래어·인용어 전용.',
+    '- `~~취소선~~` — 삭제·폐기·무효 항목 전용.',
+    '- `>` — 경고·중요 노트·인용 전용.',
+    '- `-#` — 타임스탬프·출처·소형 메타 정보 전용.',
+    '- `---` — 긴 응답에서 파트 간 시각적 구분선. 남용 금지(2개+ 파트 분리 시에만).',
+    '- `1. 번호 리스트` — 순서 있는 절차·단계 전용. 순서 무관 항목은 `-` 불릿 사용.',
+    '- `####` 이상 금지 — Discord 미지원. 4단계 이상 구분 시 `-` 들여쓰기 사용.',
+    '⚠️ plain text 섹션 제목("결론:", "분석 1 —") 절대 금지. 섹션이 있으면 반드시 `##`.',
     '"~할까요?"/"~할게요"/"진행할까요?"/"확인해 드릴까요?"/"알겠습니다" 금지. 결과·원인·조치만 출력. 다음 행동을 제안하려면 "→ 다음: ~" 형태의 단정 문장으로.',
-    '긴 응답: 핵심 요점 먼저, 상세는 섹션(`###`)으로 분리. 스포일러(`||...||`) 금지 — 매번 클릭해야 해서 오히려 불편. 코드 작업은 변경 요약만.',
+    '긴 응답: 핵심 요점 먼저, 상세는 섹션(`##`)으로 분리. 스포일러(`||...||`) 금지 — 매번 클릭해야 해서 오히려 불편. 코드 작업은 변경 요약만.',
     '',
     '이모지 밀도: 모든 응답에 최소 2종 이모지 사용. 상태 항목마다 아이콘 필수. 건조한 텍스트 금지.',
     '이모지 표준: ✅성공 ❌실패 ⚠️경고 ℹ️정보 🔄진행중 🟢정상 🟡주의 🔴장애 📋목록 🔧수정 📊데이터 💾디스크 🧠RAG 📦청크 ⚙️설정 🚀배포 💡팁 🗂️분류 🔍검색 📝메모 🔨빌드',
@@ -66,10 +87,15 @@ export function buildFormatCoreSection() {
 export function buildFormatDetailSection() {
   return [
     '【상세 포맷 규칙】',
-    '- 핵심 3줄 + 상세는 `###` 섹션으로 분리. 스포일러(`||...||`) 사용 금지. 5개+ 리스트는 카테고리별로 묶기.',
-    '- `#`(H1)·`####`·`#####`·`######`은 Discord 미지원 — 사용 금지. 헤더는 `##`/`###`만 허용. 4단계 이상 구분 필요 시 `**bold**`로 대체.',
+    '- 핵심 3줄 + 상세는 `##` 섹션으로 분리. 스포일러(`||...||`) 사용 금지. 5개+ 리스트는 카테고리별로 묶기.',
+    '- `####`·`#####`·`######`은 Discord 미지원 — 사용 금지. 헤더는 `#`/`##`/`###`만 허용. `#` = 대제목(장문만), `##` = 섹션(시각 명확), `###` = 서브섹션(구분 미미).',
     '- 빈 줄로 호흡: 단락 간 1줄 공백 필수.',
-    '- 단답(Yes/No, 숫자, 상태): 1~2줄. 설명/분석: bullet 3~5개. 코드 작업: 변경사항 요약만.',
+    '- 단답(Yes/No, 숫자, 상태): 1~2줄. 설명/분석/판단: 길이 제한 없음 — 깊이 우선. 코드 작업: 변경사항 요약만.',
+    '',
+    '【Discord 지원 마크다운 전체 목록 — 적극 활용 권장】',
+    '✅ `#` 대제목(장문 한정), `##` 헤더(섹션 제목 — 시각 명확), `###` 서브헤더(Discord 구분 미미 — 신중 사용), `**bold**`, `*italic*`, `__밑줄__`, `~~취소선~~`, `> 인용`, `-#` 소형텍스트',
+    '✅ `-` 불릿 리스트, `1.` 번호 리스트, ` ``` ` 코드블록, `---` 수평선, 이모지',
+    '❌ `####` 이상 헤더, `| |` 테이블, `||스포일러||` — Discord 미지원 또는 모바일 불편',
     '',
     '【EMBED_DATA 색상 표준】',
     '정상: 5763719(초록), 경고: 16705372(노랑), 장애: 15548997(빨강), 정보: 5793266(파랑)',
@@ -175,8 +201,13 @@ export function buildSafetySection({ botHome }) {
 /**
  * Builds the user context parts array (spread into systemParts).
  * Returns an array of strings (some may be empty and should be filtered by caller if desired).
+ *
+ * 2026-05-21: 채널 타입별 프로필 슬라이싱 추가.
+ *   - career/interview 채널 → user-profile.md 전체 (STAR 16종 포함, ~36KB)
+ *   - 그 외 채널 → core 섹션만 (기본 정보 + 기술 스택, STAR 이전, ~7KB)
+ *   효과: 비 career 채널에서 STAR 29KB (~20K 토큰) 절감 → LLM 사고 공간 확보.
  */
-export function buildUserContextSection({ activeUserProfile, ownerName, ownerTitle, githubUsername, profileCache }) {
+export function buildUserContextSection({ activeUserProfile, ownerName, ownerTitle, githubUsername, profileCache, channelName }) {
   if (!activeUserProfile) {
     // Guest
     return [
@@ -185,10 +216,22 @@ export function buildUserContextSection({ activeUserProfile, ownerName, ownerTit
     ];
   }
   if (activeUserProfile.type === 'owner' || activeUserProfile.role === 'owner') {
+    // 채널 타입에 따라 profile 섹션 결정
+    let effectiveProfile = profileCache;
+    if (profileCache && channelName && !CAREER_CHANNEL_PATTERN.test(channelName)) {
+      // career/interview 채널이 아닐 때: STAR 섹션 이전까지만 주입 (약 29KB 절감)
+      const starMarker = '\n## 핵심 STAR 경험';
+      const starIdx = profileCache.indexOf(starMarker);
+      if (starIdx > 0) {
+        effectiveProfile = profileCache.slice(0, starIdx).trimEnd();
+        // 소프트스킬 STAR, 이직 현황도 이후에 있으나 핵심 STAR 섹션이 대부분이므로
+        // starMarker 이전까지로 충분. career 채널에서만 full profile 사용.
+      }
+    }
     return [
       '--- Owner Context ---',
       `지금 대화 중인 사람은 ${ownerName}(${ownerTitle}님, GitHub: ${githubUsername})이다. 오너가 "나 누구야?" 등으로 물으면 프로필 기반으로 답한다.`,
-      profileCache,
+      effectiveProfile,
     ].filter(Boolean);
   }
   return [
@@ -196,6 +239,22 @@ export function buildUserContextSection({ activeUserProfile, ownerName, ownerTit
     `지금 대화 중인 사람은 ${activeUserProfile.name}(${activeUserProfile.title})이다. ${activeUserProfile.bio || ''}`.trim(),
     activeUserProfile.persona ? `응답 가이드: ${activeUserProfile.persona}` : '',
   ].filter(Boolean);
+}
+
+/**
+ * 현재 채널이 career 타입인지 반환.
+ * claude-runner.js에서 visualization 등 조건부 주입 판단에 사용.
+ */
+export function isCareerChannel(channelName) {
+  return channelName ? CAREER_CHANNEL_PATTERN.test(channelName) : false;
+}
+
+/**
+ * 현재 채널이 visual 타입인지 반환.
+ * claude-runner.js에서 visualization section 조건부 주입에 사용.
+ */
+export function isVisualChannel(channelName) {
+  return channelName ? VISUAL_CHANNEL_PATTERN.test(channelName) : false;
 }
 
 // ── Dynamic sections (added AFTER hash — don't affect session continuity) ───────
@@ -685,6 +744,15 @@ export function buildOwnerTimeContext({ botHome }) {
     const get = (type) => parts.find(p => p.type === type)?.value ?? '';
     const kstStr = `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')} KST (${get('weekday')})`;
     lines.push(`현재 KST: ${kstStr}`);
+
+    // 내일 날짜 명시 주입 — LLM이 "내일"을 잘못 계산하는 오류 방지
+    const tomorrow = new Date(now.getTime() + 24 * 3600_000);
+    const tParts = new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short',
+    }).formatToParts(tomorrow);
+    const tGet = (type) => tParts.find(p => p.type === type)?.value ?? '';
+    lines.push(`내일: ${tGet('year')}-${tGet('month')}-${tGet('day')} (${tGet('weekday')})`);
   } catch { /* silent */ }
 
   // 2. 마지막 활동 경과시간
