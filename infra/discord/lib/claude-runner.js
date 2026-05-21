@@ -771,13 +771,37 @@ export async function* createClaudeSession(prompt, {
 
   // 토큰 예산 모드: Progressive Compaction에서 전달
   const _tokenBudgetMode = _budgetMode || 'normal';
-  const { prompt: harnessPrompt, loadedSections } = harness.assemble(prompt, { budgetMode: _tokenBudgetMode });
+  // [2026-05-21] 상담·감정 채널은 형식·금지 룰 제외 — 모델이 자유롭게 깊이·개인화·비유 선택.
+  // 사고: jarvis-career에서 답변이 무료 Gemini보다 얕음. 진단: 누적 형식 룰이 모델 손발 묶음.
+  // 조치: format-core·principles 제외 (페르소나·identity·language·tools·safety는 유지).
+  const _LIGHTWEIGHT_CHANNELS = new Set(['jarvis-career', 'jarvis-boram']);
+  const _excludeSections = (channelName && _LIGHTWEIGHT_CHANNELS.has(channelName))
+    ? ['format-core', 'principles']
+    : [];
+  const { prompt: harnessPrompt, loadedSections } = harness.assemble(prompt, {
+    budgetMode: _tokenBudgetMode,
+    excludeSections: _excludeSections,
+  });
 
   const systemParts = [
     harnessPrompt,
     // ── 사용자 컨텍스트 ──────────────────────────────────────────────────────
     ...userContextParts,
   ];
+
+  // [2026-05-21] 상담·감정 채널 자유도 가이드 — 형식 강제 대신 풍부함 유도
+  if (channelName && _LIGHTWEIGHT_CHANNELS.has(channelName)) {
+    systemParts.push(
+      '',
+      '[채널 톤 가이드 — jarvis-career/jarvis-boram]',
+      '주인님의 일상·진로·감정 대화 채널입니다. 다음 원칙을 자연스럽게 사용하십시오:',
+      '- 정보 밀도: 단순 위로·요약 X. 주인님 경력·발언·맥락(이전 대화 / RAG / facts.md)에서 구체 디테일을 인용해 개인화.',
+      '- 구조: 헤더·번호·이모지·목록 사용 자유. 강제 템플릿 X. 답변 길이·형식은 본인이 판단.',
+      '- 풍부함: 비유·이미지·미래 상상·재구성 적극 사용 (예: "대감집에서 레드카펫 깔고 있는 시간").',
+      '- 깊이: 분석은 팩트→인과→반대 가능성→현재 연결까지. 같은 발화 반복 시 새로운 각도(이전과 다른 관점).',
+      '- 토니에게 자비스가 직접 말하는 톤 유지 — 정중하되 따뜻하고 단도직입.',
+    );
+  }
 
   // Channel-specific persona
   const channelPersona = channelId ? CHANNEL_PERSONAS[channelId] : null;
@@ -878,9 +902,16 @@ export async function* createClaudeSession(prompt, {
       log('info', 'Skill body skipped (handled inline in handlers.js)', { skill: _injectedSkillBody.name });
     }
     const matchedSkills = matchSkills({ channelName, messageText: prompt });
+    // [2026-05-21] 상담·감정 채널은 스킬 본문 자동 주입 스킵 (슬래시 명시는 살림).
+    // 4200자 스킬 본문이 컨텍스트 비대 + 모델 답변 좁아짐의 원인. 슬래시로 명시 호출만 허용.
+    const _skipAutoSkillsForChannel = channelName && _LIGHTWEIGHT_CHANNELS.has(channelName);
     for (const { skill, byChannel, byTrigger } of matchedSkills) {
       if (injected.has(skill.name)) continue;
       if (SKIP_SKILLS_WHEN_INLINE.has(skill.name)) continue;
+      if (_skipAutoSkillsForChannel) {
+        log('info', 'Skill auto-inject skipped (lightweight channel)', { skill: skill.name, channelName });
+        continue;
+      }
       const reason = byChannel ? `채널: ${channelName}` : `트리거 키워드`;
       systemParts.push('', `--- 스킬 활성화: ${skill.name} (${reason}) ---\n${skill.body}`);
       injected.add(skill.name);

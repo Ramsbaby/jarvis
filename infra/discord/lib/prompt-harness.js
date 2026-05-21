@@ -50,12 +50,14 @@ export class PromptHarness {
    * @returns {{ prompt: string, tokenEstimate: number, loadedSections: string[] }}
    */
   assemble(userQuery, opts = {}) {
-    const { budgetMode = 'normal' } = opts;
+    const { budgetMode = 'normal', excludeSections = [] } = opts;
+    const _excludeSet = new Set(excludeSections);
     const parts = [];
     const loaded = [];
 
     for (const [name, section] of this._sections) {
       if (section.tier === Tier.REFERENCE) continue; // Tier 2는 절대 프롬프트에 안 넣음
+      if (_excludeSet.has(name)) continue; // 명시 제외 (예: jarvis-career에서 format-core 빼기)
 
       if (section.tier === Tier.CORE) {
         // Tier 0: 항상 로드
