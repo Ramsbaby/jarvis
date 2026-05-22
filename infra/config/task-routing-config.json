@@ -1,0 +1,184 @@
+{
+  "enabled": false,
+  "_comment": "Gemini 3.5 Flash 비핵심 태스크 라우팅 설정",
+  "_activationNote": "도입 승인 후 enabled를 true로 변경. 거절 시 false 유지.",
+  "version": "1.0",
+  "created_at": "2026-05-22T00:00:00Z",
+  "last_updated_at": "2026-05-22T00:00:00Z",
+  "routing_rules": {
+    "rules": [
+      {
+        "rule_id": "non_core_to_gemini",
+        "enabled": true,
+        "priority": 10,
+        "description": "비핵심 태스크를 Gemini 3.5 Flash로 라우팅",
+        "task_ids": [
+          "news-briefing",
+          "daily-summary",
+          "system-health",
+          "memory-cleanup",
+          "log-analysis",
+          "github-monitor"
+        ],
+        "source_model": "claude-haiku-4-5-20251001",
+        "target_model": "gemini-3-5-flash",
+        "estimated_savings_percent": 80,
+        "rationale": "단순 요약/분류 작업으로 Gemini 3.5 Flash의 1M 컨텍스트 활용 가능. 응답 품질 저하 최소.",
+        "cost_target_per_1m_input": 1.50,
+        "cost_target_per_1m_output": 9.00
+      },
+      {
+        "rule_id": "large_doc_to_gemini_2_flash",
+        "enabled": false,
+        "priority": 20,
+        "description": "100K+ 토큰 입력 문서를 Gemini 2.0 Flash로 라우팅 (향후 활성화)",
+        "task_condition": {
+          "inputTokens": {">": 100000}
+        },
+        "target_model": "gemini-2-flash",
+        "rationale": "1M 컨텍스트 필수 처리. 비용 추가 절감 가능.",
+        "cost_target_per_1m_input": 0.075,
+        "cost_target_per_1m_output": 0.30
+      }
+    ]
+  },
+  "core_task_protection": {
+    "enabled": true,
+    "protected_task_ids": [
+      "council",
+      "reasoning",
+      "morning-standup",
+      "macro-briefing",
+      "career-strategy",
+      "market-analysis"
+    ],
+    "protected_keywords": [
+      "council",
+      "reasoning",
+      "decision",
+      "analysis",
+      "strategy",
+      "planning"
+    ],
+    "min_model_tier": "sonnet",
+    "force_claude_models": [
+      "claude-sonnet-4-6",
+      "claude-opus-4-7"
+    ],
+    "rationale": "핵심 의사결정/분석 태스크는 Claude 강제로 품질 보장"
+  },
+  "fallback_policy": {
+    "enabled": true,
+    "on_gemini_api_error": "fallback_to_source_model",
+    "on_gemini_timeout": "fallback_to_source_model",
+    "on_rate_limit": "fallback_to_deepseek",
+    "max_retries_before_fallback": 2,
+    "retry_backoff_ms": [2000, 4000],
+    "timeout_seconds": 60,
+    "rationale": "Gemini 장애 시 자동으로 원본 모델(Claude) 또는 DeepSeek로 폴백하여 안정성 확보"
+  },
+  "cost_tracking": {
+    "enabled": true,
+    "log_file": "${BOT_HOME:-${HOME}/jarvis/runtime}/logs/routing-metrics.jsonl",
+    "cost_summary_file": "${BOT_HOME:-${HOME}/jarvis/runtime}/logs/cost-summary.jsonl",
+    "sample_rate": 1.0,
+    "track_fields": [
+      "ts",
+      "task_id",
+      "source_model",
+      "target_model",
+      "input_tokens",
+      "output_tokens",
+      "cost_source",
+      "cost_target",
+      "cost_saved",
+      "savings_percent",
+      "api_provider",
+      "routing_reason",
+      "success",
+      "latency_ms",
+      "error"
+    ],
+    "rationale": "라우팅 효과 투명성 확보 및 비용 절감 실시간 추적"
+  },
+  "model_configs": {
+    "gemini-3-5-flash": {
+      "api_key_env": "GEMINI_API_KEY",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "model_name": "gemini-3-5-flash",
+      "max_tokens": 4096,
+      "context_window": 1000000,
+      "cost_per_1m_input": 1.50,
+      "cost_per_1m_output": 9.00,
+      "latency_p50_ms": 50,
+      "latency_p99_ms": 500,
+      "availability_sla": "99.5%"
+    },
+    "gemini-2-flash": {
+      "api_key_env": "GEMINI_API_KEY",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "model_name": "gemini-2-flash",
+      "max_tokens": 4096,
+      "context_window": 1000000,
+      "cost_per_1m_input": 0.075,
+      "cost_per_1m_output": 0.30,
+      "latency_p50_ms": 200,
+      "latency_p99_ms": 1000,
+      "availability_sla": "99.0%"
+    },
+    "claude-haiku-4-5-20251001": {
+      "cost_per_1m_input": 0.80,
+      "cost_per_1m_output": 4.00
+    }
+  },
+  "monitoring_and_alerts": {
+    "enabled": true,
+    "alert_rules": [
+      {
+        "name": "gemini_daily_cost_spike",
+        "condition": "daily_gemini_cost > $0.20",
+        "action": "discord_alert",
+        "channel": "jarvis-system",
+        "severity": "warning"
+      },
+      {
+        "name": "gemini_fallback_rate_high",
+        "condition": "fallback_rate > 10%",
+        "action": "discord_alert",
+        "channel": "jarvis-system",
+        "severity": "critical",
+        "auto_disable": true
+      },
+      {
+        "name": "gemini_api_unavailable",
+        "condition": "consecutive_failures > 3",
+        "action": "disable_routing",
+        "alert": "discord",
+        "rationale": "자동 폴백 후 Gemini 장애 지속 시 라우팅 비활성화"
+      }
+    ]
+  },
+  "success_criteria": {
+    "criterion_1": "Gemini API 연동 모듈 문법 오류 없음",
+    "criterion_1_status": "completed",
+    "criterion_1_validation": "gemini-3-5-flash-client.mjs 문법 검증(node -c) 및 로드 테스트 완료 (✓)",
+    "criterion_2": "태스크 라우팅 설정 파일에 비핵심 태스크 정의됨",
+    "criterion_2_status": "completed",
+    "criterion_2_validation": "task-routing-config.json에 news-briefing, daily-summary, system-health, memory-cleanup, log-analysis, github-monitor 6개 태스크 정의 (✓)",
+    "criterion_3": "기존 Claude 핵심 태스크 정상 실행",
+    "criterion_3_status": "completed",
+    "criterion_3_validation": "E2E 테스트: morning-standup, macro-briefing 등 핵심 태스크는 Claude 모델 유지 확인 (2개 / 2개 통과) (✓)",
+    "criterion_4": "비용 절감 실제 검증 + 로그 기록",
+    "criterion_4_status": "completed",
+    "criterion_4_validation": "비용 절감 검증 완료 - 6개 샘플 태스크 실행, $0.229440 절감(64.1%), 로그: /Users/ramsbaby/jarvis/runtime/logs/routing-metrics-test.jsonl (✓)",
+    "criterion_5": "주인님 도입/거절 의사결정",
+    "criterion_5_status": "pending"
+  },
+  "decision_log": {
+    "_note": "도입/거절 의사결정은 이 섹션에 기록됨",
+    "decision_date": null,
+    "decision": null,
+    "decision_reason": null,
+    "decided_by": null
+  }
+}

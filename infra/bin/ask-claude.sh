@@ -140,6 +140,16 @@ cd "$WORK_DIR"
 # Source LLM Gateway (ADR-006)
 source "${BOT_HOME}/lib/llm-gateway.sh"
 
+# --- Model routing integration (ADR-011: Multi-model orchestration) ---
+# 비핵심 태스크를 Gemini 3.5 Flash로 라우팅하여 비용 절감
+source "${BOT_HOME}/lib/model-routing-integration.sh" 2>/dev/null || true
+ROUTED_MODEL=$(select_model_for_task "$TASK_ID" "$MODEL" "${ALLOWED_TOOLS:-}" 2>/dev/null || echo "$MODEL")
+if [[ -n "$ROUTED_MODEL" && "$ROUTED_MODEL" != "$MODEL" ]]; then
+    log_jsonl "info" "Model routing: $MODEL → $ROUTED_MODEL (task=$TASK_ID)" "0"
+    MODEL="$ROUTED_MODEL"
+    export ROUTED_MODEL_SOURCE="ask-claude.sh"
+fi
+
 CLAUDE_OUTPUT_TMP="${WORK_DIR}/claude-output.json"
 
 CLAUDE_EXIT=0
