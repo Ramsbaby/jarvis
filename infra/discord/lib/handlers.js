@@ -108,9 +108,11 @@ const _preProcessorRegistry = createPreProcessorRegistry(searchRagForContext);
 
 /** 배치된 메시지 내용을 하나의 프롬프트로 합침 */
 function _buildBatchContent(messages) {
-  if (messages.length === 1) return messages[0].content;
+  // _cleanContent (nexus test-mode 마커 제거판) 우선 사용 → LLM·RAG 에 마커 노출 방지
+  const pick = (m) => m._cleanContent ?? m.content;
+  if (messages.length === 1) return pick(messages[0]);
   return messages
-    .map((m, i) => (i === 0 ? m.content : `(추가) ${m.content}`))
+    .map((m, i) => (i === 0 ? pick(m) : `(추가) ${pick(m)}`))
     .join('\n');
 }
 
@@ -249,9 +251,9 @@ const processingMsgIds = new Set();
 // Session compaction: Progressive Compaction (업계 권고 — Anthropic, OpenAI)
 // 단일 80K 한방 대신 3단계: 40K(Tier 1 제거) → 60K(요약 축소) → 80K(전면 리셋)
 const COMPACT_LEVELS = [
-  { threshold: 40_000, action: 'lean' },           // Tier 1 섹션 미로드 (format-detail 등)
-  { threshold: 60_000, action: 'compress_history' }, // 대화 요약 축소
-  { threshold: 80_000, action: 'full_compact' },     // 전면 compaction + 세션 리셋
+  { threshold: 100_000, action: 'lean' },           // Tier 1 섹션 미로드 (format-detail 등)
+  { threshold: 150_000, action: 'compress_history' }, // 대화 요약 축소
+  { threshold: 185_000, action: 'full_compact' },     // 전면 compaction + 세션 리셋
 ];
 const COMPACT_THRESHOLD_TOKENS = 80_000; // 하위 호환
 const sessionTokenCounts = new BoundedMap(1000, 60 * 60_000); // 1000 items, 60min TTL
@@ -385,25 +387,41 @@ export async function handleMessage(message, state) {
     contentLen: message.content?.length ?? 0,
   });
 
-  // 봇 필터 + slash-proxy 예외:
-  // 슬래시 커맨드 경로로 봇 자신이 프록시 발송한 메시지만 통과시키고,
-  // 이 경우 message.author 를 원래 사용자의 User 객체로 교체해
-  // 하류 로직(userId·displayName·memory 등 28개 참조)이 자연스럽게 원 사용자로 동작.
+  // 봇 필터 + slash-proxy 예외 + nexus test-mode 예외:
+  // 슬래시 커맨드 경로 프록시 메시지 통과 + nexus discord_send `as_user_id` 마커 통과.
+  // 두 경로 모두 message._proxyAuthor 로 원 사용자 User 객체 주입 → 하류 28개 참조 자연 동작.
   if (message.author.bot) {
     try {
       const { consumeSlashProxy } = await import('./slash-proxy.js');
       const isSelf = message.author.id === message.client.user.id;
       if (!isSelf) return;
+
+      // 경로 1: slash-proxy 매핑 (TTL 5초 내)
       const proxy = consumeSlashProxy(message.channel.id, message.content);
-      if (!proxy) return;
-      const origUser =
-        message.client.users.cache.get(proxy.userId) ??
-        (await message.client.users.fetch(proxy.userId).catch(() => null));
-      if (!origUser) return;
-      // Discord.js v14: message.author 는 getter 라 직접 할당 불가.
-      // 대신 _proxyAuthor 저장 + getEffectiveAuthor() 헬퍼로 다운스트림이 조회.
-      message._proxyAuthor = origUser;
-      message._viaSlashProxy = true;
+      if (proxy) {
+        const origUser =
+          message.client.users.cache.get(proxy.userId) ??
+          (await message.client.users.fetch(proxy.userId).catch(() => null));
+        if (!origUser) return;
+        message._proxyAuthor = origUser;
+        message._viaSlashProxy = true;
+      } else {
+        // 경路 2: nexus discord_send test-mode 마커 (zero-width [TESTUSER:<id>])
+        // 봇 토큰으로만 송출 가능하므로 외부 위조 불가. 자비스 자율 측정 경로.
+        const testMarker = message.content.match(/​\[TESTUSER:(\d{17,20})\]​/);
+        if (!testMarker) return;
+        const testUserId = testMarker[1];
+        const testUser =
+          message.client.users.cache.get(testUserId) ??
+          (await message.client.users.fetch(testUserId).catch(() => null));
+        if (!testUser) return;
+        message._proxyAuthor = testUser;
+        message._viaNexusTest = true;
+        // content 에서 마커 제거 (다운스트림 LLM·RAG에 노출 방지)
+        // Discord.js v14: message.content 도 getter 라 _cleanContent 별도 주입
+        // g flag: 멀티 마커 시 모두 제거 (defense-in-depth — 한 마커만 남으면 LLM 누설 가능)
+        message._cleanContent = message.content.replace(/​\[TESTUSER:\d{17,20}\]​/g, '').trim();
+      }
     } catch {
       return;
     }
@@ -1466,11 +1484,22 @@ ${extracted}
         procShim.kill();
       }, 600_000);
 
+      // Sliding window timeout: 이벤트가 올 때마다 타이머 리셋
+      // — 10분 침묵 없으면 절대 안 끊김 (도구 호출 많은 세션 premature kill 방지)
+      const resetTimeout = () => {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        timeoutHandle = setTimeout(() => {
+          log('warn', 'Claude session timed out (10min no activity), aborting', { threadId: thread.id });
+          procShim.kill();
+        }, 600_000);
+      };
+
       activeProcesses.set(sessionKey, { proc: procShim, timeout: timeoutHandle, typingInterval, userId: effectiveAuthor.id, streamer, originalPrompt, sessionKey });
       // 즉시 active-session 파일 기록 (watchdog이 5분 주기 전에 체크해도 보호됨)
       try { writeFileSync(join(_BOT_HOME, 'state', 'active-session'), String(Date.now())); } catch { /* best effort */ }
 
       let lastAssistantText = '';
+      let lastModel = null; // 사고 2026-05-22: adaptive 다운그레이드 사후 추적용 — assistant 이벤트의 model 캡처
       let toolCount = 0;
       let retryNeeded = false;
       let needsContinuation = false;
@@ -1518,6 +1547,7 @@ ${extracted}
         injectedSummary: _injectedSummary,
         _budgetMode,
       })) {
+        resetTimeout(); // sliding window: 이벤트 수신 시 타이머 리셋
         if (event.type === 'system') {
           if (event.session_reset) {
             log('warn', 'Session silently reset inside createClaudeSession', {
@@ -1588,6 +1618,7 @@ ${extracted}
             streamer.setThinking(false);
           }
         } else if (event.type === 'assistant') {
+          if (event.message?.model) lastModel = event.message.model;
           if (event.message?.content) {
             for (const block of event.message.content) {
               if (block.type === 'text') {
@@ -1641,6 +1672,43 @@ ${extracted}
           const resultSessionId = event.session_id ?? null;
           if (resultSessionId) sessions.set(sessionKey, resultSessionId);
 
+          // 봇 응답 자동 캡처 (2026-05-25 신설) — bot-response-bus.jsonl 적재.
+          // 사고 사례: 자비스가 봇 응답 본문 추출 불가 → 질적 평가는 사용자 권한.
+          // 본 캡처로 자비스가 응답 본문·메타를 자동 검토 가능 (RAG 호출 여부·메타 비즈니스 추론 깊이 등).
+          try {
+            const respText = event.result || lastAssistantText || '';
+            // 진단 로그 (2026-05-25 추가) — market 미적재 원인 추적용
+            log('info', 'ledger 적재 시도', {
+              channel: chName,
+              respTextLen: respText.length,
+              eventResultLen: (event.result || '').length,
+              lastAssistantLen: (lastAssistantText || '').length,
+              stopReason: event.stop_reason ?? null,
+              isError: event.is_error ?? false,
+            });
+            if (respText.length > 0) {
+              const ledgerDir = join(_BOT_HOME, 'ledger');
+              const ledger = join(ledgerDir, 'bot-response-bus.jsonl');
+              mkdirSync(ledgerDir, { recursive: true });
+              appendFileSync(ledger, JSON.stringify({
+                ts: new Date().toISOString(),
+                channel: chName,
+                channel_id: effectiveChannelId,
+                session_id: resultSessionId,
+                response_chars: respText.length,
+                response_full: respText,
+                cost_usd: event.cost_usd ?? 0,
+                stop_reason: event.stop_reason ?? null,
+                is_error: event.is_error ?? false,
+                via_nexus_test: message._viaNexusTest === true,
+              }) + '\n');
+            } else {
+              log('warn', 'ledger 적재 누락 — respText 빈', { channel: chName, stopReason: event.stop_reason });
+            }
+          } catch (err) {
+            log('warn', 'bot-response-bus append 실패', { error: err.message });
+          }
+
           // Auto-continue on max_turns
           if (event.stop_reason === 'max_turns' && resultSessionId && continuationCount < MAX_CONTINUATIONS) {
             continuationCount++;
@@ -1690,6 +1758,7 @@ ${extracted}
                   cache_read_input_tokens: event.usage?.cache_read_input_tokens ?? 0,
                   cache_creation_input_tokens: event.usage?.cache_creation_input_tokens ?? 0,
                   stop_reason: event.stop_reason ?? null,
+                  model_used: lastModel, // 사고 2026-05-22: adaptive 다운그레이드 사후 추적
                   output_snippet: lastAssistantText.slice(0, 300),
                 }) + '\n'
               );
@@ -1925,7 +1994,7 @@ ${extracted}
     ];
     // 가드는 원본 사용자 입력만 검사. userPrompt 는 이전 세션 요약 pre-inject 로
     // 오염된 상태라 여기서 패턴 매칭하면 과거 대화의 거짓말 스토리까지 잡혀 오탐 발생.
-    const _rawInput = (message.content || '').trim();
+    const _rawInput = (message._cleanContent ?? message.content ?? '').trim();
     const hasInterviewPattern = INTERVIEW_PATTERNS.some((re) => re.test(_rawInput));
     const hasSkillTrigger = /^\/[a-zA-Z0-9_-]+/.test(_rawInput)
       || /모의면접|면접\s*연습|면접\s*답변|면접관\s*해줘/.test(_rawInput);
