@@ -63,6 +63,9 @@ logs/
 wiki/
 # Context (대화 이력, 사용자 메모리, Claude 세션)
 context/
+# infra/context/ 는 공유 SSoT (페르소나 등) 추적 허용 — 2026-05-26 negation 추가
+!infra/context/
+!infra/context/**
 # Docker (Langfuse + 크레덴셜)
 docker/
 # Board (Jarvis Board 로컬 인스턴스)
