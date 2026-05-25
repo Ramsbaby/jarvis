@@ -75,6 +75,7 @@ export const TOOLS = [
       properties: {
         channel: { type: 'string', description: 'Channel name (e.g. jarvis-ceo, jarvis)' },
         message: { type: 'string', description: 'Message content (markdown supported)' },
+        as_user_id: { type: 'string', description: 'Optional: Discord user ID to impersonate (test-mode only; appends zero-width marker handlers.js recognizes)' },
       },
       required: ['channel', 'message'],
     },
@@ -191,7 +192,7 @@ export const TOOLS = [
 // ---------------------------------------------------------------------------
 
 /** Discord 채널에 메시지 전송 (Discord REST API v10) */
-async function discordSend({ channel, message }) {
+async function discordSend({ channel, message, as_user_id }) {
   if (!channel || !message) throw new Error('channel and message required');
 
   const token = await loadDiscordToken();
@@ -203,13 +204,20 @@ async function discordSend({ channel, message }) {
     throw new Error(`채널 '${channel}' 없음. 사용 가능: ${Object.keys(channelMap).join(', ')}`);
   }
 
+  // test-mode: zero-width 마커 삽입 → handlers.js가 인식해 _proxyAuthor 우회 처리
+  // 마커는 디스코드 화면에는 보이지 않음. 봇 토큰 없이 위조 불가 (외부 안전).
+  let finalMessage = message;
+  if (as_user_id && /^\d{17,20}$/.test(String(as_user_id))) {
+    finalMessage = `${message}​[TESTUSER:${as_user_id}]​`;
+  }
+
   const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
     method: 'POST',
     headers: {
       'Authorization': `Bot ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ content: message }),
+    body: JSON.stringify({ content: finalMessage }),
   });
 
   if (!res.ok) {
