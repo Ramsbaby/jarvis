@@ -780,12 +780,38 @@ export async function* createClaudeSession(prompt, {
   // v4(맨 끝 push)와 이중 레이어:
   //   (A) harness[1] 페르소나 직접 교체 → primacy bias 제거
   //   (B) _emotionInjection 맨 끝 push → recency bias 활용
-  // [2026-05-26] "맴도네/맴도는" — 어간 '맴돌'에서 ㄹ탈락 활용형이므로 '맴도'로 확장
-  // [2026-05-26 C1 수정] 내면 대처 질문 패턴 추가 — 이 질문들은 감정 상태에서 나오는 내면 대처 요청.
-  // "어떡하면", "버텨야", "마음이 안", "어떻게 마인드셋" — 다른 감정 키워드 없이 단독으로 올 때도 감지.
-  // 주의: "어떻게.*해야" 전체는 오탐 위험으로 제외(기술 질문과 구별 불가).
+  // [2026-05-26 구조 수정] 감정 컨텍스트 전파 (키워드 패칭 → 아키텍처 수정)
+  //
+  // 근본 문제: 현재 메시지만 검사 → "맴도네. 억울해"(이전 턴) 후
+  //           "어떻게 해야해?"(현재 턴)는 키워드 없어서 emotionalTurn=false → 주입 안 됨.
+  //           새 키워드를 추가해도 계속 뚫리는 이유가 이것.
+  //
+  // 구조적 수정: 스레드 단위 감정 상태를 2턴 전파.
+  //   - 현재 턴에 키워드 있으면 → state.turns=2 설정
+  //   - 키워드 없어도 state.turns > 0이면 → 감정 모드 유지 (count-down)
+  //   - 비감정 대화 2턴 후 자동 만료 → 기술 질문에 감정 모드 오탐 방지
+  //
+  // 전파 TTL = 2턴 선택 이유:
+  //   - 1턴: "어떻게 해야해?" 바로 다음 턴까지만 커버 (위험도 낮음)
+  //   - 2턴: 감정 발화 → 침묵/리액션 → 대처 질문 패턴까지 커버
+  //   - 3턴+: 기술 질문으로 전환 후에도 감정 모드 오탐 위험 증가
   const _EMOTION_PATTERN_RE = /제발|걱정된다|확신 없어|떨어졌는지|간절하다|어떡하지|어떡하면|붙겠어|붙을까|망했나|떨어졌나|안되겠지|불안해|무서워|긴장돼|허하다|번아웃|억울|화난다|힘들다|무너진다|막막하다|슬프다|지친다|아프다|후회된다|실망|지쳐|눈물|짜증|맴도|미련인가|답답하|갑갑하|열받|화가 나|화가나|미치겠|분하다|못 잊|떨쳐|지워지지|버텨야|마음이 안|어떻게 마인드셋/;
-  const _isEmotionalTurn = !!(prompt && _EMOTION_PATTERN_RE.test(prompt));
+
+  // 스레드 단위 감정 상태 캐시 (Map 크기 제한: 200 스레드)
+  if (!createClaudeSession._emotionStateCache) createClaudeSession._emotionStateCache = new Map();
+  if (createClaudeSession._emotionStateCache.size > 200) {
+    // 가장 오래된 절반 제거 (삽입 순서 기반 LRU 근사)
+    const keys = [...createClaudeSession._emotionStateCache.keys()];
+    keys.slice(0, 100).forEach(k => createClaudeSession._emotionStateCache.delete(k));
+  }
+  const _threadKey = threadId || channelId || 'default';
+  const _prevEmotionState = createClaudeSession._emotionStateCache.get(_threadKey) || { turns: 0 };
+  const _currentEmotional = !!(prompt && _EMOTION_PATTERN_RE.test(prompt));
+  // 전파: 현재 키워드 감지 시 turns=2 리셋, 아니면 이전 state count-down
+  const _isEmotionalTurn = _currentEmotional || _prevEmotionState.turns > 0;
+  createClaudeSession._emotionStateCache.set(_threadKey, {
+    turns: _currentEmotional ? 2 : Math.max(0, _prevEmotionState.turns - 1),
+  });
 
   const { prompt: harnessPrompt, loadedSections } = harness.assemble(prompt, {
     budgetMode: _tokenBudgetMode,
