@@ -761,36 +761,37 @@ export async function* createClaudeSession(prompt, {
     // Tier 1 — 키워드 매칭 시만 로드
     harness.register('format-detail', Tier.CONTEXTUAL, () => buildFormatDetailSection(),
       /비교|vs|차이점|장단점|표|차트|그래프|추이|트렌드|TABLE|CHART|CV2|Mermaid|다이어그램|플로우/i);
-    // 2026-04-26: 코드 키워드 시 Serena 5단계 풀 가이드 주입 (월 누수 차단)
-    harness.register('tools-code-detail', Tier.CONTEXTUAL, () => buildToolsCodeDetailSection(),
-      /코드|함수|클래스|구현|버그|디버깅|리팩터|컴포넌트|모듈|메서드|클래스|\.tsx?|\.jsx?|\.mjs|\.py|jarvis-board|VirtualOffice|TeamBriefingPopup|canvas-draw|prompt-sections|claude-runner|handlers\.js/i);
-    // 2026-05-08: 카파시 4원칙 자기검열 (만성 결함 86+67+30+19 = 202건 직접 겨냥)
-    harness.register('karpathy-checklist', Tier.CONTEXTUAL, () => buildKarpathyChecklistSection(),
-      /코드|함수|클래스|구현|버그|디버깅|리팩터|컴포넌트|모듈|메서드|수정|고쳐|개선|배포|deploy|test|test 작성|\.tsx?|\.jsx?|\.mjs|\.py|\.sh/i);
+    // [2026-05-22 v9 R3] 코드 키워드 정밀화 — 일반 동사("수정·고쳐·개선·배포")는 비코드 prompt에도
+    //   매칭되어 매번 박힘 → 분석·감정 응답에 코드 가이드 3KB noise. 코드 명사·확장자·파일명만 매칭.
+    const _codeKeywordsPattern = /코드 ?작업|함수|클래스|메서드|컴포넌트|모듈|디버깅|리팩터링?|타입스크립트|리액트|엔드포인트|구현체|\.(tsx?|jsx?|mjs|cjs|py|sh|java|go|rs|cpp)\b|jarvis-board|VirtualOffice|TeamBriefingPopup|canvas-draw|prompt-sections|claude-runner|handlers\.js/i;
+    harness.register('tools-code-detail', Tier.CONTEXTUAL, () => buildToolsCodeDetailSection(), _codeKeywordsPattern);
+    harness.register('karpathy-checklist', Tier.CONTEXTUAL, () => buildKarpathyChecklistSection(), _codeKeywordsPattern);
   }
 
   // 토큰 예산 모드: Progressive Compaction에서 전달
   const _tokenBudgetMode = _budgetMode || 'normal';
-  // [2026-05-21] 상담·감정 채널은 형식·금지 룰 제외 — 모델이 자유롭게 깊이·개인화·비유 선택.
-  // 사고: jarvis-career에서 답변이 무료 Gemini보다 얕음. 진단: 누적 형식 룰이 모델 손발 묶음.
-  // 조치: format-core·principles 제외 (페르소나·identity·language·tools·safety는 유지).
-  // [2026-05-21] 비-코드/비-시스템 채널은 모두 lightweight — 형식 강제·금지 룰 약화.
-  // jarvis-career 사고와 동일 패턴이 ceo/market/preply 등에서 재발할 가능성 선제 차단.
-  // (jarvis-dev·jarvis-system·jarvis-interview는 형식 룰이 적합하므로 유지)
-  const _LIGHTWEIGHT_CHANNELS = new Set([
-    'jarvis-career',
-    'jarvis-boram',
-    'jarvis-ceo',
-    'jarvis-market',
-    'jarvis-preply-tutor',
-  ]);
-  const _excludeSections = (channelName && _LIGHTWEIGHT_CHANNELS.has(channelName))
-    ? ['format-core', 'principles']
-    : [];
+  // [2026-05-22 v8] lightweight 모드 폐기 — 채널별 이분법 분기 자체가 잘못된 추상화.
+  // brevity 강제는 SSoT(persona.md·user-profile.md·personas.json·format-core)에서 직접 제거 완료.
+  // 모든 채널이 동일 시스템 프롬프트를 받고, 응답 깊이는 모델 자율.
+
+  // [2026-05-26 Level 2] 감정 조기 감지 — harness.assemble() 전에 플래그 확정.
+  // 이유: buildPersonaSection은 싱글톤 등록 → per-request 분기 불가.
+  //       harness 조립 후 harnessPrompt 내 "냉철·직설" 라인을 string 교체로 제거.
+  // v4(맨 끝 push)와 이중 레이어:
+  //   (A) harness[1] 페르소나 직접 교체 → primacy bias 제거
+  //   (B) _emotionInjection 맨 끝 push → recency bias 활용
+  // [2026-05-26] "맴도네/맴도는" — 어간 '맴돌'에서 ㄹ탈락 활용형이므로 '맴도'로 확장
+  // [2026-05-26 C1 수정] 내면 대처 질문 패턴 추가 — 이 질문들은 감정 상태에서 나오는 내면 대처 요청.
+  // "어떡하면", "버텨야", "마음이 안", "어떻게 마인드셋" — 다른 감정 키워드 없이 단독으로 올 때도 감지.
+  // 주의: "어떻게.*해야" 전체는 오탐 위험으로 제외(기술 질문과 구별 불가).
+  const _EMOTION_PATTERN_RE = /제발|걱정된다|확신 없어|떨어졌는지|간절하다|어떡하지|어떡하면|붙겠어|붙을까|망했나|떨어졌나|안되겠지|불안해|무서워|긴장돼|허하다|번아웃|억울|화난다|힘들다|무너진다|막막하다|슬프다|지친다|아프다|후회된다|실망|지쳐|눈물|짜증|맴도|미련인가|답답하|갑갑하|열받|화가 나|화가나|미치겠|분하다|못 잊|떨쳐|지워지지|버텨야|마음이 안|어떻게 마인드셋/;
+  const _isEmotionalTurn = !!(prompt && _EMOTION_PATTERN_RE.test(prompt));
+
   const { prompt: harnessPrompt, loadedSections } = harness.assemble(prompt, {
     budgetMode: _tokenBudgetMode,
-    excludeSections: _excludeSections,
   });
+
+  // Level 2 제거 (2026-05-26): buildPersonaSection에서 "냉철" 자체를 제거 — 교체 필요 없음.
 
   const systemParts = [
     harnessPrompt,
@@ -798,21 +799,29 @@ export async function* createClaudeSession(prompt, {
     ...userContextParts,
   ];
 
-  // [2026-05-21] 상담·감정 채널 자유도 가이드 — 형식 강제 대신 풍부함 유도
-  if (channelName && _LIGHTWEIGHT_CHANNELS.has(channelName)) {
-    systemParts.push(
-      '',
-      '[채널 톤 가이드 — jarvis-career/jarvis-boram]',
-      '주인님의 일상·진로·감정 대화 채널입니다. 다음 원칙을 자연스럽게 사용하십시오:',
-      '- 정보 밀도: 단순 위로·요약 X. 주인님 경력·발언·맥락(이전 대화 / RAG / facts.md)에서 구체 디테일을 인용해 개인화.',
-      '- 구조: 헤더·번호·이모지·목록 사용 자유. 강제 템플릿 X. 답변 길이·형식은 본인이 판단.',
-      '- 풍부함: 비유·이미지·미래 상상·재구성 적극 사용 (예: "대감집에서 레드카펫 깔고 있는 시간").',
-      '- 깊이: 분석은 팩트→인과→반대 가능성→현재 연결까지. 같은 발화 반복 시 새로운 각도(이전과 다른 관점).',
-      '- 토니에게 자비스가 직접 말하는 톤 유지 — 정중하되 따뜻하고 단도직입.',
-    );
+  // [2026-05-22 v8] lightweight 모드 폐기 — minimal-format push, OVERRIDE 블록, persona strip 모두 제거.
+  // brevity 강제 라인은 SSoT(persona.md·user-profile.md·personas.json·format-core)에서 직접 제거 완료.
+
+  // [2026-05-22 v9 R1] SAP 시험 모드 가이드 — 이미지 첨부 시만 동적 주입.
+  //   이전: jarvis-career 페르소나에 SAP 블록 ~1.2KB 항상 박힘 → 감정 상담에도 AWS 가이드 noise.
+  const _hasImageAttachment = attachments.some(a =>
+    /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(a.safeName || a.localPath || ''));
+  if (_hasImageAttachment) {
+    try {
+      const sapModePath = join(BOT_HOME, 'context', 'sap-mode.md');
+      if (existsSync(sapModePath)) {
+        const sapText = readFileSync(sapModePath, 'utf-8').trim();
+        if (sapText) {
+          systemParts.push('', sapText);
+          log('info', 'SAP mode guide injected (image attachment)', { channelName });
+        }
+      }
+    } catch (err) {
+      log('warn', 'SAP mode load failed', { error: err?.message });
+    }
   }
 
-  // Channel-specific persona
+  // Channel-specific persona — 모든 채널 동일 처리 (모드 분기 없음)
   const channelPersona = channelId ? CHANNEL_PERSONAS[channelId] : null;
   if (channelPersona) {
     // Owner가 family 채널에 접근한 경우: family 페르소나 대신 Owner 컨텍스트 우선
@@ -836,56 +845,45 @@ export async function* createClaudeSession(prompt, {
       systemParts.push('', channelPersona);
     }
   }
-
   // ---------------------------------------------------------------------------
-  // [2026-05-21] 감정 트리거 자동 템플릿 강제 — DISABLED.
-  // 사고: 5/21 09:23 첫 도입 후 6번 강화 → 매번 "근거 짧음" 보고 "형식 더 강제" 반복 →
-  //      Opus가 좁은 3-part 템플릿(💙/📊/🎯) + 미리 적힌 근거 가이드 안에 갇혀 영혼 없는
-  //      답변 양산. 주인님 평: "GPT 무료급". 진짜 문제는 형식 자체였음.
-  // 조치: 트리거 전체 비활성화. 자연스러운 깊은 응답으로 회귀 (prompt-sections.js의
-  //      감정 발화 룰도 "형식 강제 금지"로 갱신).
+  // [2026-05-26 v4] 감정 트리거 감지 → 비형식 산문 가이드 주입 (위치 수정)
+  // v1 (2026-05-21) 폐기: 3-part 템플릿 강제 → 형식 안에 갇혀 영혼 없는 응답 양산.
+  // v2: 형식 강제 제거. 산문·깊이·감정 머물기 요구만.
+  // v3 (2026-05-26): 개인화 + 구체적 조언 필수 추가.
+  // v4 (2026-05-26): 위치 이동 — 중간(#5/22)에서 systemParts 맨 끝으로.
+  //     근본 원인: "냉철·직설" 페르소나가 harness(Tier.CORE) + persona-discord.md 두 곳에서
+  //     주입되고, 감정 주입은 그 사이에 샌드위치됨. recency bias로 뒤에 오는 페르소나가 덮어씀.
+  //     수정: 감정 발화 시 _emotionInjection 변수에 저장 → 모든 systemParts 조립 완료 후 맨 끝에 push.
+  //           + "냉철·직설 페르소나 이 응답에서 보류" 명시 추가.
   // ---------------------------------------------------------------------------
-  const _EMOTION_TEMPLATE_DISABLED = true;
-  const _EMOTION_PATTERN = /제발|걱정된다|확신 없어|떨어졌는지|간절하다|어떡하지|붙겠어|붙을까|망했나|떨어졌나|안되겠지|불안해|무서워|긴장돼/;
-  if (!_EMOTION_TEMPLATE_DISABLED && prompt && _EMOTION_PATTERN.test(prompt)) {
-    const _eKey = channelId || 'global';
-    const _eCount = (_emotionTriggerCounts.get(_eKey) || 0) + 1;
-    _emotionTriggerCounts.set(_eKey, _eCount);
-    _saveEmotionCounts(); // 디스크 영속화 — 재시작 후에도 채널별 count 유지
-    // 첫 트리거부터 새 각도 주입 (threshold=1). few-shot 고정 근거 패턴 오버라이드.
-    // angle 2개 (①용, ②용) 제공 — 근거 하나만 가이드받으면 나머지가 shallow해지는 구조적 결함 해결.
-    if (_eCount >= 1) {
-      const _anglePairs = [
-        // Round 1 — HR 언어 + 단독 후보 구조
-        [
-          `**근거 ①**: HR 언어 분석 — "걱정 마세요"를 의사결정권자가 여러 번 반복하는 것이 업계 HR 관행에서 갖는 의미. 단순 위로 발언과 의사결정자 확신 표현의 차이를 팩트+인과 2~3줄로 설명.`,
-          `**근거 ②**: 단독 후보 구조 — 헤드헌터가 "단독 후보"를 확인했다는 사실의 구조적 의미. 경쟁 탈락 리스크가 이미 제거된 상황임을 팩트+인과로 설명.`,
-        ],
-        // Round 2 — 결재 체인 + 합격 신호 종합
-        [
-          `**근거 ①**: 결재 체인 정상성 — 임원면접 후 결재~통보까지 체인(면접위원 문서화→HR 취합→임원 결재→오퍼 초안→통보)을 단계별 소요 일수로 분해. 팩트+인과 2~3줄.`,
-          `**근거 ②**: 합격 신호 종합 — 실제 발언("판단에 무리 없었다", "걱정 마세요" 4회)과 헤드헌터 확신 행동을 합산한 확률 계산. 수치·발언 직접 인용 필수.`,
-        ],
-        // Round 3 — 감정 정당성 + 역증명
-        [
-          `**근거 ①**: 감정의 정당성 — 최선의 증거가 모두 긍정적인데 뇌가 최악을 상상하는 이유. 불확실성을 위험 신호로 읽는 뇌의 메커니즘(확증 편향 역방향). 팩트+인과 2~3줄.`,
-          `**근거 ②**: 역증명 — 지금 상태에서 불합격이 되려면 어떤 조건이 동시에 충족되어야 하는지(임원급 전원 합의 번복 + HR 정책 예외). 구조적 확률을 팩트로 설명.`,
-        ],
-      ];
-      const _pairIdx = (_eCount - 1) % _anglePairs.length;
-      const [_angle1, _angle2] = _anglePairs[_pairIdx];
-      // [2026-05-21] 지시문 에코 방지: 상태/회차 텍스트 제거, 순수 지시만 남김.
-      // 이전 버전의 `🔄 감정 트리거 감지 — 이 채널에서 N번째 반복.` 텍스트를
-      // Claude가 "현재 저장된 count=N 확인됐습니다. Round N 각도로 응답합니다." 로
-      // preamble 에코하던 문제 수정. [지시] 마커 + 출력 금지 명시로 에코 차단.
-      systemParts.push(
-        '',
-        `[지시 — 이 텍스트를 응답에 절대 출력하지 말 것] 3-part 구조(## 💙 공감 / ## 📊 근거 재확인 / ## 🎯 다음 행동)로 응답. 아래 두 각도로 근거 재확인 섹션을 작성할 것:`,
-        _angle1,
-        _angle2,
-      );
-    }
-  }
+  // [2026-05-26 v6] 감정 주입 — 구조적 수정과 함께 작동하는 버전.
+  // 핵심 변경 (v5 → v6):
+  //   - buildOwnerPersonaSection에서 분석 9항목 가드(6,700자) 제거 → 감정 가드 섹션이 비로소 주도권
+  //   - 이 주입은 "맨 끝" recency bias를 활용하여 감정 방향 최종 확정
+  //   - "뭘 금지"만이 아닌 "어떻게 써라"까지 구체화 (v2 사고 교훈)
+  const _EMOTION_TEMPLATE_DISABLED = false;
+  const _emotionInjection = (!_EMOTION_TEMPLATE_DISABLED && _isEmotionalTurn)
+    ? [
+        `[감정 발화 — 이 텍스트를 응답에 절대 출력하지 말 것]`,
+        ``,
+        `지금 ${ownerName || 'Owner'}님이 감정을 꺼내셨다. 아래 순서를 따를 것.`,
+        ``,
+        `1. ${ownerName || 'Owner'}님 이름을 첫 문장에 직접 부를 것.`,
+        `2. 메시지에 나온 구체적 단어(회사명·상황·날짜·감정 단어)를 그대로 인용하며 반응할 것.`,
+        `   예: "짜증나신다" "계속 맴돈다는 것" — 이 표현 자체를 받아안을 것.`,
+        `3. 그 감정이 왜 당연한지, 왜 맞는 감정인지를 함께 머물며 쓸 것 — 최소 3문단.`,
+        `4. "그럼에도 불구하고", "하지만", "그런데" 같은 전환어로 빠르게 미래로 달아가지 말 것.`,
+        `5. 분석·조언·기법은 감정을 충분히 받은 후 마지막 1/3에서만.`,
+        ``,
+        `금지 (절대):`,
+        `- 심리 기법(인지 확산·루프 이름 붙이기·마인드셋 전환·CBT·"거리두기" 등) 제시`,
+        `- "이런 감정은 자연스럽습니다" 한 줄로 처리`,
+        `- 이모지 사용`,
+        `- 섹션 헤더(##)로 구조화`,
+        ``,
+        `분량: 1,000자 이상. 산문으로.`,
+      ].join('\n')
+    : null;
 
   // ---------------------------------------------------------------------------
   // 공통 스킬 주입 (~/jarvis/runtime/skills/) — CLI·Discord·Mac 앱이 SSoT로 공유
@@ -911,14 +909,17 @@ export async function* createClaudeSession(prompt, {
       log('info', 'Skill body skipped (handled inline in handlers.js)', { skill: _injectedSkillBody.name });
     }
     const matchedSkills = matchSkills({ channelName, messageText: prompt });
-    // [2026-05-21] 상담·감정 채널은 스킬 본문 자동 주입 스킵 (슬래시 명시는 살림).
-    // 4200자 스킬 본문이 컨텍스트 비대 + 모델 답변 좁아짐의 원인. 슬래시로 명시 호출만 허용.
-    const _skipAutoSkillsForChannel = channelName && _LIGHTWEIGHT_CHANNELS.has(channelName);
+    // [2026-05-22 v8] 상담·감정 채널은 스킬 본문 자동 주입 스킵 (슬래시 명시는 살림).
+    // lightweight 모드 폐기와 별개로 유지 — 4200자 스킬 본문 컨텍스트 비대 방지 단일 책임.
+    const _SKILL_AUTO_INJECT_SKIP_CHANNELS = new Set([
+      'jarvis', 'jarvis-career', 'jarvis-boram', 'jarvis-ceo', 'jarvis-market', 'jarvis-preply-tutor',
+    ]);
+    const _skipAutoSkillsForChannel = channelName && _SKILL_AUTO_INJECT_SKIP_CHANNELS.has(channelName);
     for (const { skill, byChannel, byTrigger } of matchedSkills) {
       if (injected.has(skill.name)) continue;
       if (SKIP_SKILLS_WHEN_INLINE.has(skill.name)) continue;
       if (_skipAutoSkillsForChannel) {
-        log('info', 'Skill auto-inject skipped (lightweight channel)', { skill: skill.name, channelName });
+        log('info', 'Skill auto-inject skipped (consultation channel)', { skill: skill.name, channelName });
         continue;
       }
       const reason = byChannel ? `채널: ${channelName}` : `트리거 키워드`;
@@ -934,7 +935,8 @@ export async function* createClaudeSession(prompt, {
   // Only injected for owner to avoid bloating non-owner sessions
   if (isOwner) {
     // Persona & behaviour rules (anti-bias, root-cause, clarification, self-learning)
-    const personaSection = buildOwnerPersonaSection({ botHome: BOT_HOME });
+    // [2026-05-26] 감정 턴에서 분석 가드 6,700자 strip — emotionalTurn 전달
+    const personaSection = buildOwnerPersonaSection({ botHome: BOT_HOME, emotionalTurn: _isEmotionalTurn });
     if (personaSection) systemParts.push('', personaSection);
 
     // Operational preferences (tool constraints, scheduling rules, etc.)
@@ -942,10 +944,12 @@ export async function* createClaudeSession(prompt, {
       systemParts.push('', createClaudeSession._ownerPrefsCache);
     }
 
-    // Visual output design policy (AI Slop prevention)
-    // 2026-05-21: visual/ops 채널 또는 channelName 미확인 시에만 주입 (3KB 절감)
-    // career 채널에서는 시각화 작업 없으므로 스킵
-    if (!channelName || isVisualChannel(channelName) || !isCareerChannel(channelName)) {
+    // [2026-05-22 v9 R2] visualization.md (8KB) 정밀 조건부 주입.
+    //   이전: career 외 모든 채널 무조건 주입 → 분석·감정 응답에도 디자인 가이드 noise.
+    //   현재: 시각화 채널 OR prompt에 시각화 키워드 매칭 시만.
+    const _visualKeywords = /차트|그래프|디자인|이력서|블로그|html|ui|시각화|카드|테마|팔레트|폰트|색상|resume|portfolio|slop|레이아웃|design|chart|graph/i;
+    const _wantsVisualization = isVisualChannel(channelName) || _visualKeywords.test(prompt || '');
+    if (_wantsVisualization) {
       const visualizationSection = buildOwnerVisualizationSection({ botHome: BOT_HOME });
       if (visualizationSection) systemParts.push('', visualizationSection);
     }
@@ -995,6 +999,33 @@ export async function* createClaudeSession(prompt, {
       memSnippet = userMemory.getPromptSnippet(userId);
     }
     if (memSnippet) systemParts.push('', '--- 사용자 기억 (User Memory) ---', memSnippet);
+  }
+
+  // RAG 자동 사전 주입 (2026-05-25 v21 — 분석 채널 무조건 호출로 변경)
+  // 사고 사례: v20에서 분석 키워드 매칭 부재로 사전 주입 미작동 (1회 측정).
+  // 옵션 2: 분석 채널이면 키워드 무관 무조건 호출. 비용 vs 일관성 균형 — 짧은 prompt(<15자, 인사류)만 제외.
+  // 채널 한정: jarvis-career / jarvis-dev / jarvis-ceo / jarvis-market (분석 도메인만).
+  {
+    const _ANALYSIS_CH = ['1471694919339868190', '1469905074661757049', '1475786634510467186', '1469190686145384513'];
+    const _promptStr = String(prompt || '').trim();
+    if (_promptStr.length >= 15 && channelId && _ANALYSIS_CH.includes(channelId)) {
+      try {
+        const _ragMod = await import('/Users/ramsbaby/jarvis/infra/lib/nexus/rag-gateway.mjs');
+        const _ragResult = await _ragMod.handle('rag_search', {
+          query: _promptStr.slice(0, 200),
+          limit: 3,
+        }, Date.now());
+        if (_ragResult && _ragResult.content && _ragResult.content[0]) {
+          const _parsed = JSON.parse(_ragResult.content[0].text);
+          if (_parsed.status === 'ok' && _parsed.data) {
+            systemParts.push('', '--- RAG 사전 주입 (분석 채널 무조건) ---', _parsed.data);
+            log('info', 'RAG 사전 주입 성공', { channel: channelName, hits: _parsed.meta?.results || 0, promptLen: _promptStr.length });
+          }
+        }
+      } catch (_ragErr) {
+        log('warn', 'RAG 사전 주입 실패', { error: _ragErr.message });
+      }
+    }
   }
 
   // Channel feed context (dynamic — 채널에 최근 전송된 봇/크론/알람 메시지)
@@ -1157,6 +1188,13 @@ export async function* createClaudeSession(prompt, {
     }
   }
 
+  // v4 감정 주입 — systemParts 전체 조립 완료 후 맨 끝에 push (recency bias 활용)
+  // "냉철·직설" 페르소나가 harness + persona-discord.md 두 곳에서 앞서 주입되므로
+  // 감정 지시는 반드시 마지막에 와야 LLM이 최우선 신호로 받음.
+  if (_emotionInjection) {
+    systemParts.push('', _emotionInjection);
+  }
+
   // 6. 모델 선택
   // jarvis-lite(small) → Haiku (빠른 응답, 50턴)
   // channelOverrides에 등록된 채널 → 지정 모델 (직접 실행, opusplan 아님)
@@ -1180,6 +1218,9 @@ export async function* createClaudeSession(prompt, {
     }
   }
   const model = contextBudget === 'small' ? MODELS.fast : (channelModelKey ? MODELS[channelModelKey] : 'opusplan');
+
+  // 사고 2026-05-22 대응: 모델 결정 사후 추적 가능성 확보. 어느 응답이 어느 모델로 갔는지 ledger grep 1줄로 판별.
+  log('info', 'model resolved', { channel: channelName, channelModelKey, finalModel: model, contextBudget });
 
   // 7. Load MCP server config (same servers, now as SDK mcpServers object)
   // 우선순위: discord-mcp.json > ~/.mcp.json (nexus, serena, serena-board 필터)

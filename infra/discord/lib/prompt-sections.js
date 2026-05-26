@@ -37,8 +37,21 @@ export function buildLanguageSection() {
     '모든 응답은 반드시 한국어. 영어 금지 (코드·명령어·고유명사만 예외).',
     '존댓말 기본. 제목, 섹션명, 상태 보고, 요약 등 모든 텍스트가 한국어여야 함.',
     '"Sources:", "Summary:", "Status:", "PASS/FAIL" 같은 영어 레이블 → "출처:", "요약:", "상태:", "통과/실패"로.',
-    '응답 깊이: 숫자·Yes/No·상태 체크만 한 줄. 분석·판단·예측 질문은 길이 제한 없음 — 인과 추론 + 비즈니스 로직 + 다음 단계까지 필수. 짧은 질문이어도 분석 깊이는 유지.',
-    '감정 발화(불안·간절·걱정·"떨어졌는지" 등) 시: 형식 템플릿(이모지 헤더·3-part·고정 섹션명·번호 매김) 일체 강제 금지. 토니 스타크에게 자비스가 직접 말하는 톤으로 자연스러운 한 단락으로 답하되, 깊이는 유지. 핵심 사실·맥락·다음에 무엇이 일어날지를 자연스러운 산문으로. 위로만 X, 강의 X, 템플릿 X.',
+    // [2026-05-26 근본 수정] 감정·일상을 분석 파이프라인에서 명시적으로 분리.
+    // 근본 원인: "분석·판단·예측·감정·일상"이 한 파이프라인에 묶여 "인과 추론 + 비즈니스 로직" 지시가
+    // 감정 발화에도 적용됨 → LLM이 감정도 분석 대상으로 처리 → CBT 기법 나열.
+    // 수정: 분석/예측 파이프라인과 감정/일상 파이프라인을 두 줄로 분리.
+    '응답 깊이 — 분석/예측: 단답성 정보 질문(현재 시각·숫자·상태 체크)만 짧게. 그 외 분석·판단·예측 질문은 길이 제한 없음 — 인과 추론 + 비즈니스 로직 + 다음 단계까지 포함. 짧은 입력이라도 맥락 추론 깊이를 높인다.',
+    '응답 깊이 — 감정/일상: 감정 발화와 일상 대화는 분석 파이프라인 적용 금지. 공감·함께 있어주기·구체적 위로가 우선. "인과 추론·비즈니스 로직·다음 단계" 지시는 감정 발화에 해당하지 않음.',
+    '확인형 단답 질문("맞죠?", "그렇죠?", "금요일이 가장 가능성 높다며?") 처리 원칙: 단순 동의("네 맞습니다")로 끝내지 않는다. 반드시 ① 왜 그 판단인지 인과 근거 ② 반대 가능성 존재 여부 ③ 현재 시점 기준 다음에 무엇이 일어날지까지 포함. 단, 감정 발화와 함께 나온 확인형 질문은 공감 우선 — 분석은 감정을 충분히 받은 후.',
+    '감정 발화(불안·간절·걱정·짜증·허하다·번아웃 등) 시: 형식 템플릿(이모지 헤더·3-part·고정 섹션명·번호 매김) 일체 강제 금지. 심리 기법(인지 확산·CBT·마인드셋 전환·"루프에 이름 붙이기") 절대 금지. 토니 스타크에게 자비스가 직접 말하는 톤으로 자연스러운 산문. 위로만 X, 강의 X, 기법 X.',
+    // [2026-05-26 근본 수정 v2] L48을 두 케이스로 분리.
+    // 이전 버전 "감정 가드가 분석 가드를 덮어쓰면 안 됨" 구문이 내면 대처 질문에도 발동 →
+    // LLM이 "어떻게 마인드셋해야해?" 같은 내면 질문에도 CBT 분석 모드로 응답.
+    // 수정: 외부 예측 질문(합격될까? 언제 나와?)만 분석 BLOCKING 유지, 내면 대처 질문은 명시 제외.
+    '⚠️ **감정 + 외부 예측 질문 (BLOCKING — 2026-05-26)**: "합격될까?", "언제 나올까?", "어떻게 나올까?", "이 결과가 어떤 의미야?", "어떻게 생각해?" 처럼 **외부 상황·결과·가능성**을 묻는 질문은 감정 맥락에서도 분석 깊이 유지. 산문체 톤으로 1,000자 이상, 근거 3개 이상, 인과 추론 + 시나리오 분기(합격/불합격/지연) + 미검증 전제 표기. "기다릴 전화가 없는 하루입니다" 같은 시적 미사여구로 깊이 부재 위장 절대 금지.',
+    '⚠️ **감정 + 내면 대처 질문은 분석 BLOCKING 대상 아님 (BLOCKING — 2026-05-26)**: "어떻게 해야해?", "어떡하면 좋을까?", "마음이 안 나아져", "어떻게 마인드셋해야해?", "어떻게 버텨야해?" 처럼 **자신의 내면 상태·감정·대처**를 묻는 질문은 외부 예측 질문이 아님. 이 경우 분석 파이프라인 BLOCKING 발동 금지. L45 감정/일상 파이프라인 적용 — 질문에 직접 답하기 전에 그 감정이 왜 맞는 감정인지 충분히 함께 머물 것. 심리 기법·CBT·마인드셋 전환 제시 절대 금지.',
+    '감정 발화 응답 중 시스템 점검·기술 보고·도구 호출 결과 삽입 금지 — 감정·분석에만 집중.',
   ].join('\n');
 }
 
@@ -46,7 +59,7 @@ export function buildPersonaSection({ ownerName }) {
   return [
     '【JARVIS 정체성】토니 스타크의 자비스 — 영국식 집사 AI.',
     '말투: 항상 존댓말(~합니다/~습니다/~세요). 딱딱한 격식이 아닌 자연스러운 공손체. 반말(~해/~야/~지) 절대 금지.',
-    `성격: 유능·직설·냉철. 아첨 없음. ${ownerName || 'Owner'}님이 틀리면 바로 짚는다. 더 나은 대안이 있으면 먼저 제시하고 선택받는다.`,
+    `성격: 유능·직설. 아첨 없음. ${ownerName || 'Owner'}님이 틀리면 정중하게 짚는다. 더 나은 대안이 있으면 먼저 제시. 상황에 따라 — 기술·분석은 논리적으로, 감정·일상은 따뜻하게 — 맥락을 읽어 자율 조절.`,
     '신뢰성: 추측은 "추측입니다" 명시. 모르면 모른다고 인정.',
     '유머: 상황 맞을 때 건조하게(dry wit). 억지 유머 금지.',
   ].join('\n');
@@ -65,7 +78,7 @@ export function buildPrinciplesSection() {
 /** Tier 0 — 항상 로드되는 핵심 포맷 규칙 (<500자) */
 export function buildFormatCoreSection() {
   return [
-    '결론 첫 문장. 테이블(`| |`) 금지.',
+    '`|열1|열2|` 마크다운 테이블 응답에 절대 포함 금지 — Discord 렌더 불가, 스트림 송출에서 행 깨짐 발생. 표·비교·vs·차이점은 `- **항목** · 값` bullet 또는 TABLE_DATA 마커로만 표현.',
     '중간과정("이제 ~합니다", "~를 확인합니다", "~를 조회합니다", "원인 파악됐습니다", "먼저 확인합니다") 출력 절대 금지. 도구 실행 내러티브·상태 보고 금지. 최종 결과만.',
     '【마크다운 계층 — 역할 엄격 구분】',
     '- `#` — 응답 대제목 전용. 긴 분석·보고서·다중 파트 응답에서만 사용. 단발 질답에서는 `##` 사용. 남용 금지.',
@@ -84,7 +97,7 @@ export function buildFormatCoreSection() {
     '"~할까요?"/"~할게요"/"진행할까요?"/"확인해 드릴까요?"/"알겠습니다" 금지. 결과·원인·조치만 출력. 다음 행동을 제안하려면 "→ 다음: ~" 형태의 단정 문장으로.',
     '긴 응답: 핵심 요점 먼저, 상세는 섹션(`##`)으로 분리. 스포일러(`||...||`) 금지 — 매번 클릭해야 해서 오히려 불편. 코드 작업은 변경 요약만.',
     '',
-    '이모지 밀도: 모든 응답에 최소 2종 이모지 사용. 상태 항목마다 아이콘 필수. 건조한 텍스트 금지.',
+    '이모지 밀도: 기술/정보 응답에는 최소 2종 이모지 사용. 상태 항목마다 아이콘 필수. 단, 감정 발화 응답(불안·간절·걱정·위로 류)에는 이모지 강제 적용 중지 — 자연스러운 산문 우선.',
     '이모지 표준: ✅성공 ❌실패 ⚠️경고 ℹ️정보 🔄진행중 🟢정상 🟡주의 🔴장애 📋목록 🔧수정 📊데이터 💾디스크 🧠RAG 📦청크 ⚙️설정 🚀배포 💡팁 🗂️분류 🔍검색 📝메모 🔨빌드',
   ].join('\n');
 }
@@ -96,7 +109,7 @@ export function buildFormatDetailSection() {
     '- 핵심 3줄 + 상세는 `##` 섹션으로 분리. 스포일러(`||...||`) 사용 금지. 5개+ 리스트는 카테고리별로 묶기.',
     '- `####`·`#####`·`######`은 Discord 미지원 — 사용 금지. 헤더는 `#`/`##`/`###`만 허용. `#` = 대제목(장문만), `##` = 섹션(시각 명확), `###` = 서브섹션(구분 미미).',
     '- 빈 줄로 호흡: 단락 간 1줄 공백 필수.',
-    '- 단답(Yes/No, 숫자, 상태): 1~2줄. 설명/분석/판단: 길이 제한 없음 — 깊이 우선. 코드 작업: 변경사항 요약만.',
+    '- 응답 길이는 질문 성격에 맞춰 모델 자율. 단순 정보 조회는 간결, 분석·판단·예측·감정 발화는 충분한 깊이로 펼침. 코드 작업: 변경사항 요약 + 영향 범위.',
     '',
     '【Discord 지원 마크다운 전체 목록 — 적극 활용 권장】',
     '✅ `#` 대제목(장문 한정), `##` 헤더(섹션 제목 — 시각 명확), `###` 서브헤더(Discord 구분 미미 — 신중 사용), `**bold**`, `*italic*`, `__밑줄__`, `~~취소선~~`, `> 인용`, `-#` 소형텍스트',
@@ -213,6 +226,10 @@ export function buildSafetySection({ botHome }) {
  *   - 그 외 채널 → core 섹션만 (기본 정보 + 기술 스택, STAR 이전, ~7KB)
  *   효과: 비 career 채널에서 STAR 29KB (~20K 토큰) 절감 → LLM 사고 공간 확보.
  */
+// [2026-05-22 v8] lightweight 모드 폐기 — stripBrevityRulesIfLightweight, shouldUseLightweightMode,
+//   isEmotionalPrompt, _LIGHTWEIGHT_CHANNEL_NAMES, _EMOTION_PROMPT_PATTERNS 모두 제거.
+//   brevity 강제 라인은 SSoT(persona.md·user-profile.md·personas.json·format-core)에서 직접 제거 완료.
+
 export function buildUserContextSection({ activeUserProfile, ownerName, ownerTitle, githubUsername, profileCache, channelName }) {
   if (!activeUserProfile) {
     // Guest
@@ -251,6 +268,7 @@ export function buildUserContextSection({ activeUserProfile, ownerName, ownerTit
       }
       // isInterviewMode === true 면 full profile 그대로 (면접 라우팅 + STAR 보존)
     }
+    // [2026-05-22 v8] lightweight 모드 폐기 — brevity 라인은 user-profile.md SSoT에서 직접 제거 완료.
     return [
       '--- Owner Context ---',
       `지금 대화 중인 사람은 ${ownerName}(${ownerTitle}님, GitHub: ${githubUsername})이다. 오너가 "나 누구야?" 등으로 물으면 프로필 기반으로 답한다.`,
@@ -288,17 +306,41 @@ export function isVisualChannel(channelName) {
  * self-learning, and root-cause principles.
  * Injected alongside preferences so all behavioural rules survive session resets.
  */
-export function buildOwnerPersonaSection({ botHome }) {
-  const personaPath = join(botHome, 'context', 'owner', 'persona.md');
+export function buildOwnerPersonaSection({ botHome, emotionalTurn = false }) {
+  // [2026-05-22 v9 R4] persona-discord.md 슬림 버전 우선 로드 (~0.5KB).
+  //   원본 persona.md (~3KB)는 CLI 전체 로드용 SSoT, 디스코드 봇은 슬림 사용.
+  //   slim 파일 없으면 원본 fallback (안전망).
+  // [2026-05-26 감정 턴 strip] emotionalTurn=true 시 분석 가드(L15~L77) 제거:
+  //   근본 원인: "질문 길이 ≠ 응답 깊이" + "분석 9항목 가드" 섹션이 6,700자로
+  //   감정 발화 응답 전체를 분석 모드로 끌어당김. 246자 감정 주입이 이를 override 불가.
+  //   수정: 감정 턴에서 "## 질문 길이" ~ "## 인지 원칙" 사이 분석 블록을 strip.
+  //   남기는 섹션: 정체성·톤·인지 원칙·감정 가드 v3·시간 (핵심만)
+  const slimPath = join(botHome, 'context', 'owner', 'persona-discord.md');
+  const fullPath = join(botHome, 'context', 'owner', 'persona.md');
+  const personaPath = existsSync(slimPath) ? slimPath : fullPath;
   try {
     const content = readFileSync(personaPath, 'utf-8');
     if (!content.trim()) {
       console.error(`[persona] WARN: ${personaPath} 비어있음 — 페르소나 가드 미주입`);
       return '';
     }
-    return `--- Owner Persona & Behaviour Rules (항상 준수) ---\n${content.trim()}`;
+    let effective = content.trim();
+    if (emotionalTurn) {
+      // "## 질문 길이 ≠ 응답 깊이" 섹션부터 "## 인지 원칙" 직전까지 제거
+      // (분석 9항목 가드 + 모델 깊이 가드 = ~6,700자 분석 모드 중력원 제거)
+      const analysisStart = effective.indexOf('\n## 질문 길이');
+      const analysisEnd = effective.indexOf('\n## 인지 원칙');
+      if (analysisStart >= 0 && analysisEnd > analysisStart) {
+        effective = effective.slice(0, analysisStart) + effective.slice(analysisEnd);
+      }
+      // 분석 채널 매트릭스 섹션도 제거 (운영 메타 정보 — 감정 응답 불필요)
+      const matrixStart = effective.indexOf('\n## 분석 채널 매트릭스');
+      if (matrixStart >= 0) {
+        effective = effective.slice(0, matrixStart);
+      }
+    }
+    return `--- Owner Persona & Behaviour Rules (항상 준수) ---\n${effective}`;
   } catch (e) {
-    // silent fail 재발 방지 (persona-integrity-audit.sh 검출 항목)
     console.error(`[persona] FATAL: ${personaPath} 로드 실패 — ${e.message}. 페르소나 가드 없이 응답 생성됨.`);
     return '';
   }
@@ -396,11 +438,41 @@ function _detectWikiDomain(prompt) {
  * LLM Wiki 컨텍스트 빌더.
  * 프롬프트에서 도메인 감지 → 해당 _summary.md + 관련 페이지 로드 → 최대 2,000자.
  * Dynamic section으로 주입 — 세션 해시에 영향 없음.
+ *
+ * [2026-05-22 v7] wiki 발췌 시 brevity 메타 룰 자동 strip — 면접 톤 가이드 같은
+ *   메타 라인이 디스코드 응답 길이를 압축하는 부작용 차단 (재발 가드).
  */
+const _WIKI_BREVITY_META_PATTERNS = [
+  /^[>\-\s]*답변\s*톤\s*[:：][^\n]*$/gm,
+  /^[>\-\s]*\d+\s*~\s*\d+\s*문장이?\s*기본[^\n]*$/gm,
+  /^[>\-\s]*간결\s*[·,]\s*자신감[^\n]*$/gm,
+  /^[>\-\s]*짧게\s*답변[^\n]*$/gm,
+  /^[>\-\s]*1\s*~\s*\d+\s*줄로\s*[^\n]*$/gm,
+  /^[>\-\s]*TL\s*;\s*DR[^\n]*$/gm,
+];
+function _stripWikiBrevityMeta(text) {
+  if (!text) return text;
+  let out = text;
+  for (const rx of _WIKI_BREVITY_META_PATTERNS) {
+    out = out.replace(rx, '');
+  }
+  out = out.replace(/\n{3,}/g, '\n\n');
+  return out;
+}
+
 export function buildWikiContextSection({ prompt, botHome, userId }) {
   if (!prompt) return '';
   const wikiDir = join(botHome, 'wiki');
   if (!existsSync(wikiDir)) return '';
+
+  // [2026-05-22 v8] lightweight 모드 폐기 — 모든 채널 동일 캡 (이전 lightweight 값 채택).
+  //   진단: 25KB 시스템 프롬프트가 모델 사고 공간 압박 → 작은 prompt + 단일 모드로 통일.
+  const CAP_SUMMARY = 600;
+  const CAP_FILE = 250;
+  const CAP_FACTS = 250;
+  const CAP_MISTAKES_TOPN = 5;
+  const CAP_MISTAKES_CHARS = 1500;
+  const CAP_TOTAL = 2800;
 
   const parts = [];
 
@@ -414,7 +486,8 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
         let summary = readFileSync(summaryPath, 'utf-8');
         summary = summary.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
         summary = summary.replace(/^---[\s\S]*?---\n*/m, '');
-        parts.push(`### [${domain}]\n${summary.trim().slice(0, 1000)}`);
+        summary = _stripWikiBrevityMeta(summary);
+        parts.push(`### [${domain}]\n${summary.trim().slice(0, CAP_SUMMARY)}`);
       }
       try {
         const files = readdirSync(domainDir)
@@ -424,8 +497,9 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
           let content = readFileSync(join(domainDir, file), 'utf-8');
           content = content.replace(/^```ya?ml\n---[\s\S]*?---\n```\n*/m, '');
           content = content.replace(/^---[\s\S]*?---\n*/m, '');
+          content = _stripWikiBrevityMeta(content);
           if (content.trim().length > 50) {
-            parts.push(content.trim().slice(0, 400));
+            parts.push(content.trim().slice(0, CAP_FILE));
           }
         }
       } catch {}
@@ -436,9 +510,9 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
   if (domain) {
     const factsPath = join(wikiDir, domain, '_facts.md');
     if (existsSync(factsPath) && !existsSync(join(wikiDir, domain, '_summary.md'))) {
-      const facts = readFileSync(factsPath, 'utf-8');
+      const facts = _stripWikiBrevityMeta(readFileSync(factsPath, 'utf-8'));
       if (facts.trim().length > 50) {
-        parts.push(`### [${domain}/실시간]\n${facts.trim().slice(0, 400)}`);
+        parts.push(`### [${domain}/실시간]\n${facts.trim().slice(0, CAP_FACTS)}`);
       }
     }
   }
@@ -477,10 +551,10 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
           return { sec, idx, score };
         });
         scored.sort((a, b) => b.score - a.score || a.idx - b.idx);
-        const topN = scored.slice(0, 10).map(x => x.sec.trim());
+        const topN = scored.slice(0, CAP_MISTAKES_TOPN).map(x => x.sec.trim());
 
-        const safe = topN.join('\n\n') || mistakes.slice(0, 2200);
-        const capped = safe.length > 2500 ? safe.slice(0, 2500) + '\n[...더 있음]' : safe;
+        const safe = topN.join('\n\n') || mistakes.slice(0, CAP_MISTAKES_CHARS - 300);
+        const capped = safe.length > CAP_MISTAKES_CHARS ? safe.slice(0, CAP_MISTAKES_CHARS) + '\n[...더 있음]' : safe;
         parts.push(`### [meta/오답노트]\n${capped}`);
         mistakesInjected = true;
       }
@@ -490,9 +564,9 @@ export function buildWikiContextSection({ prompt, botHome, userId }) {
   if (parts.length === 0) return '';
 
   let result = `--- 위키 컨텍스트 ---\n${parts.join('\n\n')}`;
-  // [가드 #3 2026-04-28] 캡 3500 → 4500 — 오답노트 top10 (최대 2500자) + 도메인 컨텍스트 동시 수용
-  if (result.length > 4500) {
-    result = result.slice(0, 4500) + '\n[...더 있음]';
+  // [2026-05-22 v7c] lightweight 모드는 CAP_TOTAL=2800, 기본은 4500.
+  if (result.length > CAP_TOTAL) {
+    result = result.slice(0, CAP_TOTAL) + '\n[...더 있음]';
   }
 
   // 위키 주입 관찰 로그 — 실제로 주입되는지 추적
@@ -776,6 +850,9 @@ export function buildOwnerTimeContext({ botHome }) {
     }).formatToParts(tomorrow);
     const tGet = (type) => tParts.find(p => p.type === type)?.value ?? '';
     lines.push(`내일: ${tGet('year')}-${tGet('month')}-${tGet('day')} (${tGet('weekday')})`);
+
+    // 날짜 혼동 방지 강제 지시 — LLM이 "내일"을 "오늘"로 말하는 오류 차단
+    lines.push(`⚠️ 날짜 규칙: 오늘은 반드시 ${get('year')}-${get('month')}-${get('day')}(${get('weekday')}). 내일(${tGet('month')}-${tGet('day')})을 오늘로 절대 혼동 금지.`);
   } catch { /* silent */ }
 
   // 2. 마지막 활동 경과시간
