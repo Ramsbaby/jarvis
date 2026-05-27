@@ -113,6 +113,8 @@ rules:
     allow_paths:
       - ".privacy-blocklist.yml"
       - "private/**"
+      - "infra/discord/lib/**"
+      - "infra/discord/test/**"
       - "runtime/**"
       - ".github/**"
       - "infra/launchd/*.plist"
