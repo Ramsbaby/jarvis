@@ -327,7 +327,7 @@ try:
     )
 
     # 주인님 직접 발화 패턴 (봇 자동 메시지·크론 알림 제외)
-    OWNER_PATTERNS = ['**이정우**', '[이정우]', '[대화 상대]', 'User:']
+    OWNER_PATTERNS = ['**이정우**', '[이정우]', '[대화 상대]', 'User:']  # privacy:allow korean-owner-name
 
     last_user_date = None
     for f in history_files:

@@ -115,6 +115,7 @@ rules:
       - "private/**"
       - "infra/discord/lib/**"
       - "infra/discord/test/**"
+      - "infra/context/owner/**"
       - "runtime/**"
       - ".github/**"
       - "infra/launchd/*.plist"
