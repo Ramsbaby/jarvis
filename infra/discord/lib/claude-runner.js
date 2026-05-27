@@ -1025,6 +1025,21 @@ export async function* createClaudeSession(prompt, {
     } catch {
       memSnippet = userMemory.getPromptSnippet(userId);
     }
+    // ── hot-events.json 전채널 주입 (2026-05-28) ────────────────────────────
+    // 이유: userMemory는 compacted → 중요 사실이 묻혀 다른 채널 LLM이 연결 못함.
+    // hot-events.json은 TTL 기반 소규모 파일 → 모든 채널에서 항상 명확히 보임.
+    try {
+      const _hotEvPath = join(BOT_HOME, 'context', 'owner', 'hot-events.json');
+      if (existsSync(_hotEvPath)) {
+        const _hotData = JSON.parse(readFileSync(_hotEvPath, 'utf-8'));
+        const _today = new Date().toISOString().slice(0, 10);
+        const _active = (_hotData.events || []).filter(e => !e.expires || e.expires >= _today);
+        if (_active.length) {
+          const _lines = _active.map(e => `- [${e.date}] ${e.summary}${e.channel && e.channel !== 'unknown' ? ` (채널: ${e.channel})` : ''}`);
+          systemParts.push('', '--- 🔔 최근 주요 이벤트 (전채널 공유) ---', _lines.join('\n'));
+        }
+      }
+    } catch (e) { log('warn', '[hot-events] 주입 실패', { err: e?.message }); }
     if (memSnippet) systemParts.push('', '--- 사용자 기억 (User Memory) ---', memSnippet);
   }
 

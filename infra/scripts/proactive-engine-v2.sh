@@ -85,12 +85,12 @@ _cpu_guard() {
 get_time_mode() {
     local h
     h=$(date '+%-H')
-    if (( h >= 0 && h < 7 )); then
-        echo "silent"           # 00~07 수면
-    elif (( h >= 7 && h < 9 )); then
-        echo "critical_only"    # 07~09 출근 준비
-    elif (( h >= 9 && h < 22 )); then
-        echo "normal"           # 09~22 정상
+    if (( h >= 0 && h < 6 )); then
+        echo "silent"           # 00~06 수면 (주인님 기상 06:00)
+    elif (( h >= 6 && h < 7 )); then
+        echo "critical_only"    # 06~07 기상 직후
+    elif (( h >= 7 && h < 22 )); then
+        echo "normal"           # 07~22 정상
     else
         echo "critical_only"    # 22~24 휴식
     fi
@@ -214,36 +214,23 @@ process_event_queue() {
     rm -f "$tmp"
 }
 
-# ─── 패턴 1: 삼성물산 면접 결과 팔로업 ────────────────────────
-check_samsung_followup() {
-    _cd_check "samsung_followup" 86400 && return 0
-    local today engine_file last_sent follow_count
-    today=$(date '+%Y-%m-%d')
-    engine_file="${STATE_DIR}/proactive-engine.json"
-    [[ -f "$engine_file" ]] || return 0
-
-    last_sent=$(jq -r '.follow_ups["samsung-ct-interview"].last_sent // ""' "$engine_file" 2>/dev/null || echo "")
-    [[ "$last_sent" == "$today" ]] && return 0
-
-    follow_count=$(jq -r '.follow_ups["samsung-ct-interview"].count // 0' "$engine_file" 2>/dev/null || echo 0)
-    if (( follow_count <= 0 )); then return 0; fi
-
-    emit "interview_notice" "jarvis-interview" "🏢 **삼성물산 면접 결과 팔로업** (#${follow_count}회차)
-아직 연락 없으시죠? 오늘 헤드헌터에게 한 번 더 확인해보시는 게 어떨까요?
-D+7 무소식이면 결과 확정 처리 기준입니다." && _cd_set "samsung_followup"
-
-    local tmp="${engine_file}.tmp.$$"
-    jq --arg d "$today" '.follow_ups["samsung-ct-interview"].last_sent = $d' \
-        "$engine_file" > "$tmp" 2>/dev/null && mv "$tmp" "$engine_file" || rm -f "$tmp"
-}
-
 # ─── 패턴 1: AWS SAA-C03 D-day 카운트다운 ─────────────────────
+# 시험 정보 SSoT: proactive-engine.json > exams.aws_saa
+# active: false 시 발동 안 함 — 중단/재개는 JSON 파일만 수정
 check_aws_countdown() {
     _cd_check "aws_countdown" 86400 && return 0
-    local exam_date exam_ts diff_days
-    exam_date="2026-05-23"
+    local engine_file exam_active exam_date exam_ts diff_days
+    engine_file="${STATE_DIR}/proactive-engine.json"
+
+    # SSoT에서 시험 정보 읽기
+    exam_active=$(jq -r '.exams.aws_saa.active // false' "$engine_file" 2>/dev/null || echo "false")
+    if [[ "$exam_active" != "true" ]]; then return 0; fi
+
+    exam_date=$(jq -r '.exams.aws_saa.date // ""' "$engine_file" 2>/dev/null || echo "")
+    if [[ -z "$exam_date" ]]; then return 0; fi
+
     exam_ts=$(date -j -f '%Y-%m-%d' "$exam_date" +%s 2>/dev/null || echo "")
-    [[ -z "$exam_ts" ]] && return 0
+    if [[ -z "$exam_ts" ]]; then return 0; fi
     diff_days=$(( (exam_ts - $(date +%s)) / 86400 ))
     if (( diff_days > 10 || diff_days <= 0 )); then return 0; fi
 
@@ -263,7 +250,7 @@ check_auth_expiry_proactive() {
     local exp_ts remaining_h
     exp_ts=$(jq -r '.expiresAt // 0' "$cred_file" 2>/dev/null \
         | awk '{print int($1/1000)}' 2>/dev/null || echo 0)
-    [[ -z "$exp_ts" || "$exp_ts" == "0" ]] && return 0
+    if [[ -z "$exp_ts" || "$exp_ts" == "0" ]]; then return 0; fi
     remaining_h=$(( (exp_ts - $(date +%s)) / 3600 ))
 
     if (( remaining_h <= 0 )); then
@@ -308,11 +295,11 @@ check_tqqq_proactive() {
     price=$(curl -sf --max-time 5 \
         "https://query1.finance.yahoo.com/v8/finance/chart/TQQQ?interval=1m&range=1d" \
         2>/dev/null | jq -r '.chart.result[0].meta.regularMarketPrice // empty' 2>/dev/null || echo "")
-    [[ -z "$price" ]] && return 0
+    if [[ -z "$price" ]]; then return 0; fi
 
     local below
     below=$(awk -v p="$price" 'BEGIN{print (p+0 <= 37) ? "1" : "0"}')
-    [[ "$below" != "1" ]] && return 0
+    if [[ "$below" != "1" ]]; then return 0; fi
 
     local gap
     gap=$(awk -v p="$price" 'BEGIN{printf "%.2f", 37 - p}')
@@ -326,7 +313,7 @@ check_daily_wit() {
     _cd_check "daily_wit" 86400 && return 0
     local h
     h=$(date '+%-H')
-    if (( h < 9 || h >= 11 )); then return 0; fi
+    if (( h < 7 || h >= 9 )); then return 0; fi
 
     local idx msg
     idx=$(( $(date '+%j') % 5 ))
@@ -334,7 +321,7 @@ check_daily_wit() {
         0) msg="☕ 좋은 아침입니다, 주인님. 세계 정복 전 커피 한 잔이 선행되어야 할 것 같습니다." ;;
         1) msg="🌅 주인님, 오늘 일정을 시작하시겠습니까? 물론 기상 5분은 드리겠습니다." ;;
         2) msg="⚙️ 전 시스템 정상 가동 중입니다. 주인님도 정상 가동 상태이시길 바랍니다." ;;
-        3) msg="🎯 오늘 우선순위: AWS SAA 복습 · 이직 준비 · 자비스 개선. 어디부터 시작하십니까?" ;;
+        3) msg="🔋 에너지 레벨 불명, 주인님. 충전 완료 상태로 판단하고 전 시스템 풀 출력 대기 중입니다." ;;
         *) msg="🤖 어제보다 나은 하루가 되길 바랍니다. 데이터는 그것이 가능하다고 말하고 있습니다." ;;
     esac
     emit "daily_wit" "jarvis" "$msg" && _cd_set "daily_wit"
@@ -347,10 +334,20 @@ log "=== proactive-engine v2 시작 (mode=$(get_time_mode), poll=${POLL_INTERVAL
 _heartbeat_cnt=0
 _HEARTBEAT_EVERY=12  # 12 * 5min = 60min
 
+# 2026-05-18: 자동 재기동 — 스크립트 파일 mtime 변경 감지 시 exec으로 자기 재기동
+_SCRIPT_MTIME=$(stat -f %m "$0" 2>/dev/null || echo "0")
+
 while true; do
     _cpu_guard
     process_event_queue
     rotate_freq_ledger  # 24h 회전 (결함 2 — 매 사이클 비용 저렴)
+
+    # 자동 재기동: 스크립트 파일 변경 감지
+    _cur_mtime=$(stat -f %m "$0" 2>/dev/null || echo "0")
+    if [[ "$_cur_mtime" != "$_SCRIPT_MTIME" ]]; then
+        log "🔄 스크립트 변경 감지 (${_SCRIPT_MTIME} → ${_cur_mtime}) — 자동 재기동"
+        exec "$0"
+    fi
 
     # 가시성 — 빈 큐 사이클에도 데몬 살아있다는 흔적
     if (( _heartbeat_cnt % _HEARTBEAT_EVERY == 0 )); then
@@ -358,8 +355,10 @@ while true; do
     fi
     _heartbeat_cnt=$((_heartbeat_cnt + 1))
 
-    # ─ 5패턴 직접 체크 (v2 full — 2026-05-15) ─
-    check_samsung_followup      || true
+    # ─ 패턴 직접 체크 (v2 full — 2026-05-15) ─
+    # check_company_followup 제거 (2026-05-28): proactive-engine.json follow_ups는
+    # Python 엔진의 STATE 저장소. bash 엔진이 REGISTRY로 오독 → 중복 메시지 근본 원인.
+    # 채용 팔로업은 Python 엔진(proactive-engine.sh) + follow-ups.json이 단독 처리.
     check_aws_countdown         || true
     check_auth_expiry_proactive || true
     check_cron_failures         || true
