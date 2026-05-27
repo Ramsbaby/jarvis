@@ -579,6 +579,81 @@ export async function handleMessage(message, state) {
     }
   }
 
+  // ── proactive-engine 피드백 루프 (2026-05-27) ────────────────────────────
+  // 문제: proactive-engine은 독립 프로세스라 Discord 채널 대화를 전혀 모름.
+  // 해결: 오너 발화에서 채용 결과·시험 결과 키워드 감지 → proactive-engine.json 자동 업데이트.
+  if (senderIsOwner && message.content) {
+    try {
+      const _engPath = join(_BOT_HOME, 'state', 'proactive-engine.json');
+      let _engData = null;
+      try { _engData = JSON.parse(readFileSync(_engPath, 'utf-8')); } catch { /* 파일 없으면 스킵 */ }
+      if (_engData) {
+        let _engChanged = false;
+        const _msg = message.content;
+        const _failRe = /불합격|탈락|떨어졌|떨어짐|최종탈락|탈락됨|reject/i;
+        const _passRe = /합격|최종합격|합격됨|pass|오퍼|offer/i;
+
+        // ① follow_ups 회사 결과 감지
+        for (const [company, _val] of Object.entries(_engData.follow_ups || {})) {
+          const keys = [company, ...(_val.keywords || [])];
+          if (keys.some(k => _msg.includes(k))) {
+            if (_failRe.test(_msg)) {
+              _engData.flags = _engData.flags || {};
+              _engData.flags[`${company}_result`] = '불합격';
+              _engData.flags[`${company}_confirmed`] = new Date().toISOString().slice(0, 10);
+              delete _engData.follow_ups[company];
+              _engChanged = true;
+              log('info', '[proactive-hook] 불합격 → follow_up 제거', { company });
+            } else if (_passRe.test(_msg)) {
+              _engData.flags = _engData.flags || {};
+              _engData.flags[`${company}_result`] = '합격';
+              _engData.flags[`${company}_confirmed`] = new Date().toISOString().slice(0, 10);
+              delete _engData.follow_ups[company];
+              _engChanged = true;
+              log('info', '[proactive-hook] 합격/오퍼 → follow_up 제거', { company });
+            }
+          }
+        }
+
+        // ② AWS 시험 상태 감지 (SAA·AIF 등)
+        const _examNameMap = {
+          aws_saa: ['SAA', 'SAA-C03', 'Solutions Architect'],
+          aws_aif: ['AIF', 'AIF-C01', 'AI Practitioner'],
+        };
+        const _cancelRe = /취소|포기|안봄|안 봄|연기|cancel/i;
+        const _passExamRe = /합격|통과|pass|합격함/i;
+        const _failExamRe = /불합격|탈락|떨어졌|fail/i;
+        for (const [examKey, exam] of Object.entries(_engData.exams || {})) {
+          const names = _examNameMap[examKey] || [examKey];
+          if (names.some(k => _msg.includes(k))) {
+            const today = new Date().toISOString().slice(0, 10);
+            if (_cancelRe.test(_msg)) {
+              exam.active = false; exam.status = 'cancelled'; exam.cancelled_date = today;
+              delete exam.paused_reason;
+              _engChanged = true;
+              log('info', '[proactive-hook] 시험 취소 감지', { examKey });
+            } else if (_passExamRe.test(_msg)) {
+              exam.active = false; exam.status = 'passed'; exam.passed_date = today;
+              _engChanged = true;
+              log('info', '[proactive-hook] 시험 합격 감지', { examKey });
+            } else if (_failExamRe.test(_msg)) {
+              exam.active = false; exam.status = 'failed'; exam.failed_date = today;
+              _engChanged = true;
+              log('info', '[proactive-hook] 시험 불합격 감지', { examKey });
+            }
+          }
+        }
+
+        if (_engChanged) {
+          writeFileSync(_engPath, JSON.stringify(_engData, null, 2));
+          log('info', '[proactive-hook] proactive-engine.json 자동 업데이트');
+        }
+      }
+    } catch (_e) {
+      log('warn', '[proactive-hook] 업데이트 실패 (best-effort)', { err: _e?.message });
+    }
+  }
+
   // ── 스킬 자동 트리거 감지 (2026-04-24, Phase 1) ──────────────────────────
   // CLI UserPromptSubmit hook 방식을 Discord 표면에 이식. Jarvis 단일 뇌 완결.
   // Owner 채널 + 자연어 키워드 매칭 시 즉시 runSkill → 응답 → return.
@@ -1461,6 +1536,9 @@ ${extracted}
     let continuationCount = 0;
     let _autoResumeAttempts = 0; // 타임아웃 자동 재개 횟수 (최대 2회)
 
+    let _emotionGateRetried = false;   // 감정 품질 게이트 재시도 여부 (무한루프 방지)
+    let _emotionGateRetryPrompt = null; // 재시도 시 주입할 수정 프롬프트
+
     async function runClaude(sid, streamer) {
       log('info', 'Starting Claude session', {
         threadId: thread.id,
@@ -1811,6 +1889,29 @@ ${extracted}
           if (!isQuiet) {
             const statsLine = `-# ${stopPrefix}${footerParts.join(' · ')}`;
             streamer.append('\n' + statsLine);
+          }
+
+          // 🛡️ 감정 응답 품질 게이트 (v10 · 2026-05-27)
+          // 감정 발화에 대한 응답이 길이/질문마무리/CBT 기준 미달이면 retryNeeded=true로 재생성.
+          // lastAssistantText 사용 (streamer.buffer는 미flush 잔여분만 담아 부정확함).
+          {
+            const _GATE_RE = /어떡하지|어떡하면|어떡해야|어떡해|힘들다|무너진다|막막하다|지친다|허하다|번아웃|억울|화난다|불안해|무서워|짜증|눈물|맴도|버텨야|마음이 안/;
+            if (!_emotionGateRetried && _GATE_RE.test(originalPrompt || '')) {
+              const _gFails = [];
+              if (lastAssistantText.length < 800)
+                _gFails.push(`길이 부족: ${lastAssistantText.length}자`);
+              if (lastAssistantText.trimEnd().endsWith('?'))
+                _gFails.push('질문 마무리');
+              const _foundCbt = ['인지 확산', '루프에 이름', '거리두기', '마인드셋 전환']
+                .filter(k => lastAssistantText.includes(k));
+              if (_foundCbt.length) _gFails.push(`CBT: ${_foundCbt.join(', ')}`);
+              if (_gFails.length > 0) {
+                log('warn', '감정 품질 게이트 실패 — 재생성', { failures: _gFails, chars: lastAssistantText.length });
+                _emotionGateRetried = true;
+                _emotionGateRetryPrompt = `[이전 응답 품질 미달: ${_gFails.join(' / ')}]\n원래 메시지: "${originalPrompt}"\n위 문제를 교정하여 다시 작성하라.`;
+                retryNeeded = true;
+              }
+            }
           }
 
           await streamer.finalize();
@@ -2334,6 +2435,12 @@ ${ragContextBlock}
           userPrompt = ragSnippet + '\n\n' + userPrompt;
           log('info', 'RAG re-injected on retry', { threadId: thread.id, ragLen: ragSnippet.length, familyOnly: _isFamilyRetry });
         }
+      }
+
+      // 감정 게이트 재시도: 품질 미달 원인을 프롬프트에 명시해 재생성
+      if (_emotionGateRetryPrompt) {
+        userPrompt = _emotionGateRetryPrompt;
+        _emotionGateRetryPrompt = null;
       }
 
       runResult = await runClaude(null, streamer);
