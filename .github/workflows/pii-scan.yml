@@ -40,12 +40,14 @@ jobs:
           node scripts/privacy/scan.mjs \
             --diff=${{ steps.diff.outputs.base }}..${{ steps.diff.outputs.head }}
 
-      - name: Privacy scan (push full audit — enforce)
+      - name: Privacy scan (push full audit — high+ enforce)
         if: steps.diff.outputs.mode == 'all'
         run: |
-          node scripts/privacy/scan.mjs --all || {
+          # push to main: critical/high만 차단, medium/low는 경고 출력만 (report-only).
+          # PR diff 스캔이 실질적 게이트 역할. push는 잔존 PII 가시화 목적.
+          node scripts/privacy/scan.mjs --all --min-severity=high || {
             echo ""
-            echo "🚫 main HEAD 에 PII 위반 존재 — 추가 커밋 또는 revert 로 해소 필요."
+            echo "🚫 main HEAD 에 critical/high PII 위반 존재 — 추가 커밋 또는 revert 로 해소 필요."
             echo "ℹ️  blocker 가 과거 커밋에서 유래한 경우 BFG/filter-repo 로 history 정화 계획 수립."
             exit 1
           }

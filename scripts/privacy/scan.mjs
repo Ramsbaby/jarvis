@@ -258,19 +258,24 @@ function scan(files, blocklist, mode) {
 }
 
 // ───────────────────────── CLI ─────────────────────────
+const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
+
 function parseArgs(argv) {
+  let mode = null;
+  let minSeverity = "low"; // 기본: 모든 severity 차단
   for (const a of argv) {
-    if (a === "--staged") return { kind: "staged" };
-    if (a === "--all") return { kind: "all" };
-    if (a.startsWith("--diff=")) return { kind: "diff", range: a.slice(7) };
+    if (a === "--staged") mode = { kind: "staged" };
+    else if (a === "--all") mode = { kind: "all" };
+    else if (a.startsWith("--diff=")) mode = { kind: "diff", range: a.slice(7) };
+    else if (a.startsWith("--min-severity=")) minSeverity = a.slice(15);
   }
-  return null;
+  return mode ? { ...mode, minSeverity } : null;
 }
 
 function main() {
   const mode = parseArgs(process.argv.slice(2));
   if (!mode) {
-    console.error("Usage: scan.mjs --staged | --all | --diff=BASE..HEAD");
+    console.error("Usage: scan.mjs --staged | --all | --diff=BASE..HEAD [--min-severity=high]");
     process.exit(2);
   }
   if (!existsSync(BLOCKLIST)) {
@@ -293,24 +298,42 @@ function main() {
   }
 
   // 출력
-  const sevOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-  violations.sort((a, b) => (sevOrder[a.severity] ?? 9) - (sevOrder[b.severity] ?? 9));
+  violations.sort((a, b) => (SEV_ORDER[a.severity] ?? 9) - (SEV_ORDER[b.severity] ?? 9));
 
   const bySev = {};
   for (const v of violations) bySev[v.severity] = (bySev[v.severity] || 0) + 1;
 
-  console.log(`🚨 Privacy violations: ${violations.length}`);
-  console.log(`   by severity:`, bySev);
-  console.log("");
-  for (const v of violations) {
-    console.log(`  ${v.file}:${v.line}  [${v.severity}/${v.ruleId}]  ${v.match}`);
-    console.log(`    ${v.preview}`);
+  // min-severity 기준으로 blocking/warning 분리
+  const minSevLevel = SEV_ORDER[mode.minSeverity] ?? 3;
+  const blocking = violations.filter(v => (SEV_ORDER[v.severity] ?? 9) <= minSevLevel);
+  const warnings = violations.filter(v => (SEV_ORDER[v.severity] ?? 9) > minSevLevel);
+
+  if (blocking.length > 0) {
+    console.log(`🚨 Privacy violations (BLOCKING): ${blocking.length} / total: ${violations.length}`);
+    console.log(`   by severity:`, bySev);
+    console.log("");
+    for (const v of blocking) {
+      console.log(`  ${v.file}:${v.line}  [${v.severity}/${v.ruleId}]  ${v.match}`);
+      console.log(`    ${v.preview}`);
+    }
+  }
+  if (warnings.length > 0) {
+    console.log(`⚠️  Privacy warnings (non-blocking, min-severity=${mode.minSeverity}): ${warnings.length}`);
+    for (const v of warnings) {
+      console.log(`  ${v.file}:${v.line}  [${v.severity}/${v.ruleId}]  ${v.match}`);
+    }
   }
   console.log("");
   console.log("ℹ️  Bypass options:");
   console.log("   • 같은 라인 끝에 `# privacy:allow <rule-id>` 주석");
   console.log("   • PRIVACY_BYPASS_REASON='<사유>' git commit ... (pre-commit only)");
-  process.exit(1);
+
+  if (blocking.length > 0) {
+    process.exit(1);
+  } else {
+    // warnings only — 보고는 하지만 CI 차단 없음
+    process.exit(0);
+  }
 }
 
 main();
