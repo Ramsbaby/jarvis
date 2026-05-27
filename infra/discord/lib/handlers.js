@@ -647,8 +647,128 @@ export async function handleMessage(message, state) {
         if (_engChanged) {
           writeFileSync(_engPath, JSON.stringify(_engData, null, 2));
           log('info', '[proactive-hook] proactive-engine.json 자동 업데이트');
+          // ── follow-ups.json (Python 엔진 전용 레지스트리) 동시 업데이트 (2026-05-27) ──
+          try {
+            const _fuPath = join(_BOT_HOME, 'context', 'owner', 'follow-ups.json');
+            let _fuData = null;
+            try { _fuData = JSON.parse(readFileSync(_fuPath, 'utf-8')); } catch { /* 없으면 스킵 */ }
+            if (_fuData && Array.isArray(_fuData.items)) {
+              const _today = new Date().toISOString().slice(0, 10);
+              let _fuChanged = false;
+              for (const item of _fuData.items) {
+                if (item.resolved) continue;
+                const _subjectWords = (item.subject || item.id || '').split(/\s+/).filter(w => w.length > 1);
+                if (_subjectWords.some(w => _msg.includes(w))) {
+                  if (_failRe.test(_msg) || _passRe.test(_msg) || _cancelRe.test(_msg)) {
+                    item.resolved = true;
+                    item.resolved_date = _today;
+                    _fuChanged = true;
+                    log('info', '[proactive-hook] follow-ups.json resolved', { id: item.id });
+                  }
+                }
+              }
+              if (_fuChanged) writeFileSync(_fuPath, JSON.stringify(_fuData, null, 2));
+            }
+          } catch (_fe) { log('warn', '[proactive-hook] follow-ups.json 업데이트 실패', { err: _fe?.message }); }
+          // userMemory에도 동시 기록 → 전채널 시스템 프롬프트 주입 파이프라인 활용
+          // 이유: proactive-engine.json은 엔진 전용. jarvis·dev·ceo 채널은 여전히 이 사실을 모름.
+          // userMemory.addFact() → claude-runner.js memSnippet → 모든 채널 세션 자동 주입.
+          try {
+            const _factLines = [];
+            for (const [fkey, fval] of Object.entries(_engData.flags || {})) {
+              if (fkey.endsWith('_result') && fval) {
+                const cName = fkey.replace('_result', '');
+                const cDate = _engData.flags[`${cName}_confirmed`] || new Date().toISOString().slice(0, 10);
+                _factLines.push(`[${cDate}] 채용 결과 — ${cName}: ${fval}`);
+              }
+            }
+            for (const [examKey, exam] of Object.entries(_engData.exams || {})) {
+              if (exam.status && exam.status !== 'active') {
+                const eLabel = { aws_saa: 'AWS SAA-C03', aws_aif: 'AWS AIF-C01' }[examKey] || examKey;
+                const eDate = exam.cancelled_date || exam.passed_date || exam.failed_date || new Date().toISOString().slice(0, 10);
+                _factLines.push(`[${eDate}] 시험 상태 — ${eLabel}: ${exam.status}`);
+              }
+            }
+            for (const fact of _factLines) {
+              userMemory.addFact(effectiveAuthor.id, fact, 'proactive-hook');
+              log('info', '[proactive-hook] userMemory 전채널 주입 기록', { fact: fact.slice(0, 80) });
+            }
+          } catch (_me) {
+            log('warn', '[proactive-hook] userMemory 기록 실패 (best-effort)', { err: _me?.message });
+          }
+          // ── hot-events.json 기록 (채용/시험 결과 → 전채널 즉시 공유) ──────────
+          try {
+            const _hotPath = join(_BOT_HOME, 'context', 'owner', 'hot-events.json');
+            let _hotData = { events: [] };
+            try { _hotData = JSON.parse(readFileSync(_hotPath, 'utf-8')); } catch { /* 신규 파일 */ }
+            const _today3 = new Date().toISOString().slice(0, 10);
+            for (const fact of _factLines) {
+              const _evId = `eng-${_today3}-${fact.slice(0, 20).replace(/\W+/g, '-')}`;
+              if (!(_hotData.events || []).some(e => e.id === _evId)) {
+                _hotData.events = [...(_hotData.events || []), {
+                  id: _evId,
+                  date: _today3,
+                  channel: message.channel?.name || 'unknown',
+                  summary: fact,
+                  expires: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
+                }];
+              }
+            }
+            writeFileSync(_hotPath, JSON.stringify(_hotData, null, 2));
+            log('info', '[proactive-hook] hot-events.json 갱신', { count: _factLines.length });
+          } catch { /* best-effort */ }
         }
       }
+
+      // ── follow-ups.json subject 기반 한국어 키워드 감지 (2026-05-28) ────────
+      // 이유: proactive-engine.json follow_ups는 Python 엔진의 STATE(영문 키, "samsung-ct-interview")
+      //       → 사용자가 한국어로 "삼성물산 떨어졌어" 말해도 매칭 안 됨.
+      // 수정: follow-ups.json items의 subject 필드("삼성물산 기술면접")로 매칭
+      //       → hot-events.json 기록 → claude-runner가 전채널 주입.
+      try {
+        const _fuPath2 = join(_BOT_HOME, 'context', 'owner', 'follow-ups.json');
+        const _hotPath2 = join(_BOT_HOME, 'context', 'owner', 'hot-events.json');
+        let _fuData2 = null;
+        try { _fuData2 = JSON.parse(readFileSync(_fuPath2, 'utf-8')); } catch { /* 스킵 */ }
+        if (_fuData2 && Array.isArray(_fuData2.items)) {
+          const _today4 = new Date().toISOString().slice(0, 10);
+          for (const item of _fuData2.items) {
+            if (item.resolved) continue; // 이미 처리된 항목 재트리거 방지 (2026-05-28 BLOCKING fix)
+            const _subjectWords = (item.subject || item.id || '')
+              .split(/\s+/).filter(w => w.length > 1);
+            if (!_subjectWords.some(w => _msg.includes(w))) continue;
+            if (!_failRe.test(_msg) && !_passRe.test(_msg) && !_cancelRe.test(_msg)) continue;
+            const _resultLabel = _failRe.test(_msg) ? '최종 탈락' : _passRe.test(_msg) ? '최종 합격' : '취소/포기';
+            const _evId2 = `fu-${item.id}-${_today4}`;
+            let _hotData2 = { events: [] };
+            try { _hotData2 = JSON.parse(readFileSync(_hotPath2, 'utf-8')); } catch { /* 신규 */ }
+            if (!(_hotData2.events || []).some(e => e.id === _evId2)) {
+              _hotData2.events = [...(_hotData2.events || []), {
+                id: _evId2,
+                date: _today4,
+                channel: message.channel?.name || 'unknown',
+                summary: `${item.subject || item.id} ${_resultLabel}`,
+                expires: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
+              }];
+              writeFileSync(_hotPath2, JSON.stringify(_hotData2, null, 2));
+              log('info', '[proactive-hook] hot-events Korean match 기록', { id: _evId2 });
+            }
+            try {
+              userMemory.addFact(
+                effectiveAuthor.id,
+                `[${_today4}] ${item.subject || item.id} ${_resultLabel}`,
+                'proactive-hook-fu'
+              );
+            } catch { /* best-effort */ }
+            if (!item.resolved) {
+              item.resolved = true;
+              item.resolved_date = _today4;
+              writeFileSync(_fuPath2, JSON.stringify(_fuData2, null, 2));
+              log('info', '[proactive-hook] follow-ups.json resolved (Korean match)', { id: item.id });
+            }
+          }
+        }
+      } catch (_fe2) { log('warn', '[proactive-hook] follow-ups 한국어 감지 실패', { err: _fe2?.message }); }
     } catch (_e) {
       log('warn', '[proactive-hook] 업데이트 실패 (best-effort)', { err: _e?.message });
     }
@@ -1902,9 +2022,18 @@ ${extracted}
                 _gFails.push(`길이 부족: ${lastAssistantText.length}자`);
               if (lastAssistantText.trimEnd().endsWith('?'))
                 _gFails.push('질문 마무리');
-              const _foundCbt = ['인지 확산', '루프에 이름', '거리두기', '마인드셋 전환']
+              // 심리학 기법 레이블링 차단 — 기법명 붙이기만 금지, 관점 제시·조언 허용
+              const _foundCbt = ['인지 확산', '루프에 이름', '거리두기', 'Zeigarnik', '사후 확신 편향', '처방해 드릴게요']
                 .filter(k => lastAssistantText.includes(k));
-              if (_foundCbt.length) _gFails.push(`CBT: ${_foundCbt.join(', ')}`);
+              if (_foundCbt.length) _gFails.push(`심리기법레이블: ${_foundCbt.join(', ')}`);
+              // 맥락 인용 체크 — 사용자 발화의 3자 이상 단어가 1개 이상 응답에 포함돼야 함
+              // (짧은 감정 발화에선 고유 명사가 적으므로 임계 1개로 설정)
+              const _userNouns = (originalPrompt?.match(/[가-힣]{3,}/g) || [])
+                .filter((w, i, a) => a.indexOf(w) === i); // 중복 제거
+              if (_userNouns.length > 0) {
+                const _citedCount = _userNouns.filter(w => lastAssistantText.includes(w)).length;
+                if (_citedCount === 0) _gFails.push('맥락인용부족: 0개');
+              }
               if (_gFails.length > 0) {
                 log('warn', '감정 품질 게이트 실패 — 재생성', { failures: _gFails, chars: lastAssistantText.length });
                 _emotionGateRetried = true;
