@@ -557,7 +557,7 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
     '- "오너의 계정명은 X다", "오너는 X를 선호한다" 형태는 오너가 직접 말한 경우에만 기록.',
     '',
     '⭐ 중요도 점수 (1-5, Mem0 패턴):',
-    '- 5: 핵심 결정/선호/제약 (반복 참조 예상)',
+    '- 5: 핵심 결정/선호/제약 (반복 참조 예상) — 채용 결과(합격/불합격/오퍼)/시험 결과(합격/취소/포기)/이직 결정은 자동 5점',
     '- 4: 구체적 계획/일정/사람 정보',
     '- 3: 유용하지만 맥락 의존적',
     '- 2: 일시적 사실 (며칠 후 무의미)',
@@ -998,7 +998,7 @@ export async function* createClaudeSession(prompt, {
   if (channelId) {
     const FAMILY_CHANNEL_IDS_BR = (process.env.FAMILY_CHANNEL_IDS || process.env.FAMILY_CHANNEL_ID || '').split(',').filter(Boolean);
     if (FAMILY_CHANNEL_IDS_BR.includes(channelId)) {
-      const briefingCtx = buildFamilyBriefingContext({ botHome: BOT_HOME });
+      const briefingCtx = !_isEmotionalTurn && buildFamilyBriefingContext({ botHome: BOT_HOME });
       if (briefingCtx) systemParts.push('', briefingCtx);
     }
   }
@@ -1037,7 +1037,7 @@ export async function* createClaudeSession(prompt, {
     const _promptStr = String(prompt || '').trim();
     if (_promptStr.length >= 15 && channelId && _ANALYSIS_CH.includes(channelId)) {
       try {
-        const _ragMod = await import('/Users/ramsbaby/jarvis/infra/lib/nexus/rag-gateway.mjs');
+        const _ragMod = await import(new URL('../../lib/nexus/rag-gateway.mjs', import.meta.url).pathname);
         const _ragResult = await _ragMod.handle('rag_search', {
           query: _promptStr.slice(0, 200),
           limit: 3,
@@ -1058,7 +1058,7 @@ export async function* createClaudeSession(prompt, {
   // Channel feed context (dynamic — 채널에 최근 전송된 봇/크론/알람 메시지)
   // 사용자가 "방금 크론이 보낸 거 뭐야?" 등 채널 컨텍스트를 참조할 때 재질문 방지
   if (channelName) {
-    const feedCtx = buildChannelFeedSection(channelName, 15);
+    const feedCtx = !_isEmotionalTurn && buildChannelFeedSection(channelName, 15);
     if (feedCtx) systemParts.push('', feedCtx);
   }
 
@@ -1069,14 +1069,14 @@ export async function* createClaudeSession(prompt, {
     const handoffKey = `${threadId}-${userId}`;
     const handoff = loadHandoff(handoffKey);
     const handoffText = formatHandoffForPrompt(handoff);
-    if (handoffText) systemParts.push('', handoffText);
+    if (handoffText && !_isEmotionalTurn) systemParts.push('', handoffText);
   }
 
   // LLM Wiki context (dynamic — 세션 해시 영향 없음)
   // 2-track: 전역 도메인 위키 + 사용자 개인 페이지(pages/{userId}/)
   if (userId && isOwner && prompt) {
     const wikiCtx = buildWikiContextSection({ prompt, botHome: BOT_HOME, userId });
-    if (wikiCtx) systemParts.push('', wikiCtx);
+    if (wikiCtx && !_isEmotionalTurn) systemParts.push('', wikiCtx);
   }
 
   // 🔍 가드 #5 (2026-04-29): _facts.md 키워드 매칭 자동 발췌
@@ -1096,7 +1096,7 @@ export async function* createClaudeSession(prompt, {
   if (isOwner && prompt) {
     try {
       const evidenceMandate = buildEvidenceMandateSection({ prompt });
-      if (evidenceMandate) systemParts.push('', evidenceMandate);
+      if (evidenceMandate && !_isEmotionalTurn) systemParts.push('', evidenceMandate);
     } catch { /* best-effort */ }
   }
 
@@ -1113,7 +1113,7 @@ export async function* createClaudeSession(prompt, {
   // learned-mistakes top5 캡 밖이라도 즉시 LLM에 노출하여 같은 편향 재발 차단.
   if (isOwner) {
     const angerSection = buildAngerCorrectionSection({ botHome: BOT_HOME });
-    if (angerSection) systemParts.push('', angerSection);
+    if (angerSection && !_isEmotionalTurn) systemParts.push('', angerSection);
   }
 
   // 🔧 가드 #2 (2026-04-28) 자동 하네스 트리거 — "동작 원리/메커니즘" 류 키워드 매칭 시
@@ -1122,7 +1122,7 @@ export async function* createClaudeSession(prompt, {
   if (isOwner) {
     try {
       const harnessSection = await buildHarnessAutoTriggerSection(prompt);
-      if (harnessSection) systemParts.push('', harnessSection);
+      if (harnessSection && !_isEmotionalTurn) systemParts.push('', harnessSection);
     } catch { /* best-effort */ }
   }
 
