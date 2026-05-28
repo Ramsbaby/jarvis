@@ -2054,6 +2054,9 @@ ${extracted}
 
           if (lastAssistantText.length > 20) {
             saveConversationTurn(originalPrompt, lastAssistantText, chName, effectiveAuthor.id);
+            // channel-feed 기록 복원 (2026-05-28): 4월 16일 이후 미기록 버그 수정
+            appendFeed(chName, 'user', originalPrompt);
+            appendFeed(chName, 'jarvis', lastAssistantText);
             // INTERVIEW_CHANNEL 은 세션 요약 저장 차단: 모의면접 시뮬 답변이 요약에 섞이면
             // 다음 턴에 pre-inject 되어 RAG·가드를 모두 우회하며 거짓 스토리 부활.
             if (chName !== INTERVIEW_CHANNEL) {

@@ -16,12 +16,29 @@
  *   await discordSend(longText, 'jarvis-inbox', { username: 'Bot' });
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, appendFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const DISCORD_CHAR_LIMIT = 1990; // 2000 - 여유 10자
+
+// channel-feed 기록 — 크론/스크립트 발신 메시지를 세션 컨텍스트에 반영 (2026-05-28)
+const _FEED_DIR = join(homedir(), 'jarvis/runtime', 'state', 'channel-feed');
+const _FEED_MAX = 30;
+function _appendChannelFeed(channelKey, text) {
+  if (!channelKey || !text?.trim()) return;
+  try {
+    mkdirSync(_FEED_DIR, { recursive: true });
+    const fp = join(_FEED_DIR, `${channelKey}.jsonl`);
+    const now = new Date();
+    const kst = new Date(now.getTime() + 9 * 3600 * 1000);
+    const ts = kst.toISOString().replace('T', ' ').slice(0, 16) + ' KST';
+    appendFileSync(fp, JSON.stringify({ ts, from: 'cron', text: text.slice(0, 2000) }) + '\n', 'utf-8');
+    const lines = readFileSync(fp, 'utf-8').split('\n').filter(Boolean);
+    if (lines.length > _FEED_MAX) writeFileSync(fp, lines.slice(-_FEED_MAX).join('\n') + '\n', 'utf-8');
+  } catch { /* best-effort */ }
+}
 
 /**
  * monitoring.json 에서 webhook URL 을 읽는다.
@@ -111,4 +128,6 @@ export async function discordSend(
       await new Promise(r => setTimeout(r, chunkDelayMs));
     }
   }
+  // channel-feed 기록 (2026-05-28)
+  _appendChannelFeed(channelKey, rawContent);
 }
