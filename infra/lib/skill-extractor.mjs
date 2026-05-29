@@ -17,10 +17,36 @@ import { homedir } from 'node:os';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { getTask } from './task-store.mjs';
 
+const MISTAKES_FILE = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'wiki', 'meta', 'learned-mistakes.md');
+
+function normalizeForMatch(s) {
+  return s.replace(/[^a-zA-Z0-9가-힣]/g, '').slice(0, 30);
+}
+
+function loadMistakeAsTask(taskId) {
+  if (!existsSync(MISTAKES_FILE)) return null;
+  const content = readFileSync(MISTAKES_FILE, 'utf-8');
+  const slugNorm = normalizeForMatch(taskId.replace(/^mistake-/, ''));
+  if (!slugNorm) return null;
+  const headingRe = /^## 2026-[0-9-]+ — (.+)$/gm;
+  let m;
+  while ((m = headingRe.exec(content)) !== null) {
+    const title = m[1];
+    const candidateNorm = normalizeForMatch(title);
+    if (candidateNorm.startsWith(slugNorm) || slugNorm.startsWith(candidateNorm)) {
+      const start = m.index + m[0].length;
+      const nextHeading = content.slice(start).search(/\n## 2026-/);
+      const body = nextHeading > 0 ? content.slice(start, start + nextHeading).trim() : content.slice(start).trim();
+      return { id: taskId, name: title, prompt: title, status: 'done', meta: { source: 'learned-mistakes', body } };
+    }
+  }
+  return null;
+}
+
 delete process.env.CLAUDECODE;
 
 const BOT_HOME    = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
-const SKILLS_DIR  = join(BOT_HOME, 'wiki', 'skills');
+const SKILLS_DIR  = join(homedir(), '.jarvis', 'skills');
 const MODELS_FILE = join(BOT_HOME, 'config', 'models.json');
 const CLAUDE_BIN  = process.env.CLAUDE_BINARY || join(homedir(), '.local/bin/claude');
 const LEDGER      = join(BOT_HOME, 'state', 'skill-extractor-ledger.jsonl');
@@ -146,9 +172,12 @@ function writeSkillDoc(extracted, taskId) {
   const slug = toSlug(extracted.title);
   const fp = join(SKILLS_DIR, `skill-${slug}.md`);
   const today = new Date().toISOString().slice(0, 10);
+  const isMistakeGuard = taskId.startsWith('mistake-');
+  const category = isMistakeGuard ? 'guard' : 'reference';
   const content = `---
 id: skill-${slug}
 title: "${extracted.title.replace(/"/g, '\\"')}"
+category: ${category}
 created: ${today}
 updated: ${today}
 last_used: null
@@ -197,17 +226,28 @@ async function main() {
     process.exit(0);
   }
 
-  // 2. task 메타 로드
-  const taskMeta = getTask(TASK_ID);
-  if (!taskMeta) {
-    _log(`task not found: ${TASK_ID}`);
-    process.exit(1);
+  // 2. task 메타 로드 (mistake-* 는 learned-mistakes.md에서, 그 외는 task store에서)
+  let taskMeta;
+  if (TASK_ID.startsWith('mistake-')) {
+    taskMeta = loadMistakeAsTask(TASK_ID);
+    if (!taskMeta) {
+      _log(`mistake not found in learned-mistakes.md: ${TASK_ID}`);
+      process.exit(1);
+    }
+  } else {
+    taskMeta = getTask(TASK_ID);
+    if (!taskMeta) {
+      _log(`task not found: ${TASK_ID}`);
+      process.exit(1);
+    }
   }
 
   // 3. transcript 로드
   let transcript = '';
   if (TRANSCRIPT_FILE && existsSync(TRANSCRIPT_FILE)) {
     transcript = readFileSync(TRANSCRIPT_FILE, 'utf-8');
+  } else if (taskMeta.meta?.body) {
+    transcript = taskMeta.meta.body;
   } else {
     transcript = JSON.stringify(taskMeta.meta || {}, null, 2);
   }

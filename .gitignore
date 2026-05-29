@@ -152,3 +152,16 @@ infra/bin/*.bak-*
 
 # LaunchAgent plist 백업 (사용자 경로 노출 — 로컬 보존만)
 infra/launchagents/
+
+# Owner private context (PII — 삼성물산 등 개인 채용/일정/페르소나 정보)
+# 2026-05-29: public repo PII 누출 차단. .example.md만 추적, 실파일은 로컬 전용.
+infra/context/owner/hot-events.json
+infra/context/owner/follow-ups.json
+infra/context/owner/personal-dates.json
+infra/context/owner/persona.md
+infra/context/owner/preferences.md
+infra/context/owner/visualization.md
+infra/context/owner/persona-discord-emotional.md
+runtime/state/cli-session-starts.json
+runtime/state/anger-signals.jsonl
+runtime/state/intent-category-vectors.json
