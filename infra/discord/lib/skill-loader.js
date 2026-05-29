@@ -180,6 +180,21 @@ function _buildSkillEntry(rawText, sourcePath, fallbackName) {
   if (!name) return null;
   const description = frontmatter.description || (mdFallback && mdFallback.description) || '';
 
+  // no_auto_trigger: true → 자동 트리거 완전 비활성 (slash command 전용)
+  // 세션 요약·메시지 텍스트 매칭으로 인한 의도치 않은 스킬 주입을 방지.
+  // 사용 사례: compact-ctx (세션 요약에 "compact" 단어가 포함되면 vicious cycle 발생)
+  if (frontmatter.no_auto_trigger === true || frontmatter.no_auto_trigger === 'true') {
+    return {
+      name,
+      description,
+      triggers: [],
+      triggersSource: 'no-auto-trigger',
+      channels: [],
+      body,
+      source: sourcePath,
+    };
+  }
+
   // Layer 1: frontmatter triggers 명시 (있으면 최우선)
   // Layer 2: description 안 인용부호/bullet 키워드 자동 추출
   // Layer 3: description 추출이 빈약(<3개)하면 body(첫 2000자)도 합쳐서 추출
@@ -211,6 +226,7 @@ function _buildSkillEntry(rawText, sourcePath, fallbackName) {
   return {
     name,
     description,
+    category: frontmatter.category || 'reference',
     triggers: explicitTriggers.length > 0 ? explicitTriggers : derivedTriggers,
     triggersSource,
     channels: Array.isArray(frontmatter.channels) ? frontmatter.channels : [],

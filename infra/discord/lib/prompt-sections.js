@@ -230,7 +230,7 @@ export function buildSafetySection({ botHome }) {
 //   isEmotionalPrompt, _LIGHTWEIGHT_CHANNEL_NAMES, _EMOTION_PROMPT_PATTERNS 모두 제거.
 //   brevity 강제 라인은 SSoT(persona.md·user-profile.md·personas.json·format-core)에서 직접 제거 완료.
 
-export function buildUserContextSection({ activeUserProfile, ownerName, ownerTitle, githubUsername, profileCache, channelName }) {
+export function buildUserContextSection({ activeUserProfile, ownerName, ownerTitle, githubUsername, profileCache, channelName, emotionalTurn = false }) {
   if (!activeUserProfile) {
     // Guest
     return [
@@ -239,6 +239,15 @@ export function buildUserContextSection({ activeUserProfile, ownerName, ownerTit
     ];
   }
   if (activeUserProfile.type === 'owner' || activeUserProfile.role === 'owner') {
+    // [2026-05-28] 감정 턴엔 이력서/경력 정보 SKIP — 위로 응답엔 노이즈
+    //   사고 사례: 감정 발화에 "Knox Meeting"·"기술 스택"·"공백기" 정보가 주입돼
+    //   LLM이 분석가 톤으로 끌려감. Gemini Pro 대비 위로 톤 실패.
+    if (emotionalTurn) {
+      return [
+        '--- Owner Context (감정 턴 — 축약) ---',
+        `지금 대화 중인 사람은 주인님(${ownerName})이다. 위로 응답 모드 — 이력서·면접 전략 정보는 사용 금지.`,
+      ];
+    }
     // [2026-05-21] 채널 타입별 profile 슬라이싱 — 3단계:
     //   1. INTERVIEW_CHANNEL_PATTERN 매칭(jarvis-interview/mock 등): full profile (면접 라우팅 + STAR 16)
     //   2. 일반/상담/분석/일상 채널(jarvis-career·jarvis·ceo·market·boram·preply 등):
@@ -307,14 +316,27 @@ export function isVisualChannel(channelName) {
  * Injected alongside preferences so all behavioural rules survive session resets.
  */
 export function buildOwnerPersonaSection({ botHome, emotionalTurn = false }) {
+  // [2026-05-28] 감정 턴엔 완전히 다른 페르소나(친구 모드) 사용
+  //   기존: 집사형(주인님 호칭+존댓말) 페르소나에서 분석 가드만 strip → 여전히 분석가 톤
+  //   변경: persona-discord-emotional.md (친구 모드 SSoT) 통째로 교체
+  //   사유: Gemini Pro 비교 결과(2026-05-28) 자비스 응답이 분석가 톤으로 위로 실패.
+  //         존댓말+호칭 강제가 친구 톤 원천 차단. 페르소나 자체를 바꿔야 해결.
+  if (emotionalTurn) {
+    const emotionalPath = join(botHome, 'context', 'owner', 'persona-discord-emotional.md');
+    if (existsSync(emotionalPath)) {
+      try {
+        const content = readFileSync(emotionalPath, 'utf-8');
+        if (content.trim()) {
+          return `--- Owner Persona & Behaviour Rules (감정 턴 — 친구 모드) ---\n${content.trim()}`;
+        }
+      } catch (e) {
+        console.error(`[persona] emotional 로드 실패 — fallback to slim. ${e.message}`);
+      }
+    }
+  }
   // [2026-05-22 v9 R4] persona-discord.md 슬림 버전 우선 로드 (~0.5KB).
   //   원본 persona.md (~3KB)는 CLI 전체 로드용 SSoT, 디스코드 봇은 슬림 사용.
   //   slim 파일 없으면 원본 fallback (안전망).
-  // [2026-05-26 감정 턴 strip] emotionalTurn=true 시 분석 가드(L15~L77) 제거:
-  //   근본 원인: "질문 길이 ≠ 응답 깊이" + "분석 9항목 가드" 섹션이 6,700자로
-  //   감정 발화 응답 전체를 분석 모드로 끌어당김. 246자 감정 주입이 이를 override 불가.
-  //   수정: 감정 턴에서 "## 질문 길이" ~ "## 인지 원칙" 사이 분석 블록을 strip.
-  //   남기는 섹션: 정체성·톤·인지 원칙·감정 가드 v3·시간 (핵심만)
   const slimPath = join(botHome, 'context', 'owner', 'persona-discord.md');
   const fullPath = join(botHome, 'context', 'owner', 'persona.md');
   const personaPath = existsSync(slimPath) ? slimPath : fullPath;

@@ -160,6 +160,19 @@ async function registerSlashCommands(clientId, guildId) {
   // CLI의 `/mock-interview 삼성물산` 경험을 디스코드에서 그대로 재현.
   // 중복 이름은 기존 하드코딩 커맨드가 우선 (스킬 무시).
   // ---------------------------------------------------------------------------
+  // [2026-05-28] Intent classifier 워밍업 — 첫 호출 콜드 스타트 timeout 방지
+  //   Ollama bge-m3 임베딩 사전 로드 + 카테고리 벡터 캐시.
+  //   비동기 비차단 (실패해도 봇 기동에 영향 없음).
+  (async () => {
+    try {
+      const { warmupIntentClassifier } = await import('./lib/intent-classifier.mjs');
+      const ok = await warmupIntentClassifier();
+      log('info', 'Intent classifier warmed up', { success: ok });
+    } catch (e) {
+      log('warn', 'Intent classifier warmup failed', { err: e?.message });
+    }
+  })();
+
   try {
     const { loadSkills } = await import('./lib/skill-loader.js');
     const skills = loadSkills();

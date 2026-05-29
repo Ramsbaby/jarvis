@@ -732,6 +732,27 @@ export async function* createClaudeSession(prompt, {
 
   // 4a. Build user context section (SSoT: prompt-sections.js)
   // 2026-05-21: channelName 전달 → career 채널 아닐 때 STAR 29KB 슬라이스 (채널별 분리 Phase 1)
+  // [2026-05-28 v2] Embedding 기반 의도 분류 — 키워드 정규식 폐기
+  //   사고 사례: "찢어진다" / "랜선으로 했더라면" 키워드 정규식에 없어 감지 실패.
+  //   업계 표준: sentence-transformers / BERT classifier (베스트 프랙티스 검증 2026-05-28).
+  //   Ollama bge-m3 + cosine similarity. Latency ~100ms, 비용 0 (로컬).
+  //   Ollama 다운 시 keyword fallback 자동 작동 (서킷브레이커).
+  let _classifiedIntent = 'casual';
+  let _emotionalTurnEarly = false;
+  try {
+    const { classifyIntent } = await import('./intent-classifier.mjs');
+    const _intentResult = await classifyIntent(prompt || '');
+    _classifiedIntent = _intentResult.intent;
+    _emotionalTurnEarly = (_intentResult.intent === 'emotional');
+    log('debug', 'Intent classified', {
+      intent: _intentResult.intent,
+      confidence: _intentResult.confidence,
+      source: _intentResult.source,
+    });
+  } catch (e) {
+    log('warn', 'Intent classifier failed — fallback to false', { err: e?.message });
+  }
+
   const userContextParts = buildUserContextSection({
     activeUserProfile,
     ownerName,
@@ -739,6 +760,7 @@ export async function* createClaudeSession(prompt, {
     githubUsername,
     profileCache: createClaudeSession._profileCache,
     channelName,
+    emotionalTurn: _emotionalTurnEarly,
   });
 
   const BOT_HOME = process.env.BOT_HOME || `${homedir()}/jarvis/runtime`;
@@ -795,20 +817,28 @@ export async function* createClaudeSession(prompt, {
   //   - 1턴: "어떻게 해야해?" 바로 다음 턴까지만 커버 (위험도 낮음)
   //   - 2턴: 감정 발화 → 침묵/리액션 → 대처 질문 패턴까지 커버
   //   - 3턴+: 기술 질문으로 전환 후에도 감정 모드 오탐 위험 증가
-  const _EMOTION_PATTERN_RE = /제발|걱정된다|확신 없어|떨어졌는지|간절하다|어떡하지|어떡하면|어떡해야|어떡해|붙겠어|붙을까|망했나|떨어졌나|안되겠지|불안해|무서워|긴장돼|허하다|번아웃|억울|화난다|힘들다|무너진다|막막하다|슬프다|지친다|아프다|후회된다|실망|지쳐|눈물|짜증|맴도|미련인가|답답하|갑갑하|열받|화가 나|화가나|미치겠|분하다|못 잊|떨쳐|지워지지|버텨야|마음이 안|어떻게 마인드셋/;
+  // [2026-05-29 결함 수리 #1] regex/embedding 이중 시스템 통합.
+  //   기존: _EMOTION_PATTERN_RE 키워드 정규식이 _isEmotionalTurn 결정 → 모든 SKIP 분기.
+  //         L811의 _emotionalTurnEarly(embedding)는 budget mode/userContext만 영향.
+  //   변경: embedding 결과(_classifiedIntent)를 단일 진실로 사용.
+  //         정규식 폐기. transitive state(2턴 전파)는 유지.
+  //
+  // [2026-05-29 결함 수리 #2] 분석 채널은 감정 분류 무시 (RAG·_facts·channel-persona 보호).
+  //   사고: "이번 분기 매출 진짜 답답하다" → emotional 오인 → 분석 깊이 손실.
+  const _ANALYSIS_CH_FOR_EMOTION = ['1471694919339868190', '1469905074661757049', '1475786634510467186', '1469190686145384513'];
+  const _isAnalysisChannel = channelId && _ANALYSIS_CH_FOR_EMOTION.includes(channelId);
 
   // 스레드 단위 감정 상태 캐시 (Map 크기 제한: 200 스레드)
   if (!createClaudeSession._emotionStateCache) createClaudeSession._emotionStateCache = new Map();
   if (createClaudeSession._emotionStateCache.size > 200) {
-    // 가장 오래된 절반 제거 (삽입 순서 기반 LRU 근사)
     const keys = [...createClaudeSession._emotionStateCache.keys()];
     keys.slice(0, 100).forEach(k => createClaudeSession._emotionStateCache.delete(k));
   }
   const _threadKey = threadId || channelId || 'default';
   const _prevEmotionState = createClaudeSession._emotionStateCache.get(_threadKey) || { turns: 0 };
-  const _currentEmotional = !!(prompt && _EMOTION_PATTERN_RE.test(prompt));
-  // 전파: 현재 키워드 감지 시 turns=2 리셋, 아니면 이전 state count-down
-  const _isEmotionalTurn = _currentEmotional || _prevEmotionState.turns > 0;
+  // 분석 채널은 강제 false (도메인 가드). 그 외엔 embedding classifier 결과.
+  const _currentEmotional = _isAnalysisChannel ? false : (_classifiedIntent === 'emotional');
+  const _isEmotionalTurn = _currentEmotional || (_prevEmotionState.turns > 0 && !_isAnalysisChannel);
   createClaudeSession._emotionStateCache.set(_threadKey, {
     turns: _currentEmotional ? 2 : Math.max(0, _prevEmotionState.turns - 1),
   });
@@ -848,7 +878,12 @@ export async function* createClaudeSession(prompt, {
   }
 
   // Channel-specific persona — 모든 채널 동일 처리 (모드 분기 없음)
-  const channelPersona = channelId ? CHANNEL_PERSONAS[channelId] : null;
+  // [2026-05-28] 감정 턴엔 채널 persona SKIP — 채널 분석 가드(career=커리어 상담)가 친구 톤 망침
+  // [2026-05-29 결함 수리 #3] family 채널은 감정 턴이어도 channelPersona 유지 (가족 페르소나 보존).
+  //   사고: 가족 멤버 "힘들다" 발화 시 채널 persona 사라져 일반 owner 톤으로 응답 → 톤 깨짐.
+  const _FAMILY_CHANNEL_IDS_EARLY = (process.env.FAMILY_CHANNEL_IDS || process.env.FAMILY_CHANNEL_ID || '').split(',').filter(Boolean);
+  const _isFamilyChannelEarly = !!channelId && _FAMILY_CHANNEL_IDS_EARLY.includes(channelId);
+  const channelPersona = (channelId && (!_isEmotionalTurn || _isFamilyChannelEarly)) ? CHANNEL_PERSONAS[channelId] : null;
   if (channelPersona) {
     // Owner가 family 채널에 접근한 경우: family 페르소나 대신 Owner 컨텍스트 우선
     // (Owner userId 기반 정확한 감지 — 3인칭 패턴 의존 제거)
@@ -942,17 +977,37 @@ export async function* createClaudeSession(prompt, {
       'jarvis', 'jarvis-career', 'jarvis-boram', 'jarvis-ceo', 'jarvis-market', 'jarvis-preply-tutor',
     ]);
     const _skipAutoSkillsForChannel = channelName && _SKILL_AUTO_INJECT_SKIP_CHANNELS.has(channelName);
+    // 토큰 폭증 차단: guard 스킬 누적 시 상한 (감사관 B 결함 대응 2026-05-28)
+    const MAX_GUARD_INJECTIONS = 5;
+    const MAX_TOTAL_INJECTIONS = 8;
+    let guardInjected = 0;
     for (const { skill, byChannel, byTrigger } of matchedSkills) {
       if (injected.has(skill.name)) continue;
       if (SKIP_SKILLS_WHEN_INLINE.has(skill.name)) continue;
-      if (_skipAutoSkillsForChannel) {
-        log('info', 'Skill auto-inject skipped (consultation channel)', { skill: skill.name, channelName });
+      if (injected.size >= MAX_TOTAL_INJECTIONS) {
+        log('info', 'Skill inject limit reached', { limit: MAX_TOTAL_INJECTIONS, skipped: skill.name });
+        break;
+      }
+      const isGuard = skill.category === 'guard';
+      // [2026-05-28] 감정 턴엔 guard 스킬도 SKIP — 분석/검증 가드는 위로 응답 톤 망침
+      if (_isEmotionalTurn && isGuard) {
+        log('info', 'Guard skill skipped (emotional turn)', { skill: skill.name });
+        continue;
+      }
+      if (isGuard && guardInjected >= MAX_GUARD_INJECTIONS) {
+        log('info', 'Guard skill limit reached', { limit: MAX_GUARD_INJECTIONS, skipped: skill.name });
+        continue;
+      }
+      // category=guard 스킬은 채널 SKIP 무시 (행동 가드는 어디서든 작동해야 함)
+      if (_skipAutoSkillsForChannel && !isGuard) {
+        log('info', 'Skill auto-inject skipped (consultation channel)', { skill: skill.name, channelName, category: skill.category });
         continue;
       }
       const reason = byChannel ? `채널: ${channelName}` : `트리거 키워드`;
       systemParts.push('', `--- 스킬 활성화: ${skill.name} (${reason}) ---\n${skill.body}`);
       injected.add(skill.name);
-      log('info', 'Skill injected', { skill: skill.name, reason, channelName });
+      if (isGuard) guardInjected++;
+      log('info', 'Skill injected', { skill: skill.name, reason, channelName, category: skill.category });
     }
   } catch (skillErr) {
     log('warn', 'Skill loader failed (non-critical)', { error: skillErr.message });
@@ -963,24 +1018,25 @@ export async function* createClaudeSession(prompt, {
   if (isOwner) {
     // Persona & behaviour rules (anti-bias, root-cause, clarification, self-learning)
     // [2026-05-26] 감정 턴에서 분석 가드 6,700자 strip — emotionalTurn 전달
+    // [2026-05-28] 감정 턴이면 buildOwnerPersonaSection이 emotional 페르소나 통째 반환
     const personaSection = buildOwnerPersonaSection({ botHome: BOT_HOME, emotionalTurn: _isEmotionalTurn });
     if (personaSection) systemParts.push('', personaSection);
 
-    // Operational preferences (tool constraints, scheduling rules, etc.)
-    if (createClaudeSession._ownerPrefsCache) {
-      systemParts.push('', createClaudeSession._ownerPrefsCache);
-    }
+    // [2026-05-28] 감정 턴엔 도구 제약·시각화 정책 SKIP — 위로 응답엔 무관
+    if (!_isEmotionalTurn) {
+      // Operational preferences (tool constraints, scheduling rules, etc.)
+      if (createClaudeSession._ownerPrefsCache) {
+        systemParts.push('', createClaudeSession._ownerPrefsCache);
+      }
 
-    // [2026-05-22 v9 R2] visualization.md (8KB) 정밀 조건부 주입.
-    //   이전: career 외 모든 채널 무조건 주입 → 분석·감정 응답에도 디자인 가이드 noise.
-    //   현재: 시각화 채널 OR prompt에 시각화 키워드 매칭 시만.
-    const _visualKeywords = /차트|그래프|디자인|이력서|블로그|html|ui|시각화|카드|테마|팔레트|폰트|색상|resume|portfolio|slop|레이아웃|design|chart|graph/i;
-    const _wantsVisualization = isVisualChannel(channelName) || _visualKeywords.test(prompt || '');
-    if (_wantsVisualization) {
-      const visualizationSection = buildOwnerVisualizationSection({ botHome: BOT_HOME });
-      if (visualizationSection) systemParts.push('', visualizationSection);
+      // [2026-05-22 v9 R2] visualization.md (8KB) 정밀 조건부 주입.
+      const _visualKeywords = /차트|그래프|디자인|이력서|블로그|html|ui|시각화|카드|테마|팔레트|폰트|색상|resume|portfolio|slop|레이아웃|design|chart|graph/i;
+      const _wantsVisualization = isVisualChannel(channelName) || _visualKeywords.test(prompt || '');
+      if (_wantsVisualization) {
+        const visualizationSection = buildOwnerVisualizationSection({ botHome: BOT_HOME });
+        if (visualizationSection) systemParts.push('', visualizationSection);
+      }
     }
-
   }
 
   // Session version check: compute hash from STABLE systemParts (persona + user context only).
@@ -1040,6 +1096,29 @@ export async function* createClaudeSession(prompt, {
         }
       }
     } catch (e) { log('warn', '[hot-events] 주입 실패', { err: e?.message }); }
+
+    // ── 만성 패턴 자가 인지 (2026-05-28) ─────────────────────────────────────
+    // mistake-pattern-analyzer가 매일 03:30 만든 "내가 자주 하는 실수 TOP N" 데이터.
+    // 응답 직전 주입 → 자비스가 자기 통계를 인지하고 자기검열 강화.
+    // [2026-05-28 v2] 감정 턴 SKIP — 감정 발화에 분석/검증 통계 가드는 응답 톤 망침.
+    if (!_isEmotionalTurn) {
+      try {
+        const _patPath = join(BOT_HOME, 'state', 'mistake-pattern-analysis.json');
+        if (existsSync(_patPath)) {
+          const _patData = JSON.parse(readFileSync(_patPath, 'utf-8'));
+          const _topPatterns = (_patData.keywords || []).slice(0, 5);
+          if (_topPatterns.length) {
+            const _lines = _topPatterns.map(k => `- ${k.keyword}: ${k.count}건 (${k.description})`);
+            systemParts.push('',
+              `--- 🪞 자비스 만성 패턴 자가 인지 (최근 30d=${_patData.recent_30d}건) ---`,
+              '응답 작성 직전 다음 자기검열을 통과해야 합니다:',
+              _lines.join('\n'),
+              '위 패턴 중 하나라도 응답에 들어가면 송출 전 재작성.');
+          }
+        }
+      } catch (e) { log('warn', '[chronic-patterns] 주입 실패', { err: e?.message }); }
+    }
+
     if (memSnippet) systemParts.push('', '--- 사용자 기억 (User Memory) ---', memSnippet);
   }
 
@@ -1050,7 +1129,8 @@ export async function* createClaudeSession(prompt, {
   {
     const _ANALYSIS_CH = ['1471694919339868190', '1469905074661757049', '1475786634510467186', '1469190686145384513'];
     const _promptStr = String(prompt || '').trim();
-    if (_promptStr.length >= 15 && channelId && _ANALYSIS_CH.includes(channelId)) {
+    // [2026-05-28] 감정 턴엔 RAG 사전 주입 SKIP — 분석 컨텍스트가 위로 응답 톤 망침
+    if (_promptStr.length >= 15 && channelId && _ANALYSIS_CH.includes(channelId) && !_isEmotionalTurn) {
       try {
         const _ragMod = await import(new URL('../../lib/nexus/rag-gateway.mjs', import.meta.url).pathname);
         const _ragResult = await _ragMod.handle('rag_search', {
@@ -1097,7 +1177,8 @@ export async function* createClaudeSession(prompt, {
   // 🔍 가드 #5 (2026-04-29): _facts.md 키워드 매칭 자동 발췌
   // SSoT Cross-Link 봉쇄 해소 — career/_summary.md로 _facts.md 4000줄이
   // 영구 invisible이던 사고 영구 차단. 사용자 발화 키워드 → _facts grep top 8.
-  if (isOwner && prompt) {
+  // [2026-05-28] 감정 턴 SKIP — 분석 컨텍스트가 위로 응답 톤 망침
+  if (isOwner && prompt && !_isEmotionalTurn) {
     try {
       const factsCtx = buildFactsKeywordSection({ prompt, botHome: BOT_HOME });
       if (factsCtx) systemParts.push('', factsCtx);
@@ -1438,23 +1519,46 @@ export async function* createClaudeSession(prompt, {
     const entries = [...createClaudeSession._promptVersionMap.entries()];
     createClaudeSession._promptVersionMap = new Map(entries.slice(entries.length / 2));
   }
+  // [2026-05-28] Token Budget Hard Cap — 비대화 구조적 차단
+  //   발화 카테고리 추론 → 모드별 budget 적용 → score 낮은 섹션 자동 drop
+  //   drop ledger: ~/jarvis/runtime/state/prompt-budget-drops.jsonl
+  // [2026-05-28 v2] budget mode를 embedding classifier 결과로 결정.
+  //   _classifiedIntent는 위에서 이미 emotional/analytical/code/casual 중 하나로 분류됨.
+  //   분석 채널(jarvis-career 등)은 분류 결과 override해서 analytical 강제 (도메인 가드).
+  let _intentBudgetMode = _classifiedIntent;
+  if (!_emotionalTurnEarly && channelId && ['1471694919339868190', '1469905074661757049', '1475786634510467186', '1469190686145384513'].includes(channelId)) {
+    // 분석 채널 — 감정 발화가 아니면 analytical로 override (RAG·_facts 보장)
+    _intentBudgetMode = 'analytical';
+  }
+
+  const { enforceBudget } = await import('./prompt-harness.js');
+  const _budgetResult = enforceBudget(systemParts, {
+    mode: _intentBudgetMode,
+    ledgerPath: join(BOT_HOME, 'state', 'prompt-budget-drops.jsonl'),
+    channelId,
+  });
+  if (_budgetResult.droppedSections.length) {
+    log('info', 'Budget enforcement dropped sections', {
+      mode: _intentBudgetMode,
+      original_tokens: _budgetResult.originalTokens,
+      final_tokens: _budgetResult.tokenEstimate,
+      dropped: _budgetResult.droppedSections,
+    });
+  }
+  const _finalSystemPrompt = _budgetResult.finalPrompt;
+
   if (isResuming) {
-    // Always re-inject systemPrompt on resume — context compaction can lose persona/tone rules
-    // CRITICAL: use systemParts.join (includes memSnippet added after hash) not stableSystemPrompt
-    queryOptions.systemPrompt = systemParts.join('\n');
+    queryOptions.systemPrompt = _finalSystemPrompt;
     const savedVersion = createClaudeSession._promptVersionMap.get(threadId);
     if (savedVersion && savedVersion !== promptVersion) {
       log('info', 'System prompt changed, forcing new session', {
         threadId, oldVersion: savedVersion, newVersion: promptVersion,
       });
-      // Force new session — don't resume stale system prompt.
       sessionId = null;
-      // Notify handler that session was silently reset (맥락 단절 방지)
       yield { type: 'system', session_reset: true, reason: 'prompt_version_changed' };
     }
   } else {
-    // New session: systemParts already includes usageSummary (added in else block above)
-    queryOptions.systemPrompt = systemParts.join('\n');
+    queryOptions.systemPrompt = _finalSystemPrompt;
   }
   createClaudeSession._promptVersionMap.set(threadId, promptVersion);
 
