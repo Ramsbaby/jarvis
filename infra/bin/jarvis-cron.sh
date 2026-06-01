@@ -17,6 +17,10 @@ unset ANTHROPIC_API_KEY 2>/dev/null || true
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+
+# 자동화 전용 인증 주입 (B안 듀얼 토큰 — refresh 레이스 차단). credentials.json은 건드리지 않음.
+source "${BOT_HOME}/lib/automation-auth.sh" 2>/dev/null || true
+
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
 
