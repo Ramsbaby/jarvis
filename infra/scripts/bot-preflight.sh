@@ -30,6 +30,10 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [preflight] $*" | tee -a "$LOG_FILE
 # Shared ntfy function
 source "${BOT_HOME}/lib/ntfy-notify.sh"
 
+# 자동화 전용 인증 주입 (B안 듀얼 토큰): 봇 SDK 에이전트가 long-lived 토큰을 상속 → refresh 레이스 차단.
+# credentials.json(주인님 풀스코프 로그인·원격제어용)은 건드리지 않음.
+source "${BOT_HOME}/lib/automation-auth.sh" 2>/dev/null || true
+
 # ── Bootstrap early SIGTERM trap (RISK-A) ────────────────────────────────────
 # fail_and_heal() 내 sleep 600/300 구간 SIGTERM 사각지대 방지. node 실행 시점
 # (아래쪽)에 봇 정상 종료용 특화 trap으로 덮어씌워져 이중 안전망 역할.

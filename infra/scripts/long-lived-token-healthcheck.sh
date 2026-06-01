@@ -22,13 +22,16 @@ mkdir -p "$(dirname "$LEDGER")" "$(dirname "$LOG")"
 
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" | tee -a "$LOG"; }
 
-if [[ ! -f "$CRED" ]]; then
-    log "ERROR: credentials.json 없음 — $CRED"
+# [B안 2026-06-01] 자동화 토큰(long-lived)은 전용 파일이 SSoT.
+#   credentials.json은 주인님 풀스코프 로그인(원격제어)이라 자동화 건강과 무관 → 검사 대상에서 제외.
+TOKEN_FILE="${LONG_LIVED_TOKEN_FILE:-${HOME}/.claude/.long-lived-token}"
+if [[ ! -f "$TOKEN_FILE" ]]; then
+    log "ERROR: long-lived 토큰 없음 — $TOKEN_FILE (claude setup-token + long-lived-token-rotate.sh로 회전 필요)"
     exit 1
 fi
 
-# accessToken 추출 (Iron Law 4: 응답·로그에 평문 노출 금지)
-TOKEN=$(python3 -c "import json; print(json.load(open('$CRED'))['claudeAiOauth']['accessToken'])" 2>/dev/null || echo "")
+# 토큰 추출 (Iron Law 4: 응답·로그에 평문 노출 금지)
+TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null || echo "")
 
 if [[ -z "$TOKEN" ]]; then
     log "ERROR: accessToken 추출 실패"
