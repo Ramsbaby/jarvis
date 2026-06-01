@@ -31,7 +31,7 @@ _jarvis_inject_automation_token() {
         return 0
     fi
 
-    local token_file="${LONG_LIVED_TOKEN_FILE:-${HOME}/.claude/.long-lived-token}"
+    local token_file="${LONG_LIVED_TOKEN_FILE:-${HOME}/.claude-bot/.long-lived-token}"
     if [[ -r "$token_file" ]]; then
         local tok
         tok="$(cat "$token_file" 2>/dev/null || true)"

@@ -16,7 +16,9 @@ fi
 
 NEW_TOKEN="$1"
 CRED="${HOME}/.claude/.credentials.json"
-TOKEN_FILE="${HOME}/.claude/.long-lived-token"
+# 자동화 토큰 SSoT — 래퍼(~/.local/bin/claude)가 읽는 경로와 반드시 일치해야 함.
+# 모든 SDK 호출(pathToClaudeCodeExecutable)이 래퍼를 통과하므로, 래퍼가 보편 주입점.
+TOKEN_FILE="${LONG_LIVED_TOKEN_FILE:-${HOME}/.claude-bot/.long-lived-token}"
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LEDGER="${BOT_HOME}/ledger/oauth-refresh-ledger.jsonl"
 
@@ -45,6 +47,7 @@ echo "✅ 새 토큰 사전 검증 통과 (HTTP 200)"
 
 # 토큰 파일 갱신 (600)
 umask 077
+mkdir -p "$(dirname "$TOKEN_FILE")"
 printf '%s\n' "$NEW_TOKEN" > "$TOKEN_FILE"
 chmod 600 "$TOKEN_FILE"
 echo "✅ $TOKEN_FILE 갱신 (600)"

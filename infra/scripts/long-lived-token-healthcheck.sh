@@ -24,7 +24,7 @@ log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" | tee -a "$LOG"; }
 
 # [B안 2026-06-01] 자동화 토큰(long-lived)은 전용 파일이 SSoT.
 #   credentials.json은 주인님 풀스코프 로그인(원격제어)이라 자동화 건강과 무관 → 검사 대상에서 제외.
-TOKEN_FILE="${LONG_LIVED_TOKEN_FILE:-${HOME}/.claude/.long-lived-token}"
+TOKEN_FILE="${LONG_LIVED_TOKEN_FILE:-${HOME}/.claude-bot/.long-lived-token}"
 if [[ ! -f "$TOKEN_FILE" ]]; then
     log "ERROR: long-lived 토큰 없음 — $TOKEN_FILE (claude setup-token + long-lived-token-rotate.sh로 회전 필요)"
     exit 1
