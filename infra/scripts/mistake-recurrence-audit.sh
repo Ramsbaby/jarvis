@@ -276,7 +276,7 @@ lines.append(f\"리포트: ~/jarvis/runtime/state/mistake-recurrence.json\")
 lines.append(f\"구조적 가드가 부재하다는 신호 — oops/verify 스킬로 즉각 재발방지 훅 신설 권고\")
 print('\\n'.join(lines))
 ")
-  send_discord "$MSG" 2>>"$LOG" || echo "[$(ts)] Discord 전송 실패" >> "$LOG"
+  send_discord "$MSG" "jarvis-system" 2>>"$LOG" || echo "[$(ts)] Discord 전송 실패 (webhook=jarvis-system)" >> "$LOG"
   echo "[$(ts)] Discord 알림 전송" >> "$LOG"
 else
   echo "[$(ts)] discord-notify-bash.sh 없음 — Discord skip" >> "$LOG"
