@@ -40,8 +40,10 @@ while IFS= read -r line; do
   if [[ $age -lt $OVERDUE_SEC ]]; then continue; fi
 
   text=$(echo "$line" | jq -r '.text // .commitment // .content // "내용 없음"' 2>/dev/null)
+  # 마크다운 제거 → 플레인텍스트 (2026-06-04: 테이블·코드블록·볼드 노출 방지)
+  text=$(echo "$text" | sed 's/|[^|]*//g; s/```//g; s/\*\*//g; s/^#* //' | tr -s ' \t\n' ' ' | xargs)
   age_h=$(( age / 3600 ))
-  OVERDUE_ITEMS+=("🔴 ${age_h}h — ${text:0:120}")
+  OVERDUE_ITEMS+=("🔴 ${age_h}h — ${text:0:80}")
 done < "$COMMIT_FILE"
 
 # 초과 항목 없으면 조용히 종료

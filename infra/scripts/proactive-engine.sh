@@ -313,10 +313,14 @@ except Exception as e:
     notify_check_error('check2_gog', str(e))
 
 
-# ─── 체크 3: 침묵 감지 (3일+ 대화 없음) — 주인님 직접 발화 기준 ────────────
+# ─── 체크 3: 침묵 감지 — 비활성화 2026-06-04 ───────────────────────────────
+# 사유: 채널 피드 4/16~6/1 끊김으로 오탐 발생 (42일 침묵 오인식).
+# 주인님은 매일 대화 중. discord-history 기반 감지는 채널 피드 데이터와 불일치.
+# 재활성화 시 channel-feed/jarvis.jsonl 기반으로 재구현 필요.
 
-plog("체크 3: 침묵 감지 (주인님 직접 발화 기준)")
-try:
+plog("체크 3: 침묵 감지 SKIP (비활성화 2026-06-04)")
+if False:
+ try:
     # 파일명이 YYYY-MM-DD 또는 YYYY-MM-DD-HHMMSS 형식인 것 역순 정렬
     # mtime 기반 아님 — 봇 크론 메시지가 파일 갱신해도 오탐 없도록
     import re as _re
@@ -356,8 +360,8 @@ try:
     else:
         plog("체크 3 SKIP: 히스토리 파일에서 주인님 발화 패턴 없음")
 
-except Exception as e:
-    plog(f"체크 3 ERROR: {e}")
+ except Exception as e:
+  plog(f"체크 3 ERROR: {e}")
 
 
 # ─── 체크 4: follow-ups.json 레지스트리 (하드코딩 없음) ─────────────
