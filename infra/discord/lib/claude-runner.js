@@ -903,13 +903,14 @@ export async function* createClaudeSession(prompt, {
     const isFamilyTypeChannel = FAMILY_CHANNEL_IDS_ALL.includes(channelId)
       || (channelPersona ? /보람|가족/.test(channelPersona.split('\n')[0]) : false);
     if (isFamilyTypeChannel && isOwner) {
+      // [2026-06-04] 헤더+본문 단일 문자열 병합 — 분리 push 시 본문이 headerless unnamed로 떨어짐.
       systemParts.push(
         '',
-        `--- Owner가 family 채널에서 대화 중 ---`,
-        `지금 메시지는 가족 멤버가 아닌 Owner(${ownerName}님)가 보낸 것입니다.`,
-        `가족 멤버 페르소나(반말 금지·💕 이모지 등)로 응답하지 말 것.`,
-        `이 채널은 가족 멤버가 보는 채널이므로 가족 멤버에 대한 제3자 언급은 신중히.`,
-        `Owner 대상 일반 대화 원칙으로 응답.`,
+        `--- Owner가 family 채널에서 대화 중 ---\n` +
+        `지금 메시지는 가족 멤버가 아닌 Owner(${ownerName}님)가 보낸 것입니다.\n` +
+        `가족 멤버 페르소나(반말 금지·💕 이모지 등)로 응답하지 말 것.\n` +
+        `이 채널은 가족 멤버가 보는 채널이므로 가족 멤버에 대한 제3자 언급은 신중히.\n` +
+        `Owner 대상 일반 대화 원칙으로 응답.\n` +
         `참고 — 가족 멤버 채널 페르소나:\n${channelPersona}`,
       );
     } else {
@@ -1127,9 +1128,9 @@ export async function* createClaudeSession(prompt, {
           if (_topPatterns.length) {
             const _lines = _topPatterns.map(k => `- ${k.keyword}: ${k.count}건 (${k.description})`);
             systemParts.push('',
-              `--- 🪞 자비스 만성 패턴 자가 인지 (최근 30d=${_patData.recent_30d}건) ---`,
-              '응답 작성 직전 다음 자기검열을 통과해야 합니다:',
-              _lines.join('\n'),
+              `--- 🪞 자비스 만성 패턴 자가 인지 (최근 30d=${_patData.recent_30d}건) ---\n` +
+              '응답 작성 직전 다음 자기검열을 통과해야 합니다:\n' +
+              `${_lines.join('\n')}\n` +
               '위 패턴 중 하나라도 응답에 들어가면 송출 전 재작성.');
           }
         }
@@ -1219,8 +1220,8 @@ export async function* createClaudeSession(prompt, {
         }).filter(Boolean);
         if (_recentSkills.length > 0) {
           systemParts.push('',
-            '--- 🧠 Jarvis 학습 패턴 (최근 3건) ---',
-            '이전 운영에서 학습한 패턴입니다. 동일 상황 감지 시 참조하십시오:',
+            '--- 🧠 Jarvis 학습 패턴 (최근 3건) ---\n' +
+            '이전 운영에서 학습한 패턴입니다. 동일 상황 감지 시 참조하십시오:\n' +
             _recentSkills.join('\n')
           );
         }

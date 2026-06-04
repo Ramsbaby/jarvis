@@ -202,8 +202,11 @@ export function enforceBudget(systemParts, opts = {}) {
   // Normalize: string → { content, name: 'unknown', score: 5 (default median) }
   const sections = systemParts.map((s, idx) => {
     if (typeof s === 'string') {
-      // 섹션 헤더 추출: "--- X ---" 패턴
-      const headerMatch = s.match(/---\s*([^-\n]+?)\s*---/);
+      // 섹션 헤더 추출: "--- X ---" 헤더 라인. [2026-06-04] 기존 [^-\n]은 헤더 내 하이픈
+      //   (예 "#jarvis-dev","jarvis-career")에서 매칭 실패 → 채널피드·채널페르소나 등이 전부
+      //   unnamed로 강등되던 근본 버그. 라인 앵커(^...$/m)로 하이픈 포함 전체 헤더를 추출.
+      //   부수효과: 마크다운 표 "|---|---|"·수평선 "---"은 헤더로 오인 안 함(정확).
+      const headerMatch = s.match(/^---\s*(.+?)\s*---\s*$/m);
       const headerText = headerMatch ? headerMatch[1].trim() : '';
       const inferredName = inferSectionName(headerText);
       // [2026-05-29 #10] 추론 실패 시 unknown ledger 적재 — 점진적 발견
@@ -300,7 +303,7 @@ function inferSectionName(headerText) {
   if (/스킬 활성화|skill activated/.test(headerText)) return 'skill-guard';
   if (/만성 패턴|chronic.*pattern/i.test(headerText)) return 'chronic-patterns';
   if (/최근 주요 이벤트|hot.events|🔔/.test(headerText)) return 'hot-events';
-  if (/rag 사전 주입|rag prefetch/.test(headerText)) return 'rag-prefetch';
+  if (/rag 사전 주입|rag prefetch/.test(lower)) return 'rag-prefetch';  // [2026-06-04] headerText→lower: 'RAG' 대문자 미스매치 버그 수정
   if (/사용자 기억|user memory/.test(headerText)) return 'memory';
   if (/_facts|facts 발췌|facts.keyword|키워드 매칭 발췌/.test(headerText)) return 'facts-keyword';
   if (/오너 시간|time.context|시간 컨텍스트/.test(headerText)) return 'time-context';
@@ -308,12 +311,12 @@ function inferSectionName(headerText) {
   if (/첨부 이미지|attached image/.test(headerText)) return 'attached-image';
   if (/usage|토큰 사용|token usage/.test(headerText)) return 'usage-summary';
   if (/family|가족|보람|brief/.test(headerText)) return 'family-briefing';
-  if (/channel feed|채널 피드/.test(headerText)) return 'channel-feed';
+  if (/channel feed|채널 피드|최근 채널 활동|채널 활동/.test(headerText)) return 'channel-feed';
   if (/handoff|핸드오프|이전 세션/.test(headerText)) return 'handoff';
   if (/anger|분노|직전 정정/.test(headerText)) return 'anger-section';
   if (/harness/i.test(headerText)) return 'harness-section';
   if (/evidence|실측 의무|evidence mandate/.test(headerText)) return 'evidence-mandate';
-  if (/wiki/.test(headerText)) return 'wiki-keyword';
+  if (/wiki|위키 컨텍스트|위키 지식/.test(headerText)) return 'wiki-keyword';
   if (/emotion injection|감정 주입|감정 가이드/.test(headerText)) return 'emotion-injection';
   if (/family.*owner|owner.*family/.test(lower)) return 'family-briefing';
   if (/sap|aif|saa/i.test(headerText)) return 'sap-text';
