@@ -1022,6 +1022,11 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
       )
     : null;
   const hasVoice = !!voiceAtt;
+  // 이미지 첨부 여부 재계산 (_processBatch는 handleMessage 스코프 밖 — voiceAtt와 동일 패턴).
+  // autoExtractMemory에 전달해 이미지 유래 데이터(포트폴리오·표·수치)가 기억에서 누락되지 않게.
+  const hasImageAtt = (message.attachments?.size ?? 0) > 0 &&
+    Array.from(message.attachments.values()).some((a) =>
+      a.contentType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(a.name ?? ''));
   let batchContent = _buildBatchContent(messages); // Claude에 보낼 결합 프롬프트
 
   // Reply context: 답글 대상 메시지 내용을 컨텍스트로 주입
@@ -2154,7 +2159,7 @@ ${extracted}
               log('debug', 'Token count updated', { sessionKey, inputTokens, total: newTotal });
             }
             // 비동기 메모리 추출 — 메인 응답에 영향 없는 fire-and-forget
-            autoExtractMemory(effectiveAuthor.id, originalPrompt, lastAssistantText, effectiveChannelId).catch((e) => log('debug', 'autoExtractMemory outer catch', { error: e?.message }));
+            autoExtractMemory(effectiveAuthor.id, originalPrompt, lastAssistantText, effectiveChannelId, hasImageAtt).catch((e) => log('debug', 'autoExtractMemory outer catch', { error: e?.message }));
             // 자동 약속 감지 비활성화 (2026-06-04) — FP 과다(3일 3건, 30회+ 알림). 수동만: /commit "내용"
             //_trackCommitment(lastAssistantText, { channelId: effectiveChannelId, userId: effectiveAuthor.id })
               //.catch((e) => log('debug', 'commitment-tracker outer catch', { error: e?.message }));

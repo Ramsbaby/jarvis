@@ -506,7 +506,7 @@ const EXTRACT_COOLDOWN_MAX_ENTRIES = 500; // 메모리 누수 방지 상한
  * 대화 내용에서 미래에 유용할 사실을 추출해 userMemory에 저장.
  * 메인 응답에 영향 없도록 비동기 fire-and-forget으로 호출.
  */
-export async function autoExtractMemory(userId, userMsg, botMsg, channelId = null) {
+export async function autoExtractMemory(userId, userMsg, botMsg, channelId = null, hasImages = false) {
   if (!userId || botMsg.length < EXTRACT_MIN_LEN) return;
 
   const now = Date.now();
@@ -524,7 +524,7 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
   const isFamilyChannel = !!channelId && FAMILY_CHANNEL_IDS.includes(channelId);
 
   // family 채널 전용 추출 프롬프트 — Owner/시스템 데이터 오염 방지
-  const prompt = isFamilyChannel ? [
+  let prompt = isFamilyChannel ? [
     '다음은 가족 멤버(튜터 플랫폼 강사)와 AI 자비스의 대화입니다.',
     '가족 멤버에 대한 미래 대화에 유용한 구체적 사실만 추출해줘.',
     '기준: 학생 정보(이름/국적/수업시간), 가족, 여행 계획, 건강, 생활 이벤트, 선호 패턴.',
@@ -571,6 +571,12 @@ export async function autoExtractMemory(userId, userMsg, botMsg, channelId = nul
     '출력 형식 (JSON 배열만, 다른 텍스트 없이 마지막 줄에):',
     '[{"fact":"사실1","score":4}, {"fact":"사실2","score":5}]',
   ].join('\n');
+
+  // 이미지 배관 (2026-06-04): 스크린샷·사진은 텍스트 추출기 입력에 없으나, 봇 응답엔 분석돼 있음.
+  // 이미지 첨부 턴이면 봇 응답의 이미지 유래 데이터를 우선 추출하도록 강제 (포트폴리오·표·수치 흘림 방지).
+  if (hasImages) {
+    prompt += '\n\n⚠️ 이번 대화에 사용자가 이미지(스크린샷·사진)를 첨부했다. 봇 응답에 그 이미지에서 읽어낸 데이터(보유 종목·포트폴리오 구성·수치·표·목록·화면 상태 등)가 분석돼 있으면, 그것을 미래 대화용 지속 사실로 우선 추출하라. 이미지로만 전달된 핵심 정보가 기억에서 누락되면 안 된다. (단 당일 시세·평가금액 같은 날짜 종속 수치는 제외)';
+  }
 
   try {
     // 2026-05-06 A안: ANTHROPIC_API_KEY fetch 경로 제거 (long-lived key 갱신 불가).
