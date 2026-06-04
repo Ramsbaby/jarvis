@@ -81,5 +81,15 @@ if (( HIGH > 0 )); then
   echo "$RESULTS" | jq -r '.[] | select(.count >= 3) | "  - \(.keyword): \(.count)건 (\(.description))"' | sort -t: -k2 -nr
 fi
 
+# ── P2 단정·미확인 게이트 효과 측정 (2026-06-04 신설 — 완결 루프) ──
+# stop-unverified-assertion-guard.sh가 적재하는 ledger의 violation 추세로
+# "검증 없는 단정" 패턴이 실제 줄어드는지 추적. 발동률 감소 = 게이트 효과.
+UA_LEDGER="$HOME/jarvis/runtime/ledger/unverified-assertion.jsonl"
+if [[ -f "$UA_LEDGER" ]]; then
+  UA_VIOL=$(grep -c '"status":"violation"' "$UA_LEDGER" 2>/dev/null || echo 0)
+  UA_TOTAL=$(wc -l < "$UA_LEDGER" 2>/dev/null | tr -d ' ')
+  log "P2 단정·미확인 게이트: 누적 발동 ${UA_VIOL}/${UA_TOTAL}턴 (발동률 추세 감소 = 단정 줄어듦)"
+fi
+
 log "=== Mistake Pattern Analysis end ==="
 exit 0
