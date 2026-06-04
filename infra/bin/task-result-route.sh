@@ -102,11 +102,100 @@ clean_message() {
 
 MESSAGE=$(clean_message "$MESSAGE")
 
-# --- Format for Discord (table→list, heading normalization, etc.) ---
+# --- Markdown table → bullet list converter (Discord 호환성) ---
+# Discord는 마크다운 테이블을 렌더링하지 않으므로 리스트 형식으로 변환
+# 헤더 구분선(|---|)은 제거, 나머지 행은 "- 키: 값 | 키: 값" 형식으로 변환
+convert_table_to_list() {
+    local msg="$1"
+    # 테이블 행이 없으면 그대로 반환
+    if ! printf '%s' "$msg" | grep -q '^[[:space:]]*|'; then
+        printf '%s' "$msg"
+        return
+    fi
+    local -a header_cols=()
+    local result=""
+    local in_table=0
+    local header_saved=0
+    while IFS= read -r line; do
+        # 테이블 행 감지: 줄이 | 로 시작
+        if [[ "$line" =~ ^[[:space:]]*\| ]]; then
+            in_table=1
+            # 헤더 구분선 (|---|, |:---|, |---:|, |:---:| 등) → 건너뜀
+            # grep -E 로 판별 (bash 정규식의 문자 클래스 내 | 모호함 우회)
+            if printf '%s' "$line" | grep -qE '^\|[-: |]+\|[[:space:]]*$'; then
+                continue
+            fi
+            # 헤더 행 저장 (첫 번째 테이블 행)
+            if [[ $header_saved -eq 0 ]]; then
+                header_saved=1
+                IFS='|' read -ra header_cols <<< "$line"
+                # header_cols[0]은 항상 빈 문자열(줄 맨 앞 | 때문) → 제거
+                header_cols=("${header_cols[@]:1}")
+                continue
+            fi
+            # 데이터 행 → "- 키1: 값1 | 키2: 값2" 형식 리스트로 변환
+            IFS='|' read -ra cells <<< "$line"
+            # cells[0]도 빈 문자열 → 제거
+            cells=("${cells[@]:1}")
+            local list_item=""
+            local col_idx=0
+            for cell in "${cells[@]}"; do
+                cell="${cell#"${cell%%[![:space:]]*}"}"
+                cell="${cell%"${cell##*[![:space:]]}"}"
+                if [[ -z "$cell" ]]; then continue; fi
+                local key=""
+                if [[ $col_idx -lt ${#header_cols[@]} ]]; then
+                    key="${header_cols[$col_idx]}"
+                    key="${key#"${key%%[![:space:]]*}"}"
+                    key="${key%"${key##*[![:space:]]}"}"
+                fi
+                if [[ -n "$list_item" ]]; then list_item+=" | "; fi
+                if [[ -n "$key" ]]; then
+                    list_item+="${key}: ${cell}"
+                else
+                    list_item+="${cell}"
+                fi
+                (( col_idx++ )) || true
+            done
+            if [[ -n "$list_item" ]]; then
+                result+="- ${list_item}"$'\n'
+            fi
+        else
+            if [[ $in_table -eq 1 ]]; then
+                in_table=0
+                header_saved=0
+                header_cols=()
+            fi
+            result+="${line}"$'\n'
+        fi
+    done <<< "$msg"
+    result="${result%$'\n'}"
+    printf '%s' "$result"
+}
+
+MESSAGE=$(convert_table_to_list "$MESSAGE")
+
+# --- Format for Discord + pre-send validation ---
 FORMAT_SCRIPT="${BOT_HOME}/bin/format-discord.mjs"
+VALIDATION_LOG="${BOT_HOME}/logs/discord-validation.log"
+_VAL_TMPFILE=$(mktemp /tmp/discord-val-XXXXXX.json 2>/dev/null || echo "")
 if [[ -f "$FORMAT_SCRIPT" ]]; then
-    FORMATTED=$(printf '%s' "$MESSAGE" | node "$FORMAT_SCRIPT" 2>/dev/null) || true
+    FORMATTED=$(printf '%s' "$MESSAGE" \
+        | DISCORD_VALIDATION_FILE="${_VAL_TMPFILE}" node "$FORMAT_SCRIPT" 2>/dev/null) || true
     if [[ -n "$FORMATTED" ]]; then MESSAGE="$FORMATTED"; fi
+
+    # Read validation result, clean up temp file immediately, log if any issues
+    if [[ -n "$_VAL_TMPFILE" && -f "$_VAL_TMPFILE" ]]; then
+        _val_json=$(cat "$_VAL_TMPFILE" 2>/dev/null || echo "[]")
+        rm -f "$_VAL_TMPFILE" 2>/dev/null || true
+        _val_count=$(printf '%s' "$_val_json" | jq 'length' 2>/dev/null || echo "0")
+        if [[ "$_val_count" -gt 0 ]]; then
+            _kst=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M:%S')
+            printf '[%s] [%s] issues=%s %s\n' \
+                "$_kst" "$TASK_ID" "$_val_count" "$_val_json" \
+                >> "$VALIDATION_LOG" 2>/dev/null || true
+        fi
+    fi
 fi
 
 # --- Webhook URL resolver ---
@@ -254,7 +343,24 @@ route_to_discord() {
     # CV2_DATA가 있으면 텍스트 중복 전송 생략 — 카드가 메인 콘텐츠
     if [[ -z "$CV2_JSON" ]]; then
         while [[ $offset -lt $total ]]; do
-            local chunk="${message:$offset:1990}"
+            local raw="${message:$offset:1990}"
+            local chunk="$raw"
+            # 마지막 청크가 아니면 마크다운 경계에서 분할 (줄 중간 절단 방지)
+            if [[ $((offset + 1990)) -lt $total ]]; then
+                local t
+                # 1순위: 마지막 단락 구분 (\n\n)
+                t="${raw%$'\n\n'*}"
+                if [[ ${#t} -gt 100 && "${t}" != "${raw}" ]]; then
+                    chunk="${t}"$'\n\n'
+                else
+                    # 2순위: 마지막 줄바꿈 (\n)
+                    t="${raw%$'\n'*}"
+                    if [[ ${#t} -gt 0 && "${t}" != "${raw}" ]]; then
+                        chunk="${t}"$'\n'
+                    fi
+                    # 3순위: fallback → raw 그대로 (단일 행이 1990자 초과하는 극단 케이스)
+                fi
+            fi
             local payload
             payload=$(jq -n --arg content "$chunk" '{"content": $content, "flags": 4, "allowed_mentions": {"parse": []}}')
             local http_code
@@ -264,7 +370,7 @@ route_to_discord() {
             if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
                 echo "ERROR: Discord webhook returned HTTP $http_code for task $TASK_ID" >&2
             fi
-            offset=$((offset + 1990))
+            offset=$((offset + ${#chunk}))
             # Rate limit protection between chunks
             if [[ $offset -lt $total ]]; then sleep 1; fi
         done

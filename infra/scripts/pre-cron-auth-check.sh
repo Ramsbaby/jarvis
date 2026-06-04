@@ -57,6 +57,29 @@ if (( _CM_COUNT > 5 )); then
     log "✅ context-mode 좀비 제거 완료"
 fi
 
+# 단일 장기 폭주 context-mode 가드 (2026-06-03 추가)
+# 개수 임계값(>5) 밑이라도, CPU 80%+ 로 1시간 이상 헛도는 고아 좀비를 개별 종료.
+# 근거: 정상 context-mode는 질의 시에만 잠깐 CPU 사용 → 장시간 고CPU = 고아/폭주.
+# (2026-06-03 사고: 단일 고아가 100% CPU로 2일 버텼으나 '>5개' 가드에 안 걸림)
+while read -r _pid _cpu _etime; do
+    [[ -z "${_pid:-}" ]] && continue
+    _cpu_int=${_cpu%%.*}
+    _secs=$(awk -v t="$_etime" 'BEGIN{
+        n=split(t,a,"-"); d=0; rest=t;
+        if(n==2){d=a[1]; rest=a[2]}
+        m=split(rest,b,":");
+        if(m==3){s=b[1]*3600+b[2]*60+b[3]}
+        else if(m==2){s=b[1]*60+b[2]}
+        else {s=b[1]}
+        print d*86400+s
+    }')
+    if (( _cpu_int >= 80 && _secs >= 3600 )); then
+        log "⚠️ context-mode 장기 폭주 PID=${_pid} (CPU ${_cpu}%, ${_secs}s) — 개별 SIGKILL"
+        kill -9 "$_pid" 2>/dev/null || true
+        log "✅ context-mode 장기 폭주 ${_pid} 제거 완료"
+    fi
+done < <(ps -Ao pid=,%cpu=,etime=,command= | grep "context-mode" | grep -v "grep" | awk '{print $1, $2, $3}')
+
 # PATH 설정 (크론 환경)
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS

@@ -4,7 +4,7 @@
 set -euo pipefail
 
 SKILLS_FILE="${HOME}/jarvis/runtime/skills/skills.jsonl"
-BOT_LOG="${HOME}/jarvis/runtime/logs/bot-cron.log"
+BOT_LOG="${HOME}/jarvis/runtime/logs/council-insight.log"
 TODAY=$(TZ=Asia/Seoul date '+%Y-%m-%d')
 KST=$(TZ=Asia/Seoul date '+%H:%M KST')
 
@@ -35,7 +35,7 @@ echo ""
 # 3. skills.jsonl 현황
 if [[ -f "$SKILLS_FILE" ]]; then
     today_count=$(grep -c "\"${TODAY}" "$SKILLS_FILE" 2>/dev/null || echo 0)
-    total_count=$(wc -l < "$SKILLS_FILE" 2>/dev/null | tr -d ' ' || echo 0)
+    total_count=$(wc -l < "$SKILLS_FILE" 2>/dev/null | tr -d ' \n' || echo 0)
     echo "📚 skills.jsonl — 오늘 **${today_count}건** / 누계 **${total_count}건**"
     if [[ "$today_count" -gt 0 ]]; then
         echo ""
@@ -127,11 +127,12 @@ echo ""
 echo "### 🧬 진화 신호 (Evolution Signal)"
 if [[ -f "$GRADES_FILE" ]]; then
     total_entries=$(wc -l < "$GRADES_FILE" 2>/dev/null | tr -d ' ' || echo 0)
-    if [[ "$total_entries" -ge 1 ]]; then
+    if [[ "$total_entries" -ge 3 ]]; then
         # 최근 5건 점수 평균 (Python3 — bc보다 float 안정적)
         avg_score=$(tail -5 "$GRADES_FILE" | jq -r '.score' | \
             python3 -c "import sys; nums=[float(l) for l in sys.stdin if l.strip()]; print(f'{sum(nums)/len(nums):.2f}' if nums else '0')" 2>/dev/null || echo "0")
-        echo "  최근 5건 평균 점수: **${avg_score} / 5.0**"
+        actual_count=$(tail -5 "$GRADES_FILE" | wc -l | tr -d ' \n')
+        echo "  최근 ${actual_count}건 평균 점수: **${avg_score} / 5.0**"
 
         # Python3 float 비교
         needs_improve=$(python3 -c "print('yes' if float('${avg_score}') < 3.0 else 'no')" 2>/dev/null || echo "no")
@@ -160,3 +161,37 @@ fi
 echo ""
 echo "---"
 echo "💡 0건이면 LLM이 패턴 없다고 판단 = 정상 동작. 3일 연속 0건이면 프롬프트 검토 권장."
+
+# 7. 🔗 SKILL → wiki/_facts.md 브릿지 (학습된 패턴 봇 응답에 반영)
+FACTS_FILE="${HOME}/jarvis/runtime/wiki/ops/_facts.md"
+if [[ -f "$SKILLS_FILE" ]]; then
+    added_count=0
+    while IFS= read -r skill_line; do
+        [[ -z "$skill_line" ]] && continue
+        skill_id=$(echo "$skill_line" | jq -r '.id // ""' 2>/dev/null || true)
+        skill_date=$(echo "$skill_line" | jq -r '.date // "$TODAY"' 2>/dev/null || echo "$TODAY")
+        # 날짜에서 시간 부분 제거 (YYYY-MM-DD만 추출)
+        skill_date_short=$(echo "$skill_date" | cut -c1-10)
+        skill_title=$(echo "$skill_line" | jq -r '.title // ""' 2>/dev/null || true)
+        skill_pattern=$(echo "$skill_line" | jq -r '.pattern // ""' 2>/dev/null | head -c 120 || true)
+        skill_type=$(echo "$skill_line" | jq -r '.type // "pattern"' 2>/dev/null || true)
+
+        [[ -z "$skill_id" || -z "$skill_title" ]] && continue
+
+        # 중복 체크: skill_id가 이미 _facts.md에 있으면 스킵
+        if grep -q "source:skill.*$skill_id" "$FACTS_FILE" 2>/dev/null; then
+            continue
+        fi
+
+        # 팩트 형식으로 변환: - [날짜] [source:skill:ID] [type] 제목: 패턴요약
+        fact_line="- [${skill_date_short}] [source:skill:${skill_id}] [${skill_type}] ${skill_title}: ${skill_pattern}"
+        echo "$fact_line" >> "$FACTS_FILE"
+        added_count=$((added_count+1))
+    done < "$SKILLS_FILE"
+
+    if [[ "$added_count" -gt 0 ]]; then
+        echo "🔗 SKILL → wiki/_facts.md 브릿지: ${added_count}건 신규 적재"
+    else
+        echo "🔗 SKILL → wiki/_facts.md 브릿지: 신규 항목 없음 (모두 기적재)"
+    fi
+fi

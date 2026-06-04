@@ -308,24 +308,8 @@ check_tqqq_proactive() {
 손절 실행 여부를 결정하세요, 주인님." && _cd_set "tqqq_price"
 }
 
-# ─── 패턴 5: 일일 위트 (아침 인사) ───────────────────────────
-check_daily_wit() {
-    _cd_check "daily_wit" 86400 && return 0
-    local h
-    h=$(date '+%-H')
-    if (( h < 7 || h >= 9 )); then return 0; fi
-
-    local idx msg
-    idx=$(( $(date '+%j') % 5 ))
-    case "$idx" in
-        0) msg="☕ 좋은 아침입니다, 주인님. 세계 정복 전 커피 한 잔이 선행되어야 할 것 같습니다." ;;
-        1) msg="🌅 주인님, 오늘 일정을 시작하시겠습니까? 물론 기상 5분은 드리겠습니다." ;;
-        2) msg="⚙️ 전 시스템 정상 가동 중입니다. 주인님도 정상 가동 상태이시길 바랍니다." ;;
-        3) msg="🔋 에너지 레벨 불명, 주인님. 충전 완료 상태로 판단하고 전 시스템 풀 출력 대기 중입니다." ;;
-        *) msg="🤖 어제보다 나은 하루가 되길 바랍니다. 데이터는 그것이 가능하다고 말하고 있습니다." ;;
-    esac
-    emit "daily_wit" "jarvis" "$msg" && _cd_set "daily_wit"
-}
+# ─── 패턴 5: 일일 위트 (비활성화 2026-06-02 — 사용자 요청) ───
+# check_daily_wit() { ... }
 
 # ─── 메인 루프 ─────────────────────────────────────────────────
 log "=== proactive-engine v2 시작 (mode=$(get_time_mode), poll=${POLL_INTERVAL}s) ==="
@@ -363,7 +347,7 @@ while true; do
     check_auth_expiry_proactive || true
     check_cron_failures         || true
     check_tqqq_proactive        || true
-    check_daily_wit             || true
+    # check_daily_wit             || true  # 비활성화 2026-06-02
 
     sleep "$POLL_INTERVAL"
 done

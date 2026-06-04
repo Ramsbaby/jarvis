@@ -2,9 +2,9 @@
   "enabled": false,
   "_comment": "Gemini 3.5 Flash 비핵심 태스크 라우팅 설정",
   "_activationNote": "도입 승인 후 enabled를 true로 변경. 거절 시 false 유지.",
-  "version": "1.0",
+  "version": "1.1",
   "created_at": "2026-05-22T00:00:00Z",
-  "last_updated_at": "2026-05-22T00:00:00Z",
+  "last_updated_at": "2026-05-28T00:00:00Z",
   "routing_rules": {
     "rules": [
       {
@@ -180,5 +180,126 @@
     "decision": null,
     "decision_reason": null,
     "decided_by": null
+  },
+
+  "deepseek_v4_pro_routing": {
+    "_comment": "DeepSeek V4-Pro(deepseek-reasoner) 라우팅 검토 — tech-deepseek-v4-pro-routing 태스크",
+    "_review_date": "2026-05-28",
+    "proposal_status": "pending_owner_decision",
+    "model_info": {
+      "model_id": "deepseek-reasoner",
+      "display_name": "DeepSeek V4-Pro",
+      "architecture": "1.6T 파라미터 MoE (활성 49B/token)",
+      "context_window": 1000000,
+      "license": "MIT 오픈웨이트",
+      "swe_bench_score": "80.6%",
+      "cost_per_1m_input_usd": 0.55,
+      "cost_per_1m_output_usd": 2.19,
+      "vs_claude_haiku_savings_pct": 31,
+      "vs_gpt55_savings_pct": 97,
+      "_pricing_note": "2026-05-28 기준 DeepSeek API 공식 가격. Cache hit 시 input $0.14/1M."
+    },
+    "existing_deepseek_usage": {
+      "model": "deepseek-chat",
+      "alias": "flash",
+      "current_tasks": ["RAG 전처리", "분류", "요약 경량"],
+      "note": "models.json의 flash 티어로 이미 deepseek-chat(V4-Flash) 사용 중. V4-Pro는 코딩/추론 강화 버전."
+    },
+    "routable_tasks": [
+      {
+        "task_id": "news-briefing",
+        "name": "뉴스 브리핑",
+        "schedule": "daily",
+        "current_model": "claude-haiku-4-5-20251001",
+        "routing_target": "deepseek-reasoner",
+        "rationale": "외부 뉴스 수집 후 요약 생성. 정형 작업으로 품질 리스크 낮음.",
+        "priority": "high"
+      },
+      {
+        "task_id": "daily-summary",
+        "name": "일간 요약",
+        "schedule": "daily",
+        "current_model": "claude-haiku-4-5-20251001",
+        "routing_target": "deepseek-reasoner",
+        "rationale": "일일 활동 텍스트 요약. 반복 패턴 정형화 → 캐시 히트율 높아 비용 추가 절감.",
+        "priority": "high"
+      },
+      {
+        "task_id": "system-health",
+        "name": "시스템 헬스 리포트",
+        "schedule": "daily",
+        "current_model": "claude-haiku-4-5-20251001",
+        "routing_target": "deepseek-reasoner",
+        "rationale": "로그/메트릭 수치 해석 후 텍스트 정리. SWE-bench 80.6% 수준이면 충분.",
+        "priority": "high"
+      },
+      {
+        "task_id": "agent-perf-weekly",
+        "name": "에이전트 주간 성과 리포트",
+        "schedule": "weekly",
+        "current_model": "claude-haiku-4-5-20251001",
+        "routing_target": "deepseek-reasoner",
+        "rationale": "통계 수치 텍스트화. 단순 포매팅 작업.",
+        "priority": "medium"
+      },
+      {
+        "task_id": "github-monitor",
+        "name": "GitHub 모니터링",
+        "schedule": "daily",
+        "current_model": "claude-haiku-4-5-20251001",
+        "routing_target": "deepseek-reasoner",
+        "rationale": "PR/이슈 분류 및 요약. 코딩 컨텍스트 이해력 필요 → V4-Pro 코딩 특화 강점 활용.",
+        "priority": "high"
+      },
+      {
+        "task_id": "log-analysis",
+        "name": "로그 분석",
+        "schedule": "daily",
+        "current_model": "claude-haiku-4-5-20251001",
+        "routing_target": "deepseek-reasoner",
+        "rationale": "에러 로그 패턴 분류/요약. 반복성 높아 캐시 효율 극대화.",
+        "priority": "medium"
+      },
+      {
+        "task_id": "memory-cleanup",
+        "name": "메모리/RAG 정리",
+        "schedule": "weekly",
+        "current_model": "claude-haiku-4-5-20251001",
+        "routing_target": "deepseek-reasoner",
+        "rationale": "오래된 RAG 항목 중요도 재분류. 정형 판단 작업.",
+        "priority": "low"
+      },
+      {
+        "task_id": "claude-md-audit",
+        "name": "CLAUDE.md 감사 (1차 스캔)",
+        "schedule": "weekly",
+        "current_model": "claude-haiku-4-5-20251001",
+        "routing_target": "deepseek-reasoner",
+        "rationale": "파일 변경 감지 및 패턴 매칭. 최종 판단은 Claude 유지 가능.",
+        "priority": "low"
+      }
+    ],
+    "protected_tasks_do_not_route": [
+      "council", "morning-standup", "macro-briefing",
+      "career-strategy", "market-analysis", "board-meeting-am",
+      "ceo-daily-digest", "council-insight", "tqqq-monitor"
+    ],
+    "cost_analysis": {
+      "current_haiku_cost_per_1m_input": 0.80,
+      "current_haiku_cost_per_1m_output": 4.00,
+      "deepseek_v4pro_cost_per_1m_input": 0.55,
+      "deepseek_v4pro_cost_per_1m_output": 2.19,
+      "input_savings_pct": 31,
+      "output_savings_pct": 45,
+      "estimated_monthly_routable_tasks": 8,
+      "estimated_monthly_saving_usd": "~$2–5",
+      "_note": "비용 절감 규모는 소액이나, 기존 deepseek-chat(flash) 인프라 재활용으로 추가 구현 비용 거의 없음."
+    },
+    "implementation_note": {
+      "existing_client": "/Users/ramsbaby/jarvis/infra/lib/deepseek-client.mjs",
+      "model_change": "DEFAULT_MODEL을 deepseek-chat → deepseek-reasoner로 전환 또는 task별 오버라이드",
+      "api_key": "기존 DEEPSEEK_API_KEY 그대로 사용 가능",
+      "effort": "낮음 — 클라이언트 코드 1줄 수정, 라우팅 룰 활성화"
+    }
   }
 }

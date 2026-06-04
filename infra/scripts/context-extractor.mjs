@@ -192,10 +192,13 @@ function hasKeywords(text, keywords) {
 }
 
 // ── Claude API 호출 ───────────────────────────────────────────────────────────
+const CLAUDE_BIN = process.env.CLAUDE_BIN ||
+  (spawnSync('command', ['-v', 'claude'], { shell: true, encoding: 'utf8' }).stdout?.trim() || '/opt/homebrew/bin/claude');
+
 function callClaude(prompt, content) {
   const fullPrompt = `${prompt}\n\n---\n${content}`;
   const result = spawnSync(
-    '/opt/homebrew/bin/claude',
+    CLAUDE_BIN,
     ['-p', fullPrompt, '--output-format', 'json',
      '--permission-mode', 'bypassPermissions',
      '--strict-mcp-config', '--mcp-config', MCP_CONFIG],

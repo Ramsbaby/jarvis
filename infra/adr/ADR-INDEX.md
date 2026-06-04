@@ -23,3 +23,4 @@
 | ADR-019 | Self-healing Degraded Mode (L3/L4) | accepted | 2026-03-31 |
 | ADR-020 | Langfuse 자체 호스팅 LLM 옵저버빌리티 | accepted | 2026-03-31 |
 | ADR-021 | 자기진화 루프 (Self-Evolution Loop) | accepted | 2026-03-31 |
+| ADR-022 | Adaptive Model 비용 재산정 및 라우팅 룰 업데이트 | accepted | 2026-05-25 |

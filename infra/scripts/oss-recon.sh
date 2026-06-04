@@ -16,14 +16,7 @@ log() {
     echo "[$(date '+%F %T')] [oss-recon] $1" | tee -a "$LOG"
 }
 
-log "START — 주간 OSS 경쟁자 분석"
-
-"$NODE" "$JARVIS_HOME/scripts/oss-manager.mjs" --mode recon >> "$LOG" 2>&1
-EXIT_CODE=$?
-
-if [[ $EXIT_CODE -eq 0 ]]; then
-    log "SUCCESS"
-else
-    log "ERROR — exit $EXIT_CODE"
-    exit $EXIT_CODE
-fi
+log "DEPRECATED — recon 모드는 2026-04-21 oss-manager.mjs에서 제거됨"
+log "주간 OSS 경쟁자 분석은 recon-weekly LA (com.jarvis.recon-weekly, 월 09:00)가 담당합니다"
+log "이 LA(com.jarvis.oss-recon)는 제거 또는 비활성화를 권고합니다. exit 0으로 정상 종료"
+exit 0

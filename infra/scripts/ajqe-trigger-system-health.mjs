@@ -186,7 +186,7 @@ function checkPausedCrons() {
 // ── 2. RAG 인덱서 stale → 조사 보고 (자동 disable은 crontab 편집이라 회피) ──
 function checkRagIndexer() {
   const RAG_THRESHOLDS = {
-    'rag-conversations.log': 2,
+    // 'rag-conversations.log': 2,  // 비활성화 2026-05-07 — claude-sessions 인덱싱 차단(LanceDB bloat). 크론 영구 disabled.
     'rag-compact.log': 26,
     'rag-bug-detector.log': 8,
   };

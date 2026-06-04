@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# oauth-refresh-bot.sh — 봇·크론 전용 OAuth 토큰 자동 갱신 (격리 패밀리)
+#
+# 배경: 2026-05-30. 봇이 setup-token 정적 토큰(갱신키 없음)을 써서 만료 시 자동복구 불가 →
+#       오늘 19:34 봇 토큰 사망, 수동 재발급. 메인 oauth-refresh.sh는 ~/.claude 전용이라 봇과 무관.
+# 해법: 봇 디렉터리(~/.claude-bot)에 정식 /login으로 발급한 갱신키 있는 credentials를 두고,
+#       이 스크립트가 '선제 단일 갱신자'로 동작. 만료 2시간 전 미리 갱신 → 봇 SDK가 만료를
+#       절대 못 느낌 → 봇 SDK 자체갱신 트리거 0 → refresh_token reuse race 구조적 소멸.
+#       (ETHOS v3 "선제 갱신 단일화" A안을 봇 격리 패밀리에 적용)
+#
+# 메인 oauth-refresh.sh와의 관계: 완전 독립. 다른 credentials, 다른 PID/락/ledger 파일.
+#       메인 스크립트는 일절 수정하지 않음 (5시간 사고 직후 안전 우선 — 복제 격리).
+#
+# 봇 재시작 불필요: 봇 plist가 CLAUDE_CONFIG_DIR=~/.claude-bot을 쓰면 봇이 메시지마다 spawn하는
+#       claude가 매번 credentials.json을 새로 읽음 → 파일만 갱신하면 다음 spawn이 신선한 토큰 사용.
+#
+# 호출: LaunchAgent ai.jarvis.oauth-refresh-bot (30분 주기)
+# 종료: 0=정상(갱신 or 여유), 1=갱신 실패
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+set -euo pipefail
+
+# ── 격리 패밀리 전용 경로 (메인과 충돌 방지) ──
+CREDENTIALS_FILE="${HOME}/.claude-bot/.credentials.json"
+TOKEN_URL="https://api.anthropic.com/v1/oauth/token"
+CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+LOG="${BOT_HOME}/logs/oauth-refresh-bot.log"
+LEDGER="${BOT_HOME}/ledger/oauth-refresh-bot-ledger.jsonl"
+RENEW_THRESHOLD_SECS=18000   # 만료 5시간 전 선제 갱신 — 2h에서 상향(race 완전 차단, subprocess 임계값 ~5분과 충분한 간격)
+
+_PID="/tmp/jarvis-oauth-refresh-bot.pid"
+_LAST_FAIL="/tmp/jarvis-oauth-refresh-bot.last-fail"
+_FAIL_COUNT="/tmp/jarvis-oauth-refresh-bot.fail-count"
+_INVALID_MARKER="${BOT_HOME}/state/oauth-bot-invalid-grant-last-alert"
+
+mkdir -p "$(dirname "$LOG")" "$(dirname "$LEDGER")" "${BOT_HOME}/state" 2>/dev/null || true
+log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh-bot] $*" >> "${LOG}"; }
+
+# ── 중복 실행 방지 ──
+if [[ -f "$_PID" ]]; then
+  _OLD=$(cat "$_PID" 2>/dev/null || echo "")
+  if [[ -n "$_OLD" ]] && kill -0 "$_OLD" 2>/dev/null; then
+    log "already running (PID $_OLD) — skip"; exit 0
+  fi
+fi
+echo $$ > "$_PID"
+trap 'rm -f "$_PID"' EXIT
+
+# ── 실패 backoff (연속 실패 시 지수 backoff, 상한 1h) — rate_limit 영구화 방지 ──
+if [[ -f "$_LAST_FAIL" ]]; then
+  _last_fail=$(cat "$_LAST_FAIL" 2>/dev/null || echo "0")
+  _fc=$(cat "$_FAIL_COUNT" 2>/dev/null || echo "0")
+  _now=$(date +%s); _delta=$((_now - _last_fail))
+  if (( _fc > 6 )); then _fc=6; fi
+  _backoff=$(( (1 << _fc) * 60 )); if (( _backoff > 3600 )); then _backoff=3600; fi
+  if (( _delta < _backoff )); then
+    log "backoff 스킵 — ${_delta}s < ${_backoff}s"; exit 0
+  fi
+fi
+
+# ── credentials 존재 + 갱신키 확인 ──
+if [[ ! -f "${CREDENTIALS_FILE}" ]]; then
+  log "ERROR: ${CREDENTIALS_FILE} 없음 — 'CLAUDE_CONFIG_DIR=~/.claude-bot claude /login' 필요"; exit 1
+fi
+REFRESH_TOKEN=$(node -e "const d=JSON.parse(require('fs').readFileSync('${CREDENTIALS_FILE}','utf-8'));process.stdout.write(d.claudeAiOauth?.refreshToken||'')" 2>/dev/null)
+EXPIRES_AT=$(node -e "const d=JSON.parse(require('fs').readFileSync('${CREDENTIALS_FILE}','utf-8'));process.stdout.write(String(d.claudeAiOauth?.expiresAt||0))" 2>/dev/null)
+if [[ -z "${REFRESH_TOKEN}" ]]; then
+  log "ERROR: refreshToken 없음 — 봇 디렉터리는 setup-token이 아닌 /login으로 발급해야 갱신키가 생김"; exit 1
+fi
+
+NOW_MS=$(node -e "process.stdout.write(String(Date.now()))")
+REMAINING_SECS=$(( (EXPIRES_AT - NOW_MS) / 1000 ))
+log "토큰 만료까지 ${REMAINING_SECS}초 남음 (선제 임계값: ${RENEW_THRESHOLD_SECS}초)"
+
+if (( REMAINING_SECS > RENEW_THRESHOLD_SECS )); then
+  log "갱신 불필요 — 여유 있음"; exit 0
+fi
+
+log "선제 갱신 시작 (만료 ${REMAINING_SECS}초 전)"
+
+_do_grant() {
+  curl -s -X POST "${TOKEN_URL}" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -H "anthropic-version: 2023-06-01" \
+    --data-urlencode "grant_type=refresh_token" \
+    --data-urlencode "refresh_token=${1}" \
+    --data-urlencode "client_id=${CLIENT_ID}" \
+    --max-time 15 2>/dev/null
+}
+_parse() { echo "${1}" | node -e "try{const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));process.stdout.write(String(d['${2}']||''))}catch(e){process.stdout.write('')}" 2>/dev/null; }
+
+RESPONSE=$(_do_grant "${REFRESH_TOKEN}")
+ACCESS_TOKEN=$(_parse "${RESPONSE}" "access_token")
+NEW_REFRESH_TOKEN=$(_parse "${RESPONSE}" "refresh_token")
+EXPIRES_IN=$(_parse "${RESPONSE}" "expires_in")
+
+# ── invalid_grant 자가복구: 외부(봇 SDK)가 refresh_token 회전했으면 재로드 후 1회 재시도 ──
+if [[ -z "${ACCESS_TOKEN}" ]]; then
+  _err=$(echo "${RESPONSE}" | node -e "try{const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));process.stdout.write(d.error?.type||d.error||'')}catch(e){process.stdout.write('')}" 2>/dev/null || echo "")
+  if [[ "${_err}" == "invalid_grant" ]]; then
+    log "⚠️ invalid_grant — refresh_token 회전 race 추정, credentials 재로드 후 1회 재시도"
+    sleep 2
+    RELOAD=$(node -e "const d=JSON.parse(require('fs').readFileSync('${CREDENTIALS_FILE}','utf-8'));process.stdout.write(d.claudeAiOauth?.refreshToken||'')" 2>/dev/null)
+    if [[ -n "${RELOAD}" && "${RELOAD}" != "${REFRESH_TOKEN}" ]]; then
+      log "📥 refresh_token 외부 회전 감지 — 새 토큰으로 재시도"
+      RESPONSE=$(_do_grant "${RELOAD}")
+      ACCESS_TOKEN=$(_parse "${RESPONSE}" "access_token")
+      NEW_REFRESH_TOKEN=$(_parse "${RESPONSE}" "refresh_token")
+      EXPIRES_IN=$(_parse "${RESPONSE}" "expires_in")
+      [[ -n "${ACCESS_TOKEN}" ]] && log "✅ 재시도 성공 — race 자동 복구"
+    else
+      log "📌 refresh_token 변화 없음 — 진짜 invalid_grant (수동 /login 필요)"
+    fi
+  fi
+fi
+
+# ── 최종 실패 처리 ──
+if [[ -z "${ACCESS_TOKEN}" ]]; then
+  _err_type=$(echo "${RESPONSE}" | node -e "try{const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));process.stdout.write(d.error?.type||d.error||'unknown')}catch(e){process.stdout.write('parse_error')}" 2>/dev/null || echo "unknown")
+  log "ERROR: 갱신 실패 — ${RESPONSE:0:200}"
+  printf '{"ts":"%s","result":"fail","err_type":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${_err_type}" >> "$LEDGER"
+  date +%s > "$_LAST_FAIL"
+  echo "$(( $(cat "$_FAIL_COUNT" 2>/dev/null || echo 0) + 1 ))" > "$_FAIL_COUNT"
+  if [[ "${_err_type}" == "invalid_grant" ]]; then
+    _now=$(date +%s); _last_alert=$(cat "${_INVALID_MARKER}" 2>/dev/null || echo "0")
+    if (( _now - _last_alert > 3600 )); then
+      echo "${_now}" > "${_INVALID_MARKER}"
+      bash "${BOT_HOME}/scripts/alert.sh" critical \
+        "🚨 봇 OAuth refresh_token 무효 — 봇 디렉터리 /login 필요" \
+        "봇 격리 토큰(~/.claude-bot)의 refresh_token이 죽었습니다. 'CLAUDE_CONFIG_DIR=~/.claude-bot claude /login' 1회 필요." 2>/dev/null || true
+    fi
+  fi
+  exit 1
+fi
+
+# ── 성공: 원자적 기록 ──
+NEW_EXPIRES_AT=$(node -e "process.stdout.write(String(Date.now() + ${EXPIRES_IN} * 1000))")
+FINAL_REFRESH="${NEW_REFRESH_TOKEN:-${REFRESH_TOKEN}}"
+node --input-type=module << JSEOF
+import { readFileSync, writeFileSync, renameSync } from 'fs';
+const path = '${CREDENTIALS_FILE}';
+const d = JSON.parse(readFileSync(path, 'utf-8'));
+d.claudeAiOauth.accessToken = '${ACCESS_TOKEN}';
+d.claudeAiOauth.refreshToken = '${FINAL_REFRESH}';
+d.claudeAiOauth.expiresAt = ${NEW_EXPIRES_AT};
+const tmp = path + '.tmp.' + process.pid;
+writeFileSync(tmp, JSON.stringify(d, null, 2));
+renameSync(tmp, path);
+JSEOF
+chmod 600 "${CREDENTIALS_FILE}"
+
+log "✅ 선제 갱신 완료 — 새 만료: $(node -e "process.stdout.write(new Date(${NEW_EXPIRES_AT}).toISOString())")"
+printf '{"ts":"%s","result":"success","new_expires_at":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${NEW_EXPIRES_AT}" >> "$LEDGER"
+rm -f "$_LAST_FAIL" "$_FAIL_COUNT"
+exit 0

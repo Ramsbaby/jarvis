@@ -16,9 +16,7 @@ fi
 
 NEW_TOKEN="$1"
 CRED="${HOME}/.claude/.credentials.json"
-# 자동화 토큰 SSoT — 래퍼(~/.local/bin/claude)가 읽는 경로와 반드시 일치해야 함.
-# 모든 SDK 호출(pathToClaudeCodeExecutable)이 래퍼를 통과하므로, 래퍼가 보편 주입점.
-TOKEN_FILE="${LONG_LIVED_TOKEN_FILE:-${HOME}/.claude-bot/.long-lived-token}"
+TOKEN_FILE="${HOME}/.claude/.long-lived-token"
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LEDGER="${BOT_HOME}/ledger/oauth-refresh-ledger.jsonl"
 
@@ -28,8 +26,10 @@ if [[ ! "$NEW_TOKEN" =~ ^sk-ant-oat01- ]]; then
     exit 1
 fi
 
-# [B안 2026-06-01] credentials.json은 더 이상 변경하지 않으므로 백업 불필요.
-#   credentials.json = 주인님 풀스코프 로그인(원격제어) 전용. 자동화는 $TOKEN_FILE 주입으로 격리.
+# 백업
+BACKUP="${CRED}.backup-rotate-$(date +%Y%m%d-%H%M%S)"
+cp "$CRED" "$BACKUP"
+echo "✅ 백업: $BACKUP"
 
 # API ping 사전 검증 (주입 전에 새 토큰이 유효한지)
 HTTP=$(curl -sS -o /dev/null -w "%{http_code}" -X POST https://api.anthropic.com/v1/messages \
@@ -47,16 +47,25 @@ echo "✅ 새 토큰 사전 검증 통과 (HTTP 200)"
 
 # 토큰 파일 갱신 (600)
 umask 077
-mkdir -p "$(dirname "$TOKEN_FILE")"
 printf '%s\n' "$NEW_TOKEN" > "$TOKEN_FILE"
 chmod 600 "$TOKEN_FILE"
 echo "✅ $TOKEN_FILE 갱신 (600)"
 
-# [B안 2026-06-01] credentials.json 주입 제거.
-#   과거 Gen1은 여기서 accessToken을 long-lived로 덮어써 모든 채널을 inference-only로 만들었고,
-#   그 결과 /remote-control이 막혔다. B안은 credentials.json(로그인 토큰)을 보존하고,
-#   자동화는 automation-auth.sh가 위 $TOKEN_FILE 의 토큰을 CLAUDE_CODE_OAUTH_TOKEN으로 주입한다.
-echo "ℹ️  credentials.json 미변경 (B안 듀얼 토큰: 로그인 토큰 보존 → 원격제어 유지)"
+# credentials.json 주입 (accessToken만, expiresAt은 기존 값 유지)
+# 2026-05-20 사고: 이전 버전이 expiresAt을 +1년으로 위조했으나, Anthropic 서버는 실제 발급 만료(약 8h)를
+#                  강제 → credentials.json만 1년처럼 보이고 실제로는 8h 후 401. healthcheck가 사후 적발하는
+#                  사이클이 반복. 이제 expiresAt은 절대 위조하지 않는다.
+python3 <<PYEOF
+import json, os
+p = '$CRED'
+d = json.load(open(p))
+d['claudeAiOauth']['accessToken'] = '$NEW_TOKEN'
+# expiresAt 위조 금지 — 실제 토큰 수명은 Anthropic 서버가 결정
+tmp = p + '.tmp'
+with open(tmp, 'w') as f: json.dump(d, f, indent=2)
+os.replace(tmp, p)
+PYEOF
+echo "✅ credentials.json 주입 완료 (expiresAt 위조 없음)"
 
 # 헬스 체크 즉시 실행
 if [[ -x "${BOT_HOME}/scripts/long-lived-token-healthcheck.sh" ]]; then

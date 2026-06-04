@@ -1185,6 +1185,30 @@ export async function* createClaudeSession(prompt, {
     } catch { /* best-effort */ }
   }
 
+  // 🧠 학습된 운영 패턴 주입 (2026-06-04 — skills.jsonl → systemParts 직접 주입)
+  // council-insight가 발견한 패턴을 응답 직전에 참조 — "학습 → 저장 → 적용" 루프 완성
+  if (isOwner && !_isEmotionalTurn) {
+    try {
+      const _skillsPath = join(BOT_HOME, 'skills', 'skills.jsonl');
+      if (existsSync(_skillsPath)) {
+        const _rawLines = readFileSync(_skillsPath, 'utf-8').trim().split('\n').filter(Boolean);
+        const _recentSkills = _rawLines.slice(-3).map(l => {
+          try {
+            const s = JSON.parse(l);
+            return `- [${s.type || 'pattern'}] ${s.title}: ${(s.pattern || '').slice(0, 120)}`;
+          } catch { return null; }
+        }).filter(Boolean);
+        if (_recentSkills.length > 0) {
+          systemParts.push('',
+            '--- 🧠 Jarvis 학습 패턴 (최근 3건) ---',
+            '이전 운영에서 학습한 패턴입니다. 동일 상황 감지 시 참조하십시오:',
+            _recentSkills.join('\n')
+          );
+        }
+      }
+    } catch { /* best-effort — 실패해도 응답 계속 */ }
+  }
+
   // 🛡️ 가드 #9 (2026-04-29) — 실측 의무 트리거 (Evidence Mandate)
   // 사용자 prompt가 인프라/시스템 검토 카테고리(딥다이브·검토·분석·왜·메카니즘 등)면
   // 시스템 프롬프트에 실측 의무 룰 강제 prepend → 거짓 단정 패턴 6건 인프라 차원 차단.

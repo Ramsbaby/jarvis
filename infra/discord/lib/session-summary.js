@@ -233,7 +233,7 @@ export async function compactSessionWithAI(sessionKey) {
 
     const claudeBinary = process.env.CLAUDE_BINARY || pathJoin(hd(), '.local/bin/claude');
     const compactModel = rawContent.length > 5000
-      ? 'claude-sonnet-4-5'
+      ? 'claude-sonnet-4-6'
       : 'claude-haiku-4-5-20251001';
 
     const stdout = await new Promise((resolve, reject) => {

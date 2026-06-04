@@ -28,6 +28,16 @@ const COMMITMENT_PATTERN =
 const MAX_PER_MESSAGE = 1;
 
 // ---------------------------------------------------------------------------
+// 코드블록 / 인라인 코드 제거 — 코드 안의 문자열을 약속으로 오인 방지
+// (FP 사례: 설명용 코드블록 안의 "unload하겠습니다." 오등록 — 2026-06-02)
+// ---------------------------------------------------------------------------
+function _stripCode(text) {
+  return text
+    .replace(/```[\s\S]*?```/g, '')   // 펜스드 코드블록
+    .replace(/`[^`\n]+`/g, '');       // 인라인 코드
+}
+
+// ---------------------------------------------------------------------------
 // 약속 텍스트 정제 — 약속이 포함된 문장만 추출
 // ---------------------------------------------------------------------------
 function _extractCommitmentSentence(text) {
@@ -46,12 +56,15 @@ function _extractCommitmentSentence(text) {
 // detectAndRecord — Claude 응답 텍스트에서 약속 감지 후 JSONL에 기록
 // ---------------------------------------------------------------------------
 export async function detectAndRecord(replyText, { source = 'discord', channelId = '', userId = '' } = {}) {
-  if (!replyText || !COMMITMENT_PATTERN.test(replyText)) return null;
+  if (!replyText) return null;
+  // 코드블록·인라인코드 제거 후 약속 패턴 검사 (FP 방지 — 2026-06-02)
+  const cleanText = _stripCode(replyText);
+  if (!COMMITMENT_PATTERN.test(cleanText)) return null;
 
   const botHome = process.env.BOT_HOME || `${homedir()}/jarvis/runtime`;
   const commitFile = join(botHome, 'state', 'commitments.jsonl');
 
-  const commitmentText = _extractCommitmentSentence(replyText);
+  const commitmentText = _extractCommitmentSentence(cleanText);
   const entry = {
     id: randomUUID(),
     status: 'open',

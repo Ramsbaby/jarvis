@@ -693,25 +693,13 @@ async function main() {
         }
       } catch { /* dir may not exist */ }
     }
-    // context/claude-code-sessions/ — Claude Code CLI 대화 (최근 30일, 프로젝트별 서브디렉토리)
-    try {
-      const sessionsDir = join(contextDir, 'claude-code-sessions');
-      const projDirs = await readdir(sessionsDir, { withFileTypes: true });
-      for (const pd of projDirs) {
-        if (!pd.isDirectory()) continue;
-        const projPath = join(sessionsDir, pd.name);
-        const sessFiles = await readdir(projPath);
-        for (const f of sessFiles) {
-          if (extname(f) !== '.md') continue;
-          const fPath = join(projPath, f);
-          const mtime = await getMtime(fPath);
-          if (mtime) {
-            const ageDays = (Date.now() - mtime) / (1000 * 60 * 60 * 24);
-            if (ageDays <= 7) targets.push(fPath); // 30일→7일: 인덱스 크기 ~75% 감소
-          }
-        }
-      }
-    } catch { /* dir may not exist yet */ }
+    // context/claude-code-sessions/ — 인덱싱 비활성화 (2026-05-31)
+    // 사유: 13,870개 파일 / 565MB → LanceDB 658K 청크 편향 (전체 54%) 유발
+    // 재활성화 시: 7일 윈도우 + 반드시 age-based prune 추가 필요
+    // try {
+    //   const sessionsDir = join(contextDir, 'claude-code-sessions');
+    //   ...
+    // } catch { /* dir may not exist yet */ }
   } catch { /* dir may not exist */ }
 
   // 2. RAG memory files (decisions는 주간 파일 decisions-YYYY-WXX.md 동적 glob)

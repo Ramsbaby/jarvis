@@ -330,7 +330,7 @@ async function main() {
   let notionResult = { pageUrl: null, count: 0 };
   if (doNotion) {
     try {
-      notionResult = await sendNotion(top);
+      notionResult = await sendNotion(rawMatched); // 신규 0건이어도 전체 매칭 기록 저장 (top은 Discord 전용)
       if (notionResult.pageUrl) {
         console.log(`✅ Notion: ${notionResult.count}건 리포트 페이지 생성 → ${notionResult.pageUrl}`);
       }

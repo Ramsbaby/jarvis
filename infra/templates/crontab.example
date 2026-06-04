@@ -112,12 +112,10 @@
 0 9 * * * PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/lib/cron-performance-alerts.sh digest >> __JARVIS_HOME__/logs/cron-performance-alerts.log 2>&1
 # 크론 완료 훅 — 성능 이상 실시간 감지 (부팅 시)
 @reboot PATH=__NODE_PREFIX__:__NODE_PREFIX__/../sbin:/usr/local/bin:/usr/bin:/bin BOT_HOME=__JARVIS_HOME__ nohup /bin/bash __JARVIS_HOME__/lib/cron-completion-hook.sh monitor >> __JARVIS_HOME__/logs/cron-completion-hook.log 2>&1 &
-# [B안 2026-06-01 듀얼 토큰] 아래 두 항목 제거 — refresh 레이스("토큰 무한 소멸")의 원인.
-#   자동화는 automation-auth.sh가 refresh-free long-lived 토큰을 주입하므로 주기적 OAuth refresh
-#   불필요(+thundering herd로 해로움). credentials.json은 주인님 로그인 전용이며 CLI가 자체 갱신.
-#   토큰 건강은 long-lived-token-healthcheck(LaunchAgent 6h)가 감시.
-# (제거됨) 인증 사전 확인:  */30 * * * *  ...  scripts/pre-cron-auth-check.sh
-# (제거됨) OAuth 토큰 갱신:  0 */2 * * *  ...  scripts/oauth-refresh.sh
+# 인증 사전 확인 (30분마다)
+*/30 * * * * BOT_HOME=__JARVIS_HOME__ /bin/bash __JARVIS_HOME__/bin/cron-safe-wrapper.sh auth-check 90 /bin/bash __JARVIS_HOME__/scripts/pre-cron-auth-check.sh >> __JARVIS_HOME__/logs/pre-cron-auth-check.log 2>&1
+# OAuth 토큰 갱신 (2시간마다)
+0 */2 * * * /bin/bash __JARVIS_HOME__/scripts/oauth-refresh.sh >> __JARVIS_HOME__/logs/oauth-refresh.log 2>&1
 # API 사용량 캐시 갱신 (5분마다)
 */5 * * * * python3 __HOME__/.claude/scripts/update-usage-cache.py 2>/dev/null
 # 보안 스캔 (매일 02:30)

@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-05-14T19:00:05.798Z",
-  "totalChannels": 12,
-  "totalTasks": 122,
+  "generatedAt": "2026-06-03T19:00:05.497Z",
+  "totalChannels": 13,
+  "totalTasks": 126,
   "source": "runtime/config/tasks.json + infra/config/models.json",
   "channels": {
     "jarvis-system": {
-      "taskCount": 38,
+      "taskCount": 39,
       "tasks": [
         {
           "id": "schedule-coherence",
@@ -196,13 +196,18 @@
           "id": "age-mem-discard",
           "schedule": "0 2 * * 4",
           "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "owner-judgments-extract",
+          "schedule": "30 2 * * 0",
+          "model": "claude-haiku-4-5-20251001"
         }
       ],
       "modelOverride": "opusplan",
       "effortOverride": "max"
     },
     "<no-channel>": {
-      "taskCount": 38,
+      "taskCount": 39,
       "tasks": [
         {
           "id": "memory-cleanup",
@@ -393,6 +398,11 @@
           "id": "followup-sync",
           "schedule": "30 8 * * *",
           "model": "<default>"
+        },
+        {
+          "id": "analysis-channel-cost-daily",
+          "schedule": "0 9 * * *",
+          "model": "<default>"
         }
       ],
       "modelOverride": null,
@@ -546,7 +556,7 @@
         {
           "id": "news-briefing",
           "schedule": "0 6 * * *",
-          "model": "claude-opus-4-6"
+          "model": "claude-opus-4-8"
         },
         {
           "id": "calendar-alert",
@@ -612,7 +622,7 @@
       "effortOverride": "high"
     },
     "jarvis-dev": {
-      "taskCount": 2,
+      "taskCount": 3,
       "tasks": [
         {
           "id": "profile-weekly",
@@ -623,6 +633,11 @@
           "id": "github-pr-handler",
           "schedule": "(adhoc)",
           "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "youtube-bench",
+          "schedule": "(adhoc)",
+          "model": "claude-haiku-4-5-20251001"
         }
       ],
       "modelOverride": "opusplan",
@@ -661,6 +676,18 @@
       ],
       "modelOverride": "fast",
       "effortOverride": "low"
+    },
+    "jarvis-career": {
+      "taskCount": 1,
+      "tasks": [
+        {
+          "id": "career-daily",
+          "schedule": "0 9 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        }
+      ],
+      "modelOverride": "opusplan",
+      "effortOverride": "high"
     },
     "jarvis-boram": {
       "taskCount": 1,

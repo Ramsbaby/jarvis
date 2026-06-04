@@ -107,11 +107,14 @@ ${blogContent}`;
 }
 
 // ── claude -p 호출로 주제 추출 ──────────────────────────────────────────────
+const CLAUDE_BIN = process.env.CLAUDE_BIN ||
+  (spawnSync('command', ['-v', 'claude'], { shell: true, encoding: 'utf8' }).stdout?.trim() || '/opt/homebrew/bin/claude');
+
 function extractWithClaude(blogContent) {
   const prompt = buildPrompt(blogContent);
 
   const result = spawnSync(
-    '/opt/homebrew/bin/claude',
+    CLAUDE_BIN,
     [
       '-p', prompt,
       '--output-format', 'json',

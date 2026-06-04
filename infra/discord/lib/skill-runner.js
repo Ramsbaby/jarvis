@@ -154,7 +154,7 @@ Jarvis 환경에서는 다음으로 해석:
   // 4) Claude 호출 — API 키 있으면 fetch, 없으면 SDK query (구독제 Claude Max 지원).
   //    claude-runner.js:522-544 autoExtractMemory 패턴 재사용.
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  const model = options.model || (apiKey ? 'claude-sonnet-4-6' : 'claude-sonnet-4-5');
+  const model = options.model || (apiKey ? 'claude-sonnet-4-6' : 'claude-sonnet-4-6');
   const maxTokens = options.maxTokens || 4096;
 
   try {

@@ -738,13 +738,14 @@ for l in sys.stdin:
 }
 HEALTHEOF
 
-    # LanceDB 크기 감시 (5GB 초과 시 경고 — 정상 운영 범위 1.9~2.7GB, compact 후 최대 하루치 증분 허용)
+    # LanceDB 크기 감시 (10GB 초과 시 경고 — 2026-05-23 임계 5GB→10GB 상향:
+    # 1M+ chunks × dim 1024 정상 운용 7~9GB 도달 → 5GB는 false positive 알람 폭격)
     lancedb_path="$BOT_HOME/rag/lancedb"
     _lancedb_alert_cooldown="$BOT_HOME/state/lancedb-alert-last.txt"
     _lancedb_cooldown_sec=86400  # 24시간 — 하루 1회 알림으로 제한
     if [[ -d "$lancedb_path" ]]; then
         lancedb_mb=$(du -sm "$lancedb_path" 2>/dev/null | awk '{print $1}')
-        if (( lancedb_mb > 5120 )); then
+        if (( lancedb_mb > 10240 )); then
             _now_epoch=$(date +%s)
             _last_alert=$(cat "$_lancedb_alert_cooldown" 2>/dev/null || echo "0")
             _elapsed=$(( _now_epoch - _last_alert ))

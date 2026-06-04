@@ -372,6 +372,39 @@ function getContextualThinking(prompt, hasImages) {
 }
 
 // ---------------------------------------------------------------------------
+// _autoYoutubeBench — YouTube URL 감지 → youtube-bench 비동기 실행
+// 오너 메시지에 YouTube URL 포함 시 fire-and-forget으로 wiki 적재.
+// Ledger 기반 중복 방지는 youtube-bench.mjs 내부에서 처리.
+// ---------------------------------------------------------------------------
+const _YT_URL_RE = /https?:\/\/(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/g;
+
+async function _autoYoutubeBench(prompt) {
+  const matches = [...(prompt || '').matchAll(_YT_URL_RE)];
+  if (!matches.length) return;
+
+  const { spawn } = await import('node:child_process');
+  const { join } = await import('node:path');
+  const { homedir } = await import('node:os');
+  const script = join(homedir(), 'jarvis/infra/scripts/youtube-bench.sh');
+
+  for (const m of matches) {
+    const url = m[0];
+    log('info', '[youtube-bench] URL 감지 → 백그라운드 적재 시작', { url });
+    try {
+      const proc = spawn(script, [url], {
+        detached: true,
+        stdio: 'ignore',
+        env: { ...process.env },
+      });
+      proc.unref(); // 봇 프로세스와 완전 분리
+      log('info', '[youtube-bench] 스폰 완료', { url, pid: proc.pid });
+    } catch (e) {
+      log('warn', '[youtube-bench] 스폰 실패', { url, error: e.message });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // handleMessage — debounce gate (thin entry point)
 // ---------------------------------------------------------------------------
 
@@ -673,8 +706,8 @@ export async function handleMessage(message, state) {
           // userMemory에도 동시 기록 → 전채널 시스템 프롬프트 주입 파이프라인 활용
           // 이유: proactive-engine.json은 엔진 전용. jarvis·dev·ceo 채널은 여전히 이 사실을 모름.
           // userMemory.addFact() → claude-runner.js memSnippet → 모든 채널 세션 자동 주입.
+          let _factLines = [];
           try {
-            const _factLines = [];
             for (const [fkey, fval] of Object.entries(_engData.flags || {})) {
               if (fkey.endsWith('_result') && fval) {
                 const cName = fkey.replace('_result', '');
@@ -726,6 +759,10 @@ export async function handleMessage(message, state) {
       // 수정: follow-ups.json items의 subject 필드("삼성물산 기술면접")로 매칭
       //       → hot-events.json 기록 → claude-runner가 전채널 주입.
       try {
+        const _msg = message.content;
+        const _failRe = /불합격|탈락|떨어졌|떨어짐|최종탈락|탈락됨|reject/i;
+        const _passRe = /합격|최종합격|합격됨|pass|오퍼|offer/i;
+        const _cancelRe = /취소|포기|안봄|안 봄|연기|cancel/i;
         const _fuPath2 = join(_BOT_HOME, 'context', 'owner', 'follow-ups.json');
         const _hotPath2 = join(_BOT_HOME, 'context', 'owner', 'hot-events.json');
         let _fuData2 = null;
@@ -1659,6 +1696,11 @@ ${extracted}
     let _emotionGateRetried = false;   // 감정 품질 게이트 재시도 여부 (무한루프 방지)
     let _emotionGateRetryPrompt = null; // 재시도 시 주입할 수정 프롬프트
 
+    const senderIsOwner = (() => {
+      const _p = getUserProfile(effectiveAuthor.id);
+      return _p?.type === 'owner' || _p?.role === 'owner';
+    })();
+
     async function runClaude(sid, streamer) {
       log('info', 'Starting Claude session', {
         threadId: thread.id,
@@ -2113,9 +2155,14 @@ ${extracted}
             }
             // 비동기 메모리 추출 — 메인 응답에 영향 없는 fire-and-forget
             autoExtractMemory(effectiveAuthor.id, originalPrompt, lastAssistantText, effectiveChannelId).catch((e) => log('debug', 'autoExtractMemory outer catch', { error: e?.message }));
-            // 비동기 약속 감지 — Jarvis가 "하겠습니다" 발화 시 commitments.jsonl 기록
-            _trackCommitment(lastAssistantText, { channelId: effectiveChannelId, userId: effectiveAuthor.id })
-              .catch((e) => log('debug', 'commitment-tracker outer catch', { error: e?.message }));
+            // 자동 약속 감지 비활성화 (2026-06-04) — FP 과다(3일 3건, 30회+ 알림). 수동만: /commit "내용"
+            //_trackCommitment(lastAssistantText, { channelId: effectiveChannelId, userId: effectiveAuthor.id })
+              //.catch((e) => log('debug', 'commitment-tracker outer catch', { error: e?.message }));
+            // 비동기 YouTube URL wiki 적재 — 오너 메시지에 YouTube URL 있으면 youtube-bench 실행
+            if (senderIsOwner) {
+              _autoYoutubeBench(originalPrompt)
+                .catch((e) => log('debug', 'youtube-bench outer catch', { error: e?.message }));
+            }
           }
         }
       }

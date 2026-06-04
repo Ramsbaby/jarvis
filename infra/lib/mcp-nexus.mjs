@@ -150,7 +150,33 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 });
 
 // ---------------------------------------------------------------------------
+// Process-level safety handlers — prevent unhandled errors from killing the server
+// ---------------------------------------------------------------------------
+process.on('uncaughtException', (err) => {
+  try {
+    process.stderr.write(`[mcp-nexus] uncaughtException: ${err?.stack ?? err}\n`);
+  } catch { /* stderr write failed — nothing else to do */ }
+});
+
+process.on('unhandledRejection', (reason) => {
+  try {
+    const msg = reason instanceof Error ? reason.stack : String(reason);
+    process.stderr.write(`[mcp-nexus] unhandledRejection: ${msg}\n`);
+  } catch { /* stderr write failed — nothing else to do */ }
+});
+
+// ---------------------------------------------------------------------------
 // Connect
 // ---------------------------------------------------------------------------
 const transport = new StdioServerTransport();
-await server.connect(transport);
+
+// Allow clean exit only when stdin closes (parent process terminated)
+process.stdin.on('close', () => {
+  process.exit(0);
+});
+
+try {
+  await server.connect(transport);
+} catch (err) {
+  process.stderr.write(`[mcp-nexus] server.connect failed: ${err?.stack ?? err}\n`);
+}
