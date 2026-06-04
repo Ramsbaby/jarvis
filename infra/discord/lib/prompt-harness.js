@@ -250,7 +250,13 @@ export function enforceBudget(systemParts, opts = {}) {
     if (s.score >= 10) continue; // 절대 drop 금지
     const tokensCost = Math.ceil((s.content || '').length / CHARS_PER_TOKEN);
     droppedIdxSet.add(s.idx);
-    dropped.push({ name: s.name, score: s.score, tokens: tokensCost });
+    const _rec = { name: s.name, score: s.score, tokens: tokensCost };
+    // [2026-06-04] 관측성: 거대(>5000tok) unnamed 섹션은 내용 미리보기를 남겨 정체 추적 가능하게.
+    //   unnamed = 헤더 추론 실패 → 정체 불명 비대화의 근본 추적 불가 문제 해결.
+    if (tokensCost > 5000 && /^unnamed-/.test(s.name)) {
+      _rec.preview = String(s.content || '').slice(0, 200).replace(/\s+/g, ' ');
+    }
+    dropped.push(_rec);
     currentTokens -= tokensCost;
   }
 
