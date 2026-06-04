@@ -66,12 +66,13 @@ if [[ "$BACKUP_TYPE" == "rag" || "$BACKUP_TYPE" == "all" ]]; then
     SIZE=$(wc -c < "$DEST" 2>/dev/null || echo 0)
     log "INFO RAG 백업 완료: ${DEST} (${SIZE} bytes)"
 
-    # 최신 2개만 보존 (RAG는 큰 파일이므로 2개로 제한)
+    # 최신 1개만 보존 (RAG 4.6GB×2=9.2GB는 디스크 88% 환경에 과함. 2026-06-04 keep-1로 조정.
+    #  RAG는 원본에서 재인덱싱 가능한 파생 데이터라 1개 복원점으로 충분.)
     BACKUPS_SORTED=$(ls -t "${RAG_BACKUP_DIR}"/rag-lancedb-*.tar.gz 2>/dev/null || true)
     COUNT=0
     while IFS= read -r f; do
       COUNT=$((COUNT + 1))
-      if (( COUNT > 2 )); then
+      if (( COUNT > 1 )); then
         rm -f "$f"
         log "INFO 오래된 RAG 백업 삭제: $(basename "$f")"
       fi
