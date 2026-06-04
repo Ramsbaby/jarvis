@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-31T21:17:05.302Z",
+  "generatedAt": "2026-06-04T01:22:12.897Z",
   "source": "~/jarvis/runtime/config/tasks.json",
   "totalTasks": 126,
   "teamDistribution": {
@@ -1479,7 +1479,7 @@
             "name": "전략기획실 (트렌드·뉴스)"
           },
           "discordChannel": "jarvis",
-          "model": "claude-opus-4-7",
+          "model": "claude-opus-4-8",
           "priority": "daily",
           "maxBudget": "0.50",
           "disabled": false,

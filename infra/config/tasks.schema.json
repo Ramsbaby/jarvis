@@ -341,6 +341,10 @@
             }
           },
           "additionalProperties": false
+        },
+        "_model_note": {
+          "type": "string",
+          "description": "모델 변경 이력 메모 (validate 무시 필드)"
         }
       }
     }

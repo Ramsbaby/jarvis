@@ -327,7 +327,8 @@ try:
     )
 
     # 주인님 직접 발화 패턴 (봇 자동 메시지·크론 알림 제외)
-    OWNER_PATTERNS = ['**이정우**', '[이정우]', '[대화 상대]', 'User:']  # privacy:allow korean-owner-name
+    _onm = os.environ.get('OWNER_NAME', '')
+    OWNER_PATTERNS = ([f'**{_onm}**', f'[{_onm}]'] if _onm else []) + ['[대화 상대]', 'User:']
 
     last_user_date = None
     for f in history_files:
