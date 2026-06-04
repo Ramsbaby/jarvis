@@ -1,0 +1,48 @@
+#!/bin/bash
+# claude — OAuth 격리 바이너리 래퍼 (2026-05-30)
+#
+# 목적: 모든 claude 진입점(인터랙티브 셸·SDK 워크플로 에이전트·크론·원격)이 이 래퍼를 통과하게 해
+#       refresh_token reuse race를 구조적으로 차단. SDK는 pathToClaudeCodeExecutable=~/.local/bin/claude로
+#       에이전트를 spawn하므로, 이 한 점을 래핑하면 모든 병렬 에이전트가 격리 토큰을 쓴다.
+#
+# 동작:
+#   1. CLAUDE_CODE_OAUTH_TOKEN 이미 설정됨(봇 preflight 등) → 그대로 exec (덮어쓰지 않음, 비용 0)
+#   2. 격리 토큰 파일 readable + 생존 플래그 신선(<40분) → 격리 토큰 주입 후 exec
+#   3. 그 외(격리 토큰 죽음/없음) → env 주입 없이 exec → claude 기본 인증(메인) 폴백 = 절대 안 막힘
+#
+# 자가복구: long-lived-token-healthcheck.sh(30분)가 격리 토큰 200이면 .token-alive touch,
+#           실패면 rm. 격리 토큰이 죽으면 40분 내 플래그 만료 → 래퍼가 메인 폴백으로 자동 전환.
+#
+# 폴백 안전: REAL 해석은 캡처 경로 → 없으면 최신 버전. 실패 시 명확한 에러.
+#           exec는 항상 실제 versions/ 바이너리로 간다(래퍼 자신 재귀 방지).
+
+_HOME="${HOME:-/Users/ramsbaby}"
+_VERSIONS_DIR="$_HOME/.local/share/claude/versions"
+
+# ── 실제 바이너리 해석 (auto-update 내성: 캡처 경로 → 없으면 최신 버전) ──
+_REAL="$_VERSIONS_DIR/2.1.158"
+if [[ ! -x "$_REAL" ]]; then
+  _REAL="$_VERSIONS_DIR/$(ls -t "$_VERSIONS_DIR" 2>/dev/null | head -1)"
+fi
+if [[ ! -x "$_REAL" ]]; then
+  echo "claude wrapper ERROR: 실제 바이너리를 찾을 수 없습니다 ($_VERSIONS_DIR)" >&2
+  exit 127
+fi
+
+# ── rc/remote 서브커맨드 제외 (원격제어는 full-scope 토큰 필요, inference-only 격리토큰 비호환) ──
+case "${1:-}" in
+  rc|remote) exec "$_REAL" "$@" ;;
+esac
+
+# ── 격리 토큰 주입 판정 ──
+_TOKFILE="$_HOME/.claude-bot/.long-lived-token"
+_FLAG="$_HOME/.claude-bot/.token-alive"
+if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" && -r "$_TOKFILE" && -f "$_FLAG" ]]; then
+  _flag_age=$(( $(date +%s) - $(stat -f %m "$_FLAG" 2>/dev/null || echo 0) ))
+  if (( _flag_age < 2400 )); then
+    _tok="$(cat "$_TOKFILE" 2>/dev/null)"
+    [[ -n "$_tok" ]] && export CLAUDE_CODE_OAUTH_TOKEN="$_tok"
+  fi
+fi
+
+exec "$_REAL" "$@"

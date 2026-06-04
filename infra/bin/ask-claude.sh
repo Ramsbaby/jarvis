@@ -131,6 +131,11 @@ run_with_retry() {
 # --- Sourced modules: outcome instrumentation + insight recording ---
 source "${BOT_HOME}/lib/insight-recorder.sh"
 
+# --- Circuit breaker (Phase 3, 2026-05-23): OAuth race + 연속 실패 방어 ---
+# 출처: 2026-05-23 새벽 9건 LA가 OAuth 회전 race로 동시에 invalid_grant → recovery 4단계 모두 실패.
+# 차단 시 호출 자체 skip (exit 99) → 호출자가 graceful 처리 가능.
+source "${BOT_HOME}/lib/circuit-ask-claude.sh" 2>/dev/null || true
+
 # --- Execute LLM call (claude -p with multi-provider fallback) ---
 # Prevent nested claude detection (but preserve CLAUDECODE for OAuth credential inheritance)
 # NOTE: Unsetting CLAUDECODE breaks OAuth authentication in cron environments
@@ -152,6 +157,15 @@ fi
 
 CLAUDE_OUTPUT_TMP="${WORK_DIR}/claude-output.json"
 
+# --- Circuit check (Phase 3): open 상태면 claude 호출 자체 skip ---
+if command -v circuit_check >/dev/null 2>&1; then
+    if ! circuit_check "$TASK_ID"; then
+        log_jsonl "skip" "circuit open — claude call skipped" "0"
+        record_outcome "$TASK_ID" "false" "0" "0" 2>/dev/null || true
+        exit 99
+    fi
+fi
+
 CLAUDE_EXIT=0
 # fd 9를 tee 프로세스에 연결 — 명시적 close/wait으로 race condition 방지
 exec 9> >(tee -a "$STDERR_HIST" > "$STDERR_LOG")
@@ -172,6 +186,12 @@ exec 9>&-  # tee에 EOF 전송
 [[ -z "${CAFFEINATE_PID:-}" ]] || kill "${CAFFEINATE_PID}" 2>/dev/null || true
 CAFFEINATE_PID=""
 wait       # tee 완전 종료 대기 → stderr 유실 없음
+
+# --- Circuit update (Phase 3): 결과 반영 (성공 = closed 복귀 / 실패 = open 차단) ---
+if command -v circuit_update >/dev/null 2>&1; then
+    STDERR_SAMPLE=$(tail -20 "$STDERR_LOG" 2>/dev/null | head -c 2000 || true)
+    circuit_update "$TASK_ID" "$CLAUDE_EXIT" "$STDERR_SAMPLE" 2>/dev/null || true
+fi
 
 RAW_OUTPUT=""
 if [[ -s "$CLAUDE_OUTPUT_TMP" ]]; then RAW_OUTPUT=$(cat "$CLAUDE_OUTPUT_TMP"); fi
@@ -316,6 +336,17 @@ except (FileNotFoundError, json.JSONDecodeError):
 
 log_jsonl "success" "Completed in ${DURATION}s" "$DURATION" "$COST_EXTRA"
 record_outcome "$TASK_ID" "true" "$(( DURATION * 1000 ))" "${COST_USD:-0}" || true
+
+# --- Agent Self-Note hook (Dreaming) ---
+# 태스크 성공 완료 후 에이전트가 패턴/실수/제안을 ~/jarvis/runtime/agent-notes/에 저장.
+# 다음 세션의 context-loader.sh가 read-agent-note.sh로 주입하여 반복 실수 감소.
+# TODO: AGENT_NOTE_JSON 변수는 각 태스크별 에이전트 스크립트에서 export하면
+#       자동으로 이 훅이 노트를 저장함. 미설정 시 silently skip.
+_AGENT_NOTE_WRITER="${BOT_HOME}/lib/write-agent-note.sh"
+if [[ -n "${AGENT_NOTE_JSON:-}" && -f "$_AGENT_NOTE_WRITER" ]]; then
+    _AGENT_ROLE="${AGENT_ROLE:-ask-claude}"
+    bash "$_AGENT_NOTE_WRITER" "$TASK_ID" "$_AGENT_ROLE" "$AGENT_NOTE_JSON" 2>/dev/null || true
+fi
 
 # --- Token ledger (Tier 0 observability) ---
 # SSoT ledger for all LLM spending. Downstream: daily cap, 80% alert, dedup detection.

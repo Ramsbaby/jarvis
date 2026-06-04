@@ -1,21 +1,22 @@
 {
-  "generatedAt": "2026-05-14T19:00:05.730Z",
-  "totalTasks": 122,
+  "generatedAt": "2026-06-03T19:00:05.344Z",
+  "totalTasks": 126,
   "source": "runtime/config/tasks.json",
   "modelDistribution": {
     "claude-sonnet-4-6": 20,
-    "claude-haiku-4-5-20251001": 33,
-    "claude-opus-4-6": 1,
-    "<default>": 66,
+    "claude-haiku-4-5-20251001": 36,
+    "claude-opus-4-8": 1,
+    "<default>": 67,
     "claude-opus-4-7": 2
   },
   "channelDistribution": {
     "jarvis": 5,
-    "jarvis-system": 38,
+    "jarvis-system": 39,
     "jarvis-market": 3,
     "jarvis-ceo": 25,
-    "<none>": 38,
-    "jarvis-dev": 2,
+    "<none>": 39,
+    "jarvis-career": 1,
+    "jarvis-dev": 3,
     "jarvis-alerts": 2,
     "jarvis-boram": 1,
     "jarvis-blog": 4,
@@ -42,7 +43,7 @@
         "model": "<default>",
         "channel": "<none>",
         "timeout": 180,
-        "maxBudget": null,
+        "maxBudget": "0.00",
         "allowedTools": null
       },
       {
@@ -73,7 +74,7 @@
         "channel": "jarvis",
         "timeout": 300,
         "maxBudget": "1.00",
-        "allowedTools": "Read,Bash"
+        "allowedTools": "Read"
       },
       {
         "id": "dev-event-watcher",
@@ -139,7 +140,7 @@
         "id": "news-briefing",
         "name": "뉴스 브리핑",
         "schedule": "0 6 * * *",
-        "model": "claude-opus-4-6",
+        "model": "claude-opus-4-8",
         "channel": "jarvis",
         "timeout": 300,
         "maxBudget": "0.50",
@@ -174,6 +175,26 @@
         "timeout": 60,
         "maxBudget": "0.30",
         "allowedTools": "Bash"
+      },
+      {
+        "id": "analysis-channel-cost-daily",
+        "name": "분석 채널 4종 일간 비용·건수 모니터링 (정식 등재 2026-05-25)",
+        "schedule": "0 9 * * *",
+        "model": "<default>",
+        "channel": "<none>",
+        "timeout": 120,
+        "maxBudget": "0.00",
+        "allowedTools": null
+      },
+      {
+        "id": "career-daily",
+        "name": "채용공고 일일 현황",
+        "schedule": "0 9 * * *",
+        "model": "claude-haiku-4-5-20251001",
+        "channel": "jarvis-career",
+        "timeout": 360,
+        "maxBudget": "1.00",
+        "allowedTools": "WebSearch,Bash,Read,Write"
       },
       {
         "id": "inbox-alert",
@@ -342,7 +363,7 @@
         "model": "<default>",
         "channel": "jarvis-system",
         "timeout": 300,
-        "maxBudget": null,
+        "maxBudget": "0.00",
         "allowedTools": null
       },
       {
@@ -362,7 +383,7 @@
         "model": "<default>",
         "channel": "jarvis-system",
         "timeout": 300,
-        "maxBudget": null,
+        "maxBudget": "0.00",
         "allowedTools": null
       },
       {
@@ -899,6 +920,16 @@
         "allowedTools": null
       },
       {
+        "id": "owner-judgments-extract",
+        "name": "오너 판단 패턴 증류",
+        "schedule": "30 2 * * 0",
+        "model": "claude-haiku-4-5-20251001",
+        "channel": "jarvis-system",
+        "timeout": 180,
+        "maxBudget": "0.30",
+        "allowedTools": null
+      },
+      {
         "id": "compound-review",
         "name": "Compound Engineering 주간 복기",
         "schedule": "30 20 * * 0",
@@ -975,7 +1006,7 @@
         "model": "<default>",
         "channel": "jarvis-system",
         "timeout": 60,
-        "maxBudget": null,
+        "maxBudget": "0.00",
         "allowedTools": null
       },
       {
@@ -1091,6 +1122,16 @@
         "timeout": 240,
         "maxBudget": "0.30",
         "allowedTools": "Bash"
+      },
+      {
+        "id": "youtube-bench",
+        "name": "YouTube 영상 → LLM Wiki 적재",
+        "schedule": "(adhoc)",
+        "model": "claude-haiku-4-5-20251001",
+        "channel": "jarvis-dev",
+        "timeout": 180,
+        "maxBudget": "0.50",
+        "allowedTools": null
       }
     ],
     "other": [

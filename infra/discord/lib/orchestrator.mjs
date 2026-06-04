@@ -10,7 +10,7 @@
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { URL } from 'node:url';
 
 // ---------------------------------------------------------------------------
@@ -377,6 +377,18 @@ async function main() {
   }, 10 * 60_000);
 
   log('info', 'Orchestrator ready — entering poll loop');
+
+  // Startup: pending-deployment-restart 마커 체크 (crash recovery 시 session-end 핸들러가 못 돌아 마커 미처리)
+  {
+    const _pendingDeploy = join(BOT_HOME, 'state', 'pending-deployment-restart');
+    if (existsSync(_pendingDeploy)) {
+      let _reason = 'deployment (crash recovery)';
+      try { _reason = readFileSync(_pendingDeploy, 'utf-8').trim() || _reason; } catch { /* ok */ }
+      try { rmSync(_pendingDeploy, { force: true }); } catch { /* ok */ }
+      log('info', `Startup: pending deployment restart detected — ${_reason}. SIGTERM in 15s.`);
+      setTimeout(() => process.kill(process.pid, 'SIGTERM'), 15000);
+    }
+  }
 
   // Main poll loop
   while (running) {

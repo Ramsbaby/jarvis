@@ -38,6 +38,13 @@ const MAX_PAGE_CHARS = 3000;
 const STALE_DAYS     = 30;
 const DEEP_MODE      = process.argv.includes('--deep');
 
+// [2026-05-31 세컨브레인 벤치마킹] --fix 자가치유 모드:
+//   oversized _facts.md의 오래된 fact를 분기별 archive/_facts-{YYYY-Q}.md로 이동(원본 보존, 활성만 슬림화).
+//   DRYRUN 기본(미리보기) — 실제 이동은 --apply 동반 시에만. append-only 철학: 삭제 아닌 이동.
+const FIX_MODE       = process.argv.includes('--fix');
+const APPLY_MODE     = process.argv.includes('--apply');
+const ACTIVE_MONTHS  = parseInt(process.env.WIKI_ACTIVE_MONTHS || '3', 10); // 활성 보존 개월 (env 오버라이드)
+
 // ── 로거 (KST) ───────────────────────────────────────────────────────────────
 function kstNow() {
   return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' });
@@ -235,6 +242,71 @@ function checkDuplicateFacts(pages) {
   return issues;
 }
 
+// ── [2026-05-31] --fix 자가치유: oversized _facts.md 분기 아카이빙 ─────────────
+// 오래된 fact를 archive/_facts-{YYYY-Q}.md로 이동(원본 보존). 활성 파일은 최근 ACTIVE_MONTHS만.
+// dryRun=true면 미리보기만. 삭제 아닌 이동이라 가역(Iron Law 3 결재권 비침범).
+function archiveOversizedFacts(pages, dryRun) {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - ACTIVE_MONTHS);
+  const cutoffStr = cutoff.toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' }); // YYYY-MM-DD
+
+  const results = [];
+  for (const p of pages) {
+    if (!p.file.startsWith('_facts')) continue;
+    if (p.size <= MAX_PAGE_CHARS) continue; // oversized만 대상
+
+    const lines = p.content.split('\n');
+    const header = [];
+    const active = [];
+    const archived = {}; // 'YYYY-QN' -> [lines]
+    let sawFact = false;
+
+    for (const line of lines) {
+      const m = line.match(/^- \[(\d{4})-(\d{2})-(\d{2})\]/);
+      if (m) {
+        sawFact = true;
+        const date = `${m[1]}-${m[2]}-${m[3]}`;
+        if (date >= cutoffStr) {
+          active.push(line);
+        } else {
+          const q = Math.ceil(parseInt(m[2], 10) / 3);
+          (archived[`${m[1]}-Q${q}`] ||= []).push(line);
+        }
+      } else if (!sawFact) {
+        header.push(line); // fact 시작 전 frontmatter/제목 보존
+      } else {
+        active.push(line); // fact 사이 빈줄·연속줄은 활성 유지
+      }
+    }
+
+    const archivedCount = Object.values(archived).reduce((s, a) => s + a.length, 0);
+    if (archivedCount === 0) continue;
+
+    const result = {
+      page: p.relativePath,
+      activeFacts: active.filter(l => l.startsWith('- [')).length,
+      archivedFacts: archivedCount,
+      quarters: Object.keys(archived).sort(),
+      applied: false,
+    };
+
+    if (!dryRun) {
+      const archiveDir = join(WIKI_ROOT, p.domain, 'archive');
+      mkdirSync(archiveDir, { recursive: true });
+      for (const [q, qlines] of Object.entries(archived)) {
+        const archivePath = join(archiveDir, `_facts-${q}.md`);
+        const banner = existsSync(archivePath) ? '' : `# ${p.domain} facts archive — ${q}\n\n`;
+        appendFileSync(archivePath, banner + qlines.join('\n') + '\n');
+      }
+      writeFileSync(p.fullPath, [...header, ...active].join('\n'), 'utf-8');
+      result.applied = true;
+    }
+
+    results.push(result);
+  }
+  return results;
+}
+
 // ── 리포트 생성 ──────────────────────────────────────────────────────────────
 function generateReport(pages, issues) {
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
@@ -298,6 +370,36 @@ function main() {
 
   if (DEEP_MODE) {
     log('Phase 8: LLM 모순 검출 (--deep) — 미구현, 스킵');
+  }
+
+  if (FIX_MODE) {
+    // [2026-05-31 CRITICAL 가드] archive 분할 시 검색 경로 손실 차단.
+    // 위키 직접 주입(prompt-sections.js L533/762, wiki-engine getWikiContext)은 _facts.md만 읽고
+    // archive를 무시한다. archive로 옮긴 오래된 fact는 위키 빠른 검색에서 증발한다.
+    // 사고(2026-05-31): --apply로 career 4월 fact 4343개를 archive로 옮겼더니 위키 주입·RAG(미재색인)
+    //   모두에서 검색 불가 → 즉시 롤백. 검색 경로가 archive를 처리하도록 보강(Phase 2: summary 색인화
+    //   + 위키 주입 archive fallback)하기 전엔 --apply 영구 차단.
+    if (APPLY_MODE && process.env.WIKI_FIX_SEARCH_READY !== '1') {
+      log('🔴 --apply 차단: 검색 경로가 archive 미지원 — 분할 시 오래된 fact 검색 증발(05-31 4343개 손실 사고). Phase 2 보강 후 WIKI_FIX_SEARCH_READY=1로만 실행.');
+      console.error('BLOCKED: archive 분할 시 위키 검색에서 fact 증발. 검색 경로 보강(prompt-sections archive fallback + RAG 재색인) 후 WIKI_FIX_SEARCH_READY=1 재시도.');
+      return;
+    }
+    const dryRun = !APPLY_MODE;
+    const fixResults = archiveOversizedFacts(pages, dryRun);
+    const mode = dryRun ? 'DRYRUN(미리보기)' : 'APPLY(실제 이동)';
+    log(`--fix ${mode}: oversized _facts.md ${fixResults.length}개 대상`);
+    for (const r of fixResults) {
+      log(`  [FIX] ${r.page}: ${r.archivedFacts}개 fact → archive(${r.quarters.join(',')}) 이동${r.applied ? ' 완료' : ' 예정'}, 활성 ${r.activeFacts}개 유지`);
+    }
+    if (fixResults.length) {
+      console.log(`\n[wiki-lint --fix ${mode}] ${fixResults.length}개 oversized 파일 정리${dryRun ? ' 예정' : ' 완료'}:`);
+      for (const r of fixResults) {
+        console.log(`  - ${r.page}: ${r.archivedFacts}개 fact → archive(${r.quarters.join(', ')}), 활성 ${r.activeFacts}개 유지`);
+      }
+      if (dryRun) console.log('  실제 이동하려면: node wiki-lint.mjs --fix --apply');
+    } else {
+      console.log('[wiki-lint --fix] 아카이빙 대상 없음 (oversized _facts.md 없거나 전부 최근 3개월 이내)');
+    }
   }
 
   const errors = issues.filter(i => ['broken-crossref', 'empty'].includes(i.type));

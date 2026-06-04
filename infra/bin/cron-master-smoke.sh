@@ -98,8 +98,10 @@ fi
 say ""
 say "[Test 5] 리포트 dedup — 동일 digest 2차 실행은 stdout 0줄"
 rm -f "$DIGEST_FILE"
-_first=$(CRON_MASTER_DRY_RUN=1 bash "$CRON_MASTER" 2>/dev/null | wc -l | tr -d ' ')
-second=$(CRON_MASTER_DRY_RUN=1 bash "$CRON_MASTER" 2>/dev/null | wc -l | tr -d ' ')
+# PERMA_FAIL_DAYS=999: 실제 시스템 perma_fails가 urgent=1 → always_emit을 유발해
+# dedup 비교 자체를 무력화하는 것을 방지. 테스트 격리 목적.
+_first=$(CRON_MASTER_DRY_RUN=1 JARVIS_CRON_PERMA_FAIL_DAYS=999 bash "$CRON_MASTER" 2>/dev/null | wc -l | tr -d ' ')
+second=$(CRON_MASTER_DRY_RUN=1 JARVIS_CRON_PERMA_FAIL_DAYS=999 bash "$CRON_MASTER" 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$second" == "0" ]]; then
   ok "2차 실행 stdout 0줄 (Discord 전송 skip)"
 else

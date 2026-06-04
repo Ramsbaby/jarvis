@@ -105,6 +105,11 @@ cmd_save() {
     cp "$CREDENTIALS" "$profile_dir/credentials.json"
     echo "✅ 현재 계정을 [$name] 프로필로 저장했습니다."
     echo "   $(account_info "$profile_dir/credentials.json")"
+
+    # [2026-05-31 제거] 봇 credentials 동기화 블록 삭제.
+    # 사고: 이 블록이 메인 토큰을 ~/.claude-bot에 복사 → 봇·메인 같은 refresh_token 패밀리 공유
+    #   → reuse race로 양쪽 폐기. 봇은 oauth-isolate-bot(별도 패밀리)+.long-lived-token으로
+    #   독립 격리되어야 하며, 메인 복사는 격리를 깨는 안티패턴이라 영구 제거.
 }
 
 # ── use ───────────────────────────────────────────────────────────────────────

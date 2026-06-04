@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-05-12T05:20:37.936Z",
+  "generatedAt": "2026-05-31T21:17:05.302Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 122,
+  "totalTasks": 126,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -10,15 +10,15 @@
     "trend-lead": 8,
     "record-lead": 8,
     "library": 1,
-    "growth-lead": 6,
+    "growth-lead": 7,
     "brand-lead": 4,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 26
+    "uncategorized": 29
   },
   "typeDistribution": {
-    "prompt": 43,
-    "script": 79
+    "prompt": 40,
+    "script": 86
   },
   "groups": [
     {
@@ -1008,16 +1008,16 @@
           "name": "토큰 동기화",
           "schedule": "0 1 * * *",
           "scheduleHuman": "매일 01:00",
-          "type": "prompt",
-          "handler": "ask-claude.sh (LLM)",
+          "type": "script",
+          "handler": "claude-token-sync.py",
           "team": {
             "id": "infra-lead",
             "name": "SRE실 (인프라·신뢰성)"
           },
           "discordChannel": null,
-          "model": "claude-haiku-4-5-20251001",
+          "model": null,
           "priority": "daily",
-          "maxBudget": "0.50",
+          "maxBudget": "0.00",
           "disabled": false,
           "description": null,
           "logs": {
@@ -1908,6 +1908,38 @@
           }
         },
         {
+          "id": "career-daily",
+          "name": "채용공고 일일 현황",
+          "schedule": "0 9 * * *",
+          "scheduleHuman": "매일 09:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "growth-lead",
+            "name": "인재개발실 (성장·학습)"
+          },
+          "discordChannel": "jarvis-career",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/career-daily.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/career-daily-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-career-daily-*.log",
+              "exists": true
+            }
+          }
+        },
+        {
           "id": "inbox-alert",
           "name": "Inbox 수집 & 스코어링",
           "schedule": "0 9 * * *",
@@ -2248,8 +2280,8 @@
           "name": "CLAUDE.md 비대화·stale·dead-ref 일일 점검",
           "schedule": "45 5 * * 1",
           "scheduleHuman": "월요일 05:45",
-          "type": "prompt",
-          "handler": "ask-claude.sh (LLM)",
+          "type": "script",
+          "handler": "claude-md-audit.sh",
           "team": {
             "id": "audit-lead",
             "name": "QA실 (품질·감사·E2E)"
@@ -2344,8 +2376,8 @@
           "name": "크론 전체 점검",
           "schedule": "30 5 * * *",
           "scheduleHuman": "매일 05:30",
-          "type": "prompt",
-          "handler": "ask-claude.sh (LLM)",
+          "type": "script",
+          "handler": "cron-auditor.sh",
           "team": {
             "id": "audit-lead",
             "name": "QA실 (품질·감사·E2E)"
@@ -2353,7 +2385,7 @@
           "discordChannel": "jarvis-system",
           "model": null,
           "priority": null,
-          "maxBudget": "0.30",
+          "maxBudget": "0.00",
           "disabled": false,
           "description": null,
           "logs": {
@@ -3207,14 +3239,46 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/age-mem-discard.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/age-mem-discard-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-age-mem-discard-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "analysis-channel-cost-daily",
+          "name": "분석 채널 4종 일간 비용·건수 모니터링 (정식 등재 2026-05-25)",
+          "schedule": "0 9 * * *",
+          "scheduleHuman": "매일 09:00",
+          "type": "script",
+          "handler": "analysis-channel-cost-daily.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": "DRYRUN 1주 시뮬 후 ANALYSIS_COST_DRYRUN=0 수동 전환. 분석 채널 매트릭스 정식 등재 비용 감시.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/analysis-channel-cost-daily.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/analysis-channel-cost-daily-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-analysis-channel-cost-daily-*.log",
               "exists": false
             }
           }
@@ -3672,8 +3736,8 @@
           "name": "오답노트 반복 패턴 일일 분석",
           "schedule": "30 3 * * *",
           "scheduleHuman": "매일 03:30",
-          "type": "prompt",
-          "handler": "ask-claude.sh (LLM)",
+          "type": "script",
+          "handler": "mistake-pattern-analyzer.sh",
           "team": {
             "id": "uncategorized",
             "name": "미분류"
@@ -3696,6 +3760,38 @@
             "claudeStderr": {
               "pattern": "claude-stderr-mistake-pattern-analyzer-*.log",
               "exists": true
+            }
+          }
+        },
+        {
+          "id": "owner-judgments-extract",
+          "name": "오너 판단 패턴 증류",
+          "schedule": "30 2 * * 0",
+          "scheduleHuman": "일요일 02:30",
+          "type": "script",
+          "handler": "owner-judgments-extract.mjs",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "weekly",
+          "maxBudget": "0.30",
+          "disabled": false,
+          "description": "discord-history에서 오너 발화 추출 → Haiku로 판단 원칙 증류 → wiki/owner/_facts.md source:judgment-extract 적재. 주 1회 실행.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/owner-judgments-extract.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/owner-judgments-extract-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-owner-judgments-extract-*.log",
+              "exists": false
             }
           }
         },
@@ -3842,7 +3938,7 @@
           "model": "claude-sonnet-4-6",
           "priority": "weekly",
           "maxBudget": "1.00",
-          "disabled": true,
+          "disabled": false,
           "description": null,
           "logs": {
             "stdout": {
@@ -3911,11 +4007,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/skill-synthesis-verify.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/skill-synthesis-verify-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-skill-synthesis-verify-*.log",
@@ -4015,6 +4111,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-wiki-reference-report-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "youtube-bench",
+          "name": "YouTube 영상 → LLM Wiki 적재",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "youtube-bench.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-dev",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "event",
+          "maxBudget": "0.50",
+          "disabled": false,
+          "description": "youtube-bench.mjs 래퍼. yt-dlp로 자막 다운로드 → Haiku 인사이트 추출 → wiki/_facts.md 적재. ledger로 중복 방지.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/youtube-bench.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/youtube-bench-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-youtube-bench-*.log",
               "exists": false
             }
           }

@@ -16,14 +16,7 @@ log() {
     echo "[$(date '+%F %T')] [oss-promo] $1" | tee -a "$LOG"
 }
 
-log "START — 주간 OSS 홍보 초안 생성"
-
-"$NODE" "$JARVIS_HOME/scripts/oss-manager.mjs" --mode promo >> "$LOG" 2>&1
-EXIT_CODE=$?
-
-if [[ $EXIT_CODE -eq 0 ]]; then
-    log "SUCCESS"
-else
-    log "ERROR — exit $EXIT_CODE"
-    exit $EXIT_CODE
-fi
+log "DEPRECATED — promo 모드는 2026-04-21 oss-manager.mjs에서 제거됨"
+log "OSS 홍보 초안 생성 기능은 현재 구현 없음. 필요 시 /git-open-up step-7 스킬 참조"
+log "이 LA(com.jarvis.oss-promo)는 제거 또는 비활성화를 권고합니다. exit 0으로 정상 종료"
+exit 0

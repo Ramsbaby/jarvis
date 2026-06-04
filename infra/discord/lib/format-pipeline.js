@@ -118,6 +118,16 @@ const collapseBlankLines = withCodeFenceGuard((text) =>
   text.replace(/(\n\s*){3,}/g, '\n\n'),
 );
 
+/** Downshift H4+ headers to ### — Discord does not render #### or deeper visually. */
+const normalizeDeepHeadings = withCodeFenceGuard((text) =>
+  text.replace(/^#{4,} /gm, '### '),
+);
+
+/** Strip Discord spoiler wrappers ||text|| → text (click-to-reveal harms mobile readability). */
+const suppressSpoilers = withCodeFenceGuard((text) =>
+  text.replace(/\|\|(.+?)\|\|/gs, '$1'),
+);
+
 /** Keep at most 2 horizontal rules (---) per message. */
 function trimHorizontalRules(text) {
   const parts = text.split(/(```[\s\S]*?```)/g);
@@ -172,11 +182,17 @@ const injectSectionHeaders = ENABLE_3PART_HEADER_GUARD
     )
   : (text) => text;
 
+// [2026-05-22 v5] filterNarration default OFF — 정규식이 "이제 ~합니다", "확인했습니다" 등
+// 정상 한국어 분석 문장을 통째 도려냄 → 1500자 모델 출력이 600자로 짜내짐 사고.
+// 출력 알맹이 보존이 narration 제거보다 우선. opt-in 방식으로만 활성화.
+const _NARRATION_FILTER_ON = process.env.ENABLE_NARRATION_FILTER === '1';
 const TRANSFORMS = [
-  { name: 'filterNarration', fn: filterNarration },
+  ...(_NARRATION_FILTER_ON ? [{ name: 'filterNarration', fn: filterNarration }] : []),
   { name: 'injectSectionHeaders', fn: injectSectionHeaders },
   { name: 'tableToList', fn: tableToList },
   { name: 'normalizeHeadings', fn: normalizeHeadings },
+  { name: 'normalizeDeepHeadings', fn: normalizeDeepHeadings },
+  { name: 'suppressSpoilers', fn: suppressSpoilers },
   { name: 'collapseBlankLines', fn: collapseBlankLines },
   { name: 'trimHorizontalRules', fn: trimHorizontalRules },
   { name: 'suppressLinkPreviews', fn: suppressLinkPreviews },
@@ -200,4 +216,60 @@ export function formatForDiscord(text, { channelId } = {}) {
     }
   }
   return result;
+}
+
+/**
+ * Validate text for Discord rendering issues AFTER all transforms.
+ * Non-destructive — returns issues list for logging, does not modify text.
+ * Called by format-discord.mjs to produce pre-send audit trail.
+ *
+ * @param {string} text  Formatted text (output of formatForDiscord)
+ * @returns {{ type: string, line: number, snippet: string, severity: 'error'|'warn'|'info' }[]}
+ */
+export function validateForDiscord(text) {
+  if (!text || !text.trim()) {
+    return [{ type: 'EMPTY_MESSAGE', line: 0, snippet: '', severity: 'error' }];
+  }
+
+  const issues = [];
+  const lines = text.split('\n');
+  let inCodeFence = false;
+
+  lines.forEach((line, i) => {
+    const ln = i + 1;
+
+    // Code fence tracking — skip checks inside ``` blocks
+    if (/^```/.test(line.trim())) {
+      inCodeFence = !inCodeFence;
+      return;
+    }
+    if (inCodeFence) return;
+
+    // H4+ headers — normalizeDeepHeadings should have caught these (safety net)
+    if (/^#{4,} /.test(line)) {
+      issues.push({ type: 'H4_PLUS_HEADER', line: ln, snippet: line.slice(0, 60), severity: 'warn' });
+    }
+
+    // Markdown table row survivors — tableToList should have converted them
+    if (/^\|.+\|$/.test(line.trim()) && !/^\|[\s:|-]+\|$/.test(line.trim())) {
+      issues.push({ type: 'TABLE_ROW_SURVIVOR', line: ln, snippet: line.slice(0, 60), severity: 'error' });
+    }
+
+    // Spoiler syntax survivors — suppressSpoilers should have stripped these
+    if (/\|\|.+\|\|/.test(line)) {
+      issues.push({ type: 'SPOILER_SYNTAX', line: ln, snippet: line.slice(0, 60), severity: 'warn' });
+    }
+
+    // Very long single line (> 1900 chars) — will be chunked mid-line by route script
+    if (line.length > 1900) {
+      issues.push({ type: 'LONG_LINE', line: ln, snippet: `length=${line.length}`, severity: 'warn' });
+    }
+
+    // Bare HTML tags — Discord renders them as plain text, not markup
+    if (/<[a-zA-Z][^>]*>/.test(line)) {
+      issues.push({ type: 'HTML_TAG', line: ln, snippet: line.slice(0, 60), severity: 'info' });
+    }
+  });
+
+  return issues;
 }

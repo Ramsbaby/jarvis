@@ -121,6 +121,18 @@ rules:
       - "infra/launchd/*.plist"
       - "infra/config/*.plist"
 
+  - id: family-pii
+    severity: high
+    # 오너 배우자(가족) 실명·직업. 공개 저장소 유출 금지 — 로컬 personas.json(gitignored)에만 보관.
+    # allow_paths 최소화: infra/context/owner/** 를 일부러 제외해 persona-discord.md 도 검사 대상에 포함.
+    # (2026-06-04 사고: 깊이 가드 등재 중 배우자 직업이 공개 추적 파일로 유입될 뻔 → 본 룰로 차단)
+    # 패턴은 private/config/spouse-pii.txt 에서 로드 (gitignored) — 실명을 본 공개 파일에 평문 저장하지 않음.
+    pattern_file: "private/config/spouse-pii.txt"
+    description: "오너 배우자 실명·직업 — 로컬 personas.json(gitignored) 또는 private/config/spouse-pii.txt 로 관리"
+    allow_paths:
+      - ".privacy-blocklist.yml"
+      - "*.example.*"
+
 global_ignore:
   - ".git/**"
   - "node_modules/**"

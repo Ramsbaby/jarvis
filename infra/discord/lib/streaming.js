@@ -953,32 +953,70 @@ export class StreamingMessage {
   }
 
   _findSplitPoint(text, maxLen) {
+    // [2026-05-22 v7d] 마크다운 테이블 행(`|...|`) 중간/사이 절단 방지.
+    //   buffer 끝쪽이 미완성 테이블 (incomplete `| |` 행)이면 chunk 경계가 그 안에 떨어졌을 때
+    //   tableToList 변환 실패 → 다음 flush에서 일부만 다시 변환 → 송출 깨짐 발생.
+    //   해법: maxLen 부근에 `|...|` 행이 있으면 그 블록 위로 split 끌어올림.
+    const safeMax = this._adjustForTableBoundary(text, maxLen);
+    const effectiveMax = safeMax > 0 ? safeMax : maxLen;
+
     // 우선순위 1: ### 헤딩 경계 (섹션 단위 분할)
     const headingRe = /\n(?=###? )/g;
     let bestHeading = -1;
     let m;
     while ((m = headingRe.exec(text)) !== null) {
-      if (m.index > 0 && m.index <= maxLen) bestHeading = m.index;
+      if (m.index > 0 && m.index <= effectiveMax) bestHeading = m.index;
     }
-    if (bestHeading > maxLen * 0.4) return bestHeading + 1;
+    if (bestHeading > effectiveMax * 0.4) return bestHeading + 1;
 
     // 우선순위 2: --- 구분선
-    const hrIdx = text.lastIndexOf('\n---', maxLen);
-    if (hrIdx > maxLen * 0.4) return hrIdx + 1;
+    const hrIdx = text.lastIndexOf('\n---', effectiveMax);
+    if (hrIdx > effectiveMax * 0.4) return hrIdx + 1;
 
     // 우선순위 3: 빈 줄 (단락 경계)
-    const blankIdx = text.lastIndexOf('\n\n', maxLen);
-    if (blankIdx > maxLen * 0.5) return blankIdx + 1;
+    const blankIdx = text.lastIndexOf('\n\n', effectiveMax);
+    if (blankIdx > effectiveMax * 0.5) return blankIdx + 1;
 
     // 우선순위 4: 일반 줄바꿈
-    const candidate = text.lastIndexOf('\n', maxLen);
-    if (candidate > maxLen * 0.6) return candidate + 1;
+    const candidate = text.lastIndexOf('\n', effectiveMax);
+    if (candidate > effectiveMax * 0.6) return candidate + 1;
 
     // 우선순위 5: 공백
-    const lastSpace = text.lastIndexOf(' ', maxLen);
-    if (lastSpace > maxLen * 0.6) return lastSpace + 1;
+    const lastSpace = text.lastIndexOf(' ', effectiveMax);
+    if (lastSpace > effectiveMax * 0.6) return lastSpace + 1;
 
-    return maxLen;
+    return effectiveMax;
+  }
+
+  /**
+   * [2026-05-22 v7d] 마크다운 테이블 블록을 가로지르지 않도록 maxLen을 조정.
+   * maxLen 직전·직후 라인이 `|`로 시작하면 그 테이블 블록의 시작 위치를 반환 (split을 위로 끌어올림).
+   * 위로 올릴 공간이 없으면 -1 반환 (호출자는 원래 maxLen 사용 → 최후엔 finalize 단계 안전망 발동).
+   */
+  _adjustForTableBoundary(text, maxLen) {
+    if (maxLen >= text.length) return maxLen;
+    // maxLen 위치에서 가장 가까운 줄바꿈을 기점으로 라인 단위 검사
+    const around = text.slice(0, Math.min(text.length, maxLen + 200));
+    const lines = around.split('\n');
+    // 각 라인의 시작 offset 계산
+    const offsets = [0];
+    for (let i = 0; i < lines.length - 1; i++) {
+      offsets.push(offsets[i] + lines[i].length + 1);
+    }
+    // maxLen이 속한 라인 인덱스
+    let cur = 0;
+    for (let i = 0; i < offsets.length; i++) {
+      if (offsets[i] <= maxLen) cur = i; else break;
+    }
+    // 현재 라인 또는 직전 라인이 `|...`로 시작하는지
+    const isTableLine = (idx) => idx >= 0 && idx < lines.length && /^\s*\|/.test(lines[idx]);
+    if (!isTableLine(cur) && !isTableLine(cur - 1)) return maxLen;
+    // 위로 거슬러 테이블 블록 시작 찾기
+    let blockStart = cur;
+    while (blockStart > 0 && isTableLine(blockStart - 1)) blockStart--;
+    // 블록 시작이 너무 위 (maxLen의 30% 미만)면 양보하지 않음 — 최후 안전망에 위임
+    if (offsets[blockStart] < maxLen * 0.3) return -1;
+    return offsets[blockStart];
   }
 
   async _sendOrEdit(content, isFinal) {

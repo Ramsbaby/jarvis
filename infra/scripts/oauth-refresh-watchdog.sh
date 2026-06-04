@@ -89,10 +89,12 @@ if [[ -n "$ALERT_REASON" ]]; then
                 "$ALERT_REASON. 즉시 진단 필요: \`tail -20 ${LOG}\` + \`tail -5 ${LEDGER}\`. 주인님 /login 안 하셔도 됨 — 자비스 자동 복구 시도가 우선." \
                 2>/dev/null || log "alert.sh 호출 실패"
         fi
-        # 자동 복구 시도: --force로 즉시 갱신 한 번
-        log "자동 복구 시도 — oauth-refresh.sh --force"
-        bash "${BOT_HOME}/../infra/scripts/oauth-refresh.sh" --force >> "$LOG" 2>&1 || \
-            bash "${HOME}/jarvis/infra/scripts/oauth-refresh.sh" --force >> "$LOG" 2>&1 || true
+        # 2026-05-30: --force 자동복구 제거 (refresh_token reuse race 차단 + 이중호출 버그 제거).
+        # watchdog --force가 인터랙티브/봇 세션의 캐시 refresh_token을 stale로 만들어 다음 SDK
+        # 갱신이 reuse detection → 토큰 패밀리 revoke (05-30 13:01 회전 → 13:52 사망 실측).
+        # 또한 기존 `|| bash ... --force` 폴백은 같은 파일을 3초 간격 2발 호출(이중 POST)하는 증폭기였음.
+        # → 감지·알림 전용으로 강등. 갱신은 oauth-refresh.sh(유휴 시 skip-if-active) + SDK 자체갱신이 담당.
+        log "감지·알림 전용 — 자동 --force 비활성화 (reuse race 차단, 이중호출 제거)"
     fi
     exit 1
 fi

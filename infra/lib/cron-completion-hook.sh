@@ -13,13 +13,21 @@
 set -euo pipefail
 
 # 설정
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+if [[ ! -d "$BOT_HOME" ]]; then
+  # Fallback to runtime path if .jarvis symlink doesn't exist
+  BOT_HOME="${HOME}/jarvis/runtime"
+fi
+
 LOG_DIR="$BOT_HOME/logs"
 COMPLETION_LOG="$LOG_DIR/cron-completion-hook.log"
 METRICS_DIR="$BOT_HOME/state/cron-metrics"
 
 # 로그 디렉토리 생성
-mkdir -p "$LOG_DIR" "$METRICS_DIR"
+mkdir -p "$LOG_DIR" "$METRICS_DIR" || {
+  echo "$(date '+[%Y-%m-%d %H:%M:%S]') [completion-hook] ERROR: Failed to create log directories" >&2
+  exit 1
+}
 
 # 타임스탬프 함수
 log_timestamp() {
@@ -40,6 +48,12 @@ log_task_completion() {
   local TASK_NAME="${1:-unknown}"
   local DURATION_MS="${2:-0}"
   local EXIT_CODE="${3:-0}"
+
+  # Ensure log directory exists before writing
+  if ! mkdir -p "$LOG_DIR" "$METRICS_DIR" 2>/dev/null; then
+    echo "$(date '+[%Y-%m-%d %H:%M:%S]') [completion-hook] ERROR: Cannot create log directories" >&2
+    return 1
+  fi
 
   # 기본 로깅
   {
@@ -75,7 +89,13 @@ if [[ "$MODE" == "monitor" ]]; then
   monitor_mode
 else
   # Direct logging mode (backwards compatible)
-  log_task_completion "$@"
+  # If first arg is "log", shift it off; otherwise treat as task name
+  if [[ "$MODE" == "log" && $# -gt 1 ]]; then
+    shift
+    log_task_completion "$@"
+  else
+    log_task_completion "$@"
+  fi
 fi
 
 exit 0

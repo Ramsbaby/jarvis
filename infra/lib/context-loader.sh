@@ -114,6 +114,20 @@ $(cat "$context_bus")"
         fi
     fi
 
+    # --- [DYNAMIC] Agent Self-Note (Dreaming) ---
+    # 이전 실행에서 저장된 패턴/실수/제안을 주입. write-agent-note.sh가 저장,
+    # context_bus_update 필드가 있으면 context-bus.md에도 자동 append됨.
+    # 노트 없으면 silently skip.
+    local _note_reader="${BOT_HOME}/lib/read-agent-note.sh"
+    if [[ -f "$_note_reader" ]]; then
+        local _note_text
+        _note_text=$(bash "$_note_reader" "$TASK_ID" --markdown 2>/dev/null || true)
+        if [[ -n "$_note_text" ]]; then
+            _ctx_append "agent-note" "DYNAMIC" "## 이전 실행 Self-Note
+${_note_text}"
+        fi
+    fi
+
     # --- [DYNAMIC] Cross-team context: depends tasks' latest results ---
     # Continue Sites: minimal 모드에서 생략
     if [[ "$_ctx_mode" != "minimal" ]]; then

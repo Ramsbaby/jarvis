@@ -13,14 +13,11 @@ export HOME="${HOME:-/Users/$(id -un)}"  # macOS default; Linux: /home/$(id -un)
 # claude -p는 구독 인증으로 실행, ANTHROPIC_API_KEY가 있으면 API 크레딧을 소모하므로 명시적 unset
 unset ANTHROPIC_API_KEY 2>/dev/null || true
 
-# Prevent nested claude detection
-unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+# Prevent nested claude detection (IMPORTANT: preserve CLAUDECODE for OAuth authentication in cron)
+# See: ask-claude.sh:141 "Unsetting CLAUDECODE breaks OAuth authentication in cron environments"
+unset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
-
-# 자동화 전용 인증 주입 (B안 듀얼 토큰 — refresh 레이스 차단). credentials.json은 건드리지 않음.
-source "${BOT_HOME}/lib/automation-auth.sh" 2>/dev/null || true
-
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
 

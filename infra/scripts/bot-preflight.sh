@@ -30,10 +30,6 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [preflight] $*" | tee -a "$LOG_FILE
 # Shared ntfy function
 source "${BOT_HOME}/lib/ntfy-notify.sh"
 
-# 자동화 전용 인증 주입 (B안 듀얼 토큰): 봇 SDK 에이전트가 long-lived 토큰을 상속 → refresh 레이스 차단.
-# credentials.json(주인님 풀스코프 로그인·원격제어용)은 건드리지 않음.
-source "${BOT_HOME}/lib/automation-auth.sh" 2>/dev/null || true
-
 # ── Bootstrap early SIGTERM trap (RISK-A) ────────────────────────────────────
 # fail_and_heal() 내 sleep 600/300 구간 SIGTERM 사각지대 방지. node 실행 시점
 # (아래쪽)에 봇 정상 종료용 특화 trap으로 덮어씌워져 이중 안전망 역할.
@@ -228,6 +224,42 @@ fi
 
 # node를 백그라운드로 실행 + SIGTERM trap: launchctl stop/daily-restart 수신 시
 # bash가 즉사하여 node가 고아 프로세스로 잔존하는 문제(RISK-2) 방지
+# ── OAuth 격리 (2026-05-30 v2 자동갱신) — 봇 전용 갱신키 credentials로 분리 ──────
+# 봇을 인터랙티브/워크플로(~/.claude)와 다른 OAuth 패밀리로 분리 → reuse-race 유발 주체에서 제외.
+# v2(야간): 정적 long-lived 토큰(갱신키 없음 → 8h 만료 후 수동 재발급)을 버리고,
+#   /login 발급 갱신키 credentials.json + oauth-refresh-bot(30분 선제 갱신)으로 자동갱신.
+#   정적 토큰 사망(05-30 19:34 봇 다운)의 근본 해결. 회사 계정(yuiopnm) OAuth로 격리.
+# Iron Law 4: 토큰을 crontab/plist 평문에 두지 않고 600 credentials.json에서만 읽음.
+_BOT_CONFIG_DIR="$HOME/.claude-bot"
+_BOT_CREDS="$_BOT_CONFIG_DIR/.credentials.json"
+_OAUTH_ISO_FILE="$_BOT_CONFIG_DIR/.long-lived-token"
+if [[ -r "$_BOT_CREDS" ]]; then
+    # [2026-05-31 오염 가드] 봇 credentials가 메인(~/.claude)과 동일 토큰이면 거부 → 장수명 fallback.
+    # 사고(05-31): 봇 토큰 사망 시 메인 credentials를 봇에 복사 → 같은 refresh_token 패밀리 공유 →
+    #   봇 갱신이 메인 refresh_token 무효화 → reuse race로 양쪽 폐기. 디렉토리는 갈렸으나 토큰이 같았음.
+    # 분리 1차 키 = refreshToken(패밀리 식별자). accessToken은 8h마다 회전하므로 보조 비교.
+    # accessToken만 보면 메인 갱신 후 옛 메인 creds 복사 시 가드를 통과(우회)하는 사각지대가 생김.
+    _BOT_AT=$(node -e "try{process.stdout.write(JSON.parse(require('fs').readFileSync('$_BOT_CREDS','utf-8')).claudeAiOauth?.accessToken||'')}catch{}" 2>/dev/null)
+    _MAIN_AT=$(node -e "try{process.stdout.write(JSON.parse(require('fs').readFileSync('$HOME/.claude/.credentials.json','utf-8')).claudeAiOauth?.accessToken||'')}catch{}" 2>/dev/null)
+    _BOT_RT=$(node -e "try{process.stdout.write(JSON.parse(require('fs').readFileSync('$_BOT_CREDS','utf-8')).claudeAiOauth?.refreshToken||'')}catch{}" 2>/dev/null)
+    _MAIN_RT=$(node -e "try{process.stdout.write(JSON.parse(require('fs').readFileSync('$HOME/.claude/.credentials.json','utf-8')).claudeAiOauth?.refreshToken||'')}catch{}" 2>/dev/null)
+    if [[ -r "$_OAUTH_ISO_FILE" ]] && { [[ -n "$_BOT_RT" && "$_BOT_RT" == "$_MAIN_RT" ]] || [[ -n "$_BOT_AT" && "$_BOT_AT" == "$_MAIN_AT" ]]; }; then
+        export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_OAUTH_ISO_FILE")"
+        log "🔴 오염 감지 — 봇 credentials가 메인과 동일 갱신키/접속키. 거부하고 장수명 토큰 fallback (복사 사고 방지)"
+    else
+        # 갱신키 있는 정상 분리 credentials.json 우선 → CONFIG_DIR 방식(자동갱신 가능).
+        # CLAUDE_CODE_OAUTH_TOKEN env가 있으면 credentials.json보다 우선되므로 명시적 제거.
+        unset CLAUDE_CODE_OAUTH_TOKEN
+        export CLAUDE_CONFIG_DIR="$_BOT_CONFIG_DIR"
+        log "OAuth 격리 — 봇 전용 갱신키 credentials 사용 (CONFIG_DIR=$_BOT_CONFIG_DIR, 자동갱신 활성)"
+    fi
+elif [[ -r "$_OAUTH_ISO_FILE" ]]; then
+    export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_OAUTH_ISO_FILE")"
+    log "WARN: 갱신키 credentials 없음 — 정적 토큰 fallback (자동갱신 불가, 만료 시 수동 재발급 필요)"
+else
+    log "WARN: 격리 토큰 없음 — 봇이 메인 credentials 사용(격리 미적용)"
+fi
+
 _start_ts=$(date +%s)
 cd "$BOT_HOME/discord" || fail_and_heal "디렉토리 이동 실패: $BOT_HOME/discord"
 export NODE_PATH="/Users/ramsbaby/jarvis/runtime/discord/node_modules${NODE_PATH:+:$NODE_PATH}"

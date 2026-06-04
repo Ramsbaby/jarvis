@@ -42,7 +42,7 @@ if ! echo "$JSON" | jq -e '.insights' >/dev/null 2>&1; then
   exit 0
 fi
 
-PROPOSED=0
+ENQUEUED=0
 SKIPPED=0
 
 while IFS= read -r item; do
@@ -55,27 +55,34 @@ while IFS= read -r item; do
     continue
   fi
 
+  # 템플릿 플레이스홀더 가드 — ID/TITLE에 < > 포함된 항목은 실제 데이터가 아님
+  if [[ "$ID" == *'<'* || "$ID" == *'>'* || "$TITLE" == *'<'* || "$TITLE" == *'>'* ]]; then
+    SKIPPED=$((SKIPPED + 1))
+    _log "skipped (template placeholder): $ID"
+    continue
+  fi
+
   PROMPT="기술 도입 검토: ${TITLE}
 
 사유: ${REASON}
 
 자동 실행 안 됨. 주인님 검토 후 결정:
-  - 도입 진행: node ${TASK_STORE} promote ${ID}
-  - 거절: node ${TASK_STORE} reject ${ID} \"<사유>\""
+  - 도입 진행: node ${TASK_STORE} transition ${ID} approved
+  - 거절: node ${TASK_STORE} transition ${ID} rejected"
 
-  RESULT=$(node "$TASK_STORE" propose \
+  RESULT=$(node "$TASK_STORE" enqueue \
     --id "$ID" \
     --title "$TITLE" \
     --prompt "$PROMPT" \
-    --source news-briefing 2>&1)
+    --source news-briefing 2>&1) || true
 
-  if echo "$RESULT" | grep -q '"action":"proposed"'; then
-    PROPOSED=$((PROPOSED + 1))
-    _log "proposed: $ID — $TITLE"
+  if echo "$RESULT" | grep -qE '"action":"enqueued"|"action":"skip"'; then
+    ENQUEUED=$((ENQUEUED + 1))
+    _log "enqueued: $ID — $TITLE"
   else
     SKIPPED=$((SKIPPED + 1))
     _log "skipped: $ID ($RESULT)"
   fi
 done < <(echo "$JSON" | jq -c '.insights[]?')
 
-_log "done: proposed=$PROPOSED, skipped=$SKIPPED"
+_log "done: enqueued=$ENQUEUED, skipped=$SKIPPED"

@@ -41,7 +41,7 @@ const CLAUDE_BIN          = process.env.CLAUDE_BINARY || join(homedir(), '.local
 const LOGS_DIR            = join(BOT_HOME, 'logs');
 
 const MODELS = JSON.parse(readFileSync(MODELS_FILE, 'utf-8'));
-const OPUS_MODEL = MODELS.large || 'claude-opus-4-6';
+const OPUS_MODEL = MODELS.large || 'claude-opus-4-7';
 
 // --days 인자
 // 크론 자동 실행: 기본 1일 (어제 세션만 분석, 슬라이딩 윈도우 중복 방지)

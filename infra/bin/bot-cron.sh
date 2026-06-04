@@ -18,6 +18,14 @@ unset ANTHROPIC_API_KEY 2>/dev/null || true
 # credentials from the parent Claude Code session running cron-master.sh
 unset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
+# OAuth 격리 (2026-05-30) — 크론 claude 작업도 봇 전용 long-lived 토큰 사용.
+# 인터랙티브/워크플로(~/.claude)와 분리 → reuse-race 유발 주체에서 제외.
+# Iron Law 4: 600 파일에서만 읽음(crontab 평문 금지). SDK가 env 우선 사용.
+_OAUTH_ISO_FILE="${HOME}/.claude-bot/.long-lived-token"
+if [[ -r "$_OAUTH_ISO_FILE" ]]; then
+    export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_OAUTH_ISO_FILE")"
+fi
+
 # Batch mode: 크론 태스크는 기본적으로 토큰 절감 플래그 활성화
 # (llm-gateway.sh가 감지하여 --disable-slash-commands, --no-session-persistence,
 #  --setting-sources "" 를 claude -p에 추가)
@@ -26,10 +34,6 @@ unset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
 
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
-
-# 자동화 전용 인증 주입 (B안 듀얼 토큰 — refresh 레이스 차단). credentials.json은 건드리지 않음.
-source "${BOT_HOME}/lib/automation-auth.sh" 2>/dev/null || true
-
 INFRA_DIR="${HOME}/jarvis/infra"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
@@ -323,6 +327,25 @@ TASK_MAX_RETRIES=$(echo "$TASK_CONFIG" | jq -r '.retry.max // .maxRetries // 3')
 RESULT_RETENTION=$(echo "$TASK_CONFIG" | jq -r '.resultRetention // 7')
 RESULT_MAX_CHARS=$(echo "$TASK_CONFIG" | jq -r '.resultMaxChars // 2000')
 MODEL=$(echo "$TASK_CONFIG" | jq -r '.model // empty')
+
+# === Pilot Routing: DeepSeek/Qwen budget model routing (2026-05-25) ===
+# Phase 1-3 파일럿: 저난이도 크론을 DeepSeek V4-Flash 또는 Qwen으로 라우팅
+# config: pilot-routing-deepseek-qwen.json (status: active)
+if [[ -f "${BOT_HOME}/config/pilot-routing-deepseek-qwen.json" ]]; then
+    _pilot_config=$(cat "${BOT_HOME}/config/pilot-routing-deepseek-qwen.json" 2>/dev/null || echo '{}')
+    _pilot_status=$(echo "$_pilot_config" | jq -r '.status // "inactive"')
+
+    if [[ "$_pilot_status" == "active" ]]; then
+        # model-selector.mjs로 라우팅 결정
+        _routed_model=$(node "${BOT_HOME}/lib/model-selector.mjs" "$TASK_ID" "$MODEL" 2>&1 | tail -1)
+        if [[ -n "$_routed_model" && "$_routed_model" != "$MODEL" ]]; then
+            log "Model routing: $MODEL → $_routed_model (pilot phase)"
+            MODEL="$_routed_model"
+        fi
+        unset _pilot_config _pilot_status _routed_model
+    fi
+fi
+
 # TASK_AUTHOR: tasks.json의 "author" 필드, 없으면 task id를 그대로 사용
 # ask-claude.sh에서 TASK_AUTHOR로 사용됨
 export TASK_AUTHOR
@@ -768,7 +791,7 @@ unset _reg_remaining
 _sk_enabled_b=$(echo "$TASK_CONFIG" | jq -r '.skillSynthesis.enabled // false')
 if [[ "$_sk_enabled_b" == "true" ]] && command -v jq >/dev/null 2>&1 \
     && printf '%s' "$RESULT" | grep -q "^SKILL_JSON:"; then
-    _sk_file="${HOME}/jarvis/runtime/skills/skills.jsonl"
+    _sk_file="${HOME}/jarvis/runtime/runtime/skills/skills.jsonl"
     _sk_domain=$(echo "$TASK_CONFIG" | jq -r '.skillSynthesis.domain // "ops"')
     mkdir -p "$(dirname "$_sk_file")"
     _sk_added=0
@@ -842,9 +865,12 @@ if [[ "$TASK_ID" == "council-insight" ]] && command -v jq >/dev/null 2>&1 \
 fi
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
-# --- Truncate result to maxChars before routing ---
-if [[ ${#RESULT} -gt $RESULT_MAX_CHARS ]]; then
-    RESULT="${RESULT:0:$RESULT_MAX_CHARS}...(truncated)"
+# --- Truncate result for non-Discord outputs (file, ntfy 등) ---
+# Discord는 route-result.sh 내 1990자 청킹이 처리하므로 pre-truncation 불필요.
+# file/ntfy 등 단일 출력용 라우터에는 RESULT_MAX_CHARS를 그대로 적용.
+_RESULT_FOR_NON_DISCORD="$RESULT"
+if [[ ${#_RESULT_FOR_NON_DISCORD} -gt $RESULT_MAX_CHARS ]]; then
+    _RESULT_FOR_NON_DISCORD="${_RESULT_FOR_NON_DISCORD:0:$RESULT_MAX_CHARS}...(truncated)"
 fi
 
 # --- Route output based on tasks.json output field ---
@@ -859,13 +885,14 @@ for mode in $OUTPUT_MODES; do
     if [[ -z "$RESULT" ]]; then continue; fi
     case "$mode" in
         discord)
+            # Discord: 원본 RESULT 전달 — route-result.sh 내 1990자 청킹이 분할 처리
             "$BOT_HOME/bin/route-result.sh" discord "$TASK_ID" "$RESULT" "${DISCORD_CHANNEL:-}" || log "WARN: discord routing failed"
             ;;
         ntfy)
-            "$BOT_HOME/bin/route-result.sh" ntfy "$TASK_ID" "$RESULT" || log "WARN: ntfy routing failed"
+            "$BOT_HOME/bin/route-result.sh" ntfy "$TASK_ID" "$_RESULT_FOR_NON_DISCORD" || log "WARN: ntfy routing failed"
             ;;
         file)
-            # Save result to task-specific log file
+            # Save result to task-specific log file — 원본 전체 저장 (truncation 없음)
             _log_file="${BOT_HOME}/logs/${TASK_ID}.log"
             mkdir -p "$(dirname "$_log_file")"
             {

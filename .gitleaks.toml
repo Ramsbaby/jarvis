@@ -9,6 +9,13 @@ id = "hardcoded-home-path"
 description = "Hardcoded personal home directory path"
 regex = '''/Users/[a-zA-Z]+/\.|/home/[a-zA-Z]+/\.|C:\\Users\\[a-zA-Z]+\\'''
 tags = ["personal", "path"]
+# 2026-06-04: 아래 2개 자동생성 스크립트의 홈경로(.jarvis 레거시 호환)는 시크릿 아님
+# — 이미 origin에 동일 부류 57건 공개됨. 본 룰만 면제하고 토큰·이메일 등 다른 룰은 계속 검사.
+[rules.allowlist]
+paths = [
+  '''infra/bin/test-cron-safe-wrapper\.sh$''',
+  '''infra/scripts/oauth-rotation-verify\.sh$''',
+]
 
 # Discord bot token pattern
 [[rules]]

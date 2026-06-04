@@ -41,7 +41,7 @@ fi
 
 # 변경 없으면 주요 파일만 리뷰
 if [[ -z "$CHANGED_FILES" ]]; then
-bin/ask-claude.sh
+    CHANGED_FILES="bin/ask-claude.sh
 discord/lib/session.js"
 fi
 
@@ -57,14 +57,16 @@ while IFS= read -r file; do
     line_count=$(wc -l < "$filepath" | tr -d ' ')
     if [[ "$line_count" -gt 200 ]]; then
         content=$(head -200 "$filepath")
+        _header="=== ${file} (${line_count} lines, showing first 200) ==="
         REVIEW_CONTEXT="${REVIEW_CONTEXT}
-=== ${file} (${line_count} lines, showing first 200) ===
+${_header}
 ${content}
 "
     else
         content=$(cat "$filepath")
+        _header="=== ${file} ==="
         REVIEW_CONTEXT="${REVIEW_CONTEXT}
-=== ${file} ===
+${_header}
 ${content}
 "
     fi

@@ -21,7 +21,7 @@ export PATH="${PATH:-/usr/bin:/bin}:/opt/homebrew/bin:/usr/local/bin:${HOME}/.lo
 #
 # ADR-006: LLM Gateway Multi-Provider
 
-LLM_GATEWAY_VERSION="1.2.0"
+LLM_GATEWAY_VERSION="1.3.0"
 LLM_GATEWAY_BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 _TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
@@ -38,18 +38,27 @@ else
 fi
 
 # Load API keys from .env if available
-if [[ -f "${LLM_GATEWAY_BOT_HOME}/discord/.env" ]]; then
+# .env 경로 우선순위: runtime/discord/.env → (legacy) infra/discord/.env
+_LLM_GW_ENV_FILE=""
+if [[ -f "${LLM_GATEWAY_BOT_HOME}/../runtime/discord/.env" ]]; then
+    _LLM_GW_ENV_FILE="${LLM_GATEWAY_BOT_HOME}/../runtime/discord/.env"
+elif [[ -f "${LLM_GATEWAY_BOT_HOME}/discord/.env" ]]; then
+    _LLM_GW_ENV_FILE="${LLM_GATEWAY_BOT_HOME}/discord/.env"
+fi
+if [[ -n "$_LLM_GW_ENV_FILE" ]]; then
     while IFS='=' read -r key val; do
         key=$(echo "$key" | xargs)
         [[ -z "$key" || "$key" == \#* ]] && continue
         val=$(echo "$val" | sed "s/^[\"']//;s/[\"']$//")
         case "$key" in
             OPENAI_API_KEY)       export OPENAI_API_KEY="${OPENAI_API_KEY:-$val}" ;;
+            DEEPSEEK_API_KEY)     export DEEPSEEK_API_KEY="${DEEPSEEK_API_KEY:-$val}" ;;
             LANGFUSE_PUBLIC_KEY)  export LANGFUSE_PUBLIC_KEY="${LANGFUSE_PUBLIC_KEY:-$val}" ;;
             LANGFUSE_SECRET_KEY)  export LANGFUSE_SECRET_KEY="${LANGFUSE_SECRET_KEY:-$val}" ;;
             LANGFUSE_BASE_URL)    export LANGFUSE_BASE_URL="${LANGFUSE_BASE_URL:-$val}" ;;
         esac
-    done < "${LLM_GATEWAY_BOT_HOME}/discord/.env"
+    done < "$_LLM_GW_ENV_FILE"
+    unset _LLM_GW_ENV_FILE
 fi
 
 # Source Langfuse tracing (no-op if keys not configured)
@@ -145,17 +154,17 @@ _llm_claude_cli() {
         cmd=("${cmd[@]/--output-format json/--output-format stream-json}")
         local stream_forwarder="${LLM_GATEWAY_BOT_HOME}/lib/stream-to-board.sh"
         if [[ -x "$stream_forwarder" ]]; then
-            ANTHROPIC_API_KEY="" "${cmd[@]}" < /dev/null 2>"$stderr_tmp" \
+            ANTHROPIC_API_KEY="" CLAUDECODE="${CLAUDECODE:-}" "${cmd[@]}" < /dev/null 2>"$stderr_tmp" \
                 | bash "$stream_forwarder" "$DEV_TASK_ID" "$output"
             exit_code=${PIPESTATUS[0]}
         else
             # forwarder 없으면 기존 json 모드로 폴백
             cmd=("${cmd[@]/--output-format stream-json/--output-format json}")
-            ANTHROPIC_API_KEY="" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
+            ANTHROPIC_API_KEY="" CLAUDECODE="${CLAUDECODE:-}" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
             exit_code=$?
         fi
     else
-        ANTHROPIC_API_KEY="" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
+        ANTHROPIC_API_KEY="" CLAUDECODE="${CLAUDECODE:-}" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
         exit_code=$?
     fi
     if [[ $exit_code -ne 0 ]]; then
@@ -178,6 +187,212 @@ except:
     fi
     rm -f "$stderr_tmp"
     return "$exit_code"
+}
+
+# --- Provider: Google Gemini 3.5 Flash API ---
+# Model: gemini-3.5-flash-latest (1M context, $1.50/$9.00 per 1M tokens)
+# 비핵심 태스크(뉴스 브리핑, 요약, 로그 분석) 전용
+# Ref: https://ai.google.dev/
+_llm_gemini_35_flash_api() {
+    local prompt="$1" system="$2" timeout="$3" model="$4" output="$5"
+
+    # Node.js 클라이언트 사용 (fetch + JSON 구현)
+    local gemini_client="${LLM_GATEWAY_BOT_HOME}/lib/gemini-3-5-flash-client.mjs"
+    if [[ ! -f "$gemini_client" ]]; then
+        log_warn "Gemini 3.5 Flash client not found: $gemini_client"
+        return 1
+    fi
+
+    # 환경 변수 준비 (API 키 로드)
+    local api_key="${GEMINI_API_KEY:-}"
+    if [[ -z "$api_key" ]]; then
+        # .env 파일에서 자동 로드 시도
+        if [[ -f "${LLM_GATEWAY_BOT_HOME}/../runtime/discord/.env" ]]; then
+            api_key=$(grep '^GEMINI_API_KEY=' "${LLM_GATEWAY_BOT_HOME}/../runtime/discord/.env" | cut -d'=' -f2 | tr -d '"'\''')
+        fi
+    fi
+
+    if [[ -z "$api_key" ]]; then
+        log_warn "Gemini API key not found (GEMINI_API_KEY or .env)"
+        return 1
+    fi
+
+    # Node.js를 통해 Gemini API 호출
+    local result_tmp
+    result_tmp=$(mktemp)
+    local exit_code=0
+
+    # 프롬프트 + 시스템 프롬프트 병합
+    local combined_prompt="$prompt"
+    if [[ -n "$system" ]]; then
+        combined_prompt="${system}
+
+${prompt}"
+    fi
+
+    # Timeout 적용 (bash timeout 명령 사용)
+    if [[ -n "${_TIMEOUT_CMD:-}" ]]; then
+        "${_TIMEOUT_CMD}" "$timeout" \
+            node --input-type=module -e "
+import { gemini35Chat } from '${gemini_client}';
+(async () => {
+  try {
+    const result = await gemini35Chat([
+      { role: 'user', parts: [{ text: \`${combined_prompt//\`/\\\`}\` }] }
+    ], { apiKey: '${api_key}', maxTokens: 4096 });
+    console.log(JSON.stringify({
+      result: result.text,
+      cost_usd: result.cost_usd,
+      usage: result.usage,
+      subtype: 'gemini_35_flash',
+      is_error: false
+    }));
+  } catch (err) {
+    console.log(JSON.stringify({
+      result: '',
+      cost_usd: 0,
+      usage: { input_tokens: 0, output_tokens: 0 },
+      subtype: 'gemini_35_flash_error',
+      is_error: true,
+      error: err.message
+    }));
+    process.exit(1);
+  }
+})();
+" > "$result_tmp" 2>&1 || exit_code=$?
+    else
+        node --input-type=module -e "
+import { gemini35Chat } from '${gemini_client}';
+(async () => {
+  try {
+    const result = await gemini35Chat([
+      { role: 'user', parts: [{ text: \`${combined_prompt//\`/\\\`}\` }] }
+    ], { apiKey: '${api_key}', maxTokens: 4096 });
+    console.log(JSON.stringify({
+      result: result.text,
+      cost_usd: result.cost_usd,
+      usage: result.usage,
+      subtype: 'gemini_35_flash',
+      is_error: false
+    }));
+  } catch (err) {
+    console.log(JSON.stringify({
+      result: '',
+      cost_usd: 0,
+      usage: { input_tokens: 0, output_tokens: 0 },
+      subtype: 'gemini_35_flash_error',
+      is_error: true,
+      error: err.message
+    }));
+    process.exit(1);
+  }
+})();
+" > "$result_tmp" 2>&1 || exit_code=$?
+    fi
+
+    if [[ $exit_code -ne 0 ]]; then
+        log_warn "Gemini 3.5 Flash API failed (exit $exit_code)"
+        if [[ -s "$result_tmp" ]]; then
+            log_warn "Gemini error: $(tail -1 "$result_tmp" | head -c 120)"
+        fi
+        rm -f "$result_tmp"
+        return 1
+    fi
+
+    # 결과 파일로 복사
+    if [[ ! -s "$result_tmp" ]]; then
+        log_warn "Gemini 3.5 Flash: empty response"
+        rm -f "$result_tmp"
+        return 1
+    fi
+
+    cp "$result_tmp" "$output"
+    rm -f "$result_tmp"
+
+    local result_text
+    result_text=$(jq -r '.result // ""' "$output" 2>/dev/null)
+    if [[ -z "$result_text" ]]; then
+        log_warn "Gemini 3.5 Flash: no result in JSON"
+        return 1
+    fi
+
+    log_info "Gemini 3.5 Flash API succeeded"
+    return 0
+}
+
+# --- Provider: DeepSeek API ---
+# OpenAI-compatible chat completions endpoint
+# Model: deepseek-chat (DeepSeek V4-Flash, MIT, $0.14/$0.28 per 1M tokens)
+# Ref: https://api-docs.deepseek.com/
+_llm_deepseek_api() {
+    local prompt="$1" system="$2" timeout="$3" model="$4" output="$5"
+
+    [[ -z "${DEEPSEEK_API_KEY:-}" ]] && return 1
+
+    # Map internal aliases → DeepSeek model names
+    local api_model="deepseek-chat"
+    case "${model:-}" in
+        *flash*|*deepseek*)      api_model="deepseek-chat" ;;
+        *deepseek-reasoner*)     api_model="deepseek-reasoner" ;;
+    esac
+
+    local body
+    body=$(_llm_py "deepseek-body" -c "
+import json, sys, os
+messages = []
+if sys.argv[2]:
+    messages.append({'role': 'system', 'content': sys.argv[2]})
+messages.append({'role': 'user', 'content': sys.argv[1]})
+body = {
+    'model': sys.argv[3],
+    'max_tokens': int(os.environ.get('JARVIS_MAX_OUTPUT_TOKENS') or 0) or 4096,
+    'messages': messages
+}
+print(json.dumps(body))
+" "$prompt" "${system:-}" "$api_model") || return 1
+
+    local response _curl_err
+    _curl_err=$(mktemp)
+    response=$(curl -s --max-time "$timeout" \
+        -H "Authorization: Bearer ${DEEPSEEK_API_KEY}" \
+        -H "Content-Type: application/json" \
+        -d "$body" \
+        "https://api.deepseek.com/chat/completions" 2>"$_curl_err") || { log_warn "deepseek curl: $(cat "$_curl_err")"; rm -f "$_curl_err"; return 1; }
+    rm -f "$_curl_err"
+
+    # Convert to claude -p compatible JSON format + cost tracking
+    _llm_py "deepseek-convert" -c "
+import json, sys
+r = json.loads(sys.argv[1])
+if 'error' in r:
+    print(r['error'].get('message', 'unknown'), file=sys.stderr)
+    sys.exit(1)
+choices = r.get('choices', [])
+if not choices:
+    sys.exit(1)
+result = choices[0].get('message', {}).get('content', '')
+usage = r.get('usage', {})
+input_tokens  = usage.get('prompt_tokens', 0)
+output_tokens = usage.get('completion_tokens', 0)
+# DeepSeek V4-Flash pricing: \$0.14/1M input, \$0.28/1M output (cache miss)
+cost_usd = (input_tokens * 0.00000014) + (output_tokens * 0.00000028)
+out = {
+    'result': result,
+    'cost_usd': round(cost_usd, 8),
+    'usage': {
+        'input_tokens': input_tokens,
+        'output_tokens': output_tokens
+    },
+    'subtype': 'deepseek_api',
+    'is_error': False
+}
+print(json.dumps(out))
+" "$response" > "$output" || return 1
+
+    local result_text
+    result_text=$(jq -r '.result // ""' "$output" 2>/dev/null)
+    [[ -z "$result_text" ]] && return 1
+    return 0
 }
 
 # --- Provider: OpenAI API ---
@@ -368,8 +583,8 @@ llm_call() {
         complexity=$(_detect_complexity "$prompt")
         case "$complexity" in
             budget) model="claude-haiku-4-5-20251001" ;;
-            small)  model="claude-sonnet-4-20250514" ;;
-            large)  model="claude-opus-4-20250514" ;;
+            small)  model="claude-sonnet-4-6" ;;
+            large)  model="claude-opus-4-7" ;;
         esac
         log_debug "auto-selected model=$model (complexity=$complexity)"
     fi
@@ -411,7 +626,35 @@ llm_call() {
 
     log_info "Trying fallback providers (text-only mode)..."
 
-    # 2. OpenAI API
+    # 2. Gemini 3.5 Flash API (비핵심 태스크 primary fallback — $1.50/$9.00 per 1M tokens)
+    # task-routing-config.json에 의해 라우팅된 태스크 또는 명시적 Gemini 지정 모델
+    if [[ "$model" == *"gemini"* ]] || [[ "${ROUTED_MODEL_SOURCE:-}" == "ask-claude.sh" ]]; then
+        log_info "Trying Gemini 3.5 Flash API (routed or explicit model=$model)..."
+        if _llm_gemini_35_flash_api "$prompt" "$system" "$timeout" "$model" "$output"; then
+            log_info "Gemini 3.5 Flash API succeeded (fallback)"
+            lf_trace_generation --task-id "${TASK_ID:-llm-gateway}" \
+                --name "${TASK_ID:-llm-call}" --model "gemini-3.5-flash-latest" \
+                --provider "gemini-api" --output "$output"
+            return 0
+        fi
+        log_warn "Gemini 3.5 Flash API failed"
+    fi
+
+    # 3. DeepSeek API (비용 민감 태스크 차선 fallback — $0.14/$0.28 per 1M tokens)
+    # deepseek-flash 모델명이 명시되거나 DEEPSEEK_API_KEY가 설정된 경우 시도
+    if [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
+        log_info "Trying DeepSeek API..."
+        if _llm_deepseek_api "$prompt" "$system" "$timeout" "$model" "$output"; then
+            log_info "DeepSeek API succeeded (fallback)"
+            lf_trace_generation --task-id "${TASK_ID:-llm-gateway}" \
+                --name "${TASK_ID:-llm-call}" --model "deepseek-chat" \
+                --provider "deepseek-api" --output "$output"
+            return 0
+        fi
+        log_warn "DeepSeek API failed"
+    fi
+
+    # 4. OpenAI API
     if [[ -n "${OPENAI_API_KEY:-}" ]]; then
         log_info "Trying OpenAI API..."
         if _llm_openai_api "$prompt" "$system" "$timeout" "$model" "$output"; then
@@ -424,7 +667,7 @@ llm_call() {
         log_warn "OpenAI API failed"
     fi
 
-    # 3. Ollama (local)
+    # 5. Ollama (local)
     log_info "Trying Ollama (local)..."
     if _llm_ollama "$prompt" "$system" "$timeout" "$model" "$output"; then
         log_info "Ollama succeeded (fallback)"

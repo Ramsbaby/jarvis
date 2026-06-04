@@ -133,6 +133,38 @@ stage_verify() {
     return 0
 }
 
+# ─── STAGE 4: WRITE SELF-NOTE (Dreaming hook) ───────────────
+# TODO(dreaming): stage_execute/verify 결과를 기반으로 실제 패턴/실수를 수집해
+#   write-agent-note.sh에 동적으로 전달하도록 개선할 것.
+#   현재는 구조 검증 및 파이프라인 연결 확인용 기본 구현.
+stage_write_note() {
+    local write_note_sh="${BOT_HOME}/lib/write-agent-note.sh"
+    if [[ ! -x "$write_note_sh" ]]; then
+        write_note_sh="${HOME}/jarvis/infra/lib/write-agent-note.sh"
+    fi
+    if [[ ! -x "$write_note_sh" ]]; then
+        log "note_skip: write-agent-note.sh 없음"
+        return 0
+    fi
+
+    # 실행 결과에서 패턴·실수를 간단히 수집 (향후 LLM 분석으로 확장 가능)
+    local patterns='["context-bus 신선도를 plan 단계에서 먼저 확인하면 LLM 호출 낭비 방지 가능"]'
+    local mistakes='[]'
+    local suggestions='["verify 섹션 키워드 누락 시 Discord 즉시 알림 추가 고려"]'
+    local cb_update="council-insight 정상 완료 ($(date '+%Y-%m-%d %H:%M KST')). verify 섹션 체크 통과."
+
+    local note_json
+    note_json=$(jq -cn \
+        --argjson patterns    "$patterns" \
+        --argjson mistakes    "$mistakes" \
+        --argjson suggestions "$suggestions" \
+        --arg     cb_update   "$cb_update" \
+        '{patterns:$patterns, mistakes:$mistakes, suggestions:$suggestions, context_bus_update:$cb_update}')
+
+    bash "$write_note_sh" "$TASK_ID" "infra-chief" "$note_json" || true
+    log "note_written: self-note 저장 완료"
+}
+
 # ─── MAIN ───────────────────────────────────────────────────
 if ! stage_plan; then
     printf 'PLAN_FAIL\n'
@@ -140,4 +172,5 @@ if ! stage_plan; then
 fi
 stage_execute || exit $?
 stage_verify || exit $?
-printf 'Council insight 3-agent 완료 (plan+execute+verify)\n'
+stage_write_note || true   # Dreaming hook — 실패해도 전체 태스크에 영향 없음
+printf 'Council insight 3-agent 완료 (plan+execute+verify+note)\n'

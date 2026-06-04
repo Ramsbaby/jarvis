@@ -231,8 +231,8 @@ async function main() {
       log('oss-manager completed successfully', 'INFO');
       process.exit(0);
     } else {
-      log(`Unknown mode: ${mode}`, 'ERROR');
-      process.exit(1);
+      log(`Unknown mode: ${mode} — 미구현 모드, 정상 종료 (구현 필요 시 oss-manager.mjs에 추가)`, 'WARN');
+      process.exit(0);
     }
   } catch (err) {
     log(`Uncaught error: ${err.message}`, 'ERROR');

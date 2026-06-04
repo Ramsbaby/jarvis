@@ -92,6 +92,36 @@ node ~/jarvis/infra/scripts/gen-tasks-index.mjs
 - **Store는 하나** (`addFactToWiki`) — 여기가 SSoT. 중복 체크는 source 무관, 첫 주입이 승.
 - **Source 태깅** (`[source:X]`) — 나중에 "어느 표면에서 쌓인 기억인가" 감사 필수.
 
+### BLOCKING 룰 등재 시 양쪽 SSoT 적용 (2026-05-25 영구 등재 · BLOCKING)
+
+> **읽기·쓰기 저장소는 통합되어 있지만, 시스템 프롬프트(LLM 행동 가드)는 표면별 분리**임을 명시.
+
+#### 시스템 프롬프트 SSoT (표면별 분리)
+
+| 표면 | 시스템 프롬프트 SSoT | 누가 읽나 |
+|---|---|---|
+| **Claude Code CLI** | `~/.claude/rules/jarvis-*.md` (jarvis-core·jarvis-persona·jarvis-ethos·integrations·discord-visualization) | Claude Code CLI 자동 주입 |
+| **디스코드 봇** | `~/jarvis/runtime/context/owner/persona-discord.md` + `personas.json` (채널별) + `user-profile.md` + `preferences.md` + 17단계 systemParts 합성 (claude-runner.js) | 디스코드 봇이 매 응답마다 합성 |
+| **Claude macOS 앱** | claude.ai 서버 (사용자 system prompt 설정) | 외부 — Jarvis 통제 불가 |
+
+#### BLOCKING 룰 등재 강제 (재발 방지 — 2026-05-25 사고 기반)
+
+분석·예측·판단·응답 깊이·인지 원칙·말투 같은 **LLM 행동 가드** BLOCKING 룰 등재 시 다음 단계 필수:
+
+1. **CLI 측 등재**: `~/.claude/rules/jarvis-core.md` (또는 jarvis-persona·jarvis-ethos)
+2. **디스코드 봇 측 등재**: `~/jarvis/runtime/context/owner/persona-discord.md`
+3. **상호 참조 명시**: 양쪽에 "동일 룰이 다른 SSoT에도 적용됨" 1줄 메모
+
+#### 사고 사례 (영구 학습)
+2026-05-25 — jarvis-core.md L16에 "삼성물산 발표일 예측 패턴 매칭" BLOCKING 사고 사례 명시되어 있었으나 **CLI 전용**이었고 디스코드 봇 persona-discord.md에 미적용. 결과: 같은 도메인·같은 질문 유형에서 디스코드 봇이 깊이 부족 응답. V1-V5 진단 후 A+B 수정으로 양쪽 동시 적용 완료. 상세: `~/jarvis/runtime/wiki/meta/learned-mistakes.md` 5/25 entry (line 17).
+
+#### 자기검열 (BLOCKING 룰 등재 직전 필수)
+1. 이 룰이 CLI 행동만 가드하는가, 디스코드 봇도 가드해야 하는가?
+2. 디스코드 봇도 적용해야 한다면 persona-discord.md에 등재했는가?
+3. 양쪽 SSoT에 동일 사고 사례 인용했는가?
+
+위 3개 통과해야 BLOCKING 룰 등재 완료. 한 곳만 등재 = **표면별 불일치 메타 결함 재발**.
+
 ## Git
 
 Commit messages: conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`)
