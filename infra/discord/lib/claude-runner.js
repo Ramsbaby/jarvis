@@ -857,7 +857,10 @@ export async function* createClaudeSession(prompt, {
   // Level 2 제거 (2026-05-26): buildPersonaSection에서 "냉철" 자체를 제거 — 교체 필요 없음.
 
   const systemParts = [
-    harnessPrompt,
+    // [2026-06-04] 핵심 정체성·언어·포맷·검색 지시(rag_search 호출 기준 포함)는 절대 drop 금지(score 10).
+    //   기존: harnessPrompt가 string으로 push돼 unnamed-0(score 5) → budget 초과 시 핵심 지시가 잘림
+    //   → 위고비 답변 품질 저하의 직접 원인. 명시 score로 절단 불가 최상위 보호.
+    { content: harnessPrompt, name: 'identity', score: 10 },
     // ── 사용자 컨텍스트 ──────────────────────────────────────────────────────
     ...userContextParts,
   ];
@@ -1098,8 +1101,15 @@ export async function* createClaudeSession(prompt, {
         const _today = new Date().toISOString().slice(0, 10);
         const _active = (_hotData.events || []).filter(e => !e.expires || e.expires >= _today);
         if (_active.length) {
-          const _lines = _active.map(e => `- [${e.date}] ${e.summary}${e.channel && e.channel !== 'unknown' ? ` (채널: ${e.channel})` : ''}`);
-          systemParts.push('', '--- 🔔 최근 주요 이벤트 (전채널 공유) ---', _lines.join('\n'));
+          // [2026-06-04] 비대화 차단: 783건 무cap 덤프 → 70K 토큰 점령 사고 수리.
+          //   ① 최근 날짜순 상위 N건만 ② 헤더+본문을 단일 문자열로 병합(분리 push 시 본문이
+          //      headerless unnamed로 떨어져 budget 명명·보호 누락 → 추적 불가 + 점수 5 강등).
+          const HOT_EV_MAX = 15;
+          const _recent = [..._active]
+            .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+            .slice(0, HOT_EV_MAX);
+          const _lines = _recent.map(e => `- [${e.date}] ${e.summary}${e.channel && e.channel !== 'unknown' ? ` (채널: ${e.channel})` : ''}`);
+          systemParts.push('', `--- 🔔 최근 주요 이벤트 (전채널 공유) ---\n${_lines.join('\n')}`);
         }
       }
     } catch (e) { log('warn', '[hot-events] 주입 실패', { err: e?.message }); }
@@ -1126,7 +1136,8 @@ export async function* createClaudeSession(prompt, {
       } catch (e) { log('warn', '[chronic-patterns] 주입 실패', { err: e?.message }); }
     }
 
-    if (memSnippet) systemParts.push('', '--- 사용자 기억 (User Memory) ---', memSnippet);
+    // [2026-06-04] 헤더+본문 단일 문자열 병합 — 분리 push 시 본문이 headerless unnamed로 떨어져 budget 명명·보호 누락.
+    if (memSnippet) systemParts.push('', `--- 사용자 기억 (User Memory) ---\n${memSnippet}`);
   }
 
   // RAG 자동 사전 주입 (2026-05-25 v21 — 분석 채널 무조건 호출로 변경)
@@ -1147,7 +1158,8 @@ export async function* createClaudeSession(prompt, {
         if (_ragResult && _ragResult.content && _ragResult.content[0]) {
           const _parsed = JSON.parse(_ragResult.content[0].text);
           if (_parsed.status === 'ok' && _parsed.data) {
-            systemParts.push('', '--- RAG 사전 주입 (분석 채널 무조건) ---', _parsed.data);
+            // [2026-06-04] 헤더+본문 단일 문자열 병합 — 분리 push 시 본문이 headerless unnamed로 떨어짐.
+            systemParts.push('', `--- RAG 사전 주입 (분석 채널 무조건) ---\n${_parsed.data}`);
             log('info', 'RAG 사전 주입 성공', { channel: channelName, hits: _parsed.meta?.results || 0, promptLen: _promptStr.length });
           }
         }

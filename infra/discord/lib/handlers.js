@@ -747,6 +747,11 @@ export async function handleMessage(message, state) {
                 }];
               }
             }
+            // [2026-06-04] retention: 만료분 prune + 최근 50건 cap (783건 무한 누적 → 70K 주입 사고 수리).
+            _hotData.events = (_hotData.events || [])
+              .filter(e => !e.expires || e.expires >= _today3)
+              .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+              .slice(0, 50);
             writeFileSync(_hotPath, JSON.stringify(_hotData, null, 2));
             log('info', '[proactive-hook] hot-events.json 갱신', { count: _factLines.length });
           } catch { /* best-effort */ }
@@ -787,6 +792,11 @@ export async function handleMessage(message, state) {
                 summary: `${item.subject || item.id} ${_resultLabel}`,
                 expires: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
               }];
+              // [2026-06-04] retention: 만료분 prune + 최근 50건 cap.
+              _hotData2.events = _hotData2.events
+                .filter(e => !e.expires || e.expires >= _today4)
+                .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+                .slice(0, 50);
               writeFileSync(_hotPath2, JSON.stringify(_hotData2, null, 2));
               log('info', '[proactive-hook] hot-events Korean match 기록', { id: _evId2 });
             }
