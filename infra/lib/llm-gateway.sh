@@ -145,6 +145,20 @@ _llm_claude_cli() {
     # -- 로 옵션 종료: -로 시작하는 프롬프트가 옵션으로 오인되는 것을 방지
     cmd+=(-- "$prompt")
 
+    # OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude -p는 격리 장수명 토큰(setup-token, 1년)을 사용.
+    # 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 단일 갱신 주체 — 배치가 만료 상태로 접근하면
+    # refresh 경쟁/reuse-revoke의 트리거가 됨 (oauth-incident-ledger cli-login-session-expired-20260611).
+    # CLAUDE_CODE_OAUTH_TOKEN이 이미 주입돼 있으면(bot-cron 경유) 그대로 존중.
+    local _run=(env ANTHROPIC_API_KEY= CLAUDECODE="${CLAUDECODE:-}")
+    local _iso_token_file="${HOME}/.claude-bot/.long-lived-token"
+    if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+        _run+=(CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}")
+    elif [[ -s "$_iso_token_file" ]]; then
+        _run+=(CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_iso_token_file")")
+    else
+        log_warn "격리 토큰 없음 — 메인 credentials.json 폴백 (갱신 경쟁 위험)"
+    fi
+
     local stderr_tmp
     stderr_tmp=$(mktemp)
 
@@ -154,17 +168,17 @@ _llm_claude_cli() {
         cmd=("${cmd[@]/--output-format json/--output-format stream-json}")
         local stream_forwarder="${LLM_GATEWAY_BOT_HOME}/lib/stream-to-board.sh"
         if [[ -x "$stream_forwarder" ]]; then
-            ANTHROPIC_API_KEY="" CLAUDECODE="${CLAUDECODE:-}" "${cmd[@]}" < /dev/null 2>"$stderr_tmp" \
+            "${_run[@]}" "${cmd[@]}" < /dev/null 2>"$stderr_tmp" \
                 | bash "$stream_forwarder" "$DEV_TASK_ID" "$output"
             exit_code=${PIPESTATUS[0]}
         else
             # forwarder 없으면 기존 json 모드로 폴백
             cmd=("${cmd[@]/--output-format stream-json/--output-format json}")
-            ANTHROPIC_API_KEY="" CLAUDECODE="${CLAUDECODE:-}" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
+            "${_run[@]}" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
             exit_code=$?
         fi
     else
-        ANTHROPIC_API_KEY="" CLAUDECODE="${CLAUDECODE:-}" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
+        "${_run[@]}" "${cmd[@]}" < /dev/null > "$output" 2>"$stderr_tmp"
         exit_code=$?
     fi
     if [[ $exit_code -ne 0 ]]; then
@@ -183,6 +197,14 @@ except:
     pass
 " < "$output" 2>/dev/null || true)
             [[ -n "$_out_snippet" ]] && log_warn "claude-cli output on failure: ${_out_snippet}"
+        fi
+        # 인증 실패(401) 즉시 Discord critical 알림 — 야간 침묵 사망 방지 (2026-06-11 사고).
+        # alert-send.sh 자체 쿨다운(기본 300s)이 폭주를 막는다. 실패해도 본 함수 결과에 영향 없음.
+        if grep -qiE "Failed to authenticate|authentication_error" "$stderr_tmp" "$output" 2>/dev/null; then
+            bash "${HOME}/jarvis/infra/scripts/alert-send.sh" critical \
+                "🔑 claude 배치 인증 실패 (401)" \
+                "task=${TASK_ID:-unknown} model=${model:-auto} — OAuth 토큰 사망 의심. long-lived-token-healthcheck·oauth-incident-ledger 확인 필요" \
+                >/dev/null 2>&1 || true
         fi
     fi
     rm -f "$stderr_tmp"
