@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { userMemory } from '../../lib/user-memory.mjs';
+import { getCareerCodingMode } from './career-coding-mode.js';
 import {
   detectFeedback as _sharedDetectFeedback,
   processFeedback as _sharedProcessFeedback,
@@ -872,18 +873,56 @@ export async function* createClaudeSession(prompt, {
   //   이전: jarvis-career 페르소나에 SAP 블록 ~1.2KB 항상 박힘 → 감정 상담에도 AWS 가이드 noise.
   const _hasImageAttachment = attachments.some(a =>
     /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(a.safeName || a.localPath || ''));
-  if (_hasImageAttachment) {
+  // [2026-06-11 v2] #jarvis-career 코딩테스트 모드 — env 게이트 → 상태 파일 토글 (재시작 불필요).
+  //   토글: bash ~/jarvis/infra/scripts/career-coding-mode.sh {coach|solve|off|status}
+  //   solve = 자바 직접 풀이 (기존) · coach = 생성형AI 프롬프트 전략 코치 (AI 활용형 라이브코딩 대비) · off = 평소.
+  //   공통(solve·coach): fresh 세션, Sonnet, RAG/피드 주입 끔 — 문제 간 오염·지연 차단.
+  const _ccMode = channelId === '1471694919339868190' ? getCareerCodingMode() : 'off';
+  const _careerCoding = _ccMode !== 'off';
+  {
+    // [2026-06-07] 빈 캡션 이미지는 handlers가 "🖼️ 이미지 분석 중..."(msg.analyzeImage)을 프롬프트로 넣는다.
+    //   이게 코딩 기본프롬프트(<10자 조건)를 안 덮어 모델이 "풀이" 대신 "이미지 분석(진단/묘사)"로 빠지던 근본 버그.
+    //   → 빈/짧음 OR 일반 "이미지 분석" 프롬프트면 코딩 풀이 지시로 교체(6단계 형식 명시).
+    const _p = String(prompt || '').trim();
+    if (_careerCoding && (_p.length < 10 || _p.startsWith('🖼️') || /이미지\s*분석|analyz(e|ing)\s*image/i.test(_p))) {
+      prompt = _ccMode === 'coach'
+        ? '첨부했거나 위에 적은 코딩테스트/알고리즘 문제를 직접 끝까지 풀지 말고, 코치 가이드 형식(① 문제 해독 → ② 유형·함정 → ③ 복붙용 1차 프롬프트 → ④ 검증 프롬프트 → ⑤ 리스크·설명 멘트)으로 "생성형 AI에게 어떻게 시킬지"를 코치해주세요. 이미지를 그냥 "분석/묘사"하지 말고 반드시 문제로 읽으세요.'
+        : '첨부했거나 위에 적은 코딩테스트/알고리즘 문제를 자바(Java 15)로 풀어주세요. 이미지를 그냥 "분석/묘사"하지 말고 반드시 문제로 보고 풉니다. 출력은 코딩테스트 가이드의 6단계 순서(① 문제 의도 → ② 어떻게 풀 것인가 → ③ 전체 코드 → ④ 시간 복잡도 → ⑤ 공간 복잡도 → ⑥ 엣지케이스)를 그대로 따르세요. 모든 설명과 주석은 최대한 쉽게, 복잡도는 왜 그런지까지.';
+    }
+  }
+  if (_hasImageAttachment || _careerCoding) {
     try {
-      const sapModePath = join(BOT_HOME, 'context', 'sap-mode.md');
-      if (existsSync(sapModePath)) {
-        const sapText = readFileSync(sapModePath, 'utf-8').trim();
-        if (sapText) {
-          systemParts.push('', sapText);
-          log('info', 'SAP mode guide injected (image attachment)', { channelName });
+      // 이미지 모드 채널별 분기: career → 코딩테스트(자바), 그 외 → SAP(AWS 시험)
+      const _isCareerChannel = channelId === '1471694919339868190';
+      const _imgModeFile = _ccMode === 'coach'
+        ? 'coding-coach-mode.md'
+        : ((_isCareerChannel || _careerCoding) ? 'coding-test-mode.md' : 'sap-mode.md');
+      const imgModePath = join(BOT_HOME, 'context', _imgModeFile);
+      if (existsSync(imgModePath)) {
+        const modeText = readFileSync(imgModePath, 'utf-8').trim();
+        if (modeText) {
+          // 가이드가 답변의 핵심이므로 score 9 명명 섹션으로 승격(예산 캡에서 드롭 방지).
+          const _override = _ccMode === 'coach'
+            ? '【⚠️ 현재 이 채널은 코딩테스트 "프롬프트 코치" 모드입니다. 모든 입력(텍스트·이미지)을 코딩테스트 문제로 간주하되, 문제를 직접 끝까지 풀지 말고 생성형 AI에게 시킬 프롬프트 전략을 코치하세요. 커리어 상담·분석·시나리오는 하지 마세요.】\n\n'
+            : _careerCoding
+              ? '【⚠️ 현재 이 채널은 코딩테스트 전용 모드입니다. 모든 입력(텍스트·이미지)을 코딩테스트/알고리즘 문제로 간주해 자바로 풉니다. 커리어 상담·분석·시나리오는 하지 마세요.】\n\n'
+              : '';
+          // [2026-06-07] 코딩 전용 모드에선 가이드를 never-drop(10)으로 — career analytical 예산(7000)에
+          //   28K+ 프롬프트가 몰려 score 9 가이드가 매 턴 잘리던 근본 버그 차단(정규식 답 재발 원인).
+          //   (SAP 등 일반 이미지 모드는 9 유지.)
+          // [2026-06-07] 첨부 이미지 경로를 이 never-drop 섹션에 함께 박는다 — 경로 안내(attached-image, score1)가
+          //   예산에 잘려 모델이 "이미지 확인 불가"라 답하던 버그 차단. 경로 + 강제 Read 지시를 가이드와 함께 보존.
+          let _imgPathNote = '';
+          if (attachments.length > 0) {
+            const _imgNames = attachments.map((a) => join(stableDir, a.safeName)).join('\n  ');
+            _imgPathNote = `\n\n【📎 첨부된 문제 이미지가 있습니다. 답하기 전에 반드시 먼저 Read 도구로 아래 파일을 열어 문제를 읽으세요. "이미지를 확인할 수 없다"고 답하지 말 것 — 아래 경로를 Read하면 보입니다:\n  ${_imgNames}\n】`;
+          }
+          systemParts.push({ content: _override + modeText + _imgPathNote, name: 'image-mode', score: _careerCoding ? 10 : 9 });
+          log('info', 'coding/image mode guide injected', { channelName, mode: _careerCoding ? `career-coding:${_ccMode}` : (_isCareerChannel ? 'coding-test' : 'sap') });
         }
       }
     } catch (err) {
-      log('warn', 'SAP mode load failed', { error: err?.message });
+      log('warn', 'image mode load failed', { error: err?.message });
     }
   }
 
@@ -1149,7 +1188,9 @@ export async function* createClaudeSession(prompt, {
     const _ANALYSIS_CH = ['1471694919339868190', '1469905074661757049', '1475786634510467186', '1469190686145384513'];
     const _promptStr = String(prompt || '').trim();
     // [2026-05-28] 감정 턴엔 RAG 사전 주입 SKIP — 분석 컨텍스트가 위로 응답 톤 망침
-    if (_promptStr.length >= 15 && channelId && _ANALYSIS_CH.includes(channelId) && !_isEmotionalTurn) {
+    // [2026-06-07] 이미지 첨부(코딩테스트·SAP) 시도 RAG 사전 주입 SKIP — 코딩 문제 풀이에 커리어
+    //   RAG는 무용한데 7~60초를 잡아먹어 "너무 느림" 유발. 코딩은 이미지 자체가 문제이므로 RAG 불필요.
+    if (_promptStr.length >= 15 && channelId && _ANALYSIS_CH.includes(channelId) && !_isEmotionalTurn && !_hasImageAttachment && !_careerCoding) {
       try {
         const _ragMod = await import(new URL('../../lib/nexus/rag-gateway.mjs', import.meta.url).pathname);
         const _ragResult = await _ragMod.handle('rag_search', {
@@ -1173,7 +1214,8 @@ export async function* createClaudeSession(prompt, {
   // Channel feed context (dynamic — 채널에 최근 전송된 봇/크론/알람 메시지)
   // 사용자가 "방금 크론이 보낸 거 뭐야?" 등 채널 컨텍스트를 참조할 때 재질문 방지
   if (channelName) {
-    const feedCtx = !_isEmotionalTurn && buildChannelFeedSection(channelName, 15);
+    // [2026-06-07] 코딩테스트 모드는 채널 피드(직전 다른 문제들) 주입 금지 — 문제 간 오염 차단.
+    const feedCtx = !_isEmotionalTurn && !_careerCoding && buildChannelFeedSection(channelName, 15);
     if (feedCtx) systemParts.push('', feedCtx);
   }
 
@@ -1295,6 +1337,9 @@ export async function* createClaudeSession(prompt, {
   } catch { /* ignore */ }
 
   // 5. Build effective prompt (same logic as former spawnClaude)
+  // [2026-06-07] 코딩테스트 모드: 매 문제를 독립(fresh) 세션으로 — 직전 문제(특히 다른 유형) 컨텍스트가
+  //   섞여 "틀린 문제를 푸는" 오염 방지. 같은 채널에 문제를 연달아 올려도 서로 영향 없음.
+  if (_careerCoding) sessionId = null;
   const isResuming = !!sessionId;
   let effectivePrompt = prompt;
 
@@ -1367,9 +1412,12 @@ export async function* createClaudeSession(prompt, {
   // channelOverrides에 등록된 채널 → 지정 모델 (직접 실행, opusplan 아님)
   // 그 외 → opusplan (계획 Opus, 실행 Sonnet, 200턴)
   // P2-2: ADAPTIVE_MODEL_ENABLED=1 이면 프롬프트 분류로 trivial → fast 다운그레이드.
-  const maxTurns = contextBudget === 'small' ? 50 : 200;
+  // [2026-06-07] 코딩테스트 모드(시스템 검증만): 모델은 이미지 Read + 생성뿐 → 6턴이면 충분.
+  const maxTurns = _careerCoding ? 6 : (contextBudget === 'small' ? 50 : 200);
   let channelModelKey = channelName && MODELS.channelOverrides?.[channelName];
-  if (process.env.ADAPTIVE_MODEL_ENABLED === '1' && contextBudget !== 'small' && channelModelKey) {
+  // [2026-06-07] 이미지 첨부(코딩테스트·SAP 등)는 다운그레이드 제외 — 짧은 캡션("이거 풀어줘")이라도
+  //   텍스트가 짧다고 haiku로 떨어지면 코드/문제 풀이 품질이 망가짐. 이미지 작업은 강한 모델 유지.
+  if (process.env.ADAPTIVE_MODEL_ENABLED === '1' && contextBudget !== 'small' && channelModelKey && !_hasImageAttachment) {
     try {
       const { resolveModelTier } = await import('./adaptive-model.js');
       const resolved = resolveModelTier(channelModelKey, prompt);
@@ -1384,7 +1432,8 @@ export async function* createClaudeSession(prompt, {
       log('warn', 'adaptive-model routing failed (using base tier)', { error: err.message });
     }
   }
-  const model = contextBudget === 'small' ? MODELS.fast : (channelModelKey ? MODELS[channelModelKey] : 'opusplan');
+  // [2026-06-07] 코딩테스트 모드는 Sonnet 단발 — opusplan(계획Opus+실행Sonnet 듀얼)의 계획 오버헤드 제거.
+  const model = _careerCoding ? MODELS.sonnet : (contextBudget === 'small' ? MODELS.fast : (channelModelKey ? MODELS[channelModelKey] : 'opusplan'));
 
   // 사고 2026-05-22 대응: 모델 결정 사후 추적 가능성 확보. 어느 응답이 어느 모델로 갔는지 ledger grep 1줄로 판별.
   log('info', 'model resolved', { channel: channelName, channelModelKey, finalModel: model, contextBudget });
@@ -1550,10 +1599,26 @@ export async function* createClaudeSession(prompt, {
     includePartialMessages: true,
   };
 
-  // 1M 토큰 컨텍스트 항상 활성화
-  if (!queryOptions.betas) queryOptions.betas = [];
-  if (!queryOptions.betas.includes('context-1m-2025-08-07')) {
-    queryOptions.betas.push('context-1m-2025-08-07');
+  // 1M 토큰 컨텍스트 — opt-in 전용 (기본: 표준 200K 컨텍스트, 무료).
+  // 계정에 1M usage credits가 있을 때만 ENABLE_1M_CONTEXT=1 로 켤 것.
+  // credits 없이 켜면 모든 요청이 "Usage credits required for 1M context"로 실패하므로,
+  // 세션 크기에 따른 자동 활성화는 하지 않는다 (같은 에러 재발 방지).
+  if (process.env.ENABLE_1M_CONTEXT === '1') {
+    if (!queryOptions.betas) queryOptions.betas = [];
+    if (!queryOptions.betas.includes('context-1m-2025-08-07')) {
+      queryOptions.betas.push('context-1m-2025-08-07');
+    }
+  }
+
+  // [2026-06-07] 코딩테스트 전용 모드(시스템 검증만 = 속도 우선): 모델은 생성만 한다.
+  //   컴파일·실행 검증은 봇이 백그라운드로(coding-verify.js handlers 훅) 결정적으로 수행 → 진짜 결과 자동 첨부.
+  //   따라서 모델엔 이미지 읽기용 Read만 허용(Write/Bash/MCP 불필요) → 도구 루프 0, 가장 빠름.
+  if (_careerCoding) {
+    queryOptions.mcpServers = {};
+    queryOptions.allowedTools = ['Read'];
+    // [2026-06-07] effort max→high: 코딩 정답성은 가이드 규칙이 잡으므로 max의 과한 추론시간 불필요.
+    //   응답 지연(2분+) 완화. (화요일 후 CAREER_CODING_MODE=0이면 채널 기본 max로 자동 복귀.)
+    queryOptions.effort = 'high';
   }
 
   // _promptVersionMap: per-threadId 버전 캐시 (글로벌 싱글턴은 다채널 동시실행 시 오염됨)
@@ -1606,6 +1671,27 @@ export async function* createClaudeSession(prompt, {
   }
   createClaudeSession._promptVersionMap.set(threadId, promptVersion);
 
+  // [2026-06-07] resume 세션 jsonl 크기 가드 — 세션이 누적돼 컨텍스트가 200K를 넘으면 Claude Code
+  //   SDK가 1M 컨텍스트를 자동 요구 → 계정에 1M usage credits 없으면 전 요청이 "Usage credits
+  //   required for 1M context"로 실패한다. SDK 내부 자동 승급은 claude-runner의 beta 게이트로
+  //   막을 수 없으므로, resume 대상 jsonl 크기로 선제 차단(초과 시 새 세션 시작).
+  if (sessionId) {
+    try {
+      const _ccDir = process.env.CLAUDE_CONFIG_DIR || join(HOME, '.claude');
+      const _jsonlPath = join(_ccDir, 'projects', '-private-tmp-claude-discord-' + String(threadId), sessionId + '.jsonl');
+      const _cap = Number(process.env.RESUME_JSONL_CAP_BYTES) || 1_200_000; // ~1.2MB (≈200K 토큰 안전 마진)
+      if (existsSync(_jsonlPath)) {
+        const _sz = statSync(_jsonlPath).size;
+        if (_sz > _cap) {
+          log('warn', 'resume session jsonl too large — starting fresh (1M auto-upgrade 방지)', {
+            threadId, sessionId: String(sessionId).slice(0, 8), bytes: _sz, cap: _cap,
+          });
+          sessionId = null;
+          yield { type: 'system', session_reset: true, reason: 'session_too_large' };
+        }
+      }
+    } catch { /* fail-open: 크기 확인 실패 시 기존 resume 유지 (봇 먹통 방지 우선) */ }
+  }
   if (sessionId) {
     queryOptions.resume = sessionId;
   }

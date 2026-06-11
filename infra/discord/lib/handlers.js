@@ -12,6 +12,7 @@
  */
 
 import { BoundedMap } from './bounded-map.js';
+import { getCareerCodingMode } from './career-coding-mode.js';
 // v3.3 P0-D: interview-fast-path 모듈 eager import로 RAG warmup IIFE를 봇 기동 시 트리거.
 // dynamic import 시점(첫 질의)에 warmup하면 의미 없음 — 여기서 선행 실행.
 import './interview-fast-path.js';
@@ -1624,6 +1625,12 @@ ${extracted}
     // 재생성 버튼 대비: sessionKey별 마지막 원본 쿼리 저장
     lastQueryStore.set(sessionKey, originalPrompt);
     streamer = new StreamingMessage(thread, message, sessionKey, effectiveChannelId);
+    // [2026-06-07] 코딩테스트 모드: 스트리밍 중 코드블록이 청크 경계에서 쪼개져 깨지는 문제 →
+    //   생성 중엔 버퍼만 모으고 finalize에서 한 번에 fence-aware 청킹(코드블록 통째로 한 메시지에).
+    // [2026-06-11 v2] env → 상태 파일 토글 (career-coding-mode.sh). coach/solve 모두 코드블록 보호 필요.
+    if (effectiveChannelId === '1471694919339868190' && getCareerCodingMode() !== 'off') {
+      streamer.deferStreaming = true;
+    }
     streamer.setContext(getContextualThinking(userPrompt, imageAttachments.length > 0));
     streamer.setChannelName(chName); // P0-3: 아티팩트 태그에 사용
     // P3-3: A/B 실험 variant 결정 — userId 기반 deterministic
@@ -1927,11 +1934,39 @@ ${extracted}
           const resultSessionId = event.session_id ?? null;
           if (resultSessionId) sessions.set(sessionKey, resultSessionId);
 
+          // [2026-06-07] 코딩테스트 모드 결정적 검증 — 모델이 실행을 건너뛰고 "됩니다"라고 주장하는 것 차단.
+          //   봇이 직접 java 코드를 컴파일·실행해 진짜 결과를 응답에 붙인다 (모델 재량 아님 = 못 건너뜀).
+          let verifyBlock = '';
+          {
+            const _willContinue = event.stop_reason === 'max_turns' && resultSessionId && continuationCount < MAX_CONTINUATIONS;
+            // [2026-06-11 v2] 자바 컴파일 검증은 solve 모드 전용 — coach 모드는 프롬프트 전략 출력이라 실행할 코드가 없음.
+            if (!_willContinue && !event.is_error
+                && getCareerCodingMode() === 'solve' && effectiveChannelId === '1471694919339868190') {
+              try {
+                const { compileAndRunJava } = await import('./coding-verify.js');
+                const _v = compileAndRunJava(lastAssistantText);
+                if (_v.found) {
+                  if (_v.stage === 'stdin') {
+                    verifyBlock = `\n\n— 📥 위 코드는 표준입력(Scanner)을 받는 제출용 형태라 로컬 자동검증은 생략했습니다. 직접 돌리려면 예시 입력을 코드에 하드코딩하거나 파이프로 넣으세요.`;
+                  } else {
+                    verifyBlock = _v.ok
+                      ? `\n\n— ✅ 실제 실행 결과 (자비스가 직접 javac+java 돌림):\n\`\`\`\n${(_v.output || '').slice(0, 700)}\n\`\`\``
+                      : `\n\n— ⚠️ ${_v.stage} 실패 (자비스가 직접 돌려봄): 이 코드는 그대로는 안 돌아갑니다.\n\`\`\`\n${(_v.output || '').slice(0, 700)}\n\`\`\``;
+                  }
+                  // [2026-06-07] 정규식 필수 문제(모델이 "【정규식 필수 문제】" 표시)면 경고 억제 — 그 문제는 정규식이 정답.
+                  if (_v.usesRegex && !/정규식 필수 문제/.test(lastAssistantText)) verifyBlock += `\n— ⚠️ 정규식이 쓰였습니다. 면접에선 정규식 없이 char 반복문으로 푸는 버전을 다시 요청하세요.`;
+                  streamer.append(verifyBlock);
+                  log('info', 'coding-verify done', { ok: _v.ok, stage: _v.stage, className: _v.className, usesRegex: _v.usesRegex, outLen: (_v.output || '').length });
+                }
+              } catch (_e) { log('warn', 'coding-verify 실패', { error: _e?.message }); }
+            }
+          }
+
           // 봇 응답 자동 캡처 (2026-05-25 신설) — bot-response-bus.jsonl 적재.
           // 사고 사례: 자비스가 봇 응답 본문 추출 불가 → 질적 평가는 사용자 권한.
           // 본 캡처로 자비스가 응답 본문·메타를 자동 검토 가능 (RAG 호출 여부·메타 비즈니스 추론 깊이 등).
           try {
-            const respText = event.result || lastAssistantText || '';
+            const respText = (event.result || lastAssistantText || '') + verifyBlock;
             // 진단 로그 (2026-05-25 추가) — market 미적재 원인 추적용
             log('info', 'ledger 적재 시도', {
               channel: chName,
