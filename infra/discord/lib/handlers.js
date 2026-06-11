@@ -1627,8 +1627,10 @@ ${extracted}
     streamer = new StreamingMessage(thread, message, sessionKey, effectiveChannelId);
     // [2026-06-07] 코딩테스트 모드: 스트리밍 중 코드블록이 청크 경계에서 쪼개져 깨지는 문제 →
     //   생성 중엔 버퍼만 모으고 finalize에서 한 번에 fence-aware 청킹(코드블록 통째로 한 메시지에).
-    // [2026-06-11 v2] env → 상태 파일 토글 (career-coding-mode.sh). coach/solve 모두 코드블록 보호 필요.
-    if (effectiveChannelId === '1471694919339868190' && getCareerCodingMode() !== 'off') {
+    // [2026-06-11 v2] env → 상태 파일 토글 (career-coding-mode.sh).
+    // solve만 버퍼링(완성 후 일괄 송출 — 코드블록 보호). coach는 실시간 스트리밍 —
+    // 라이브 면접에서 "2분 내 출력이 흐르기 시작"이 코드펜스 미관보다 우선 (주인님 요구 2026-06-11).
+    if (effectiveChannelId === '1471694919339868190' && getCareerCodingMode() === 'solve') {
       streamer.deferStreaming = true;
     }
     streamer.setContext(getContextualThinking(userPrompt, imageAttachments.length > 0));
