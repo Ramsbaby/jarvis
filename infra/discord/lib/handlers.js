@@ -1630,7 +1630,7 @@ ${extracted}
       if (_cmdAuthorId && _cmdAuthorId === getOwnerDiscordId()) {
         const _cmd = parseCodingModeCommand(message._cleanContent ?? message.content);
         if (_cmd) {
-          const _labels = { coach: '🎯 프롬프트 코치', solve: '🧮 자바 직접 풀이', off: '💼 평소 커리어 채널' };
+          const _labels = { coach: '🎯 프롬프트 코치', solve: '🧮 자바 직접 풀이 (빠름)', deep: '🔬 정밀 풀이 (Opus·자가검증·느림)', off: '💼 평소 커리어 채널' };
           try {
             if (_cmd === 'status') {
               const _cur = getCareerCodingMode();
@@ -1657,7 +1657,7 @@ ${extracted}
     // [2026-06-11 v2] env → 상태 파일 토글 (career-coding-mode.sh).
     // solve만 버퍼링(완성 후 일괄 송출 — 코드블록 보호). coach는 실시간 스트리밍 —
     // 라이브 면접에서 "2분 내 출력이 흐르기 시작"이 코드펜스 미관보다 우선 (주인님 요구 2026-06-11).
-    if (effectiveChannelId === '1471694919339868190' && getCareerCodingMode() === 'solve') {
+    if (effectiveChannelId === '1471694919339868190' && ['solve', 'deep'].includes(getCareerCodingMode())) {
       streamer.deferStreaming = true;
     }
     streamer.setContext(getContextualThinking(userPrompt, imageAttachments.length > 0));
@@ -1968,9 +1968,10 @@ ${extracted}
           let verifyBlock = '';
           {
             const _willContinue = event.stop_reason === 'max_turns' && resultSessionId && continuationCount < MAX_CONTINUATIONS;
-            // [2026-06-11 v2] 자바 컴파일 검증은 solve 모드 전용 — coach 모드는 프롬프트 전략 출력이라 실행할 코드가 없음.
+            // [2026-06-11 v2] 자바 컴파일 검증은 solve·deep 전용 — coach는 프롬프트 전략 출력이라 실행할 코드가 없음.
+            // deep은 모델이 자가 검증을 하지만, 봇의 결정적 재검증을 한 번 더 얹는다 (이중 안전망).
             if (!_willContinue && !event.is_error
-                && getCareerCodingMode() === 'solve' && effectiveChannelId === '1471694919339868190') {
+                && ['solve', 'deep'].includes(getCareerCodingMode()) && effectiveChannelId === '1471694919339868190') {
               try {
                 const { compileAndRunJava } = await import('./coding-verify.js');
                 const _v = compileAndRunJava(lastAssistantText);

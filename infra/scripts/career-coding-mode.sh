@@ -4,7 +4,8 @@
 #
 # 사용:
 #   career-coding-mode.sh coach   # 생성형AI 프롬프트 전략 코치 (AI 활용형 라이브코딩 대비)
-#   career-coding-mode.sh solve   # 자바 직접 풀이 (기존 모드)
+#   career-coding-mode.sh solve   # 자바 직접 풀이 — 빠름 (Sonnet)
+#   career-coding-mode.sh deep    # 정밀 풀이 — 확실함 (Opus·자가 컴파일/실행 검증·시간 무관)
 #   career-coding-mode.sh off     # 평소 커리어 채널로 복귀
 #   career-coding-mode.sh status  # 현재 모드 확인
 set -euo pipefail
@@ -12,7 +13,7 @@ set -euo pipefail
 STATE="$HOME/jarvis/runtime/state/career-coding-mode.json"
 
 case "${1:-status}" in
-    coach|solve|off)
+    coach|solve|deep|off)
         printf '{"mode":"%s","changedAt":"%s"}\n' "$1" "$(date '+%Y-%m-%dT%H:%M:%S%z')" > "$STATE"
         echo "✅ 코딩테스트 모드 → $1 (재시작 불필요, 커리어 채널 다음 메시지부터 적용)"
         ;;
@@ -24,7 +25,7 @@ case "${1:-status}" in
         fi
         ;;
     *)
-        echo "사용법: career-coding-mode.sh {coach|solve|off|status}" >&2
+        echo "사용법: career-coding-mode.sh {coach|solve|deep|off|status}" >&2
         exit 1
         ;;
 esac
