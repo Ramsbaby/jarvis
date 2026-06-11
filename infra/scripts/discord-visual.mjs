@@ -4,7 +4,7 @@
 // 타입: system-doctor | disk | rag-health | stats
 
 import puppeteer from 'puppeteer-core';
-import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, unlinkSync, existsSync, appendFileSync, mkdirSync } from 'fs';
 import { tmpdir, homedir } from 'os';
 import { join } from 'path';
 
@@ -31,6 +31,24 @@ const CONFIG_PATH = join(homedir(), 'jarvis/runtime', 'config', 'monitoring.json
 const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
 const WEBHOOK_URL = config.webhooks?.[CHANNEL] ?? config.webhook?.url;
 if (!WEBHOOK_URL) { console.error(`ERROR: No webhook for channel '${CHANNEL}'`); process.exit(1); }
+// 미등록 채널명이 조용히 기본 웹훅으로 빠지던 결함 가시화 (2026-06-11) — 동작은 유지, 경고만 명시
+if (!config.webhooks?.[CHANNEL]) {
+  console.error(`WARN: channel '${CHANNEL}' not in monitoring.json webhooks — falling back to default webhook`);
+}
+
+// ── 송출 감사 원장 (2026-06-11 신설) ──────────────────────────────────────
+// 모든 카드/폴백 송출 시도를 JSONL로 기록 — 채널별 송출량·실패율의 30일 추이 측정 기반.
+function auditLog(result) {
+  try {
+    const dir = join(homedir(), 'jarvis/runtime', 'ledger');
+    mkdirSync(dir, { recursive: true });
+    const entry = {
+      ts: new Date().toISOString(), source: 'discord-visual', type: TYPE,
+      channel: CHANNEL, title: DATA?.title ?? null, result,
+    };
+    appendFileSync(join(dir, 'discord-send-audit.jsonl'), JSON.stringify(entry) + '\n');
+  } catch { /* 원장 실패가 송출을 막으면 안 됨 */ }
+}
 
 // ── 공통 스타일 ────────────────────────────────────────────────────────────
 const BASE_STYLE = `
@@ -265,11 +283,13 @@ async function sendVisual() {
     const res = await fetch(WEBHOOK_URL, { method: 'POST', body: form });
     if (!res.ok) { const t = await res.text(); throw new Error(`Discord ${res.status}: ${t}`); }
     console.log(`✅ Discord visual sent [${TYPE}]`);
+    auditLog('sent');
   } catch (e) {
     if (browser) await browser.close().catch(() => {});
     console.error(`WARN: visual failed (${e.message}) — text fallback`);
     const fallback = CAPTION || `[${TYPE}] ${JSON.stringify(DATA).slice(0, 400)}`;
     await sendTextFallback(fallback);
+    auditLog(`fallback:${e.message.slice(0, 80)}`);
   } finally {
     for (const f of [HTML_TMP, IMG_TMP]) {
       try { if (existsSync(f)) unlinkSync(f); } catch {}

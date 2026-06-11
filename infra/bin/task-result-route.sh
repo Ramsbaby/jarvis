@@ -210,6 +210,18 @@ get_webhook_url() {
     printf '%s' "$url"
 }
 
+# --- 송출 감사 원장 (2026-06-11 신설): 채널별 송출량·실패율 30일 추이 측정 기반 ---
+_route_audit_log() {
+    local kind="$1" result="$2"
+    local ledger_dir="${BOT_HOME:-$HOME/jarvis/runtime}/ledger"
+    mkdir -p "$ledger_dir" 2>/dev/null || return 0
+    jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg src "task-result-route" --arg k "$kind" \
+        --arg ch "${CHANNEL:-default}" --arg t "${TASK_ID:-unknown}" --arg r "$result" \
+        '{ts:$ts,source:$src,kind:$k,channel:$ch,task:$t,result:$r}' \
+        >> "$ledger_dir/discord-send-audit.jsonl" 2>/dev/null || true
+}
+
 # --- Rich embed sender (Discord color card) ---
 send_embed() {
     local embed_json="$1"
@@ -223,6 +235,9 @@ send_embed() {
         -d "$payload") || true
     if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
         echo "WARN: embed webhook returned HTTP $http_code" >&2
+        _route_audit_log "embed" "failed:http_${http_code}"
+    else
+        _route_audit_log "embed" "sent"
     fi
 }
 
@@ -253,6 +268,9 @@ console.log(JSON.stringify({ flags: 32768, components: [container], allowed_ment
         -d "$payload") || true
     if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
         echo "WARN: cv2 webhook returned HTTP $http_code" >&2
+        _route_audit_log "cv2" "failed:http_${http_code}"
+    else
+        _route_audit_log "cv2" "sent"
     fi
 }
 
@@ -275,6 +293,9 @@ send_chart_embed() {
         -d "$payload") || true
     if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
         echo "WARN: chart embed webhook returned HTTP $http_code" >&2
+        _route_audit_log "chart" "failed:http_${http_code}"
+    else
+        _route_audit_log "chart" "sent"
     fi
 }
 
@@ -323,8 +344,16 @@ _build_header() {
     echo "> ${emoji} **${task_id}** · ${kst_time} KST"
 }
 
-# --- Embed color by severity (Uptime Kuma 패턴) ---
+# --- Embed color by severity — 단일 정의(discord-severity.sh) 위임 (2026-06-11 중앙화) ---
+source "$HOME/jarvis/infra/lib/discord-severity.sh"
 _severity_embed_color() {
+    local c
+    c=$(severity_color "${1:-}")
+    if [[ "$c" != "9807270" ]]; then echo "$c"; return; fi
+    # 미지정 심각도 = 정상 결과 → 초록 (기존 동작 유지)
+    echo "3066993"
+}
+_severity_embed_color_legacy_unused() {
     case "$1" in
         error)   echo "15548997" ;;  # red
         warning) echo "16705372" ;;  # yellow
@@ -369,6 +398,9 @@ route_to_discord() {
                 -d "$payload") || true
             if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
                 echo "ERROR: Discord webhook returned HTTP $http_code for task $TASK_ID" >&2
+                _route_audit_log "text" "failed:http_${http_code}"
+            else
+                _route_audit_log "text" "sent"
             fi
             offset=$((offset + ${#chunk}))
             # Rate limit protection between chunks

@@ -38,25 +38,22 @@ _cooldown_for_channel() {
 }
 
 # 쿨다운 체크 (동일 메시지 중복 방지). 두 번째 인자로 채널별 cooldown 주입 가능.
+# 2026-06-11: 단일 last-alert 파일 → 해시별 파일로 교체. 기존 방식은 "마지막 1건"만 기억해
+# 서로 다른 알림이 번갈아 오면 동일 알림의 반복을 전혀 막지 못했음 (실패 알림 12연발의 구조 원인).
+ALERT_DEDUP_DIR="$ALERT_STATE_DIR/alert-dedup"
+mkdir -p "$ALERT_DEDUP_DIR"
+
 is_in_cooldown() {
     local message_hash="$1"
     local cooldown="${2:-$COOLDOWN_SECONDS}"
-
-    if [[ ! -f "$LAST_ALERT_FILE" ]]; then
-        return 1
-    fi
-
-    local last_hash last_time
-    last_hash=$(head -1 "$LAST_ALERT_FILE" 2>/dev/null || echo "")
-    last_time=$(tail -1 "$LAST_ALERT_FILE" 2>/dev/null || echo "0")
-    # 빈 값이나 숫자가 아닌 경우 0으로 처리
+    local f="$ALERT_DEDUP_DIR/$message_hash"
+    [[ -f "$f" ]] || return 1
+    local last_time now elapsed
+    last_time=$(cat "$f" 2>/dev/null || echo "0")
     if [[ ! "$last_time" =~ ^[0-9]+$ ]]; then last_time=0; fi
-    local now
     now=$(date +%s)
-    local elapsed=$((now - last_time))
-
-    # 동일 메시지 + 쿨다운 시간 내
-    if [[ "$last_hash" == "$message_hash" ]] && [[ $elapsed -lt $cooldown ]]; then
+    elapsed=$((now - last_time))
+    if [[ $elapsed -lt $cooldown ]]; then
         return 0
     fi
     return 1
@@ -64,20 +61,28 @@ is_in_cooldown() {
 
 set_last_alert() {
     local message_hash="$1"
-    echo "$message_hash" > "$LAST_ALERT_FILE"
-    date +%s >> "$LAST_ALERT_FILE"
+    date +%s > "$ALERT_DEDUP_DIR/$message_hash"
+    # 이틀 지난 해시 파일은 기회적 정리 (상태 디렉토리 비대 방지)
+    find "$ALERT_DEDUP_DIR" -type f -mmin +2880 -delete 2>/dev/null || true
 }
 
-# Discord Embed 색상
+# 송출 감사 원장 (2026-06-11 신설): 모든 Discord 알림 송출 시도를 JSONL로 기록.
+# 측정 원장 없이는 노이즈 개선을 입증할 수 없음 — 30일 추이 분석의 데이터 기반.
+_send_audit_log() {
+    local level="$1" channel="$2" title="$3" result="$4"
+    local ledger_dir="$BOT_HOME/ledger"
+    mkdir -p "$ledger_dir" 2>/dev/null || return 0
+    jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg src "alert-send" --arg lvl "$level" --arg ch "$channel" \
+        --arg t "$title" --arg r "$result" \
+        '{ts:$ts,source:$src,level:$lvl,channel:$ch,title:$t,result:$r}' \
+        >> "$ledger_dir/discord-send-audit.jsonl" 2>/dev/null || true
+}
+
+# Discord Embed 색상 — 단일 정의(discord-severity.sh) 위임 (2026-06-11 중앙화)
+source "$HOME/jarvis/infra/lib/discord-severity.sh"
 get_color() {
-    local level="$1"
-    case "$level" in
-        critical) echo "15158332" ;;  # 빨강
-        warning)  echo "16776960" ;;  # 노랑
-        info)     echo "3447003" ;;   # 파랑
-        success)  echo "3066993" ;;   # 초록
-        *)        echo "9807270" ;;   # 회색
-    esac
+    severity_color "$1"
 }
 
 # Discord Emoji
@@ -106,6 +111,7 @@ send_alert() {
     cooldown=$(_cooldown_for_channel "$channel")
     if is_in_cooldown "$message_hash" "$cooldown"; then
         echo "Alert skipped (cooldown=${cooldown}s, channel=${channel}): $title"
+        _send_audit_log "$level" "$channel" "$title" "skipped:cooldown"
         return 0
     fi
 
@@ -114,6 +120,11 @@ send_alert() {
     emoji=$(get_emoji "$level")
     timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
     hostname=$(hostname -s)
+
+    # Discord embed description 한도(4096자) 가드 — 초과분은 자르고 표시 (2026-06-11)
+    if [[ ${#message} -gt 4000 ]]; then
+        message="${message:0:4000}…(잘림)"
+    fi
 
     # Embed JSON 생성 (jq로 특수문자 안전 처리)
     local embed_json
@@ -137,7 +148,7 @@ send_alert() {
     fi
 
     # Webhook 전송
-    local http_code
+    local http_code rc=0
     http_code=$(curl -s -o /tmp/webhook_response.txt -w "%{http_code}" -X POST "$WEBHOOK_URL" \
         -H "Content-Type: application/json" \
         -d "$embed_json" 2>&1)
@@ -145,10 +156,13 @@ send_alert() {
     if [[ "$http_code" == "204" ]] || [[ "$http_code" == "200" ]]; then
         set_last_alert "$message_hash"
         echo "Alert sent (Discord): $title"
+        _send_audit_log "$level" "$channel" "$title" "sent"
     else
         local body
         body=$(cat /tmp/webhook_response.txt 2>/dev/null || echo "")
         echo "Alert failed (Discord HTTP $http_code): $body" >&2
+        _send_audit_log "$level" "$channel" "$title" "failed:http_${http_code}"
+        rc=1  # 무음 삼킴 금지 — 호출자가 실패를 인지하도록 명시 반환 (2026-06-11)
     fi
 
     # ntfy 푸시 알림 (Galaxy 폰 직접 전송)
@@ -171,6 +185,8 @@ send_alert() {
             && echo "Alert sent (ntfy): $title" \
             || echo "Alert failed (ntfy)" >&2
     fi
+
+    return "$rc"
 }
 
 # ============================================================================
