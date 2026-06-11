@@ -1339,7 +1339,9 @@ export async function* createClaudeSession(prompt, {
   // 5. Build effective prompt (same logic as former spawnClaude)
   // [2026-06-07] 코딩테스트 모드: 매 문제를 독립(fresh) 세션으로 — 직전 문제(특히 다른 유형) 컨텍스트가
   //   섞여 "틀린 문제를 푸는" 오염 방지. 같은 채널에 문제를 연달아 올려도 서로 영향 없음.
-  if (_careerCoding) sessionId = null;
+  // [2026-06-11 v2] coach 모드 보강: 면접관 꼬리질문 대응 — 이미지 첨부(=새 문제)만 fresh,
+  //   텍스트(=직전 문제에 대한 후속/꼬리질문)는 세션을 이어 직전 맥락을 기억한다. solve는 기존대로 항상 fresh.
+  if (_careerCoding && (_ccMode === 'solve' || _hasImageAttachment)) sessionId = null;
   const isResuming = !!sessionId;
   let effectivePrompt = prompt;
 

@@ -12,7 +12,7 @@
  */
 
 import { BoundedMap } from './bounded-map.js';
-import { getCareerCodingMode } from './career-coding-mode.js';
+import { getCareerCodingMode, setCareerCodingMode, parseCodingModeCommand, getOwnerDiscordId, CAREER_CHANNEL_ID } from './career-coding-mode.js';
 // v3.3 P0-D: interview-fast-path 모듈 eager import로 RAG warmup IIFE를 봇 기동 시 트리거.
 // dynamic import 시점(첫 질의)에 warmup하면 의미 없음 — 여기서 선행 실행.
 import './interview-fast-path.js';
@@ -1622,6 +1622,33 @@ ${extracted}
 
     const effectiveChannelId = isThread ? message.channel.parentId : message.channel.id;
     const chName = isThread ? (message.channel.parent?.name ?? 'thread') : (message.channel.name ?? 'dm');
+
+    // [2026-06-11] 자연어 코딩모드 토글 — 주인님(owner)이 커리어 채널에서 "코딩모드 켜줘/꺼줘/풀이로/상태"
+    // 한마디로 전환. LLM 호출 없이 즉답하고 종료 (명령어 암기 불필요 요구).
+    if (effectiveChannelId === CAREER_CHANNEL_ID) {
+      const _cmdAuthorId = message._proxyAuthor?.id || message.author?.id;
+      if (_cmdAuthorId && _cmdAuthorId === getOwnerDiscordId()) {
+        const _cmd = parseCodingModeCommand(message._cleanContent ?? message.content);
+        if (_cmd) {
+          const _labels = { coach: '🎯 프롬프트 코치', solve: '🧮 자바 직접 풀이', off: '💼 평소 커리어 채널' };
+          try {
+            if (_cmd === 'status') {
+              const _cur = getCareerCodingMode();
+              await message.reply(`현재 코딩테스트 모드: **${_labels[_cur] || _cur}**`);
+            } else {
+              setCareerCodingMode(_cmd, 'discord-natural');
+              await message.reply(`✅ 코딩테스트 모드 → **${_labels[_cmd]}** (다음 메시지부터 적용)`);
+            }
+            log('info', '[coding-mode] 자연어 토글', { cmd: _cmd, by: _cmdAuthorId });
+          } catch (e) {
+            log('warn', '[coding-mode] 토글 실패', { error: e?.message });
+            await message.reply(`⚠️ 모드 전환 실패: ${e?.message}`).catch(() => {});
+          }
+          return;
+        }
+      }
+    }
+
     // 재생성 버튼 대비: sessionKey별 마지막 원본 쿼리 저장
     lastQueryStore.set(sessionKey, originalPrompt);
     streamer = new StreamingMessage(thread, message, sessionKey, effectiveChannelId);
