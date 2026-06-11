@@ -138,6 +138,13 @@ ${adr_list}
     # 중첩 세션 방지 변수 해제 (크론에서는 없지만, 수동 실행 시 필요)
     unset CLAUDECODE
 
+    # OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰 사용 — llm-gateway.sh 패턴
+    _ISO_TOKEN_FILE="$HOME/.claude-bot/.long-lived-token"
+    if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -s "$_ISO_TOKEN_FILE" ]; then
+        export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_ISO_TOKEN_FILE")"
+    fi
+    export ANTHROPIC_API_KEY=""
+
     _claude_cmd=()
     if [[ -n "${_TIMEOUT_CMD:-}" ]]; then _claude_cmd+=("${_TIMEOUT_CMD}" 180); fi
     _claude_cmd+=(claude -p "$prompt")

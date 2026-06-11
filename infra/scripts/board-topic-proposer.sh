@@ -15,6 +15,13 @@ LOG_FILE="${LOG_DIR}/board-topic-proposer.log"
 # Cron 환경에서 PATH 확장 (homebrew 바이너리 포함)
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH}"
 
+# OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰 사용 — llm-gateway.sh 패턴
+_ISO_TOKEN_FILE="$HOME/.claude-bot/.long-lived-token"
+if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -s "$_ISO_TOKEN_FILE" ]; then
+  export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_ISO_TOKEN_FILE")"
+fi
+export ANTHROPIC_API_KEY=""
+
 # 로그 디렉토리 확인
 if [[ ! -d "$LOG_DIR" ]]; then
     mkdir -p "$LOG_DIR"

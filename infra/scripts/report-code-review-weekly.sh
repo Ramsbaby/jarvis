@@ -18,6 +18,13 @@ log "=== Weekly code review started ==="
 
 _TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
 
+# OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰 사용 — llm-gateway.sh 패턴
+_ISO_TOKEN_FILE="$HOME/.claude-bot/.long-lived-token"
+if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -s "$_ISO_TOKEN_FILE" ]; then
+  export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_ISO_TOKEN_FILE")"
+fi
+export ANTHROPIC_API_KEY=""
+
 # 의존성 확인
 for _cmd in claude jq; do
     if ! command -v "$_cmd" >/dev/null 2>&1; then

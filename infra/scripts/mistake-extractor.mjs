@@ -39,6 +39,19 @@ const MISTAKES_FILE = join(BOT_HOME, 'wiki', 'meta', 'learned-mistakes.md');
 const STATE_FILE    = join(BOT_HOME, 'state', 'mistake-extractor-state.json');
 
 const CLAUDE_BIN       = process.env.CLAUDE_BINARY || join(HOME, '.local/bin/claude');
+
+// OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰을 사용.
+// 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 — llm-gateway.sh와 동일 패턴.
+function isolatedClaudeEnv() {
+  const env = { ...process.env, ANTHROPIC_API_KEY: '' };
+  if (!env.CLAUDE_CODE_OAUTH_TOKEN) {
+    try {
+      const tok = readFileSync(join(HOME, '.claude-bot/.long-lived-token'), 'utf-8').trim();
+      if (tok) env.CLAUDE_CODE_OAUTH_TOKEN = tok;
+    } catch { /* 토큰 파일 없으면 메인 credentials 폴백 — 401 시 호출부에서 실패 처리 */ }
+  }
+  return env;
+}
 const MAX_FILES_PER_RUN = 5;     // 세션 파일 상한
 const MAX_MISTAKES_PER_RUN = 5;  // 추출 건 상한
 // Discord turn은 짧으므로 cutoff 완화 (Harness P0 verify R6 지적).
@@ -94,6 +107,7 @@ function callClaude(prompt) {
     maxBuffer: 1024 * 1024,
     encoding: 'utf-8',
     stdio: ['pipe', 'pipe', 'pipe'],
+    env: isolatedClaudeEnv(),
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {

@@ -8,6 +8,13 @@ set -euo pipefail
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰 사용 — llm-gateway.sh 패턴
+_ISO_TOKEN_FILE="$HOME/.claude-bot/.long-lived-token"
+if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -s "$_ISO_TOKEN_FILE" ]; then
+  export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_ISO_TOKEN_FILE")"
+fi
+export ANTHROPIC_API_KEY=""
+
 # === 설정 ===
 TEST_DATE="${1:-$(date +%Y-%m-%d)}"
 OUTPUT_DIR="${BOT_HOME}/tmp/compress-loss-analysis"

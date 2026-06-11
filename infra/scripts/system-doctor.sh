@@ -294,6 +294,37 @@ check_disk() {
   fi
 }
 
+# ── 9. claude 직접 호출 격리 가드 (2026-06-11 신설) ──────────────────────────
+# 배치 스크립트가 격리 토큰 없이 claude를 직접 호출하면 대화형 CLI와 토큰 갱신 경쟁
+# → 세션 강제 로그아웃 사고 재발 (oauth-incident-ledger cli-login-session-expired-20260611).
+# 신규 위반 스크립트가 생기면 WARN으로 적발한다.
+check_claude_isolation() {
+  local viol=0 names=""
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    grep -qE "CLAUDE_CODE_OAUTH_TOKEN|llm-gateway|ask-claude" "$f" && continue
+    case "$(basename "$f")" in
+      # 화이트리스트 (2026-06-11 전수 판정 — 에이전트 2차 분류 + 실측):
+      # ① 인증 점검 도구 — 메인 credentials 검사가 본래 목적
+      pre-cron-auth-check.sh|boot-auth-check.sh|token-health-check.sh|claude-switch.sh) continue ;;
+      # ② bot-cron/게이트웨이 격리 주입 경로 경유 또는 claude 실호출 없음(오탐)
+      macro-briefing.sh|coder-functions.sh|extras-gateway.mjs|health-gateway.mjs) continue ;;
+      watchdog.sh|health-check.sh|bot-self-restart.sh) continue ;;
+      # ③ 대화형 TUI — 메인 credentials 사용이 정당 (배치 아님)
+      chat.mjs) continue ;;
+    esac
+    viol=$((viol + 1))
+    names="${names}$(basename "$f") "
+  done < <(grep -rlE 'spawnSync\(CLAUDE_BIN|\.local/bin/claude.{0,40}(-p|--print)|claude (-p|--print)' \
+            "$HOME/jarvis/infra/scripts" "$HOME/jarvis/infra/lib" 2>/dev/null \
+            | grep -vE '\.bak|\.LOCKED|node_modules|\.md$' || true)
+  if [[ "$viol" -gt 0 ]]; then
+    add_result "claude-격리" "WARN" "${viol}건 우회 호출: ${names:0:80}"
+  else
+    add_result "claude-격리" "OK" "전 배치 격리 토큰 경유"
+  fi
+}
+
 # ── 모든 체크 실행 ────────────────────────────────────────────────────────────
 log "system-doctor 시작"
 
@@ -305,6 +336,7 @@ check_e2e
 check_glances
 check_cli_tools
 check_disk
+check_claude_isolation
 
 read -r ok wf < "$COUNTS_TMP"
 log "점검 완료 — OK:$ok WARN/FAIL:$wf"
