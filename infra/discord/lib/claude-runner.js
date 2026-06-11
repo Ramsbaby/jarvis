@@ -887,7 +887,9 @@ export async function* createClaudeSession(prompt, {
     if (_careerCoding && (_p.length < 10 || _p.startsWith('🖼️') || /이미지\s*분석|analyz(e|ing)\s*image/i.test(_p))) {
       prompt = _ccMode === 'coach'
         ? '첨부했거나 위에 적은 코딩테스트/알고리즘 문제를 직접 끝까지 풀지 말고, 코치 가이드 형식(① 문제 해독 → ② 유형·함정 → ③ 복붙용 1차 프롬프트 → ④ 검증 프롬프트 → ⑤ 리스크·설명 멘트)으로 "생성형 AI에게 어떻게 시킬지"를 코치해주세요. 이미지를 그냥 "분석/묘사"하지 말고 반드시 문제로 읽으세요.'
-        : '첨부했거나 위에 적은 코딩테스트/알고리즘 문제를 자바(Java 15)로 풀어주세요. 이미지를 그냥 "분석/묘사"하지 말고 반드시 문제로 보고 풉니다. 출력은 코딩테스트 가이드의 6단계 순서(① 문제 의도 → ② 어떻게 풀 것인가 → ③ 전체 코드 → ④ 시간 복잡도 → ⑤ 공간 복잡도 → ⑥ 엣지케이스)를 그대로 따르세요. 모든 설명과 주석은 최대한 쉽게, 복잡도는 왜 그런지까지.';
+        : _ccMode === 'deep'
+          ? '첨부했거나 위에 적은 코딩테스트/알고리즘 문제를 자바(Java 15)로 확실하게 푸세요. 시간이 걸려도 정확성이 최우선입니다. 정밀 풀이 가이드를 따르세요: 접근법 후보 비교 → 구현 → 반드시 코드를 파일로 작성해 javac/java로 직접 컴파일·실행 → 예제 + 자가 생성 경계값·반례 테스트로 검증 → 전부 통과한 코드만 최종 제출. 검증 결과 로그를 응답에 포함하세요.'
+          : '첨부했거나 위에 적은 코딩테스트/알고리즘 문제를 자바(Java 15)로 풀어주세요. 이미지를 그냥 "분석/묘사"하지 말고 반드시 문제로 보고 풉니다. 출력은 코딩테스트 가이드의 6단계 순서(① 문제 의도 → ② 어떻게 풀 것인가 → ③ 전체 코드 → ④ 시간 복잡도 → ⑤ 공간 복잡도 → ⑥ 엣지케이스)를 그대로 따르세요. 모든 설명과 주석은 최대한 쉽게, 복잡도는 왜 그런지까지.';
     }
   }
   if (_hasImageAttachment || _careerCoding) {
@@ -896,7 +898,9 @@ export async function* createClaudeSession(prompt, {
       const _isCareerChannel = channelId === '1471694919339868190';
       const _imgModeFile = _ccMode === 'coach'
         ? 'coding-coach-mode.md'
-        : ((_isCareerChannel || _careerCoding) ? 'coding-test-mode.md' : 'sap-mode.md');
+        : _ccMode === 'deep'
+          ? 'coding-deep-mode.md'
+          : ((_isCareerChannel || _careerCoding) ? 'coding-test-mode.md' : 'sap-mode.md');
       const imgModePath = join(BOT_HOME, 'context', _imgModeFile);
       if (existsSync(imgModePath)) {
         const modeText = readFileSync(imgModePath, 'utf-8').trim();
@@ -904,6 +908,8 @@ export async function* createClaudeSession(prompt, {
           // 가이드가 답변의 핵심이므로 score 9 명명 섹션으로 승격(예산 캡에서 드롭 방지).
           const _override = _ccMode === 'coach'
             ? '【⚠️ 현재 이 채널은 코딩테스트 "프롬프트 코치" 모드입니다. 모든 입력(텍스트·이미지)을 코딩테스트 문제로 간주하되, 문제를 직접 끝까지 풀지 말고 생성형 AI에게 시킬 프롬프트 전략을 코치하세요. 커리어 상담·분석·시나리오는 하지 마세요.】\n\n'
+            : _ccMode === 'deep'
+            ? '【⚠️ 현재 이 채널은 코딩테스트 "정밀 풀이" 모드입니다. 모든 입력(텍스트·이미지)을 코딩테스트 문제로 간주합니다. 시간 무관, 정확성 최우선 — 반드시 직접 컴파일·실행·반례 검증을 마친 코드만 제출하세요. 커리어 상담·분석·시나리오는 하지 마세요.】\n\n'
             : _careerCoding
               ? '【⚠️ 현재 이 채널은 코딩테스트 전용 모드입니다. 모든 입력(텍스트·이미지)을 코딩테스트/알고리즘 문제로 간주해 자바로 풉니다. 커리어 상담·분석·시나리오는 하지 마세요.】\n\n'
               : '';
@@ -1424,7 +1430,8 @@ export async function* createClaudeSession(prompt, {
   // 그 외 → opusplan (계획 Opus, 실행 Sonnet, 200턴)
   // P2-2: ADAPTIVE_MODEL_ENABLED=1 이면 프롬프트 분류로 trivial → fast 다운그레이드.
   // [2026-06-07] 코딩테스트 모드(시스템 검증만): 모델은 이미지 Read + 생성뿐 → 6턴이면 충분.
-  const maxTurns = _careerCoding ? 6 : (contextBudget === 'small' ? 50 : 200);
+  // deep: 직접 컴파일·실행·반례 검증 루프를 돌아야 하므로 턴 여유 필요 (시간 무관 모드)
+  const maxTurns = _careerCoding ? (_ccMode === 'deep' ? 80 : 6) : (contextBudget === 'small' ? 50 : 200);
   let channelModelKey = channelName && MODELS.channelOverrides?.[channelName];
   // [2026-06-07] 이미지 첨부(코딩테스트·SAP 등)는 다운그레이드 제외 — 짧은 캡션("이거 풀어줘")이라도
   //   텍스트가 짧다고 haiku로 떨어지면 코드/문제 풀이 품질이 망가짐. 이미지 작업은 강한 모델 유지.
@@ -1444,7 +1451,9 @@ export async function* createClaudeSession(prompt, {
     }
   }
   // [2026-06-07] 코딩테스트 모드는 Sonnet 단발 — opusplan(계획Opus+실행Sonnet 듀얼)의 계획 오버헤드 제거.
-  const model = _careerCoding ? MODELS.sonnet : (contextBudget === 'small' ? MODELS.fast : (channelModelKey ? MODELS[channelModelKey] : 'opusplan'));
+  const model = _careerCoding
+    ? (_ccMode === 'deep' ? MODELS.power : MODELS.sonnet)
+    : (contextBudget === 'small' ? MODELS.fast : (channelModelKey ? MODELS[channelModelKey] : 'opusplan'));
 
   // 사고 2026-05-22 대응: 모델 결정 사후 추적 가능성 확보. 어느 응답이 어느 모델로 갔는지 ledger grep 1줄로 판별.
   log('info', 'model resolved', { channel: channelName, channelModelKey, finalModel: model, contextBudget });
@@ -1626,10 +1635,17 @@ export async function* createClaudeSession(prompt, {
   //   따라서 모델엔 이미지 읽기용 Read만 허용(Write/Bash/MCP 불필요) → 도구 루프 0, 가장 빠름.
   if (_careerCoding) {
     queryOptions.mcpServers = {};
-    queryOptions.allowedTools = ['Read'];
-    // [2026-06-07] effort max→high: 코딩 정답성은 가이드 규칙이 잡으므로 max의 과한 추론시간 불필요.
-    //   응답 지연(2분+) 완화. (화요일 후 CAREER_CODING_MODE=0이면 채널 기본 max로 자동 복귀.)
-    queryOptions.effort = 'high';
+    if (_ccMode === 'deep') {
+      // [2026-06-11] deep: 시간 무관 정답성 최우선 — 모델이 직접 Main.java를 쓰고
+      //   javac/java로 컴파일·실행·반례 검증 루프를 돈다. effort max.
+      queryOptions.allowedTools = ['Read', 'Bash', 'Write', 'Edit'];
+      queryOptions.effort = 'max';
+    } else {
+      queryOptions.allowedTools = ['Read'];
+      // [2026-06-07] effort max→high: 코딩 정답성은 가이드 규칙이 잡으므로 max의 과한 추론시간 불필요.
+      //   응답 지연(2분+) 완화.
+      queryOptions.effort = 'high';
+    }
   }
 
   // _promptVersionMap: per-threadId 버전 캐시 (글로벌 싱글턴은 다채널 동시실행 시 오염됨)
