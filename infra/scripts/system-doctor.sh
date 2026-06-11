@@ -325,6 +325,85 @@ check_claude_isolation() {
   fi
 }
 
+# ── 10. 학습 소비처 등기소 검사 (2026-06-11 신설) ─────────────────────────────
+# 학습 산출물(오답노트·체크리스트·통찰·ralph)이 "생산만 되고 아무도 안 읽는"
+# 구조 단절을 적발한다. 등기부(learning-consumer-registry.json) 각 항목에 대해
+# ① artifact 존재 ② 소비처 파일 존재 ③ 소비처가 artifact 경로/이름을 참조하는지 grep
+# 3중 검사 — 실패 항목은 WARN. optional=true(선등기)는 artifact 미생성 시
+# 조용히 통과시켜 영구 오탐을 방지한다 (설계 v2 결함 3 정정).
+check_learning_consumers() {
+  local REG="$HOME/jarvis/runtime/config/learning-consumer-registry.json"
+  if [[ ! -f "$REG" ]]; then
+    add_result "학습-소비처" "WARN" "등기부 부재: learning-consumer-registry.json"
+    return
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    add_result "학습-소비처" "WARN" "jq 없음 — 검사 불가"
+    return
+  fi
+  if ! jq empty "$REG" 2>/dev/null; then
+    add_result "학습-소비처" "WARN" "등기부 JSON 파싱 실패"
+    return
+  fi
+
+  local total=0 issues=0 notes=""
+  local id apath kind optional cfile cref ctype
+
+  # ① artifact 존재 검사 — kind=dir은 디렉토리, 그 외는 파일로 판정.
+  #    optional=true는 미생성 허용 (경로만 선등기한 항목).
+  while IFS=$'\t' read -r id apath kind optional; do
+    [[ -z "$id" ]] && continue
+    total=$((total + 1))
+    apath="${apath/#\~/$HOME}"
+    local a_ok=true
+    if [[ "$kind" == "dir" ]]; then
+      [[ -d "$apath" ]] || a_ok=false
+    else
+      [[ -f "$apath" ]] || a_ok=false
+    fi
+    if ! $a_ok && [[ "$optional" != "true" ]]; then
+      issues=$((issues + 1))
+      notes="${notes}${id}:산출물없음; "
+    fi
+  done < <(jq -r '.artifacts[] | [.id, .path, (.kind // "file"), ((.optional // false)|tostring)] | @tsv' "$REG" 2>/dev/null)
+
+  # ② + ③ 소비처 검사 — 파일 존재 + artifact 참조(ref 문자열) grep.
+  #    kind=archive는 보관용(소비처 부재가 정상)이라 면제.
+  #    optional artifact가 아직 미생성이면 소비처 검사 생략 — 생성 시점부터 발효.
+  #    비파일 소비처(type 마커, 예: claude-code-rules-autoload)는 grep 불가 → 통과.
+  while IFS=$'\t' read -r id apath kind optional cfile cref ctype; do
+    [[ -z "$id" ]] && continue
+    [[ "$kind" == "archive" ]] && continue
+    apath="${apath/#\~/$HOME}"
+    if [[ "$optional" == "true" ]]; then
+      if [[ "$kind" == "dir" ]]; then
+        [[ -d "$apath" ]] || continue
+      else
+        [[ -f "$apath" ]] || continue
+      fi
+    fi
+    if [[ -z "$cfile" && -n "$ctype" ]]; then
+      continue
+    fi
+    cfile="${cfile/#\~/$HOME}"
+    if [[ ! -f "$cfile" ]]; then
+      issues=$((issues + 1))
+      notes="${notes}${id}:소비처없음($(basename "$cfile")); "
+      continue
+    fi
+    if [[ -n "$cref" ]] && ! grep -qF -- "$cref" "$cfile" 2>/dev/null; then
+      issues=$((issues + 1))
+      notes="${notes}${id}:참조누락($(basename "$cfile")); "
+    fi
+  done < <(jq -r '.artifacts[] | .id as $i | .path as $p | (.kind // "file") as $k | ((.optional // false)|tostring) as $o | (.consumers // [])[]? | [$i, $p, $k, $o, (.file // ""), (.ref // ""), (.type // "")] | @tsv' "$REG" 2>/dev/null)
+
+  if [[ "$issues" -gt 0 ]]; then
+    add_result "학습-소비처" "WARN" "${issues}건 단절: ${notes:0:110}"
+  else
+    add_result "학습-소비처" "OK" "artifact ${total}종 소비 연결 실재"
+  fi
+}
+
 # ── 모든 체크 실행 ────────────────────────────────────────────────────────────
 log "system-doctor 시작"
 
@@ -337,6 +416,7 @@ check_glances
 check_cli_tools
 check_disk
 check_claude_isolation
+check_learning_consumers
 
 read -r ok wf < "$COUNTS_TMP"
 log "점검 완료 — OK:$ok WARN/FAIL:$wf"

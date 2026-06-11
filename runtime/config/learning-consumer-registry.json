@@ -1,0 +1,222 @@
+{
+  "version": 2,
+  "updated": "2026-06-11",
+  "purpose": "학습 산출물(오답노트·체크리스트·통찰)이 '생산만 되고 아무도 안 읽는' 구조 단절을 등기·감사하는 SSoT. system-doctor.sh check_learning_consumers가 매일 검사.",
+  "schema_note": "kind: file|dir|archive(소비처 검사 면제). optional: true=미생성 허용(선등기 — artifact 생성 시점부터 소비처 검사 발효). consumers[].file은 grep 대상, consumers[].ref는 참조 문자열, consumers[].type은 비파일 소비처 마커. producers는 정보성(검사 비대상).",
+  "artifacts": [
+    {
+      "id": "learned-mistakes",
+      "path": "~/jarvis/runtime/wiki/meta/learned-mistakes.md",
+      "producers": ["~/.claude/hooks/stop-mistake-extract.sh", "~/jarvis/infra/scripts/mistake-extractor.mjs", "/oops"],
+      "consumers": [
+        {"file": "~/.claude/hooks/mistake-prewarn.sh", "ref": "learned-mistakes.md"},
+        {"file": "~/jarvis/infra/scripts/mistake-to-checklist.mjs", "ref": "learned-mistakes"},
+        {"file": "~/jarvis/infra/scripts/mistake-to-skill-pipeline.sh", "ref": "learned-mistakes"},
+        {"file": "~/jarvis/infra/scripts/learning-loop-audit.sh", "ref": "learned-mistakes"},
+        {"file": "~/jarvis/infra/bin/mistake-pattern-analyzer.sh", "ref": "learned-mistakes.md"}
+      ],
+      "freshness_hours": 48,
+      "note": "UserPromptSubmit 훅(mistake-prewarn.sh) 소비 실측(settings.json L104~). 설계 정정: pattern-analyzer 입력은 mistake-ledger가 아니라 learned-mistakes.md (analyzer L10 실측, 2026-06-11)."
+    },
+    {
+      "id": "learned-mistakes-archive",
+      "path": "~/jarvis/runtime/wiki/meta/learned-mistakes.archive.md",
+      "kind": "file",
+      "optional": true,
+      "producers": ["tasks.json:compound-review (일 20:30 — 90일+ 무재발 항목 이동)"],
+      "consumers": [
+        {"file": "~/jarvis/infra/scripts/mistake-to-checklist.mjs", "ref": "learned-mistakes.archive"}
+      ],
+      "freshness_hours": 0
+    },
+    {
+      "id": "mistake-ledger",
+      "path": "~/jarvis/runtime/state/mistake-ledger.jsonl",
+      "producers": ["~/jarvis/infra/scripts/mistake-extractor.mjs"],
+      "consumers": [
+        {"file": "~/jarvis/infra/scripts/mistake-recurrence-audit.sh", "ref": "mistake-ledger"}
+      ],
+      "freshness_hours": 48,
+      "note": "설계 v2 §1-A의 pattern-analyzer 소비 기재는 실측 불일치(grep 0건)로 제외 — analyzer는 learned-mistakes 항목에 등기."
+    },
+    {
+      "id": "recurrence-report",
+      "path": "~/jarvis/runtime/state/mistake-recurrence.json",
+      "producers": ["~/jarvis/infra/scripts/mistake-recurrence-audit.sh (crontab 03:30 KST 덮어쓰기)"],
+      "consumers": [
+        {"file": "~/jarvis/infra/scripts/weekly-mistake-heatmap.sh", "ref": "mistake-recurrence.json"},
+        {"file": "~/jarvis/infra/scripts/mistake-promoter.mjs", "ref": "mistake-recurrence.json"}
+      ],
+      "freshness_hours": 26,
+      "note": "heatmap 소비는 실측 추가(L15). promoter는 설계 §2 선등기 — 파일 생성 전까지 doctor WARN이 사다리 미완성을 정직하게 표시."
+    },
+    {
+      "id": "pattern-analysis",
+      "path": "~/jarvis/runtime/state/mistake-pattern-analysis.json",
+      "producers": ["~/jarvis/infra/bin/mistake-pattern-analyzer.sh (tasks.json 03:30)"],
+      "consumers": [
+        {"file": "~/jarvis/infra/discord/lib/claude-runner.js", "ref": "mistake-pattern-analysis"}
+      ],
+      "freshness_hours": 26
+    },
+    {
+      "id": "checklist-dir",
+      "path": "~/jarvis/runtime/wiki/meta/checklists",
+      "kind": "dir",
+      "producers": ["~/jarvis/infra/scripts/mistake-to-checklist.mjs (crontab 03:45 KST)"],
+      "consumers": [
+        {"file": "~/.claude/hooks/mistake-prewarn.sh", "ref": "checklists"}
+      ],
+      "freshness_hours": 0,
+      "note": "mistake-to-checklist 산출물 본체. 소비처 훅 연결은 이번 배치 작업 — 연결 전까지 참조누락 WARN이 정상(미연결 실태의 정직 표시)."
+    },
+    {
+      "id": "checklist-items",
+      "path": "~/jarvis/runtime/wiki/meta/checklists/items.jsonl",
+      "optional": true,
+      "producers": ["~/jarvis/infra/scripts/mistake-to-checklist.mjs (사이드카 — 설계 §2)"],
+      "consumers": [
+        {"file": "~/.claude/hooks/mistake-prewarn.sh", "ref": "items.jsonl"},
+        {"file": "~/jarvis/infra/scripts/mistake-promoter.mjs", "ref": "items.jsonl"}
+      ],
+      "freshness_hours": 26,
+      "note": "경로 선등기 — 생성 전까지 검사 면제, 생성 시점부터 소비처 grep 발효."
+    },
+    {
+      "id": "checklist-index",
+      "path": "~/jarvis/runtime/wiki/meta/checklists/INDEX.md",
+      "producers": ["~/jarvis/infra/scripts/mistake-to-checklist.mjs"],
+      "consumers": [
+        {"file": "~/jarvis/infra/scripts/weekly-mistake-heatmap.sh", "ref": "INDEX.md"}
+      ],
+      "freshness_hours": 26
+    },
+    {
+      "id": "eureka",
+      "path": "~/jarvis/runtime/wiki/meta/eureka.jsonl",
+      "producers": ["~/jarvis/infra/bin/bot-cron.sh (EUREKA_JSON 마커 — grep 7건 실측)"],
+      "consumers": [
+        {"file": "~/jarvis/rag/bin/rag-index.mjs", "ref": "eureka.jsonl"},
+        {"file": "~/jarvis/infra/scripts/learning-loop-audit.sh", "ref": "eureka"},
+        {"file": "~/jarvis/runtime/config/tasks.json", "ref": "eureka"}
+      ],
+      "freshness_hours": 0,
+      "note": "RAG 인덱서가 wiki/를 0순위 인덱싱(rag-index.mjs L651 collectWikiMd, L634 주석에 eureka.jsonl 명시 — 2026-06-11 실측). 단 수집 필터가 .md 한정이라 jsonl 본문 직접 청크 인덱싱은 미확인 — 인덱서 확장 시 이 노트 갱신."
+    },
+    {
+      "id": "ralph-insights",
+      "path": "~/jarvis/runtime/state/ralph-insights.jsonl",
+      "producers": ["~/jarvis/infra/scripts/interview-ralph-runner.mjs"],
+      "consumers": [
+        {"file": "~/jarvis/infra/scripts/interview-ralph-runner.mjs", "ref": "ralph-insights.jsonl"}
+      ],
+      "freshness_hours": 0,
+      "note": "라운드 간 self-feedback 루프 (생산자=소비자가 정상인 항목)."
+    },
+    {
+      "id": "ralph-insights-block",
+      "path": "~/jarvis/runtime/state/ralph-insights-block.json",
+      "producers": ["~/jarvis/infra/scripts/interview-ralph-runner.mjs"],
+      "consumers": [
+        {"file": "~/jarvis/infra/discord/lib/interview-fast-path.js", "ref": "ralph-insights-block"},
+        {"file": "~/jarvis/infra/discord/lib/handlers.js", "ref": "ralph-insights-block"}
+      ],
+      "freshness_hours": 0
+    },
+    {
+      "id": "ralph-forbid",
+      "path": "~/jarvis/runtime/state/ralph-forbid-list.json",
+      "producers": ["/interview-ralph (forbid 등재)"],
+      "consumers": [
+        {"file": "~/jarvis/infra/discord/lib/interview-fast-path.js", "ref": "ralph-forbid-list.json"},
+        {"file": "~/jarvis/infra/scripts/interview-ralph-runner.mjs", "ref": "ralph-forbid-list"}
+      ],
+      "freshness_hours": 0,
+      "note": "interview-fast-path.js L890 RALPH_FORBID_PATH 실측 (2026-06-11)."
+    },
+    {
+      "id": "ralph-approved-answers",
+      "path": "~/jarvis/runtime/state/scenarios",
+      "kind": "dir",
+      "producers": ["/interview-ralph (approvedAnswer 승격)", "시나리오 편집 세션"],
+      "consumers": [
+        {"file": "~/jarvis/infra/discord/lib/interview-fast-path.js", "ref": "approvedAnswer"}
+      ],
+      "freshness_hours": 0,
+      "note": "approvedAnswer 필드는 scenarios/<name>.json 질문 객체 내 저장 — interview-fast-path.js L918(SCENARIO_PATH)·L1028(q.approvedAnswer) 실측."
+    },
+    {
+      "id": "auto-skills",
+      "path": "~/jarvis/runtime/skills",
+      "kind": "dir",
+      "producers": ["~/jarvis/infra/lib/skill-extractor.mjs (mistake-to-skill-pipeline 경유)"],
+      "consumers": [
+        {"file": "~/jarvis/infra/scripts/mistake-skill-effect-check.sh", "ref": "auto-extracted-from-task:mistake-"}
+      ],
+      "freshness_hours": 0
+    },
+    {
+      "id": "skill-extractor-ledger",
+      "path": "~/jarvis/runtime/state/skill-extractor-ledger.jsonl",
+      "producers": ["~/jarvis/infra/lib/skill-extractor.mjs"],
+      "consumers": [
+        {"file": "~/jarvis/infra/scripts/mistake-promoter.mjs", "ref": "skill-extractor-ledger"}
+      ],
+      "freshness_hours": 0,
+      "note": "promoter 교차 dedup 입력(설계 §4-B 선등기). 설계 실측 메모: mistake-to-skill-pipeline이 tasks.json·crontab·LaunchAgent 미등재 — 스케줄 끊김 의심, 적용 직후 점검 항목."
+    },
+    {
+      "id": "autolearn-rules",
+      "path": "~/.claude/rules/jarvis-autolearn.md",
+      "kind": "file",
+      "optional": true,
+      "max_bytes": 3000,
+      "max_rules": 5,
+      "pair": {"path": "~/jarvis/runtime/context/owner/persona-discord.md", "marker": "AL-[0-9]{3}"},
+      "producers": ["~/jarvis/infra/scripts/mistake-promoter.mjs --apply (주인님 결재 후 대화형 세션 한정 — 무인 write 금지)"],
+      "consumers": [
+        {"type": "claude-code-rules-autoload"}
+      ],
+      "freshness_hours": 0,
+      "note": "Claude Code가 ~/.claude/rules/*.md를 세션마다 자동 로드 — 비파일 소비처."
+    },
+    {
+      "id": "autolearn-candidates",
+      "path": "~/jarvis/runtime/state/autolearn-candidates.jsonl",
+      "optional": true,
+      "producers": ["~/jarvis/infra/scripts/mistake-promoter.mjs --propose"],
+      "consumers": [
+        {"file": "~/jarvis/infra/scripts/mistake-promoter.mjs", "ref": "autolearn-candidates"}
+      ],
+      "freshness_hours": 0
+    },
+    {
+      "id": "promoter-ledger",
+      "path": "~/jarvis/runtime/ledger/promoter-ledger.jsonl",
+      "optional": true,
+      "producers": ["~/jarvis/infra/scripts/mistake-promoter.mjs"],
+      "consumers": [
+        {"file": "~/jarvis/infra/scripts/weekly-mistake-heatmap.sh", "ref": "promoter-ledger"},
+        {"file": "~/jarvis/infra/scripts/system-doctor.sh", "ref": "promoter-ledger"}
+      ],
+      "freshness_hours": 0
+    },
+    {
+      "id": "autolearn-archive",
+      "path": "~/jarvis/runtime/wiki/meta/autolearn-archive.md",
+      "kind": "archive",
+      "optional": true,
+      "producers": ["~/jarvis/infra/scripts/mistake-promoter.mjs --apply-demote (강등 보관 — rules 밖)"],
+      "consumers": [],
+      "freshness_hours": 0
+    }
+  ],
+  "unregistered_scan": {
+    "dirs": ["~/jarvis/runtime/wiki/meta", "~/jarvis/runtime/state"],
+    "patterns": ["*checklist*", "*insight*", "*eureka*", "*forbid*", "*pattern*", "*autolearn*"],
+    "max_age_days": 14,
+    "exclude_names": ["*.bak*", "*backup*", "*pre-prepend*", "*.pretest", "*state*", "*.last_sent", "*.lock", "*.tmp"],
+    "prune_dirs": ["dedup"],
+    "note": "설계 §1-A — 향후 미등기 산출물 스캔용 메타데이터(2026-06-11 정정판 find 실측: 등기 외 매치 0건). 현재 doctor 검사는 등기 항목 3중 검사만 수행."
+  }
+}
