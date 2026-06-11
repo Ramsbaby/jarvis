@@ -8,9 +8,9 @@
 #   discord_route retro "..."
 #
 # severity → channel:
-#   critical → jarvis-system  (즉시 대응 필요 — 시스템 채널은 critical 전용으로 유지)
-#   info     → jarvis         (단순 알림 — 2026-06-11 분산 가동. jarvis-info 신설 시 여기만 교체)
-#   retro    → jarvis         (자가 회고 — jarvis-retro 신설 시 여기만 교체)
+#   critical → jarvis-system  (즉시 대응 필요 — 시스템 채널은 critical 전용)
+#   info     → jarvis-info    (단순 알림 — 2026-06-11 채널 신설로 완전 분리)
+#   retro    → jarvis-retro   (자가 회고 — 안 봐도 되는 기록)
 #
 # 채널 신설 마이그 시 이 함수 본문만 수정 — 모든 cron이 자동 분산.
 
@@ -21,8 +21,8 @@ _discord_route_channel() {
     local severity="$1"
     case "$severity" in
         critical) echo "jarvis-system" ;;
-        info)     echo "jarvis" ;;
-        retro)    echo "jarvis" ;;
+        info)     echo "jarvis-info" ;;
+        retro)    echo "jarvis-retro" ;;
         *)        echo "jarvis-system" ;;
     esac
 }
