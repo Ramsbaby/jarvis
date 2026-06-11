@@ -1367,6 +1367,15 @@ export async function* createClaudeSession(prompt, {
       ctxParts.push(`[이전 작업 요약] ${injectedSummary}`);
       log('debug', 'createClaudeSession: injected previous session summary on resume', { threadId, summaryLen: injectedSummary.length });
     }
+    // [2026-06-11] 코딩 모드 resume(꼬리질문) 턴에도 가이드 최신본 재주입 — 세션 생성 시점의
+    // 낡은 가이드가 박제되는 문제 해결 (실측: 쉬운말 규칙 갱신이 이어지는 세션에 미반영 → "불변식" 노출).
+    if (_careerCoding) {
+      try {
+        const _gFile = _ccMode === 'coach' ? 'coding-coach-mode.md' : 'coding-test-mode.md';
+        const _g = readFileSync(join(BOT_HOME, 'context', _gFile), 'utf-8').trim();
+        if (_g) ctxParts.push(`[코딩테스트 모드 가이드 — 매 턴 최신본. 세션에 저장된 이전 가이드와 충돌하면 이것을 따르세요]\n${_g}`);
+      } catch { /* 가이드 파일 없으면 세션 보존분 사용 */ }
+    }
     // 사용량 현황은 80% 이상일 때만 주입 — 낮을 때 주입하면 Claude self-throttling 유발
     // 예외: 사용자가 "사용량" 키워드로 직접 조회할 때는 항상 주입
     if (usageSummary) {
