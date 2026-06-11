@@ -49,6 +49,64 @@ const BOT_NAME = process.env.BOT_NAME || 'Claude Bot';
 // Shared state (created here, passed to handlers)
 // ---------------------------------------------------------------------------
 
+/**
+ * === Discord 봇의 세션/레이트 관리 아키텍처 ===
+ *
+ * [1] 세션 저장소 (SessionStore)
+ *   - 역할: 디스코드 스레드 ID ↔ Claude 세션 ID 매핑
+ *   - 파일: ~/jarvis/runtime/state/sessions.json
+ *   - 데이터 구조:
+ *     {
+ *       "123456789-987654321": {
+ *         "id": "uuid-xxxxx",        # Claude CLI가 할당한 세션 ID
+ *         "updatedAt": 1781143914412,# 마지막 업데이트 타임스탬프 (7일 TTL 체크용)
+ *         "tokenCount": 1200         # 누적 input+output 토큰 (5000 임계 체크용)
+ *       }
+ *     }
+ *   - 중요: 이것은 Claude CLI의 ~/.cache/claude-cli/sessions/에 있는 실제 세션 파일과 다름!
+ *           이 맵은 "어떤 스레드가 어떤 세션을 사용할지" 결정하는 메타데이터일 뿐.
+ *
+ * [2] 레이트 트래커 (RateTracker)
+ *   - 역할: 5시간 슬라이딩 윈도우 기반 API 호출 속도 제한
+ *   - 파일: ~/jarvis/runtime/state/rate-tracker.json
+ *   - 형식: [timestamp_ms, timestamp_ms, ...]
+ *   - 임계값: 5시간에 900 호출 (180 calls/hour)
+ *   - 경고: 80% 초과 시 warning, 90% 초과 시 reject
+ *   - Discord 봇과 ask-claude.sh가 공유 (동시 업데이트)
+ *
+ * [3] 세마포어 (Semaphore, MAX_CONCURRENT=4)
+ *   - 역할: 동시 실행 프로세스 제한 (메모리/CPU 보호)
+ *   - 제한: 최대 4개 Claude 프로세스만 동시 실행
+ *   - 초과 시: 큐에 대기 (handler에서 대기 메시지 표시)
+ *
+ * === 호출 흐름 ===
+ * Discord 사용자 메시지
+ *   ↓
+ * messageCreate 핸들러
+ *   ↓
+ * handleMessage(message, { sessions, rateTracker, semaphore, ... })
+ *   ↓
+ * 세션 조회: sessions.get(threadId)
+ *   ↓
+ * 레이트 체크: rateTracker.check()
+ *   ↓
+ * 세마포어 대기: semaphore.acquire()
+ *   ↓
+ * Claude CLI 프로세스 스폰 (ask-claude.sh 호출)
+ *   ↓
+ * 응답 취득 후 sessionStore.addTokens(threadId, inputTokens + outputTokens)
+ *   ↓
+ * 디스코드에 응답 전송
+ *
+ * === 중요 사항 ===
+ * ❌ "세션 파일이 가득 차서 성능 저하" → 불가능 (매우 작은 맵)
+ * ✓ "디스코드 봇이 느려지는 이유" → 동시 요청 많음, 또는 Claude 응답 느림
+ *
+ * ❌ "sessions.json을 지우면 메모리가 줄어든다" → 효과 미미
+ * ✓ "메모리 문제" → discord-bot.js 프로세스 크기 모니터링 필요
+ *                  (watchdog이 1300MB 한계 체크)
+ */
+
 const sessions = new SessionStore(SESSIONS_PATH);
 const rateTracker = new RateTracker(RATE_TRACKER_PATH);
 const semaphore = new Semaphore(MAX_CONCURRENT);

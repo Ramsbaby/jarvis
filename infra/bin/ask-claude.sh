@@ -20,6 +20,26 @@ BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_FILE="${BOT_HOME}/logs/task-runner.jsonl"
 
 # --- Batch mode (토큰 절감) ---
+# === 배치 모드 vs 대화형 모드 ===
+#
+# [배치 모드 (JARVIS_BATCH_MODE=1, 기본값)]
+#   - claude -p CLI에 --disable-slash-commands, --no-session-persistence 플래그 추가
+#   - 효과: 세션 파일 (~/.cache/claude-cli/sessions/)에 저장 안 함
+#           → 메모리 누적 방지, 토큰 절감 (매 호출마다 깔끔한 새 세션)
+#   - 부작용: /file, /read 등 슬래시 명령 불가능 → 대신 전체 파일 내용을 프롬프트에 포함
+#   - 용도: 크론 태스크, batch 스크립트 (ask-claude.sh의 기본값)
+#
+# [대화형 모드 (JARVIS_BATCH_MODE=0)]
+#   - claude -p CLI가 세션 파일을 사용하여 컨텍스트 유지
+#   - 효과: 동일 사용자/채널이 연속 호출 시 마지막 대화 기억
+#   - 문제점: tokenCount 누적 위험 (위의 세션 좀비 청소 메커니즘 필요)
+#   - 용도: Discord 봇의 messageCreate (단일 스레드 대화)
+#
+# [주의사항]
+#   ❌ "배치 모드면 항상 비용이 적다" → 틀림
+#   ✓ 옳은 것: "배치 모드는 세션 누적을 방지하므로 예측 가능한 비용"
+#             "대화형 모드는 컨텍스트가 계속 커져서 후반부 호출이 비쌈"
+#
 # ask-claude.sh는 크론/배치 태스크 전용 진입점이므로 기본값 1.
 # llm-gateway.sh의 _llm_claude_cli가 이 값을 보고 claude -p에 다음 플래그 추가:
 #   --disable-slash-commands, --no-session-persistence,
@@ -349,6 +369,39 @@ if [[ -n "${AGENT_NOTE_JSON:-}" && -f "$_AGENT_NOTE_WRITER" ]]; then
 fi
 
 # --- Token ledger (Tier 0 observability) ---
+# === 토큰 레져 개념 정리 ===
+#
+# [토큰 레져 (Token Ledger)]
+#   - 파일: ~/jarvis/runtime/state/token-ledger.jsonl
+#   - 목적: 모든 LLM 호출의 "Single Source of Truth" (SSoT) 레져
+#   - 형식: 라인 단위 JSON (JSONL), 각 호출마다 1라인 추가
+#   - 용도:
+#     1. 일일 $50 한도 체크 (downstream: daily-cap.sh)
+#     2. 80% 경고 알림 (supervisor 체크)
+#     3. 중복 호출 감지 (result_hash로 멱등성 확인)
+#     4. 비용 분석 (task별, model별 집계)
+#
+# [입력 토큰 vs 출력 토큰 vs 비용]
+#   - input_tokens: 프롬프트에 포함된 토큰 수
+#     (예: 10KB 문서 = ~2,500 input tokens)
+#   - output_tokens: 모델이 생성한 응답 토큰 수
+#     (예: 1KB 응답 = ~250 output tokens)
+#   - cost_usd: 실제 청구액
+#     Claude Opus: $0.003/1M input + $0.015/1M output
+#     예) 1000 input + 500 output = ($0.003 + $0.0075) = $0.0105 정도
+#
+# [세션 토큰 카운트 vs 토큰 레져의 차이점]
+#   ❌ 혼동: "토큰 레져의 input+output = sessionStore의 tokenCount"
+#   ✓ 정확: sessionStore.addTokens(threadId, input+output)를 호출하여
+#          별도로 누적 추적. 둘은 동시에 업데이트되지만 목적이 다름:
+#     - sessionStore.tokenCount: 세션별 메모리 폭발 감지 (7일+5000 임계)
+#     - token-ledger: 비용 추적 (일일 한도, 알림)
+#
+# [레져 기록 주기]
+#   - 매 ask-claude.sh 호출 후 즉시 1라인 추가
+#   - 크론 태스크마다 기록되므로 매 시간 수십~수백 줄 추가 가능
+#   - 7일 보관 후 자동 rotation (downstream: archive-ledger.sh)
+#
 # SSoT ledger for all LLM spending. Downstream: daily cap, 80% alert, dedup detection.
 LEDGER_FILE="${BOT_HOME}/state/token-ledger.jsonl"
 mkdir -p "$(dirname "$LEDGER_FILE")" 2>/dev/null || true

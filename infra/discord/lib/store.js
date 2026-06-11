@@ -1,5 +1,43 @@
 /**
  * SessionStore — thread-to-session mapping with TTL expiry and debounced persist.
+ *
+ * === 세션 파일 개념 정리 ===
+ *
+ * 세션(session)은 단순히 "파일"이 아닙니다. sessions.json은 메모리 맵입니다:
+ *   threadId → { id: "session-uuid", updatedAt: timestamp, tokenCount: number }
+ *
+ * [A] 세션 파일 (Session File) 이란?
+ *   - sessions.json 파일 자체
+ *   - 메모리상 스레드별 세션 ID + 토큰 카운트 매핑 저장
+ *   - Claude -p CLI가 자동 생성/관리하는 ~/.cache/claude-cli/ 내 실제 세션 파일과는 무관
+ *   - 용도: 디스코드 채널별 또는 스레드별로 Claude CLI 세션을 "재사용"할지 결정
+ *   - 크기: 매우 작음 (채널 수 × ~100 bytes)
+ *
+ * [B] 컨텍스트 토큰 (Context Tokens) 이란?
+ *   - tokenCount: 누적된 LLM 호출 토큰 합계 (input_tokens + output_tokens)
+ *   - 각 Claude 호출 후 ask-claude.sh → token-ledger.jsonl에 기록됨
+ *   - 목적: 단일 세션에서 누적 토큰이 과도하면 "메모리 폭발" 감지
+ *   - 임계값: SESSIONS_MAX_TOKEN_COUNT (기본 5000) 초과 시 세션 폐기
+ *   - 비용 영향: 토큰 ∝ 비용, 세션별 독립 추적으로 영향 격리
+ *
+ * [C] 세션 크레딧/예산 (Budget) 이란?
+ *   - sessionStore와는 무관, ask-claude.sh에서 관리
+ *   - $MAX_BUDGET 인수로 전달, token-ledger.jsonl에 cost_usd 누적
+ *   - 일일/월별 전체 예산과는 별개, 태스크별 독립 한도
+ *   - 예: ask-claude.sh TASK_ID PROMPT ... "$10" → 이 태스크는 $10 한도
+ *
+ * === 사고 사례: 2026-05-08 세션 522d6b74 ===
+ * - 문제: tokenCount 13,329까지 누적 (7일 TTL 게이트로는 못 잡음)
+ * - 원인: 14일 동안 재사용되며 tokenCount는 계속 증가
+ * - 결과: 호출 1회당 $1,685 발생 (컨텍스트 길이 때문)
+ * - 해결: tokenCount 임계값(5000) + age 체크 병행, 부팅 시 자동 청소
+ *
+ * === 주의: 혼동하기 쉬운 부분 ===
+ * ❌ "세션 파일이 커서 비용이 증가했다" → 잘못됨
+ *    ✓ 옳은 것: "tokenCount가 누적되어 컨텍스트가 길어져 비용이 증가"
+ *
+ * ❌ "sessions.json 파일 크기가 크다" → 거의 불가능 (항상 매우 작음)
+ *    ✓ 옳은 것: "세션 개수가 많거나, 토큰 카운트가 큼"
  */
 
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
@@ -128,10 +166,34 @@ export class SessionStore {
     this.save();
   }
 
+  /**
+   * 스레드별 누적 토큰 카운트 조회
+   *
+   * tokenCount는 이 스레드에서 Claude와 상호작용한 모든 호출의
+   * input_tokens + output_tokens 합계입니다.
+   *
+   * 사용 예:
+   *   - 토큰 카운트가 5000을 초과하면 메모리 폭발 위험 신호
+   *   - Discord 사용자에게 경고: "이 스레드의 누적 토큰이 X개입니다"
+   *   - 세션 폐기 결정 (부팅 시 자동 실행됨)
+   */
   getTokenCount(threadId) {
     return this.data[threadId]?.tokenCount ?? 0;
   }
 
+  /**
+   * 스레드별 토큰 카운트에 증분 추가
+   *
+   * ask-claude.sh에서 LLM 호출 후 호출됨:
+   *   sessions.addTokens(threadId, input_tokens + output_tokens)
+   *
+   * tokenCount가 SESSIONS_MAX_TOKEN_COUNT를 초과하면,
+   * 다음 부팅 시 이 세션은 load() 함수에서 자동으로 폐기됩니다.
+   *
+   * 주의: 이 메서드는 sessionStore.addTokens()이지,
+   *       token-ledger.jsonl과는 별개입니다.
+   *       (레져는 ask-claude.sh에서 관리)
+   */
   addTokens(threadId, delta) {
     if (!this.data[threadId]) return;
     this.data[threadId].tokenCount = (this.data[threadId].tokenCount ?? 0) + delta;
