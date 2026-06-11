@@ -10,6 +10,13 @@ export HOME="${HOME:-/Users/$(id -un)}"
 # Prevent nested claude
 unset CLAUDECODE CLAUDE_CODE_ENTRYPOINT
 
+# OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰 사용 — llm-gateway.sh 패턴
+_ISO_TOKEN_FILE="$HOME/.claude-bot/.long-lived-token"
+if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -s "$_ISO_TOKEN_FILE" ]; then
+  export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_ISO_TOKEN_FILE")"
+fi
+export ANTHROPIC_API_KEY=""
+
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 STATE_FILE="$BOT_HOME/state/triggers/update-broadcast.last-sha"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"

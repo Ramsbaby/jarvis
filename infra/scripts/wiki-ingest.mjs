@@ -37,6 +37,17 @@ const CLAUDE_BIN     = process.env.CLAUDE_BINARY || join(HOME, '.local/bin/claud
 const MAX_LLM_CALLS  = 5;
 const MAX_FACTS_CHARS = 5000;
 
+// OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰을 사용.
+// 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 — llm-gateway.sh와 동일 패턴.
+// spawnSync는 process.env를 상속하므로 모듈 초기화 시점에 주입한다.
+process.env.ANTHROPIC_API_KEY = '';
+if (!process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+  try {
+    const _isoTok = readFileSync(join(HOME, '.claude-bot/.long-lived-token'), 'utf-8').trim();
+    if (_isoTok) process.env.CLAUDE_CODE_OAUTH_TOKEN = _isoTok;
+  } catch { /* 토큰 파일 없으면 메인 credentials 폴백 — 401 시 기존 에러 경로로 처리 */ }
+}
+
 // ── 로거 (KST) ───────────────────────────────────────────────────────────────
 function kstNow() {
   return new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' });

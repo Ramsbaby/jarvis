@@ -34,6 +34,17 @@ const TRACKER_FILE  = join(TOPIC_DIR, 'inbox-tracker.md');
 const MCP_CONFIG    = join(BOT_HOME, 'config', 'empty-mcp.json');
 const PROMPT_PATH   = join(HOME, 'jarvis', 'private', 'prompts', 'profile-extract.md');
 
+// OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰을 사용.
+// 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 — llm-gateway.sh와 동일 패턴.
+// spawnSync는 process.env를 상속하므로 모듈 초기화 시점에 주입한다.
+process.env.ANTHROPIC_API_KEY = '';
+if (!process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+  try {
+    const _isoTok = readFileSync(join(HOME, '.claude-bot/.long-lived-token'), 'utf-8').trim();
+    if (_isoTok) process.env.CLAUDE_CODE_OAUTH_TOKEN = _isoTok;
+  } catch { /* 토큰 파일 없으면 메인 credentials 폴백 — 401 시 기존 에러 경로로 처리 */ }
+}
+
 // ── 날짜 결정 ───────────────────────────────────────────────────────────────
 const targetDate = process.argv[2] ?? (() => {
   const d = new Date();
