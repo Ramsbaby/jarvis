@@ -144,6 +144,9 @@ infra/discord/lib/interview-fast-path.js
 infra/scripts/interview-verifier-server.mjs
 # interview-ralph-runner: 질문 풀에 STAR/회사명/PII 식별자 포함.
 infra/scripts/interview-ralph-runner.mjs
+# career-coding-mode: 로컬 전용 코딩 연습 도구 — public repo 제외.
+infra/discord/lib/career-coding-mode.js
+infra/scripts/career-coding-mode.sh
 .local-backup/
 infra/scripts/*.LOCKED.*
 
