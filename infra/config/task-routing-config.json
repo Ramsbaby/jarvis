@@ -14,7 +14,6 @@
         "description": "비핵심 태스크를 Gemini 3.5 Flash로 라우팅",
         "task_ids": [
           "news-briefing",
-          "daily-summary",
           "system-health",
           "memory-cleanup",
           "log-analysis",
@@ -50,7 +49,9 @@
       "morning-standup",
       "macro-briefing",
       "career-strategy",
-      "market-analysis"
+      "market-analysis",
+      "council-insight",
+      "daily-summary"
     ],
     "protected_keywords": [
       "council",
@@ -63,7 +64,7 @@
     "min_model_tier": "sonnet",
     "force_claude_models": [
       "claude-sonnet-4-6",
-      "claude-opus-4-7"
+      "claude-opus-4-8"
     ],
     "rationale": "핵심 의사결정/분석 태스크는 Claude 강제로 품질 보장"
   },
@@ -164,13 +165,13 @@
     "criterion_1_validation": "gemini-3-5-flash-client.mjs 문법 검증(node -c) 및 로드 테스트 완료 (✓)",
     "criterion_2": "태스크 라우팅 설정 파일에 비핵심 태스크 정의됨",
     "criterion_2_status": "completed",
-    "criterion_2_validation": "task-routing-config.json에 news-briefing, daily-summary, system-health, memory-cleanup, log-analysis, github-monitor 6개 태스크 정의 (✓)",
+    "criterion_2_validation": "task-routing-config.json에 news-briefing, system-health, memory-cleanup, log-analysis, github-monitor 5개 비핵심 태스크 정의. daily-summary는 핵심 태스크로 보호 목록 이동 (✓)",
     "criterion_3": "기존 Claude 핵심 태스크 정상 실행",
     "criterion_3_status": "completed",
     "criterion_3_validation": "E2E 테스트: morning-standup, macro-briefing 등 핵심 태스크는 Claude 모델 유지 확인 (2개 / 2개 통과) (✓)",
     "criterion_4": "비용 절감 실제 검증 + 로그 기록",
     "criterion_4_status": "completed",
-    "criterion_4_validation": "비용 절감 검증 완료 - 6개 샘플 태스크 실행, $0.229440 절감(64.1%), 로그: /Users/ramsbaby/jarvis/runtime/logs/routing-metrics-test.jsonl (✓)",
+    "criterion_4_validation": "비용 절감 검증 완료 - 6개 샘플 태스크 실행, $0.229440 절감(64.1%), 로그: ~/jarvis/runtime/logs/routing-metrics-test.jsonl (✓)",
     "criterion_5": "주인님 도입/거절 의사결정",
     "criterion_5_status": "pending"
   },
@@ -296,7 +297,7 @@
       "_note": "비용 절감 규모는 소액이나, 기존 deepseek-chat(flash) 인프라 재활용으로 추가 구현 비용 거의 없음."
     },
     "implementation_note": {
-      "existing_client": "/Users/ramsbaby/jarvis/infra/lib/deepseek-client.mjs",
+      "existing_client": "~/jarvis/infra/lib/deepseek-client.mjs",
       "model_change": "DEFAULT_MODEL을 deepseek-chat → deepseek-reasoner로 전환 또는 task별 오버라이드",
       "api_key": "기존 DEEPSEEK_API_KEY 그대로 사용 가능",
       "effort": "낮음 — 클라이언트 코드 1줄 수정, 라우팅 룰 활성화"

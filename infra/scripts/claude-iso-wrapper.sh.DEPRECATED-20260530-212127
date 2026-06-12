@@ -16,7 +16,7 @@
 # 폴백 안전: REAL 해석은 캡처 경로 → 없으면 최신 버전. 실패 시 명확한 에러.
 #           exec는 항상 실제 versions/ 바이너리로 간다(래퍼 자신 재귀 방지).
 
-_HOME="${HOME:-/Users/ramsbaby}"
+_HOME="${HOME}"
 _VERSIONS_DIR="$_HOME/.local/share/claude/versions"
 
 # ── 실제 바이너리 해석 (auto-update 내성: 캡처 경로 → 없으면 최신 버전) ──

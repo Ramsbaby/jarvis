@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-WRAPPER="/Users/ramsbaby/jarvis/runtime/bin/cron-safe-wrapper.sh"
+WRAPPER="$HOME/jarvis/runtime/bin/cron-safe-wrapper.sh"
 TEST_LOG="/tmp/cron-wrapper-test-$(date +%s).log"
 PASS_COUNT=0
 FAIL_COUNT=0

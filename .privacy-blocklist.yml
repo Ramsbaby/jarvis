@@ -114,6 +114,16 @@ rules:
       - ".privacy-blocklist.yml"
       - "private/**"
       - "infra/discord/lib/**"
+      # 2026-06-12: 자동 생성 운영 카탈로그의 채널명(jarvis-career)은 서사가 아닌 메타데이터.
+      # 서사 단어(이직 준비 등)는 여전히 전 경로 차단 — 채널명 식별자만 카탈로그에 한해 허용.
+      - "infra/docs/CRON-MATRIX.md"
+      - "infra/docs/cron-matrix.json"
+      - "infra/docs/TASKS-INDEX.md"
+      - "infra/docs/tasks-index.json"
+      - "infra/docs/DISCORD-CHANNELS.md"
+      - "infra/docs/discord-channels.json"
+      - "infra/adr/ADR-022-adaptive-model-cost-rebalance.md"
+      - "infra/scripts/career-daily-report.mjs"
       - "infra/discord/test/**"
       - "infra/context/owner/**"
       - "runtime/**"

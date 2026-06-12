@@ -10,7 +10,7 @@
 
 ### [1] Claude Opus 4.8 — 이미 반영 완료
 
-`/Users/ramsbaby/jarvis/infra/config/models.json`에 2026-05-29 기준으로 이미 반영:
+`~/jarvis/infra/config/models.json`에 2026-05-29 기준으로 이미 반영:
 
 ```json
 "power": "claude-opus-4-8"

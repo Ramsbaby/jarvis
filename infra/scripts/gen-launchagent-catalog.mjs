@@ -81,15 +81,18 @@ const plists = fs.readdirSync(LA_DIR)
 
 const activeCount = plists.filter(p => p.active).length;
 
+// 홈 경로 마스킹 — 공개 repo에 절대경로/계정명 유출 방지 (privacy scan absolute-home-path 룰)
+const maskHome = (s) => s.split(os.homedir()).join('~');
+
 // JSON 출력
-fs.writeFileSync(OUT_JSON, JSON.stringify({
+fs.writeFileSync(OUT_JSON, maskHome(JSON.stringify({
   generatedAt: now,
   totalLaunchAgents: plists.length,
   activeCount,
   inactiveCount: plists.length - activeCount,
   source: '~/Library/LaunchAgents/ai.jarvis.*.plist + launchctl list',
   agents: plists,
-}, null, 2), 'utf-8');
+}, null, 2)), 'utf-8');
 
 // MD 출력
 const md = [];
@@ -110,7 +113,7 @@ for (const p of plists) {
   md.push(`- **Active**: ${p.active ? `✅ (PID ${p.pid}, last exit ${p.lastExitCode})` : '❌'}`);
   md.push('');
 }
-fs.writeFileSync(OUT_MD, md.join('\n'), 'utf-8');
+fs.writeFileSync(OUT_MD, maskHome(md.join('\n')), 'utf-8');
 
 console.log(`✅ ${OUT_MD}`);
 console.log(`✅ ${OUT_JSON}`);

@@ -22,7 +22,7 @@ from openai import OpenAI
 MODEL = 'gpt-5.5-pro'
 PDF_DIR = Path('/tmp/script-pdf-pages')
 SCRIPT_MD_V11 = Path.home() / 'jarvis/runtime/career/samsung-cnt-2026-04-v3/20-presentation-script-v11.md'
-PREV_LOG = Path('/Users/ramsbaby/jarvis/runtime/state/script-pdfaware-log-20260505-170655.json')
+PREV_LOG = Path('~/jarvis/runtime/state/script-pdfaware-log-20260505-170655.json').expanduser()
 
 # 시간 영향 큰 5장
 TARGET_SLIDES = [4, 6, 9, 10, 11]
