@@ -62,6 +62,15 @@ while IFS= read -r item; do
     continue
   fi
 
+  # 의미 중복 가드 (2026-06-12) — 기존 태스크와 핵심 단어 2개 이상 겹치면 제안 skip
+  # exit 3만 중복으로 처리. 판별기 자체 오류(DB 부재 등)는 fail-open으로 등록 계속.
+  DUP_MATCH=$(node "${JARVIS_HOME}/infra/lib/task-dedup-check.mjs" "$ID" 2>>"$LOG_FILE") && DUP_RC=0 || DUP_RC=$?
+  if [[ "$DUP_RC" -eq 3 ]]; then
+    SKIPPED=$((SKIPPED + 1))
+    _log "skipped (semantic dup vs ${DUP_MATCH}): $ID"
+    continue
+  fi
+
   PROMPT="기술 도입 검토: ${TITLE}
 
 사유: ${REASON}
