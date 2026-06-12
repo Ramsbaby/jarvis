@@ -168,3 +168,9 @@ infra/context/owner/persona-discord-emotional.md
 runtime/state/cli-session-starts.json
 runtime/state/anger-signals.jsonl
 runtime/state/intent-category-vectors.json
+# 코딩테스트 개인 도구 일체 — public repo 노출 금지 (2026-06-12 주인님 지시)
+/Main.java
+infra/bin/ascii-guard.sh
+infra/config/code-routing-config.json
+infra/discord/lib/coding-verify.js
+infra/docs/CODE_ROUTING_COST_ANALYSIS.md

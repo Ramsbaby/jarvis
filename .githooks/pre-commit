@@ -20,6 +20,20 @@ set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
 
+# ─── Personal Path Guard: 개인용 파일 커밋 차단 (2026-06-12) ─────────
+# 패턴 목록은 gitignored private 파일에 보관 — 파일 부재 시 자동 skip (OSS 배포판 영향 0).
+# 사고 이력: 2026-06-11 개인 기능 공개 커밋(6f116e8). 우회: JARVIS_PERSONAL_OK=1 (주인님 명시 승인 시만).
+PERSONAL_BLOCKLIST="$ROOT/private/config/personal-path-blocklist.txt"
+if [[ -f "$PERSONAL_BLOCKLIST" && "${JARVIS_PERSONAL_OK:-0}" != "1" ]]; then
+  personal_hits=$(git diff --cached --name-only | grep -E -f "$PERSONAL_BLOCKLIST" || true)
+  if [[ -n "$personal_hits" ]]; then
+    echo "🚫 [pre-commit] 개인용 파일이 스테이징에 포함되어 커밋을 차단합니다:" >&2
+    echo "$personal_hits" | sed 's/^/   - /' >&2
+    echo "   해제: git restore --staged <파일> / 의도된 커밋이면 JARVIS_PERSONAL_OK=1 prefix" >&2
+    exit 1
+  fi
+fi
+
 # ─── Topology Guard: ~/.jarvis/ 신규 유입 차단 ──────────────────────
 # SSoT: ~/jarvis/runtime/ (~/.jarvis 는 호환 심링크, 2026-10-17 만료 예정)
 TOPOLOGY_ALLOWLIST='^(infra/adr/|README\.(ko\.)?md$|infra/CLAUDE-SETUP-GUIDE\.md|infra/README-infra\.md|infra/\.env\.example|infra/lib/(compat|jarvis-paths)\.sh|infra/scripts/(upgrade-v2|migrate-to-runtime|symlink-topology-audit|backup-retention|board-watchdog|tasks-prompt-path-audit)\.(sh|mjs)|infra/scripts/A2-MIGRATION\.md|infra/docs/(A2-MIGRATION|API|CONFIG|EXAMPLES|INSTALL|INSTALL\.en|DEPENDENCY-ANALYSIS|ARCHITECTURE)\.md|infra/discord/lib/(orchestrator\.mjs|streaming\.js)|infra/templates/crontab\.example|infra/prompts/memory-expire\.md|rag/lib/rag-engine\.mjs|docs/promo/awesome-claude-code-submission\.md|\.claude/skills/onboarding/SKILL\.md|^discord/discord-bot\.js$|\.githooks/pre-commit$|dotfiles/)'
