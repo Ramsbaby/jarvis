@@ -113,7 +113,7 @@ REPORT="## Self-Healing 주간 감사 리포트
 - **L0 Preflight**: 실패 ${incidents_preflight}건, heal 트리거 ${auto_preflight_heals}건
 - **L1 Guardian**: 감지 ${incidents_guardian}건, kickstart ${auto_restarts_guardian}건
 - **L2 Watchdog**: 감지 ${incidents_watchdog}건 (bot-watchdog: ${incidents_bot_wd}건)
-- **L3 AI Heal**: ${l3_attempts}건 시도 → 성공률 $(( l3_attempts > 0 ? l3_success * 100 / l3_attempts : 0 ))%
+- **L3 AI Heal**: ${l3_attempts}건 시도 → 성공률 $(if (( l3_attempts > 0 )); then echo $(( l3_success * 100 / l3_attempts )); else echo 0; fi)%
 - **L4 알림**: crash loop ${crash_loops}회 → jarvis-ceo 에스컬레이션"
 
 # 파일 저장

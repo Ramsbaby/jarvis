@@ -6,6 +6,29 @@
 #   2. 실패 시 → tmux(jarvis-heal) 세션에서 ask-claude.sh 실행 → AI가 직접 수정
 #   3. 180초 대기 후 exit 1 → launchd가 재시작 → 다시 검증
 #   4. 통과 시 → 현재 설정 백업 → exec node (프로세스 교체)
+#
+# ═══════════════════════════════════════════════════════════════
+# CONCEPT: SESSION FILES vs CONTEXT TOKENS
+# ═══════════════════════════════════════════════════════════════
+# When this script runs preflight checks and loads config files:
+#
+# SESSION FILES (persistent on disk):
+#   - $BOT_HOME/state/*.md, *.json — configuration state
+#   - $BOT_HOME/logs/preflight.log — persistent diagnostics
+#   - $BOT_HOME/discord/.env — bot credentials and settings
+#   - NOT consumed by Claude API
+#   - Size/count does NOT affect API token usage
+#
+# CONTEXT TOKENS (ephemeral, during Claude calls):
+#   - When ask-claude.sh is invoked for healing
+#   - The error message + config snippets are sent to Claude API
+#   - Claude API tokenizes this input (affects billing)
+#   - Different from "session files" - tokens are discarded after call
+#
+# Design note: We persist config state in session files to avoid
+# re-discovery. When Claude needs to heal, we extract relevant
+# portions and send as context tokens (not the whole file).
+# ═══════════════════════════════════════════════════════════════
 
 set -euo pipefail
 

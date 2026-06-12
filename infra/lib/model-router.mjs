@@ -18,7 +18,7 @@
 
 const MODEL_PRICES = {
   'claude-opus': {
-    name: 'Claude Opus 4.7',
+    name: 'Claude Opus 4.8',
     input: 15.00,
     output: 75.00,
     contextWindow: 200_000,
@@ -175,7 +175,7 @@ export function estimateCost(modelId, inputTokens = 0, outputTokens = 0) {
     const map = {
       'claude-haiku-4-5-20251001': 'claude-haiku',
       'claude-sonnet-4-6': 'claude-sonnet',
-      'claude-opus-4-7': 'claude-opus',
+      'claude-opus-4-8': 'claude-opus',
       'gemini-3.5-flash-latest': 'gemini-3-5-flash',
       'gemini-2.0-flash': 'gemini-2-flash',
       'deepseek-chat': 'deepseek-chat',

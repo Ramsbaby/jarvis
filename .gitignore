@@ -174,3 +174,4 @@ infra/bin/ascii-guard.sh
 infra/config/code-routing-config.json
 infra/discord/lib/coding-verify.js
 infra/docs/CODE_ROUTING_COST_ANALYSIS.md
+runtime/state/ralph-forbid-list.json

@@ -773,6 +773,10 @@ export class StreamingMessage {
 
   async _flush() {
     if (this._flushing || this.buffer.length === 0) return;
+    // [2026-06-07] 코딩모드 등 deferStreaming 세션: 생성 중 중간 flush를 막고 버퍼만 모은다.
+    //   finalize 시 _finalizeComplete=true가 되어 가드 해제 → 완성 버퍼를 한 번에 fence-aware 청킹.
+    //   (스트리밍 중간 flush가 코드블록을 쪼개 깨뜨리는 문제를 근본 차단. 완성 버퍼 청킹은 시뮬로 검증됨.)
+    if (this.deferStreaming && !this._finalizeComplete) return;
     this._flushing = true;
     let resolve;
     this._flushDone = new Promise(r => { resolve = r; });
@@ -953,6 +957,11 @@ export class StreamingMessage {
   }
 
   _findSplitPoint(text, maxLen) {
+    // [2026-06-07] 코드블록(```) 한가운데서 쪼개져 코드가 "생략된 것처럼" 보이는 문제 차단.
+    //   maxLen이 코드블록 안이면 여는 펜스 직전으로 split을 끌어올려 코드블록을 통째로 다음 청크로 보낸다.
+    //   (코드블록 자체가 한 청크보다 크면 -1 반환 → 아래 기존 로직으로 폴백, 펜스 연속성이 처리.)
+    const codeAdj = this._adjustForCodeFence(text, maxLen);
+    if (codeAdj > 0 && codeAdj < maxLen) return codeAdj;
     // [2026-05-22 v7d] 마크다운 테이블 행(`|...|`) 중간/사이 절단 방지.
     //   buffer 끝쪽이 미완성 테이블 (incomplete `| |` 행)이면 chunk 경계가 그 안에 떨어졌을 때
     //   tableToList 변환 실패 → 다음 flush에서 일부만 다시 변환 → 송출 깨짐 발생.
@@ -986,6 +995,24 @@ export class StreamingMessage {
     if (lastSpace > effectiveMax * 0.6) return lastSpace + 1;
 
     return effectiveMax;
+  }
+
+  /**
+   * [2026-06-07] 코드펜스(```) 블록을 가로질러 split되지 않도록 maxLen을 조정.
+   * maxLen이 열린 코드블록 안이면 그 블록의 여는 펜스 직전 위치를 반환(split을 위로 끌어올림 → 코드블록 통째로 다음 청크).
+   * 코드블록이 한 청크보다 커서 위로 못 끌어올리면 -1 반환(호출자는 기존 로직으로 폴백, 펜스 연속성이 처리).
+   */
+  _adjustForCodeFence(text, maxLen) {
+    if (maxLen >= text.length) return maxLen;
+    const before = text.slice(0, maxLen);
+    const fenceCount = (before.match(/```/g) || []).length;
+    if (fenceCount % 2 === 0) return maxLen; // 코드블록 밖 → 조정 불필요
+    const openIdx = before.lastIndexOf('```');
+    if (openIdx <= 0) return maxLen;
+    const lineStart = text.lastIndexOf('\n', openIdx - 1);
+    const split = lineStart >= 0 ? lineStart + 1 : openIdx;
+    if (split < maxLen * 0.2) return -1; // 코드블록이 한 청크보다 큼 → 폴백
+    return split;
   }
 
   /**

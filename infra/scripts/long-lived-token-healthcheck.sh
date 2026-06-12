@@ -56,6 +56,37 @@ if [[ -z "$TOKEN" ]]; then
     exit 1
 fi
 
+# 2026-06-10 추가: 메인 토큰 독립 감시 — 격리 토큰 감시 중에도 메인 credentials.json 만료를 별도 확인.
+# 사고: 6/10 메인 토큰 10:10 KST 만료 → statusline 사용량 4시간+ 침묵 401. 격리 토큰만 감시해 사각지대.
+# 영향 범위: statusline(update-usage-cache.py) 등 메인 토큰 legacy 소비자. 봇·크론(격리 토큰)은 무관.
+MAIN_EXP_MS=$(python3 -c "import json; print(json.load(open('$CRED'))['claudeAiOauth'].get('expiresAt',0))" 2>/dev/null || echo "0")
+NOW_MS_CHK=$(date +%s000)
+if (( MAIN_EXP_MS > 0 )); then
+    MAIN_REMAIN=$(( (MAIN_EXP_MS - NOW_MS_CHK) / 1000 ))
+    if (( MAIN_REMAIN < 3600 )); then
+        MAIN_CD_FILE="/tmp/jarvis-main-token-expire.cooldown"
+        NOW_S2=$(date +%s)
+        LAST_S2=$(cat "$MAIN_CD_FILE" 2>/dev/null || echo "0")
+        if (( NOW_S2 - LAST_S2 > 21600 )); then  # 6시간 쿨다운
+            echo "$NOW_S2" > "$MAIN_CD_FILE"
+            if (( MAIN_REMAIN < 0 )); then
+                MAIN_MSG="이미 만료 ($(( -MAIN_REMAIN / 60 ))분 경과)"
+            else
+                MAIN_MSG="${MAIN_REMAIN}초 후 만료"
+            fi
+            log "🔑 메인 토큰(credentials.json) ${MAIN_MSG} — statusline 등 legacy 소비자 영향"
+            printf '{"ts":"%s","result":"main-token-stale","remainSecs":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MAIN_REMAIN" >> "$LEDGER"
+            if [[ -x "${BOT_HOME}/scripts/alert.sh" ]]; then
+                bash "${BOT_HOME}/scripts/alert.sh" \
+                    info \
+                    "🔑 메인 OAuth 토큰 ${MAIN_MSG}" \
+                    "봇·크론(격리 토큰)은 정상. statusline 사용량 표시 등 메인 토큰 소비자만 영향. 복구: 새 터미널 또는 현재 세션에서 \`claude /login\`." \
+                    2>/dev/null || log "alert.sh 호출 실패"
+            fi
+        fi
+    fi
+fi
+
 # 2026-05-20 추가: 만료 임박 사전 경보 (401 사후 적발 대신 T-60분 사전 알림)
 # 사고: 5/20 18:24 만료를 21:17 healthcheck가 사후 적발 → 22:03 주인님이 /login 수동 복구.
 #       이제 expiresAt이 60분 이내면 즉시 critical 알림.

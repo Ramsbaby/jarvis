@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-06-03T19:00:05.497Z",
+  "generatedAt": "2026-06-11T19:00:05.531Z",
   "totalChannels": 13,
-  "totalTasks": 126,
+  "totalTasks": 127,
   "source": "runtime/config/tasks.json + infra/config/models.json",
   "channels": {
     "jarvis-system": {
-      "taskCount": 39,
+      "taskCount": 40,
       "tasks": [
         {
           "id": "schedule-coherence",
@@ -201,6 +201,11 @@
           "id": "owner-judgments-extract",
           "schedule": "30 2 * * 0",
           "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "skill-loop-nightly",
+          "schedule": "50 3 * * *",
+          "model": "<default>"
         }
       ],
       "modelOverride": "opusplan",
@@ -429,12 +434,12 @@
         {
           "id": "connections-weekly-insight",
           "schedule": "45 9 * * 1",
-          "model": "claude-opus-4-7"
+          "model": "claude-opus-4-8"
         },
         {
           "id": "monthly-review",
           "schedule": "0 9 1 * *",
-          "model": "claude-opus-4-7"
+          "model": "claude-opus-4-8"
         },
         {
           "id": "cost-monitor",

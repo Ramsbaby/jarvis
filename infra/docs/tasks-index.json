@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-04T01:22:12.897Z",
+  "generatedAt": "2026-06-11T21:17:06.182Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 126,
+  "totalTasks": 127,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -14,11 +14,11 @@
     "brand-lead": 4,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 29
+    "uncategorized": 30
   },
   "typeDistribution": {
     "prompt": 40,
-    "script": 86
+    "script": 87
   },
   "groups": [
     {
@@ -87,11 +87,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/board-conclude.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/board-conclude-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-board-conclude-*.log",
@@ -183,11 +183,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/board-perf-review.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/board-perf-review-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-board-perf-review-*.log",
@@ -215,11 +215,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/board-topic-proposer.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/board-topic-proposer-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-board-topic-proposer-*.log",
@@ -271,7 +271,7 @@
             "name": "대표실 (CEO·이사회·KPI)"
           },
           "discordChannel": "jarvis-ceo",
-          "model": "claude-opus-4-7",
+          "model": "claude-opus-4-8",
           "priority": "daily",
           "maxBudget": "0.80",
           "disabled": true,
@@ -279,7 +279,7 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/connections-weekly-insight.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/connections-weekly-insight-err.log",
@@ -287,7 +287,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-connections-weekly-insight-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -367,7 +367,7 @@
             "name": "대표실 (CEO·이사회·KPI)"
           },
           "discordChannel": "jarvis-ceo",
-          "model": "claude-opus-4-7",
+          "model": "claude-opus-4-8",
           "priority": "daily",
           "maxBudget": "1.00",
           "disabled": true,
@@ -375,15 +375,15 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/monthly-review.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/monthly-review-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-monthly-review-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -407,15 +407,15 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/weekly-kpi.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/weekly-kpi-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-weekly-kpi-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -471,7 +471,7 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/weekly-roi.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/weekly-roi-err.log",
@@ -519,7 +519,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-bot-crash-classifier-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -743,7 +743,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-memory-cleanup-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -775,7 +775,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-memory-expire-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -1027,11 +1027,11 @@
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/token-sync-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-token-sync-*.log",
-              "exists": true
+              "exists": false
             }
           }
         }
@@ -1063,15 +1063,15 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/cost-monitor.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/cost-monitor-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-cost-monitor-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -1127,7 +1127,7 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/finance-monitor.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/finance-monitor-err.log",
@@ -1199,7 +1199,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-market-alert-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -1327,11 +1327,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/calendar-alert.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/calendar-alert-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-calendar-alert-*.log",
@@ -1359,11 +1359,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/geeknews-bench-crawl.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/geeknews-bench-crawl-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-geeknews-bench-crawl-*.log",
@@ -1391,11 +1391,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/geeknews-bench-report.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/geeknews-bench-report-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-geeknews-bench-report-*.log",
@@ -1423,15 +1423,15 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/github-monitor.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/github-monitor-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-github-monitor-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -1855,11 +1855,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/rag-bench.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/rag-bench-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-rag-bench-*.log",
@@ -2127,15 +2127,15 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/brand-weekly.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/brand-weekly-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-brand-weekly-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -2159,11 +2159,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/oss-docs.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/oss-docs-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-oss-docs-*.log",
@@ -2303,7 +2303,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-claude-md-audit-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -2367,7 +2367,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-cost-cap-audit-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -2399,7 +2399,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-cron-auditor-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -2487,11 +2487,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/gen-gotchas.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/gen-gotchas-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-gen-gotchas-*.log",
@@ -2551,11 +2551,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/jira-sync.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/jira-sync-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-jira-sync-*.log",
@@ -2583,11 +2583,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/launchagents-audit.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/launchagents-audit-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-launchagents-audit-*.log",
@@ -2647,11 +2647,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/log-size-audit.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/log-size-audit-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-log-size-audit-*.log",
@@ -2711,15 +2711,15 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/schedule-coherence.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/schedule-coherence-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-schedule-coherence-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -2775,11 +2775,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/tasks-integrity-audit.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/tasks-integrity-audit-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-tasks-integrity-audit-*.log",
@@ -2935,11 +2935,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/weekly-perf-agent.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/weekly-perf-agent-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-weekly-perf-agent-*.log",
@@ -3399,11 +3399,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/context-extractor.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/context-extractor-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-context-extractor-*.log",
@@ -3431,11 +3431,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/cron-master.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/cron-master-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-cron-master-*.log",
@@ -3559,11 +3559,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/entity-graph.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/entity-graph-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-entity-graph-*.log",
@@ -3655,11 +3655,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/jarvis-home-sync.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/jarvis-home-sync-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-jarvis-home-sync-*.log",
@@ -3759,7 +3759,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-mistake-pattern-analyzer-*.log",
-              "exists": true
+              "exists": false
             }
           }
         },
@@ -3988,6 +3988,38 @@
           }
         },
         {
+          "id": "skill-loop-nightly",
+          "name": "스킬 자가 생성 루프 (야간 선별·추출)",
+          "schedule": "50 3 * * *",
+          "scheduleHuman": "매일 03:50",
+          "type": "script",
+          "handler": "skill-loop-nightly.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-system",
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "1.00",
+          "disabled": false,
+          "description": "DRYRUN 1주 (06-10~06-17): 초안만 생성, 카드 OFF. 체크리스트 통과 기록: autoplan/2026-06-10-skill-evolution-loop.md. Why 1줄: 성공 절차가 휘발되어 같은 작업을 매번 처음부터 다시 하는 낭비 차단.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/skill-loop-nightly.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/skill-loop-nightly-err.log",
+              "exists": true
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-skill-loop-nightly-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "skill-synthesis-verify",
           "name": "SKILL 합성 검증",
           "schedule": "15 23 * * *",
@@ -4039,11 +4071,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/unpause-rebound-check.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/unpause-rebound-check-err.log",
-              "exists": true
+              "exists": false
             },
             "claudeStderr": {
               "pattern": "claude-stderr-unpause-rebound-check-*.log",

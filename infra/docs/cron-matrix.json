@@ -1,17 +1,16 @@
 {
-  "generatedAt": "2026-06-03T19:00:05.344Z",
-  "totalTasks": 126,
+  "generatedAt": "2026-06-12T00:10:28.997Z",
+  "totalTasks": 127,
   "source": "runtime/config/tasks.json",
   "modelDistribution": {
     "claude-sonnet-4-6": 20,
     "claude-haiku-4-5-20251001": 36,
-    "claude-opus-4-8": 1,
-    "<default>": 67,
-    "claude-opus-4-7": 2
+    "claude-opus-4-8": 3,
+    "<default>": 68
   },
   "channelDistribution": {
     "jarvis": 5,
-    "jarvis-system": 39,
+    "jarvis-system": 40,
     "jarvis-market": 3,
     "jarvis-ceo": 25,
     "<none>": 39,
@@ -526,6 +525,16 @@
         "allowedTools": null
       },
       {
+        "id": "skill-loop-nightly",
+        "name": "스킬 자가 생성 루프 (야간 선별·추출)",
+        "schedule": "50 3 * * *",
+        "model": "<default>",
+        "channel": "jarvis-system",
+        "timeout": 900,
+        "maxBudget": "1.00",
+        "allowedTools": null
+      },
+      {
         "id": "board-meeting-pm",
         "name": "Board Meeting (저녁)",
         "schedule": "55 21 * * *",
@@ -1013,7 +1022,7 @@
         "id": "connections-weekly-insight",
         "name": "Connections 주간 인사이트",
         "schedule": "45 9 * * 1",
-        "model": "claude-opus-4-7",
+        "model": "claude-opus-4-8",
         "channel": "jarvis-ceo",
         "timeout": 240,
         "maxBudget": "0.80",
@@ -1055,7 +1064,7 @@
         "id": "monthly-review",
         "name": "월간 회고",
         "schedule": "0 9 1 * *",
-        "model": "claude-opus-4-7",
+        "model": "claude-opus-4-8",
         "channel": "jarvis-ceo",
         "timeout": 300,
         "maxBudget": "1.00",

@@ -156,7 +156,7 @@ function checkSilence() {
 checkLunch();
 checkEvening();
 checkScheduleFollowup();
-checkSilence();
+// checkSilence(); // 비활성화 2026-06-11 — CLI 대화는 active-work.json 미갱신 → 영구 오탐
 
 // 안전망: 같은 id 여러 번 push된 경우 dedupe (정규식 폭주 방지)
 const seenIds = new Set();

@@ -43,7 +43,7 @@ USER_ARGS=("$@")
 # v4.47 (2026-04-27): INTERVIEW_ACTIVE_SCENARIO env 자동 감지 → --scenario 자동 추가.
 # 중복 주입 방지: USER_ARGS에 이미 --scenario 있으면 skip (2026-04-30 v4.74 핫픽스).
 if [ -f "$HOME/jarvis/runtime/.env" ]; then
-  ACTIVE_SCN=$(grep -E "^INTERVIEW_ACTIVE_SCENARIO=" "$HOME/jarvis/runtime/.env" | cut -d= -f2 | tr -d '"' | tr -d "'" | head -1)
+  ACTIVE_SCN=$(grep -E "^INTERVIEW_ACTIVE_SCENARIO=" "$HOME/jarvis/runtime/.env" | head -1 | cut -d= -f2 | sed 's/#.*//' | tr -d '"' | tr -d "'" | xargs)
   # shellcheck disable=SC2199
   if [ -n "${ACTIVE_SCN:-}" ] && [[ ! " ${USER_ARGS[*]:-} " =~ " --scenario " ]]; then
     DEFAULT_ARGS+=(--scenario "$ACTIVE_SCN")

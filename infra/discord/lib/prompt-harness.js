@@ -142,11 +142,11 @@ export function resetPromptHarness() {
  * 발화 카테고리별로 다른 cap을 적용해 비대화를 자동 차단.
  */
 export const TOKEN_BUDGETS = Object.freeze({
-  emotional: 3000,   // 감정 턴: 위로에 필요한 핵심만 (~12KB)
-  casual:    4000,   // 잡담: 가볍게 (~16KB)
-  analytical: 7000,  // 분석/판단: 깊은 컨텍스트 허용 (~28KB)
-  code:      6000,   // 코드 작업: serena·SSoT 필요 (~24KB)
-  default:   5000,   // 분류 안 됐을 때 (~20KB)
+  emotional: 3000,    // 감정 턴: 위로에 필요한 핵심만 (~12KB)
+  casual:    4000,    // 잡담: 가볍게 (~16KB)
+  analytical: 12000,  // 분석/판단: 깊은 컨텍스트 허용 (~48KB) ↑ 2026-06-11
+  code:      9000,    // 코드 작업: serena·SSoT 필요 (~36KB) ↑ 2026-06-11
+  default:   7000,    // 분류 안 됐을 때 (~28KB) ↑ 2026-06-11
 });
 
 /**
@@ -169,7 +169,7 @@ export const SECTION_PRIORITY = Object.freeze({
   // Tier 10 — 절대 drop 금지
   'identity': 10, 'language': 10, 'persona-core': 10, 'persona-emotional': 10,
   // Tier 9
-  'safety': 9, 'channel-persona': 9, 'time-context': 9, 'principles': 9, 'format-core': 9,
+  'safety': 9, 'channel-persona': 9, 'time-context': 9, 'principles': 9, 'format-core': 9, 'image-mode': 9,
   // Tier 8
   'user-context': 8, 'memory': 8, 'hot-events': 8, 'owner-context': 8,
   // Tier 7

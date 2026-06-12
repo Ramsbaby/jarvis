@@ -121,6 +121,31 @@ export async function handleApprovalInteraction(interaction) {
     return true;
   }
 
+  // --- skill-loop 초안 결재 버튼 (권한 분리: 의사만 decision 파일에 기록, 파일 이동·등재는 skill-loop-promote.mjs가 수행) ---
+  if (customId.startsWith('slapprove:') || customId.startsWith('slreject:') || customId.startsWith('slhold:')) {
+    const [act, slug] = customId.split(':');
+    if (!/^[a-z0-9-]{1,64}$/.test(slug || '')) {
+      await interaction.reply({ content: '❌ 잘못된 슬러그입니다.', flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    const decision = act === 'slapprove' ? 'approve' : act === 'slreject' ? 'reject' : 'hold';
+    const dir = join(BOT_HOME, 'state', 'skill-drafts', 'decisions');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${slug}.json`), JSON.stringify({
+      slug, decision, by: interaction.user?.tag || interaction.user?.id, ts: new Date().toISOString(),
+    }, null, 2));
+    const labelMap = {
+      approve: '✅ 승인 기록됨 — 다음 promote 주기에 등재됩니다',
+      reject: '🗑️ 폐기 기록됨 — 다음 주기에 보관함으로 이동합니다',
+      hold: '⏸️ 보류 기록됨 — pending에 유지됩니다 (월요일 묶음 재안내)',
+    };
+    await interaction.update({
+      content: `${interaction.message.content}\n\n${labelMap[decision]}`,
+      components: [],
+    });
+    return true;
+  }
+
   if (!customId.startsWith('l3approve:') && !customId.startsWith('l3reject:')) return false;
 
   const [action, actionId] = customId.split(':');
