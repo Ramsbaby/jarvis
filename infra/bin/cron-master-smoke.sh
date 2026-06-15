@@ -97,11 +97,17 @@ fi
 # ── Test 5: 리포트 dedup — 2차 실행 stdout 0줄 ────────────────────────────────
 say ""
 say "[Test 5] 리포트 dedup — 동일 digest 2차 실행은 stdout 0줄"
-rm -f "$DIGEST_FILE"
-# PERMA_FAIL_DAYS=999: 실제 시스템 perma_fails가 urgent=1 → always_emit을 유발해
-# dedup 비교 자체를 무력화하는 것을 방지. 테스트 격리 목적.
-_first=$(CRON_MASTER_DRY_RUN=1 JARVIS_CRON_PERMA_FAIL_DAYS=999 bash "$CRON_MASTER" 2>/dev/null | wc -l | tr -d ' ')
-second=$(CRON_MASTER_DRY_RUN=1 JARVIS_CRON_PERMA_FAIL_DAYS=999 bash "$CRON_MASTER" 2>/dev/null | wc -l | tr -d ' ')
+# 테스트 격리: 임시 홈 디렉토리로 실행 (실제 시스템 상태 영향 제거)
+_test5_home=$(mktemp -d)
+mkdir -p "$_test5_home/.jarvis/state"
+_test5_digest="$_test5_home/.jarvis/state/cron-master-last-digest.txt"
+_test5_ledger="$_test5_home/.jarvis/state/cron-master-ledger.jsonl"
+# 첫 번째 실행 (digest 없음 → should_emit=1 → 리포트 출력)
+_first=$(HOME="$_test5_home" CRON_MASTER_DRY_RUN=1 bash "$CRON_MASTER" 2>/dev/null | wc -l | tr -d ' ')
+# 두 번째 실행: 동일 환경 (digest 있음 + 변화 없음 → should_emit=0 → stdout 0줄 기대)
+second=$(HOME="$_test5_home" CRON_MASTER_DRY_RUN=1 bash "$CRON_MASTER" 2>/dev/null | wc -l | tr -d ' ')
+# 정리
+rm -rf "$_test5_home"
 if [[ "$second" == "0" ]]; then
   ok "2차 실행 stdout 0줄 (Discord 전송 skip)"
 else
