@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-12T08:14:57.717Z",
+  "generatedAt": "2026-06-15T19:00:05.105Z",
   "totalTasks": 127,
   "source": "runtime/config/tasks.json",
   "modelDistribution": {
@@ -193,7 +193,7 @@
         "channel": "jarvis-career",
         "timeout": 360,
         "maxBudget": "1.00",
-        "allowedTools": "WebSearch,Bash,Read,Write"
+        "allowedTools": "Bash,Read,Write,WebSearch"
       },
       {
         "id": "inbox-alert",
