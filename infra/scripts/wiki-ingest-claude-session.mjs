@@ -20,6 +20,32 @@
  * Exit codes: 항상 0. 세션 저장 파이프라인을 절대 차단하지 않음.
  *
  * Log: ~/jarvis/runtime/logs/wiki-ingest-claude.log
+ *
+ * ═══════════════════════════════════════════════════════════════
+ * CONCEPT: SESSION FILE vs CONTEXT TOKEN
+ * ═══════════════════════════════════════════════════════════════
+ * SESSION FILE = Persistent context storage (disk-based)
+ *   - Input: sessionFile (markdown from ~/.jarvis/context/claude-code-sessions/)
+ *   - Purpose: Archive user conversations, extract facts
+ *   - Lifetime: Persistent on disk
+ *   - Related to API tokens? NO (file on disk)
+ *
+ * CONTEXT TOKEN = Ephemeral API input (for Claude API calls)
+ *   - Created when: facts are sent to Haiku for extraction
+ *   - Consumed by: Claude API tokenizer
+ *   - Lifetime: Duration of single API call only
+ *   - Related to billing? YES (tokens consumed = credits used)
+ *
+ * This script:
+ *   1. Reads SESSION FILE from disk (no token cost)
+ *   2. Sends partial content to Claude API → CONTEXT TOKENS consumed
+ *   3. Writes extracted facts back to wiki (SESSION FILE update)
+ *
+ * Cost control:
+ *   - MIN_SESSION_BYTES: Pre-filter to avoid sending tiny files
+ *   - MAX_INPUT_CHARS: Cap token consumption per call
+ *   - DAILY_CAP_USD: Global daily limit (billing safety)
+ * ═══════════════════════════════════════════════════════════════
  */
 
 import {

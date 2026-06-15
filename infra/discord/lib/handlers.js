@@ -1668,7 +1668,7 @@ ${extracted}
     if (process.env.STATUS_BAR_ENABLED !== '0') {
       try {
         const tier = _MODELS.channelOverrides?.[chName] || 'sonnet';
-        const modelLabel = { power: 'Opus 4.7', sonnet: 'Sonnet 4.6', fast: 'Haiku 4.5' }[tier] || tier;
+        const modelLabel = { power: 'Opus 4.8', sonnet: 'Sonnet 4.6', fast: 'Haiku 4.5' }[tier] || tier;
         streamer.setStatusMeta({ model: modelLabel, startedAt: Date.now(), turn: 0 });
       } catch { /* status bar 실패는 비차단 */ }
     }

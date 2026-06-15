@@ -144,22 +144,60 @@ classify_exit_code() {
 }
 
 # --- Error classification by stdout+stderr content ---
-# Phase 1 (2026-04-17): 실패 관측가능성 확보 — UNKNOWN 비율을 줄이는 게 목표.
-# 신규 카테고리: SCRIPT_MISSING / BUDGET_EXCEEDED / NETWORK_ERROR
-# Sprint Contract #1: Rate limit 감지 패턴 확장
+# Phase 2 (2026-06-14): UNKNOWN 실패 분석 완료 — 누락된 패턴 확장
+# 최근 분석 (2026-06-11~06-14): EVALUATOR_FAIL, error_max_budget_usd, timeout, socket 오류 패턴 추가
+# Sprint Contract #1,2,3: Rate limit + Budget + Evaluator + Timeout + Socket 패턴 확장
 classify_error() {
     local result_file="$1"
     local stderr_file="${result_file}.stderr"
     local check_files=("$result_file")
     if [[ -f "$stderr_file" ]]; then check_files+=("$stderr_file"); fi
-    # Rate limit 패턴: ask-claude.sh에서 추가한 "[SUBTYPE]" 마커도 감지
-    if grep -qiE "rate_limit|rate limit|error_rate_limit|RATE_LIMIT_ERROR|429|hit your limit|you've hit|usage limit|\[SUBTYPE\].*rate" "${check_files[@]}" 2>/dev/null; then echo "RATE_LIMITED"
-    elif grep -qi "overloaded\|503\|capacity" "${check_files[@]}" 2>/dev/null; then echo "OVERLOADED"
-    elif grep -qiE "authentication|unauthorized|401|invalid api key|fix external api key|not logged in" "${check_files[@]}" 2>/dev/null; then echo "AUTH_ERROR"
-    elif grep -qi "context_length\|too.long\|too.large" "${check_files[@]}" 2>/dev/null; then echo "TOO_LONG"
-    elif grep -qi "no such file or directory\|command not found" "${check_files[@]}" 2>/dev/null; then echo "SCRIPT_MISSING"
-    elif grep -qi "budget exceeded\|max.budget\|예산 초과\|예산초과\|budget.cap" "${check_files[@]}" 2>/dev/null; then echo "BUDGET_EXCEEDED"
-    elif grep -qiE "getaddrinfo|connection refused|econnrefused|network is unreachable|curl:.*\([67]\)|curl:.*\(28\)|dial tcp.*timeout" "${check_files[@]}" 2>/dev/null; then echo "NETWORK_ERROR"
+
+    # 검사 순서: 가장 구체적인 패턴부터 일반적인 패턴으로 (중복 방지)
+
+    # [1] EVALUATOR_FAIL - ask-claude.sh에서 출력, 응답 품질 검증 실패
+    # 패턴: repeated_line_x10+, missing_field, invalid_structure 등
+    if grep -qE "^EVALUATOR_FAIL:" "${check_files[@]}" 2>/dev/null; then echo "EVALUATOR_FAIL"
+
+    # [2] BUDGET_EXCEEDED - 비용 한도 초과 (Claude API)
+    # 패턴: error_max_budget_usd, budget exceeded, max.budget, 예산 초과
+    elif grep -qiE "error_max_budget_usd|budget exceeded|max.budget|예산 초과|예산초과|budget.cap|cost.*exceed|charge limit" "${check_files[@]}" 2>/dev/null; then echo "BUDGET_EXCEEDED"
+
+    # [3] RATE_LIMITED - API rate limit (429 또는 명시적 rate_limit 메시지)
+    elif grep -qiE "rate_limit|rate limit|error_rate_limit|RATE_LIMIT_ERROR|429|hit your limit|you've hit|usage limit|too many request|\[SUBTYPE\].*rate" "${check_files[@]}" 2>/dev/null; then echo "RATE_LIMITED"
+
+    # [4] TIMEOUT - 작업 초과 시간 (timeout or 결과 없음)
+    # 패턴: timeout occurred, timed out, execution timeout, no response after Xs
+    elif grep -qiE "timeout|timed.out|execution.timeout|no.response.after|took.too.long|deadline exceeded" "${check_files[@]}" 2>/dev/null; then echo "TIMEOUT"
+
+    # [5] SOCKET_ERROR - 네트워크 소켓 오류
+    # 패턴: socket error, connection reset, broken pipe, reset by peer
+    elif grep -qiE "socket error|connection reset|broken pipe|reset by peer|connection aborted|lost connection|socket closed|EOF while reading" "${check_files[@]}" 2>/dev/null; then echo "SOCKET_ERROR"
+
+    # [6] OVERLOADED - 503 Service Unavailable
+    elif grep -qi "overloaded\|503\|capacity\|temporarily unavailable\|service.unavailable" "${check_files[@]}" 2>/dev/null; then echo "OVERLOADED"
+
+    # [7] AUTH_ERROR - 인증 실패 (401, api key invalid, etc)
+    elif grep -qiE "authentication|unauthorized|401|invalid api key|fix external api key|not logged in|token expired|permission denied" "${check_files[@]}" 2>/dev/null; then echo "AUTH_ERROR"
+
+    # [8] CONTEXT_LENGTH - 컨텍스트 길이 초과
+    elif grep -qiE "context_length|too.long|too.large|context.too|messages.too.long|input.too.long" "${check_files[@]}" 2>/dev/null; then echo "CONTEXT_LENGTH"
+
+    # [9] SCRIPT_MISSING - 스크립트 또는 커맨드 누락
+    elif grep -qiE "no such file or directory|command not found|cannot find|file not found|does not exist" "${check_files[@]}" 2>/dev/null; then echo "SCRIPT_MISSING"
+
+    # [10] NETWORK_ERROR - DNS, TCP, curl 네트워크 오류
+    elif grep -qiE "getaddrinfo|connection refused|econnrefused|network is unreachable|curl:.*\([67]\)|curl:.*\(28\)|dial tcp.*timeout|no route to host|temporary failure" "${check_files[@]}" 2>/dev/null; then echo "NETWORK_ERROR"
+
+    # [11] JSON_PARSE_ERROR - JSON 파싱 실패 (API 응답이 JSON이 아닌 경우)
+    # 패턴: jq parse error, json.decode error, invalid json
+    elif grep -qiE "parse error|invalid json|not valid json|unexpected token|json.decodeerror|cannot unmarshal" "${check_files[@]}" 2>/dev/null; then echo "JSON_PARSE_ERROR"
+
+    # [12] INVALID_RESPONSE - API 응답이 예상 형식과 다름
+    # 패턴: missing field, missing_content, invalid response, unexpected response
+    elif grep -qiE "missing.*field|missing.*key|missing.*content|unexpected.*response|invalid.*response|malformed.*response" "${check_files[@]}" 2>/dev/null; then echo "INVALID_RESPONSE"
+
+    # Fallback: 알 수 없는 오류
     else echo "UNKNOWN"; fi
 }
 
@@ -540,6 +578,16 @@ if [[ "$FAIL_CLASS" == "UNKNOWN" && -f "$RESULT_TMP" ]]; then
     fi
 fi
 
+# ── 가드: cl-6bfbff665fd9f99a — 컨텍스트 오버플로 근본 원인 진단 ──────────────
+# 표면 증상(세션 크기)만 보고 근본 원인(contextWindow/1M 설정)을 누락하는
+# 반복 오진단 방지용 의무 진단 스크립트. CONTEXT_TOO_LONG 감지 즉시 첫 단계로 실행.
+if [[ "$FAIL_CLASS" == "CONTEXT_TOO_LONG" ]]; then
+    _DIAG_SCRIPT="${BOT_HOME}/bin/diagnose-context-overflow.sh"
+    if [[ -x "$_DIAG_SCRIPT" ]]; then
+        "$_DIAG_SCRIPT" "$TASK_ID" "$STDERR_FILE" 2>/dev/null || true
+    fi
+fi
+
 # RATE_LIMIT은 Claude Max 한도 소진 — 예측 가능한 상황, Discord 알림 불필요
 if [[ "$FAIL_CLASS" == "RATE_LIMIT" ]]; then
     cat "$RESULT_TMP" >&2
@@ -557,6 +605,9 @@ human_reason() {
         AUTH_ERROR)    echo "🔑 API 인증 오류 — API 키 확인 필요" ;;
         CONTEXT_TOO_LONG) echo "📄 프롬프트 너무 김 — 컨텍스트 축소 필요" ;;
         RATE_LIMIT)    echo "🚦 Claude Max 한도 초과 — 자동 리셋 대기" ;;
+        BUDGET_EXCEEDED) echo "💰 API 예산 한도 초과 — cost cap 상향 또는 모델 다운그레이드 필요" ;;
+        EVALUATOR_FAIL) echo "❌ 평가자 검증 실패 — 결과 품질 미달 또는 거부 패턴 감지" ;;
+        NETWORK_ERROR) echo "🌐 네트워크 오류 — 연결 문제 재확인 필요" ;;
         *)
             # UNKNOWN: 실제 에러 메시지 한 줄 추출
             local snippet=""

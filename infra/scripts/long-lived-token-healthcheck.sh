@@ -9,7 +9,7 @@
 # - 401/403 발생 시 Discord critical 알림 + ledger 기록
 # - 통과 시 ledger에 success 기록 (주간 통계용)
 #
-# 호출: LaunchAgent 매 6시간 (cron 부담 최소화)
+# 호출: LaunchAgent 매 30분 (StartInterval=1800 — 2026-06-12 주석 실측 정정, 구 "매 6시간"은 stale)
 
 set -euo pipefail
 
@@ -43,11 +43,9 @@ fi
 _ISO_TOKEN_FILE="${HOME}/.claude-bot/.long-lived-token"
 if [[ -r "$_ISO_TOKEN_FILE" ]]; then
     TOKEN="$(cat "$_ISO_TOKEN_FILE")"
-    EXPIRES_AT_MS=0   # 격리 토큰은 raw bearer(메타 없음) → HTTP 200 여부로만 판정
     _TOKEN_SRC="isolated-bot"
 else
     TOKEN=$(python3 -c "import json; print(json.load(open('$CRED'))['claudeAiOauth']['accessToken'])" 2>/dev/null || echo "")
-    EXPIRES_AT_MS=$(python3 -c "import json; print(json.load(open('$CRED'))['claudeAiOauth'].get('expiresAt',0))" 2>/dev/null || echo "0")
     _TOKEN_SRC="main"
 fi
 
@@ -56,58 +54,86 @@ if [[ -z "$TOKEN" ]]; then
     exit 1
 fi
 
-# 2026-06-10 추가: 메인 토큰 독립 감시 — 격리 토큰 감시 중에도 메인 credentials.json 만료를 별도 확인.
-# 사고: 6/10 메인 토큰 10:10 KST 만료 → statusline 사용량 4시간+ 침묵 401. 격리 토큰만 감시해 사각지대.
-# 영향 범위: statusline(update-usage-cache.py) 등 메인 토큰 legacy 소비자. 봇·크론(격리 토큰)은 무관.
+# 2026-06-12 재설계: 메인 토큰 감시를 "시간 예측"에서 "검증된 실패 시그니처"로 전환.
+# 실측(06-12): CLI는 만료 후 첫 거부 시점에 지연 갱신함 (만료 09:40 → 갱신 09:51).
+#   만료 임박·직후 수 분~수 시간 stale은 정상 창 → 알림 대상 아님 (기존 T-60분 예고가 하루 2~3회 오경보).
+# 실패 시그니처 2종만 알림 (독립 감사 반영):
+#   (1) 폐기 의심: expiresAt이 미래(5분+)인데 API 401 — 유효 중 패밀리 폐기 (5/29형) → critical. 5초 후 재검 1회로 오탐 차단.
+#   (2) 장기 미갱신: 만료 후 12시간+ 파일 그대로 — CLI 장기 미사용(정상 가능) 또는 갱신 불능 → info (24h 1회)
+# 커버리지 한계 (정직 명시 — 독립 감사 C-2): 6/11형(만료 후 갱신 시도 중 패밀리 사망)은 expiresAt이 과거라
+#   (1)에 안 걸리고, 외부에서 refresh를 시험하는 것은 금지라 실시간 탐지 불가. 원인 차단은 llm-gateway
+#   격리 토큰 주입(v4)이 담당, 여기서는 (2)가 늦은 안전망 + llm-gateway 401 critical 알림이 즉시 경보.
+#   "CLI 활동 흔적" 휴리스틱은 06-12 실측 결과 야간 크론 transcript가 ~/.claude/projects를 오염시켜
+#   (매일 밤 오탐 확정) 채택 불가 판정.
+# 갱신 메커니즘 자체는 불간섭 — refresh 엔드포인트 호출 영구 금지 (~/CLAUDE.md 0순위). 검사는 읽기 전용 /v1/models만.
 MAIN_EXP_MS=$(python3 -c "import json; print(json.load(open('$CRED'))['claudeAiOauth'].get('expiresAt',0))" 2>/dev/null || echo "0")
 NOW_MS_CHK=$(date +%s000)
+# 읽기 전용 /v1/models 검사 — 401이면 성공(0) 리턴, 에러 종류를 MAIN_ERR_TYPE에 기록 (refresh 비호출)
+_main_token_401() {
+    local tk resp http
+    tk=$(python3 -c "import json; print(json.load(open('$CRED'))['claudeAiOauth']['accessToken'])" 2>/dev/null || echo "")
+    [[ -n "$tk" ]] || return 1
+    resp="/tmp/lltkn-main-resp.$$"
+    http=$(curl -sS -o "$resp" -w "%{http_code}" --max-time 10 https://api.anthropic.com/v1/models \
+        -H "authorization: Bearer $tk" \
+        -H "anthropic-version: 2023-06-01" \
+        -H "anthropic-beta: oauth-2025-04-20" 2>/dev/null || true)
+    http="${http:0:3}"   # curl 부분 실패 시 이중 출력("401000" 등) 정규화 — 독립 감사 M-2
+    MAIN_ERR_TYPE=$(python3 -c "import json; print(json.load(open('$resp')).get('error',{}).get('type','unknown'))" 2>/dev/null || echo "unknown")
+    rm -f "$resp"
+    [[ "$http" == "401" ]]
+}
 if (( MAIN_EXP_MS > 0 )); then
     MAIN_REMAIN=$(( (MAIN_EXP_MS - NOW_MS_CHK) / 1000 ))
-    if (( MAIN_REMAIN < 3600 )); then
-        MAIN_CD_FILE="/tmp/jarvis-main-token-expire.cooldown"
-        NOW_S2=$(date +%s)
-        LAST_S2=$(cat "$MAIN_CD_FILE" 2>/dev/null || echo "0")
-        if (( NOW_S2 - LAST_S2 > 21600 )); then  # 6시간 쿨다운
-            echo "$NOW_S2" > "$MAIN_CD_FILE"
-            if (( MAIN_REMAIN < 0 )); then
-                MAIN_MSG="이미 만료 ($(( -MAIN_REMAIN / 60 ))분 경과)"
-            else
-                MAIN_MSG="${MAIN_REMAIN}초 후 만료"
+    if (( MAIN_REMAIN > 300 )); then
+        # (1) 폐기 시그니처 — 만료 5분+ 전(시계 오차 마진)인데 401이면 비정상
+        MAIN_ERR_TYPE="unknown"
+        if _main_token_401; then
+            sleep 5   # /login·갱신 직후 파일 교체 창의 1회성 오탐 차단 — 재독 + 재검 (독립 감사 M-3)
+            if _main_token_401; then
+                REVOKE_CD_FILE="/tmp/jarvis-main-token-revoked.cooldown"
+                NOW_S2=$(date +%s)
+                LAST_S2=$(cat "$REVOKE_CD_FILE" 2>/dev/null || echo "0")
+                [[ "$LAST_S2" =~ ^[0-9]+$ ]] || LAST_S2=0   # 쿨다운 파일 오염 시 즉사 방지 — 독립 감사 M-1
+                if (( NOW_S2 - LAST_S2 > 1500 )); then  # 실행 주기 1800s와 경계 충돌 방지 — 독립 감사 M-4
+                    echo "$NOW_S2" > "$REVOKE_CD_FILE"
+                    log "🛑 메인 토큰 폐기 의심 — 만료 ${MAIN_REMAIN}초 전인데 HTTP 401 (err=${MAIN_ERR_TYPE}, 재검 포함 2회)"
+                    printf '{"ts":"%s","result":"main-token-revoked-suspect","remainSecs":%s,"err_type":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MAIN_REMAIN" "$MAIN_ERR_TYPE" >> "$LEDGER"
+                    if [[ -x "${BOT_HOME}/scripts/alert.sh" ]]; then
+                        bash "${BOT_HOME}/scripts/alert.sh" \
+                            critical \
+                            "🛑 메인 OAuth 토큰 폐기 의심 (만료 전 401)" \
+                            "만료 시각이 아직 미래인데 API가 거부 (err=${MAIN_ERR_TYPE}, 5초 간격 2회 확인) = 갱신 키 패밀리 폐기 시그니처 (5/29 사고 패턴). 봇·크론(격리 토큰)은 무관. 조치: \`claude /login\` 재로그인." \
+                            2>/dev/null || log "alert.sh 호출 실패"
+                    fi
+                fi
             fi
-            log "🔑 메인 토큰(credentials.json) ${MAIN_MSG} — statusline 등 legacy 소비자 영향"
-            printf '{"ts":"%s","result":"main-token-stale","remainSecs":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MAIN_REMAIN" >> "$LEDGER"
+        fi
+    elif (( MAIN_REMAIN < -43200 )); then
+        # (2) 만료 후 12시간+ 미갱신 — 지연 갱신 정상 창(분~수 시간)과 야간 공백(~10h)은 침묵
+        STALE_CD_FILE="/tmp/jarvis-main-token-stale12h.cooldown"
+        NOW_S2=$(date +%s)
+        LAST_S2=$(cat "$STALE_CD_FILE" 2>/dev/null || echo "0")
+        [[ "$LAST_S2" =~ ^[0-9]+$ ]] || LAST_S2=0   # 쿨다운 파일 오염 시 즉사 방지 — 독립 감사 M-1
+        if (( NOW_S2 - LAST_S2 > 86400 )); then  # 24시간 쿨다운
+            echo "$NOW_S2" > "$STALE_CD_FILE"
+            log "🔑 메인 토큰 만료 후 $(( -MAIN_REMAIN / 3600 ))시간 미갱신"
+            printf '{"ts":"%s","result":"main-token-stale-12h","remainSecs":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MAIN_REMAIN" >> "$LEDGER"
             if [[ -x "${BOT_HOME}/scripts/alert.sh" ]]; then
                 bash "${BOT_HOME}/scripts/alert.sh" \
                     info \
-                    "🔑 메인 OAuth 토큰 ${MAIN_MSG}" \
-                    "봇·크론(격리 토큰)은 정상. statusline 사용량 표시 등 메인 토큰 소비자만 영향. 복구: 새 터미널 또는 현재 세션에서 \`claude /login\`." \
+                    "🔑 메인 OAuth 토큰 만료 후 12시간+ 미갱신" \
+                    "CLI 장기 미사용이면 정상 (다음 사용 시 자동 갱신). CLI를 쓰는데도 이 알림이 반복되면 갱신 실패 — \`claude /login\` 점검. 봇·크론(격리 토큰)은 무관." \
                     2>/dev/null || log "alert.sh 호출 실패"
             fi
         fi
     fi
 fi
 
-# 2026-05-20 추가: 만료 임박 사전 경보 (401 사후 적발 대신 T-60분 사전 알림)
-# 사고: 5/20 18:24 만료를 21:17 healthcheck가 사후 적발 → 22:03 주인님이 /login 수동 복구.
-#       이제 expiresAt이 60분 이내면 즉시 critical 알림.
-NOW_MS=$(date +%s000)
-REMAIN_SECS=$(( (EXPIRES_AT_MS - NOW_MS) / 1000 ))
-if (( EXPIRES_AT_MS > 0 && REMAIN_SECS > 0 && REMAIN_SECS < 3600 )); then
-    EXPIRE_COOLDOWN_FILE="/tmp/jarvis-lltkn-expire-soon.cooldown"
-    NOW_S=$(date +%s)
-    LAST_S=$(cat "$EXPIRE_COOLDOWN_FILE" 2>/dev/null || echo "0")
-    if (( NOW_S - LAST_S > 1800 )); then  # 30분 쿨다운
-        echo "$NOW_S" > "$EXPIRE_COOLDOWN_FILE"
-        log "⏰ 토큰 만료 임박 — ${REMAIN_SECS}초 남음"
-        if [[ -x "${BOT_HOME}/scripts/alert.sh" ]]; then
-            bash "${BOT_HOME}/scripts/alert.sh" \
-                critical \
-                "⏰ Claude OAuth 토큰 ${REMAIN_SECS}초 후 만료" \
-                "401 사후 적발이 아닌 T-${REMAIN_SECS}s 사전 알림. 즉시 \`claude /login\` 또는 \`claude setup-token\` 후 자비스 정상 작동 보장." \
-                2>/dev/null || log "alert.sh 호출 실패"
-        fi
-    fi
-fi
+# 2026-06-12 폐지 (독립 감사 C-1): 구 "T-60분 만료 임박" critical 예측 경보 블록 제거.
+# 사유: 격리 토큰 존재 시 휴면(dead code)이었으나, 격리 토큰 파일 소실 폴백 경로에서 부활해
+#   "시간 예측 알림 폐지" 재설계와 모순 — lazy 갱신이 정상 동작이므로 만료 임박은 사고가 아님.
+#   메인 토큰 감시는 위 시그니처 블록(폐기 의심·장기 미갱신)이 전담.
 
 # Anthropic API ping (가장 저렴한 호출 — haiku, 1 token output)
 HTTP_CODE=$(curl -sS -o /tmp/lltkn-resp.$$ -w "%{http_code}" -X POST https://api.anthropic.com/v1/messages \
@@ -148,6 +174,7 @@ fi
 COOLDOWN_FILE="/tmp/jarvis-lltkn-alert.cooldown"
 NOW=$(date +%s)
 LAST=$(cat "$COOLDOWN_FILE" 2>/dev/null || echo "0")
+[[ "$LAST" =~ ^[0-9]+$ ]] || LAST=0   # 쿨다운 파일 오염 시 즉사 방지 — 독립 감사 M-1
 if (( NOW - LAST > 21600 )); then
     echo "$NOW" > "$COOLDOWN_FILE"
     if [[ -x "${BOT_HOME}/scripts/alert.sh" ]]; then

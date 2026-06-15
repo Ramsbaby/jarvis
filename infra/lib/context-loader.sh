@@ -21,6 +21,37 @@
 # Output variables:
 #   SYSTEM_PROMPT       — assembled system prompt string
 #   CTX_SECTION_SIZES   — associative "name:bytes" entries (newline-separated, for diagnostics)
+#
+# ═══════════════════════════════════════════════════════════════
+# CONCEPT: SESSION FILE vs CONTEXT TOKEN
+# ═══════════════════════════════════════════════════════════════
+# This script loads SESSION FILES from disk and assembles them
+# into a CONTEXT TOKEN that's sent to the Claude API.
+#
+# "Session File" = Persistent disk storage (loaded once)
+#   - _capabilities.md, insight-report.md, etc. (SESSION FILES)
+#   - Stored in: ~/.jarvis/docs/, ~/.jarvis/context/
+#   - Lifetime: Persistent on disk
+#   - Cost: Disk space only
+#
+# "Context Token" = Ephemeral API input (created here, sent once)
+#   - Created by: This script's load_context() function
+#   - Assembled from: Multiple session files + task context
+#   - Sent to: Claude API per-call
+#   - Consumed: By Claude tokenizer (costs API credits)
+#   - Lifetime: Duration of single API call only
+#
+# Flow:
+#   1. load_context() reads SESSION FILES (disk, no cost)
+#   2. Assembles SYSTEM_PROMPT string (combined input)
+#   3. SYSTEM_PROMPT becomes CONTEXT TOKENS when sent to API
+#   4. Claude API counts tokens → consumes credits
+#   5. After API call returns, tokens discarded
+#
+# CRITICAL: File size in SESSION FILES ≠ Token count in API call
+#   - Only the data actually sent to API counts
+#   - This script controls which files included via CTX sections
+# ═══════════════════════════════════════════════════════════════
 
 load_context() {
     SYSTEM_PROMPT=""

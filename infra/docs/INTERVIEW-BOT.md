@@ -2,7 +2,8 @@
 
 > **SSoT**: 이 파일이 면접봇 시스템의 단일 기획 원본입니다.
 > **압축본**: `~/jarvis/runtime/context/interview-bot-profile.md` (Jarvis 세션 자동 주입용)
-> **최종 업데이트**: 2026-04-30 · 현재 버전: v4.76
+> **최종 업데이트**: 2026-06-12 · 현재 버전: v5.3
+> **v5.3 (2026-06-12)**: O사 실면접 STAR 매몰 사고 수리 — ① scoped profile 폐지(직전 STAR만 주입하던 v4.82 최적화가 v5.0 꼬리질문 감지 제거 후 전 질문에 적용되어, 한 번 쓴 STAR가 유일한 재료로 남는 자가증식 매몰 루프 유발) ② STAR-13(메타에이전트) 전역 화이트리스트 게이트 신설(허용 3유형 외 전 질문 금지) ③ user-profile STAR-13 본문 2,242→1,415자 다이어트(상세는 wiki/career/_facts.md 보존). 상세 불변식: interview-bot-profile.md #13·#14.
 
 ---
 

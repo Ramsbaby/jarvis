@@ -3,6 +3,27 @@ set -euo pipefail
 # auto-diagnose.sh — 크론 실패 감지 후 요약 출력
 # 실패 없으면 아무 출력 없이 종료 → Discord 전송 안 됨
 
+# ═══════════════════════════════════════════════════════════════
+# CONCEPT: SESSION FILE vs CONTEXT TOKEN
+# ═══════════════════════════════════════════════════════════════
+# This script monitors cron task failures and generates diagnostic
+# summaries. It reads from log files (persistent session files on disk)
+# but does NOT directly consume API tokens.
+#
+# "Session File" = Persistent logs stored on disk
+#   - CRON_LOG: Cron execution history (disk file)
+#   - Located in: ~/.jarvis/logs/
+#   - Used for: Diagnosis and troubleshooting
+#   - Disk-based only, NOT API tokens
+#
+# "Context Token" = Ephemeral API input (sent to Claude per call)
+#   - If diagnosis is sent to Claude, tokens consumed then
+#   - But reading/storing logs does NOT consume tokens
+#
+# This script's log file monitoring is SESSION FILE operation.
+# Token consumption only occurs IF diagnosis output is sent to API.
+# ═══════════════════════════════════════════════════════════════
+
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
 

@@ -54,7 +54,9 @@ if (( F_HOOK > 0 )); then
   log "--- 매핑 유효성 검증 시작 ---"
   while IFS= read -r line; do
     # 매핑 pattern 추출 (backtick 안의 type, 또는 자유 텍스트)
-    hook_type=$(echo "$line" | grep -oE "\`[a-z-]+\`" | head -1 | tr -d '`')
+    # 2026-06-12 수정: 백틱 없는 hook 표기(자유 텍스트 경로)에서 grep 실패 → pipefail+set -e 즉사.
+    #   5/23 이후 매주 이 지점에서 침묵 사망 = ledger 3주 공백의 근본 원인. || true로 생존 보장.
+    hook_type=$(echo "$line" | grep -oE "\`[a-z-]+\`" | head -1 | tr -d '`' || true)
     if [[ -z "$hook_type" || "$hook_type" == "n/a" ]]; then
       continue
     fi

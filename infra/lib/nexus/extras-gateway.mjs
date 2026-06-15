@@ -204,6 +204,15 @@ async function discordSend({ channel, message, as_user_id }) {
     throw new Error(`채널 '${channel}' 없음. 사용 가능: ${Object.keys(channelMap).join(', ')}`);
   }
 
+  // 2026-06-12 hook 승격 (룰 다이어트 전략 1호): 가족·사용자 대화 채널로의 도구 발송을 코드로 차단.
+  // 사고: 06-12 04:33 야간 자율 에이전트가 jarvis-boram 웹훅으로 내부 완료 임베드 오발송 (오너 지침:
+  // "시스템·개발 보고는 관리자 채널 전용, 보람님은 사용자"). 텍스트 룰(_capabilities.md)의 강제 집행판.
+  // 정당한 가족 발송 경로: tasks.json discordChannel 선언(task-result-route) · boram-alarm.sh · boram-meds-reminder.sh
+  const PROTECTED_USER_CHANNELS = ['jarvis-boram'];
+  if (PROTECTED_USER_CHANNELS.includes(channel)) {
+    throw new Error(`'${channel}'은 가족·사용자 대화 전용 채널 — discord_send 차단 (오너 지침 2026-06-12). 시스템·완료 보고는 jarvis-system/jarvis-info/jarvis-retro, 가족 알림은 boram-alarm.sh·boram-meds-reminder.sh를 사용하십시오.`);
+  }
+
   // test-mode: zero-width 마커 삽입 → handlers.js가 인식해 _proxyAuthor 우회 처리
   // 마커는 디스코드 화면에는 보이지 않음. 봇 토큰 없이 위조 불가 (외부 안전).
   let finalMessage = message;

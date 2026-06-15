@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-12T00:54:11.440Z",
+  "generatedAt": "2026-06-14T19:00:05.158Z",
   "totalLaunchAgents": 73,
   "activeCount": 73,
   "inactiveCount": 0,
@@ -32,7 +32,7 @@
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/infra/scripts/audit-la-cron.sh",
       "active": true,
-      "pid": "-",
+      "pid": "5397",
       "lastExitCode": "0"
     },
     {
@@ -108,7 +108,7 @@
     {
       "label": "ai.jarvis.commitment-check",
       "file": "ai.jarvis.commitment-check.plist",
-      "schedule": "3600s 주기",
+      "schedule": "매일 09:00 KST",
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/runtime/scripts/commitment-check.sh",
       "active": true,
@@ -132,7 +132,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/bot-preflight.sh",
       "active": true,
-      "pid": "49117",
+      "pid": "96621",
       "lastExitCode": "0"
     },
     {
@@ -142,7 +142,7 @@
       "runAtLoad": false,
       "program": "/bin/bash -c",
       "active": true,
-      "pid": "-",
+      "pid": "5399",
       "lastExitCode": "0"
     },
     {
@@ -422,7 +422,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node --max-old-space-size=150",
       "active": true,
-      "pid": "70873",
+      "pid": "97226",
       "lastExitCode": "0"
     },
     {
@@ -643,7 +643,7 @@
       "program": "/bin/bash ~/jarvis/infra/scripts/symlink-topology-audit.sh",
       "active": true,
       "pid": "-",
-      "lastExitCode": "0"
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.sync-system-metrics",
@@ -683,7 +683,7 @@
       "program": "/opt/homebrew/bin/node ~/jarvis/infra/scripts/weekly-response-critique.mjs",
       "active": true,
       "pid": "-",
-      "lastExitCode": "0"
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.weekly-self-retro",

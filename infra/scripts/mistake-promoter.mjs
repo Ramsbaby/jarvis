@@ -375,7 +375,11 @@ function main() {
         `멤버 예시: ${cluster.members.slice(0, 5).join(' / ')}`,
         `제안: ${v.proposal || '(없음)'}`,
         '',
-        '수정 시 기존 동작 파괴 금지. 완료 후 Discord #jarvis-system 에 결과 보고.',
+        '수정 시 기존 동작 파괴 금지.',
+        // 2026-06-12 사고: "Discord에 결과 보고"라는 자유 지시만 주자 야간 에이전트가 monitoring.json에서
+        // jarvis-boram(가족 채널) 웹훅을 임의로 골라 내부 완료 임베드를 오발송. 보고 명령을 정확히 고정한다.
+        '완료 보고는 반드시 아래 명령 한 가지만 사용한다 (monitoring.json 웹훅 직접 호출·임의 채널 선택 절대 금지):',
+        `source ~/jarvis/infra/lib/discord-route.sh && discord_route info "오답승격 가드 구현 완료 ${v.id}" "클러스터=${v.id},결과=<한줄요약>"`,
       ].join('\n');
       const q = enqueueDevQueue(v.id, `[오답승격 tier_b] ${v.title || cluster.seed.slice(0, 40)}`, promptText);
       ledgerAppend({ ...base, status: 'proposed_dev_queue', dev_queue_action: q.action || 'unknown' });

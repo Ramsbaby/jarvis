@@ -11,6 +11,26 @@
 #   - context-bus 마지막 갱신 시각 < 최근 대화 활동 시각이면 동기화
 #   - 변화 없으면 아무것도 안 함 (조용히 종료)
 #   - LLM 호출 실패해도 타임스탬프만 갱신 (best-effort)
+#
+# ═══════════════════════════════════════════════════════════════
+# CONCEPT: SESSION FILE vs CONTEXT TOKEN
+# ═══════════════════════════════════════════════════════════════
+# "Session File" = Persistent metadata stored in ~/.jarvis/context/
+#   - discord-history/*.md: Discord conversation logs (disk files)
+#   - context-bus.md: Current system state summary (disk file)
+#   - NOT ephemeral API tokens
+#   - NOT counted by Claude API
+#   - Only consumes disk space, NOT API credits
+#
+# "Context Token" = Ephemeral input to Claude API (sent once per call)
+#   - Created during API call
+#   - Discarded after API call
+#   - Counted by Claude tokenizer
+#   - Consumes API credits
+#
+# This script updates SESSION FILES (discord-history, context-bus)
+# but does NOT directly affect CONTEXT TOKENS or API credits.
+# ═══════════════════════════════════════════════════════════════
 
 # best-effort 스크립트: 실패해도 exit 0 (context-bus 미갱신은 치명적 오류 아님)
 # set -e/pipefail 제거 — bot-cron.sh가 exit 0를 unexpected로 감지하는 것 방지

@@ -73,6 +73,40 @@ const filterNarration = withCodeFenceGuard((text) => {
 });
 
 // ---------------------------------------------------------------------------
+// Tool-call artifact stripper — 모델이 text 블록에 흘린 함수 호출 XML 제거
+// ---------------------------------------------------------------------------
+
+/**
+ * [2026-06-15] 모델이 응답 text 안에 흘린 도구 호출 XML 잔재를 제거하는 안전망.
+ *
+ * 원인: Claude Agent SDK 가 tool_use 블록을 정상 분리하지 못하거나(malformed tool call),
+ * 모델이 함수 호출 신택스를 텍스트로 생성하면 invoke/parameter/function_calls 태그로 된
+ * XML 블록이 그대로 Discord 로 송출된다. filterNarration 은 "이제 ~합니다" 류 내러티브만
+ * 잡을 뿐 이 XML 은 못 거른다.
+ *
+ * filterNarration 과 달리 항상 ON 으로 둔다 — 이 XML 은 100% 도구호출 누수이지
+ * 정상 답변 텍스트가 아니므로 알맹이를 도려낼 위험이 없다. 코드 펜스 내부는
+ * withCodeFenceGuard 로 보호하므로, 코드 예시로 의도된 태그는 보존된다.
+ */
+const stripToolCallArtifacts = withCodeFenceGuard((text) => {
+  if (!text || (text.indexOf('<' + 'invoke') < 0 && text.indexOf('<' + 'function_calls') < 0 && text.indexOf('<' + 'parameter') < 0)) {
+    return text; // 빠른 경로 — 누수 토큰이 전혀 없으면 정규식 스킵
+  }
+  let r = text;
+  // 1) 완전한 function_calls 래퍼 블록 (antml: prefix 유무 모두 대응)
+  r = r.replace(/(?:^|\n)[ \t]*<(?:antml:)?function_calls>[\s\S]*?<\/(?:antml:)?function_calls>[ \t]*/gi, '\n');
+  // 2) 완전한 invoke 블록 — 앞에 붙는 'call' 한 줄 prefix까지 함께 제거
+  r = r.replace(/(?:^|\n)[ \t]*(?:call[ \t]*\n)?[ \t]*<(?:antml:)?invoke\b[\s\S]*?<\/(?:antml:)?invoke>[ \t]*/gi, '\n');
+  // 3) 스트리밍 도중 닫는 태그가 아직 안 온 미완성 블록 — 여는 태그부터 버퍼 끝까지
+  //    (1·2에서 완전 블록은 이미 제거됐으므로, 여기 걸리는 건 잘린 잔재뿐)
+  r = r.replace(/(?:^|\n)[ \t]*(?:call[ \t]*\n)?[ \t]*<(?:antml:)?(?:function_calls|invoke|parameter)\b[\s\S]*$/i, '\n');
+  // 4) 블록 매칭에서 빠진 단독 여닫는 태그 잔재
+  r = r.replace(/<\/?(?:antml:)?(?:function_calls|invoke|parameter)\b[^>]*>/gi, '');
+  // 5) 제거 후 빈 줄 누적 정리
+  return r.replace(/\n{3,}/g, '\n\n');
+});
+
+// ---------------------------------------------------------------------------
 // Transforms
 // ---------------------------------------------------------------------------
 
@@ -187,6 +221,8 @@ const injectSectionHeaders = ENABLE_3PART_HEADER_GUARD
 // 출력 알맹이 보존이 narration 제거보다 우선. opt-in 방식으로만 활성화.
 const _NARRATION_FILTER_ON = process.env.ENABLE_NARRATION_FILTER === '1';
 const TRANSFORMS = [
+  // [2026-06-15] 최우선 — 도구 호출 XML 누수 제거. 다른 transform 전에 먼저 걷어낸다.
+  { name: 'stripToolCallArtifacts', fn: stripToolCallArtifacts },
   ...(_NARRATION_FILTER_ON ? [{ name: 'filterNarration', fn: filterNarration }] : []),
   { name: 'injectSectionHeaders', fn: injectSectionHeaders },
   { name: 'tableToList', fn: tableToList },

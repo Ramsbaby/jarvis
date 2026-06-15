@@ -107,8 +107,11 @@ evaluate_result() {
     fi
 
     # --- Check 6: repeated phrase spam (LLM 루프 감지) ---
-    local max_dup
-    max_dup=$(printf '%s\n' "$result" | awk 'NF>0' | sort | uniq -c | sort -rn | head -1 | awk '{print $1}' 2>/dev/null || echo 0)
+    local max_dup repeated_line
+    # 마크다운 구조 요소(---, |, 등)를 제외하고 반복 라인 확인
+    repeated_line=$(printf '%s\n' "$result" | awk 'NF>0' | grep -v '^---$' | grep -v '^\|.*\|$' | sort | uniq -c | sort -rn | head -1 | awk '{print $2}' 2>/dev/null)
+    max_dup=$(printf '%s\n' "$result" | awk 'NF>0' | grep -v '^---$' | grep -v '^\|.*\|$' | sort | uniq -c | sort -rn | head -1 | awk '{print $1}' 2>/dev/null || echo 0)
+    # 실제 콘텐츠 라인이 10회 이상 반복되면 스팸으로 판정
     if [[ -n "$max_dup" ]] && (( max_dup >= 10 )); then
         EVALUATOR_VERDICT="fail"
         EVALUATOR_REASON="repeated_line_x${max_dup}"

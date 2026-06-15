@@ -11,6 +11,29 @@
  * 출력 per domain:
  *   claude-memory/{domain}-full.md    ← 누적 상세 (RAG + Claude Code 심층 참조용)
  *   claude-memory/{domain}-summary.md ← 합성 요약 (Claude Code 세션 시작 시 자동 로드)
+ *
+ * ═══════════════════════════════════════════════════════════════
+ * CONCEPT: SESSION FILES vs CONTEXT TOKENS
+ * ═══════════════════════════════════════════════════════════════
+ * "Session Files" = Persistent metadata in ~/.jarvis/context/
+ *   - Claude Code sessions: ~/.jarvis/context/claude-code-sessions/{id}/*.json
+ *   - Context memories: ~/.jarvis/context/claude-memory/{domain}-*.md
+ *   - Discord history: ~/.jarvis/context/discord-history/*.md
+ *   - Files persist on disk after process ends
+ *   - Independent of API token usage
+ *
+ * "Context Tokens" = Ephemeral input to Claude API
+ *   - Generated from session files + current input
+ *   - Sent in API call, then discarded
+ *   - Counted by Claude tokenizer (affects billing)
+ *   - Different from "session" or "session file"
+ *
+ * This script CREATES/UPDATES session files (persistent).
+ * When we later use these files in an API call, we extract
+ * portions of them as context tokens (ephemeral, counted).
+ *
+ * Key insight: File size on disk ≠ Context token count in API call
+ * ═══════════════════════════════════════════════════════════════
  */
 
 import { spawnSync } from 'node:child_process';

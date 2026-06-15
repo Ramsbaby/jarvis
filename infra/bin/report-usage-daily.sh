@@ -3,6 +3,7 @@ set -euo pipefail
 
 # daily-usage-report.sh — Claude Max 사용량을 usage-cache.json에서 읽어 포맷팅
 # bot-cron.sh의 script 필드로 호출됨. Claude API 호출 없이 직접 데이터 읽기.
+# v2 2026-06-15: ok:false 시 null% 대신 에러 메시지 출력
 
 HOME="${HOME:-$(eval echo ~)}"
 CACHE="${HOME}/.claude/usage-cache.json"
@@ -19,7 +20,23 @@ if [[ ! -f "$CACHE" ]]; then
     exit 0
 fi
 
-# 3. jq로 포맷팅 (스크린샷 포맷 재현)
+# 3. ok 필드 체크 — 실패 시 null% 대신 명확한 에러 출력
+CACHE_OK=$(jq -r '.ok // false' "$CACHE" 2>/dev/null || echo "false")
+if [[ "$CACHE_OK" != "true" ]]; then
+    REASON=$(jq -r '.reason // "unknown"' "$CACHE" 2>/dev/null || echo "unknown")
+    ERROR=$(jq -r '.error // ""' "$CACHE" 2>/dev/null || echo "")
+    if [[ "$REASON" == "auth" ]]; then
+        echo "⚠️ **Claude Max 사용량 조회 실패** — OAuth 토큰 만료"
+        echo ""
+        echo "Claude Code 세션이 시작되면 자동 갱신됩니다. (다음 날 리포트에 정상 반영)"
+    else
+        echo "⚠️ **Claude Max 사용량 조회 실패** (${REASON})"
+        [[ -n "$ERROR" ]] && echo "\`${ERROR:0:100}\`"
+    fi
+    exit 0
+fi
+
+# 4. jq로 포맷팅 (스크린샷 포맷 재현)
 jq -r '
   def emoji(pct): if pct >= 80 then "🔴" elif pct >= 60 then "🟡" else "🟢" end;
   def bar(pct):
