@@ -485,6 +485,68 @@ function checkC7() {
   }
 }
 
+// ─── C8: relevance 축 가드 — cl-1c2b189b1bc5dd3e (2026-06-16 등록) ────────────
+// 근본 원인: 채점 3축 평균이 동문서답(질문 핵심 회피) 고득점 통과를 허용
+//   → relevanceScore 4번째 축 + ceiling 로직이 verifier에 코드 패턴으로 존재해야 함.
+// 이 감사는 해당 패턴이 코드 회귀로 제거되는 상황을 방어한다.
+function checkC8() {
+  console.log('\n[C8] relevance 축 가드 — 동문서답 차단 (cl-1c2b189b1bc5dd3e)');
+
+  const VERIFIER_PATH = join(HOME, 'jarvis/infra/scripts/interview-verifier-server.mjs');
+  const SCORER_PATH   = join(HOME, 'jarvis/infra/scripts/interview-relevance-scorer.mjs');
+
+  // C8-a: relevance 독립 스코어링 모듈 존재 확인
+  if (!existsSync(SCORER_PATH)) {
+    fail('C8-a', 'interview-relevance-scorer.mjs 없음 — cl-1c2b189b1bc5dd3e 가드 모듈 소실');
+  } else {
+    pass('C8-a', 'interview-relevance-scorer.mjs 존재 확인');
+  }
+
+  if (!existsSync(VERIFIER_PATH)) {
+    fail('C8', 'interview-verifier-server.mjs 없음 — 감사 불가');
+    return;
+  }
+
+  const src = readFileSync(VERIFIER_PATH, 'utf-8');
+
+  // C8-b: relevanceScore 채점 축 선언이 채점 프롬프트에 존재
+  const gate_b = /relevanceScore/.test(src) && /질문 정조준/.test(src);
+  if (gate_b) {
+    pass('C8-b', 'verifier 채점 프롬프트에 relevanceScore 축 선언 확인');
+  } else {
+    fail(
+      'C8-b',
+      'verifier 채점 프롬프트에 relevanceScore 또는 질문 정조준 선언 누락 — 동문서답 감지 불가',
+      '수정: 채점 프롬프트에 "relevanceScore" + "질문 정조준" 항목 복원 필요',
+    );
+  }
+
+  // C8-c: relevance ceiling 로직 (relevancePenalty 또는 relCeiling 코드) 존재
+  const gate_c = /relevancePenalty|relCeiling|relevanceScore.*ceiling|ceiling.*relevance/i.test(src);
+  if (gate_c) {
+    pass('C8-c', 'verifier relevance ceiling(동문서답 강제 감점) 로직 확인');
+  } else {
+    fail(
+      'C8-c',
+      'verifier relevance ceiling 로직 누락 — 동문서답 고득점 통과 맹점 재발',
+      '수정: relevanceScore < 5 → overallScore ceiling 4.0 코드 복원 필요',
+    );
+  }
+
+  // C8-d: 4축 평균 계산 코드 존재 (human+ssot+detail+relevance / 4)
+  const gate_d = /human.*ssot.*detail.*rel|rel.*4\b|\/\s*4\b/.test(src) &&
+                 /relevanceScore/.test(src);
+  if (gate_d) {
+    pass('C8-d', 'verifier 4축 평균(relevance 포함) 계산 코드 확인');
+  } else {
+    fail(
+      'C8-d',
+      'verifier overallScore 4축 평균 계산 코드 누락 — relevance 가중치 0으로 강등됨',
+      '수정: (h + s + d + rel) / 4 형태의 4축 평균 코드 복원 필요',
+    );
+  }
+}
+
 // ─── 메인 ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('🔍 interview-harness-audit — 면접봇 하네스 독립 감사');
@@ -506,6 +568,7 @@ async function main() {
   checkC5();
   checkC6();
   checkC7();
+  checkC8();
 
   // --fix: C1 수정 후 파일 저장
   if (FIX_MODE && c1Result?.fixed) {
