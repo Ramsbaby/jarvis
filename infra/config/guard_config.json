@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "updated_at": "2026-06-17",
+  "guards": [
+    {
+      "id": "watchdog-threshold-validator",
+      "cluster_id": "cl-c334ba50fb007425",
+      "description": "감시기 판정 임계값이 실제 정상 동작 샘플을 잘못 분류하는 비율(오분류율)을 자동 계산하고, 기준치 초과 시 파이프라인 차단",
+      "script": "~/.jarvis/infra/bin/validate-watchdog-thresholds.sh",
+      "trigger": ["pre-threshold-change", "daily-audit", "ci-pipeline"],
+      "misclassification_threshold_pct": 10,
+      "exit_on_exceed": true,
+      "enabled": true,
+      "schedule": "0 6 * * *",
+      "owner": "infra",
+      "created_at": "2026-06-17",
+      "notes": "오분류율 > 10% 시 exit 1 반환 — heartbeat 임계값 재검토 필요"
+    }
+  ],
+  "defaults": {
+    "misclassification_threshold_pct": 10,
+    "exit_on_exceed": true
+  }
+}
