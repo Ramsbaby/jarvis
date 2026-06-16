@@ -302,6 +302,29 @@ if [[ -f "$EVALUATOR_LIB" ]]; then
     fi
 fi
 
+# --- Tier 1.5: 근본원인 분석 검증 가드 (root-cause-validator.sh) ---
+# 클러스터 cl-d8daa113f8bb5b30 대응: 초기 권고가 근본 해법이 아니었음 패턴 방지
+# pass=근본해결 / warn=부분분석 / block=근본미분석(차단)
+ROOT_CAUSE_VERDICT="pass"
+ROOT_CAUSE_REASON=""
+ROOT_CAUSE_BLOCKED=false
+ROOT_CAUSE_LIB="${BOT_HOME}/lib/root-cause-validator.sh"
+if [[ -f "$ROOT_CAUSE_LIB" ]]; then
+    # shellcheck source=/dev/null
+    source "$ROOT_CAUSE_LIB"
+    validate_root_cause "$TASK_ID" "$RESULT" "$PROMPT" || true
+    if [[ "$ROOT_CAUSE_BLOCKED" == "true" ]]; then
+        log_jsonl "error" "root_cause_analysis_blocked: ${ROOT_CAUSE_REASON}" "$DURATION"
+        echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-root-cause-fail.json"
+        record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
+        # stdout으로 에러 메시지 (retry-wrapper가 분류에 사용)
+        echo "ROOT_CAUSE_ANALYSIS_REQUIRED: ${ROOT_CAUSE_REASON}"
+        exit 1
+    elif [[ "$ROOT_CAUSE_VERDICT" == "warn" ]]; then
+        log_jsonl "warn" "root_cause_analysis_warn: ${ROOT_CAUSE_REASON}" "$DURATION"
+    fi
+fi
+
 # --- Extract cost and token usage ---
 COST_USD=$(echo "$RAW_OUTPUT" | jq -r '.cost_usd // 0')
 INPUT_TOKENS=$(echo "$RAW_OUTPUT" | jq -r '.usage.input_tokens // 0')
