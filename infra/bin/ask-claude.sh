@@ -156,6 +156,19 @@ source "${BOT_HOME}/lib/insight-recorder.sh"
 # 차단 시 호출 자체 skip (exit 99) → 호출자가 graceful 처리 가능.
 source "${BOT_HOME}/lib/circuit-ask-claude.sh" 2>/dev/null || true
 
+# --- Root Cause Analysis gate (Cluster cl-d8daa113f8bb5b30: 근본원인 분석 검증) ---
+# 반복 실수 패턴 자동 감지: "초기 권고가 근본 해법이 아님" 클러스터 방어
+# 차단 조건: problem-solving 태스크에서 "quick fix" 등 증상억제 표현만 있고
+#           "root cause", "architecture" 등 근본 분석 증거 부재 시 차단
+source "${BOT_HOME}/lib/rca-gate.sh" 2>/dev/null || true
+if command -v rca_gate_check >/dev/null 2>&1; then
+    if ! rca_gate_check "$TASK_ID" "$PROMPT"; then
+        log_jsonl "blocked" "RCA gate: repeated mistake pattern detected" "0"
+        record_outcome "$TASK_ID" "false" "0" "0" 2>/dev/null || true
+        exit 1
+    fi
+fi
+
 # --- Execute LLM call (claude -p with multi-provider fallback) ---
 # Prevent nested claude detection (but preserve CLAUDECODE for OAuth credential inheritance)
 # NOTE: Unsetting CLAUDECODE breaks OAuth authentication in cron environments
