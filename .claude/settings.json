@@ -1,0 +1,220 @@
+{
+  "version": "1.0",
+  "description": "Jarvis Autonomous Cron Task Permission Isolation Configuration",
+  "timestamp": "2026-06-17T00:00:00Z",
+  "comments": "This nested .claude configuration enforces strict permission boundaries for autonomous cron task execution. Each task context can override parent settings for granular access control.",
+
+  "defaultPermissions": {
+    "allowedTools": [
+      "Bash",
+      "Read",
+      "Grep",
+      "Glob",
+      "WebFetch",
+      "WebSearch",
+      "Edit"
+    ],
+    "deniedTools": [
+      "Write",
+      "NotebookEdit",
+      "Task",
+      "EnterPlanMode",
+      "ExitPlanMode"
+    ],
+    "disableByDefault": true
+  },
+
+  "taskContexts": {
+    "ask-claude-cron": {
+      "description": "Main cron executor for autonomous Claude prompts",
+      "allowedTools": [
+        "Bash",
+        "Read",
+        "Grep",
+        "Glob",
+        "WebFetch",
+        "WebSearch",
+        "Edit",
+        "Skill"
+      ],
+      "deniedTools": [
+        "Write",
+        "NotebookEdit",
+        "Task",
+        "EnterPlanMode"
+      ],
+      "disableByDefault": false,
+      "restrictions": {
+        "commandPatterns": {
+          "forbidden": [
+            "curl.*monitoring\\.json",
+            "curl.*webhook",
+            "discord.*hook",
+            "rm.*-rf",
+            "git.*push.*--force"
+          ],
+          "reason": "Prevent unauthorized Discord sends, destructive operations, and force pushes"
+        }
+      }
+    },
+
+    "task-result-route": {
+      "description": "Result routing engine - Discord dispatch control",
+      "allowedTools": [
+        "Bash",
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit"
+      ],
+      "deniedTools": [
+        "Write",
+        "Task",
+        "EnterPlanMode",
+        "WebFetch",
+        "WebSearch"
+      ],
+      "disableByDefault": false,
+      "restrictions": {
+        "bashFiltering": {
+          "enforced": true,
+          "allowOnlyScripts": [
+            "discord-route.sh",
+            "task-store.mjs"
+          ],
+          "reason": "Enforce discord-route.sh for all Discord sends; prevent direct webhook curl"
+        },
+        "fileAccess": {
+          "readOnly": [
+            "~/.jarvis/infra/config/",
+            "~/.jarvis/infra/lib/"
+          ],
+          "forbidden": [
+            "~/.env",
+            "~/.ssh",
+            "~/.aws"
+          ],
+          "reason": "Prevent accidental credential exposure"
+        }
+      }
+    },
+
+    "cron-master": {
+      "description": "Master orchestrator for daily tasks (system-health, daily-summary, etc.)",
+      "allowedTools": [
+        "Bash",
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit"
+      ],
+      "deniedTools": [
+        "Write",
+        "WebFetch",
+        "Task",
+        "EnterPlanMode"
+      ],
+      "disableByDefault": false,
+      "restrictions": {
+        "fileAccess": {
+          "readOnly": [
+            "~/.jarvis/infra/config/",
+            "~/.jarvis/docs/"
+          ],
+          "forbidden": [
+            "~/.env",
+            "~/.jarvis/.env"
+          ]
+        }
+      }
+    },
+
+    "bot-cron": {
+      "description": "Discord bot cron tasks - social listening, event processing",
+      "allowedTools": [
+        "Bash",
+        "Read",
+        "Grep",
+        "Glob",
+        "WebFetch"
+      ],
+      "deniedTools": [
+        "Write",
+        "Edit",
+        "Task",
+        "EnterPlanMode"
+      ],
+      "disableByDefault": false
+    }
+  },
+
+  "safetyGuards": {
+    "discordMisrouting": {
+      "enabled": true,
+      "mechanism": "enforce discord-route.sh gatekeeping",
+      "rules": [
+        {
+          "name": "Block Direct Webhook Curl",
+          "pattern": "curl.*monitoring\\.json.*webhook",
+          "action": "deny",
+          "reason": "Bypass audit log; use discord-route.sh instead"
+        },
+        {
+          "name": "Enforce Channel Validation",
+          "pattern": "discord_route",
+          "requiredArgs": ["critical|info|retro", "title", "metadata"],
+          "action": "warn_if_incomplete",
+          "reason": "Severity parameter must be validated before send"
+        }
+      ]
+    },
+
+    "excessiveFileAccess": {
+      "enabled": true,
+      "mechanism": "nested .claude deniedTools and readOnly restrictions",
+      "rules": [
+        {
+          "name": "Protect Secrets",
+          "path": "~/.env*",
+          "action": "deny",
+          "reason": "Prevent credential leakage from cron logs"
+        },
+        {
+          "name": "Restrict Write to User Home",
+          "path": "~",
+          "action": "deny_write_except",
+          "exceptions": ["~/.jarvis/logs/", "~/.jarvis/cache/"],
+          "reason": "Limit blast radius of autonomous file creation"
+        }
+      ]
+    },
+
+    "autoModeActivation": {
+      "enabled": true,
+      "condition": "disableByDefault: false in taskContext",
+      "meaning": "Auto mode permitted for this cron task context",
+      "audit": "All auto mode actions logged with taskContext identifier"
+    }
+  },
+
+  "auditLogging": {
+    "enabled": true,
+    "logPath": "~/.jarvis/logs/permission-audit.log",
+    "events": [
+      "tool_access_denied",
+      "bash_pattern_match",
+      "file_access_forbidden",
+      "discord_route_call",
+      "auto_mode_activation"
+    ]
+  },
+
+  "rolloutStrategy": {
+    "phase": "evaluation",
+    "status": "awaiting_owner_decision",
+    "decisionCommands": {
+      "approve": "node /Users/ramsbaby/jarvis/infra/lib/task-store.mjs transition tech-claude-code-permission-nested-claude approved",
+      "reject": "node /Users/ramsbaby/jarvis/infra/lib/task-store.mjs transition tech-claude-code-permission-nested-claude rejected"
+    }
+  }
+}
