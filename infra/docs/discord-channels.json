@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-15T19:00:05.193Z",
+  "generatedAt": "2026-06-16T19:00:05.405Z",
   "totalChannels": 13,
   "totalTasks": 127,
   "source": "runtime/config/tasks.json + infra/config/models.json",
