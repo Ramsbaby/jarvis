@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # runtime-rag-backup.sh — runtime/rag/ 주간 백업 (disaster recovery)
-# 시나리오 D 방어: runtime 전체 삭제 시 RAG DB 2.2GB 복구 가능.
-# 매주 일요일 03:00 tar.gz 생성, 4주 retention.
+# 시나리오 D 방어: runtime 전체 삭제 시 RAG DB(현재 약 21GB) 복구 가능.
+# 매주 일요일 03:00 tar.gz 생성, 7일 retention(최근 1개만 유지 — 디스크 절약).
+# RAG는 재인덱싱으로 재생성 가능한 파생 데이터라 안전망 1개면 충분.
 
 BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
 RAG_SRC="$BOT_HOME/rag"
 BACKUP_DIR="$HOME/backup/runtime-rag"
 LOG="$BOT_HOME/logs/runtime-rag-backup.log"
-RETENTION_DAYS=28
+RETENTION_DAYS=7
 
 mkdir -p "$BACKUP_DIR" "$(dirname "$LOG")"
 
@@ -39,7 +40,7 @@ else
     exit 1
 fi
 
-# retention (4주)
+# retention (7일 — 최근 1개만 유지)
 deleted=0
 while IFS= read -r old; do
     rm -f "$old"
