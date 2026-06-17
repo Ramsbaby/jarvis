@@ -15,7 +15,7 @@
  *   - 최종: project-context 주입으로 프롬프트 강화
  */
 
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -251,8 +251,7 @@ class MistakeClusterGuard {
    * 모든 활성 클러스터 나열
    */
   getActiveClusters() {
-    const files = require('node:fs')
-      .readdirSync(CLUSTER_GUARDS_DIR)
+    const files = readdirSync(CLUSTER_GUARDS_DIR)
       .filter(f => f.endsWith('.json'));
 
     return files.map(f => {
