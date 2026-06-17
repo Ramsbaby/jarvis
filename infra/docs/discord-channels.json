@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-06-16T19:00:05.405Z",
+  "generatedAt": "2026-06-17T19:00:05.355Z",
   "totalChannels": 13,
-  "totalTasks": 127,
+  "totalTasks": 130,
   "source": "runtime/config/tasks.json + infra/config/models.json",
   "channels": {
     "jarvis-system": {
-      "taskCount": 40,
+      "taskCount": 42,
       "tasks": [
         {
           "id": "schedule-coherence",
@@ -206,13 +206,23 @@
           "id": "skill-loop-nightly",
           "schedule": "50 3 * * *",
           "model": "<default>"
+        },
+        {
+          "id": "promoter-auto-close",
+          "schedule": "30 4 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "wiki-contradiction-scan",
+          "schedule": "0 3 * * 1",
+          "model": "claude-haiku-4-5-20251001"
         }
       ],
       "modelOverride": "opusplan",
       "effortOverride": "max"
     },
     "<no-channel>": {
-      "taskCount": 39,
+      "taskCount": 40,
       "tasks": [
         {
           "id": "memory-cleanup",
@@ -408,6 +418,11 @@
           "id": "analysis-channel-cost-daily",
           "schedule": "0 9 * * *",
           "model": "<default>"
+        },
+        {
+          "id": "agent-sdk-billing-watch",
+          "schedule": "0 9 * * 1",
+          "model": "claude-sonnet-4-6"
         }
       ],
       "modelOverride": null,

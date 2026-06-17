@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-06-15T19:00:05.105Z",
-  "totalTasks": 127,
+  "generatedAt": "2026-06-17T19:00:05.248Z",
+  "totalTasks": 130,
   "source": "runtime/config/tasks.json",
   "modelDistribution": {
-    "claude-sonnet-4-6": 20,
-    "claude-haiku-4-5-20251001": 36,
+    "claude-sonnet-4-6": 21,
+    "claude-haiku-4-5-20251001": 38,
     "claude-opus-4-8": 3,
     "<default>": 68
   },
   "channelDistribution": {
     "jarvis": 5,
-    "jarvis-system": 40,
+    "jarvis-system": 42,
     "jarvis-market": 3,
     "jarvis-ceo": 25,
-    "<none>": 39,
+    "<none>": 40,
     "jarvis-career": 1,
     "jarvis-dev": 3,
     "jarvis-alerts": 2,
@@ -374,6 +374,16 @@
         "timeout": 60,
         "maxBudget": "0.30",
         "allowedTools": null
+      },
+      {
+        "id": "promoter-auto-close",
+        "name": "프로모터 루프 자동 닫기",
+        "schedule": "30 4 * * *",
+        "model": "claude-haiku-4-5-20251001",
+        "channel": "jarvis-system",
+        "timeout": 120,
+        "maxBudget": "0.00",
+        "allowedTools": "Read,Write,Bash"
       },
       {
         "id": "cron-auditor",
@@ -769,6 +779,16 @@
         "allowedTools": "Bash"
       },
       {
+        "id": "wiki-contradiction-scan",
+        "name": "위키 모순·중복 주간 스캔",
+        "schedule": "0 3 * * 1",
+        "model": "claude-haiku-4-5-20251001",
+        "channel": "jarvis-system",
+        "timeout": 120,
+        "maxBudget": "0.00",
+        "allowedTools": "Read,Write,Bash"
+      },
+      {
         "id": "legacy-plist-audit",
         "name": "legacy LaunchAgent plist 감사 (tasks.json 미편입 탐지)",
         "schedule": "0 4 * * 0",
@@ -826,6 +846,16 @@
         "channel": "jarvis-ceo",
         "timeout": 180,
         "maxBudget": "0.50",
+        "allowedTools": "Bash"
+      },
+      {
+        "id": "agent-sdk-billing-watch",
+        "name": "Anthropic Agent SDK 과금 정책 모니터",
+        "schedule": "0 9 * * 1",
+        "model": "claude-sonnet-4-6",
+        "channel": "<none>",
+        "timeout": 120,
+        "maxBudget": "0.10",
         "allowedTools": "Bash"
       },
       {
