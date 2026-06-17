@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-15T21:17:05.748Z",
+  "generatedAt": "2026-06-17T13:23:31.641Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 127,
+  "totalTasks": 130,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -14,11 +14,11 @@
     "brand-lead": 4,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 30
+    "uncategorized": 33
   },
   "typeDistribution": {
-    "prompt": 40,
-    "script": 87
+    "prompt": 41,
+    "script": 89
   },
   "groups": [
     {
@@ -3252,6 +3252,38 @@
           }
         },
         {
+          "id": "agent-sdk-billing-watch",
+          "name": "Anthropic Agent SDK 과금 정책 모니터",
+          "schedule": "0 9 * * 1",
+          "scheduleHuman": "월요일 09:00",
+          "type": "prompt",
+          "handler": "ask-claude.sh (LLM)",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": "claude-sonnet-4-6",
+          "priority": "normal",
+          "maxBudget": "0.10",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/agent-sdk-billing-watch.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/agent-sdk-billing-watch-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-agent-sdk-billing-watch-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "analysis-channel-cost-daily",
           "name": "분석 채널 4종 일간 비용·건수 모니터링 (정식 등재 2026-05-25)",
           "schedule": "0 9 * * *",
@@ -3860,6 +3892,38 @@
           }
         },
         {
+          "id": "promoter-auto-close",
+          "name": "프로모터 루프 자동 닫기",
+          "schedule": "30 4 * * *",
+          "scheduleHuman": "매일 04:30",
+          "type": "script",
+          "handler": "promoter-auto-close.mjs",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "daily",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/promoter-auto-close.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/promoter-auto-close-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-promoter-auto-close-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "rag-stale-scan",
           "name": "RAG 스테일 청크 주간 스캔",
           "schedule": "0 3 * * 0",
@@ -4112,6 +4176,38 @@
             "claudeStderr": {
               "pattern": "claude-stderr-weekly-dream-insight-*.log",
               "exists": true
+            }
+          }
+        },
+        {
+          "id": "wiki-contradiction-scan",
+          "name": "위키 모순·중복 주간 스캔",
+          "schedule": "0 3 * * 1",
+          "scheduleHuman": "월요일 03:00",
+          "type": "script",
+          "handler": "wiki-contradiction-scan.mjs",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-system",
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "weekly",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/wiki-contradiction-scan.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/wiki-contradiction-scan-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-wiki-contradiction-scan-*.log",
+              "exists": false
             }
           }
         },

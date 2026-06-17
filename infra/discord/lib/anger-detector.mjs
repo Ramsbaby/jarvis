@@ -112,6 +112,9 @@ export async function recordAngerSignal(sig) {
       child.stdin.end();
     }
     child.unref();
+
+    // Phase 1-B 메타인지 자기 조정: 스킬 패치 초안 자동 생성 (비블로킹)
+    setImmediate(() => triggerSkillPatch(sig).catch(() => {}));
   } catch (err) {
     // best-effort — 분노 감지 실패가 메인 흐름 차단하지 않도록
     process.stderr.write(`[anger-detector] recordAngerSignal failed: ${err.message}\n`);
@@ -212,4 +215,84 @@ export async function recordSelfAssertiveSignal(args) {
     process.stderr.write(`[anger-detector] recordSelfAssertiveSignal failed: ${err.message}\n`);
     return { recorded: false, reason: 'error', error: err.message };
   }
+}
+
+/**
+ * triggerSkillPatch — 분노 감지 직후 스킬 패치 초안을 자동 생성하여 pending 폴더에 저장.
+ *
+ * Phase 1-B 메타인지 자기 조정: anger-detector가 감지→등재에서 멈추던 루프를
+ * 감지→등재→스킬 패치 초안 생성까지 연결한다. setImmediate로 비동기 실행되므로
+ * 메인 응답 흐름을 차단하지 않는다.
+ *
+ * 처리 흐름:
+ *   1. 동일 userId 60초 디바운스 (연속 분노 신호 누적 방지)
+ *   2. SKILL_DIRS에서 관련 스킬 파일 간이 탐색
+ *   3. 패치 초안을 skill-drafts/pending/ 에 JSON으로 저장
+ *   4. skill-loop.jsonl에 anger_patch_triggered 이벤트 기록
+ *      → 다음 skill-loop-nightly가 이 파일을 우선 선별 대상으로 사용
+ */
+async function triggerSkillPatch(sig) {
+  // 동일 userId 60초 디바운스
+  const debounceKey = `patch-${sig.userId}`;
+  const now = Date.now();
+  triggerSkillPatch._debounce = triggerSkillPatch._debounce || {};
+  if (triggerSkillPatch._debounce[debounceKey] && now - triggerSkillPatch._debounce[debounceKey] < 60_000) return;
+  triggerSkillPatch._debounce[debounceKey] = now;
+
+  const { mkdirSync: mkdir, writeFileSync: write, appendFileSync: append, readdirSync: readdir, existsSync: exists } = await import('node:fs');
+  const { join: pjoin } = await import('node:path');
+  const { homedir: home } = await import('node:os');
+
+  const HOME_DIR = home();
+  const DRAFTS_PENDING = pjoin(BOT_HOME, 'state', 'skill-drafts', 'pending');
+  const SKILL_LOOP_LEDGER = pjoin(BOT_HOME, 'ledger', 'skill-loop.jsonl');
+
+  mkdir(DRAFTS_PENDING, { recursive: true });
+
+  // 관련 스킬 파일 간이 탐색 (mistake/anger/correction 관련 파일)
+  const SKILL_DIRS_LOCAL = [
+    pjoin(HOME_DIR, '.claude', 'commands'),
+    pjoin(HOME_DIR, '.claude', 'skills'),
+  ];
+
+  const relatedSkills = [];
+  for (const dir of SKILL_DIRS_LOCAL) {
+    if (!exists(dir)) continue;
+    try {
+      for (const f of readdir(dir)) {
+        if (/mistake|anger|correction|정정|오류/.test(f)) {
+          relatedSkills.push(pjoin(dir, f));
+        }
+      }
+    } catch { /* 스킵 */ }
+  }
+
+  const draftId = `anger-${now}`;
+  const tsKST = new Date(now + 9 * 3600_000).toISOString().replace('Z', '+09:00');
+
+  const patchDraft = {
+    id: draftId,
+    trigger: sig.keyword,
+    userText: (sig.userText || '').slice(0, 200),
+    assistantText: (sig.assistantText || '').slice(0, 200),
+    relatedSkills: relatedSkills.slice(0, 3),
+    suggestedNote: `## 주의 (${tsKST.slice(0, 10)} 사용자 정정)\n키워드: ${sig.keyword}\n사용자: ${(sig.userText || '').slice(0, 100)}`,
+    status: 'pending_review',
+    createdAt: tsKST,
+    source: 'anger-detector',
+    userId: sig.userId,
+    channelId: sig.channelId,
+  };
+
+  // pending 폴더에 패치 초안 저장
+  write(pjoin(DRAFTS_PENDING, `${draftId}.json`), JSON.stringify(patchDraft, null, 2));
+
+  // skill-loop.jsonl에 이벤트 기록
+  append(SKILL_LOOP_LEDGER, JSON.stringify({
+    ts: tsKST,
+    event: 'anger_patch_triggered',
+    draft_id: draftId,
+    trigger: sig.keyword,
+    userId: sig.userId,
+  }) + '\n');
 }

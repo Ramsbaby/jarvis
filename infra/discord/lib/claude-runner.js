@@ -38,6 +38,7 @@ import {
 } from './prompt-sections.js';
 import { getPromptHarness, Tier } from './prompt-harness.js';
 import { loadHandoff, formatHandoffForPrompt } from './session-handoff.js';
+import { loadProjectContext, detectAndSaveProject } from './project-context.mjs';
 import { buildChannelFeedSection } from './channel-feed.js';
 import { checkSensitivePath } from './security-guard.js';
 
@@ -1233,6 +1234,9 @@ export async function* createClaudeSession(prompt, {
     const handoff = loadHandoff(handoffKey);
     const handoffText = formatHandoffForPrompt(handoff);
     if (handoffText && !_isEmotionalTurn) systemParts.push('', handoffText);
+    // Phase 2-B 메타인지: 장기 프로젝트 맥락 주입 (TTL 없음, 30일 보관)
+    const _projectCtx = loadProjectContext(userId);
+    if (_projectCtx && !_isEmotionalTurn) systemParts.push('', _projectCtx);
   }
 
   // LLM Wiki context (dynamic — 세션 해시 영향 없음)

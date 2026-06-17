@@ -717,6 +717,19 @@ if [[ -f "$_CB_FILE" ]]; then rm -f "$_CB_FILE" 2>/dev/null || true; fi
 _fsm_transition "$TASK_ID" "done"
 _FSM_RUNNING=false
 
+# Phase 2-A 메타인지 절차적 자기 관찰 (옵트인: TASK_OBSERVE=1 or JARVIS_METACOG_OBSERVE=1)
+if [[ "${TASK_OBSERVE:-0}" == "1" || "${JARVIS_METACOG_OBSERVE:-0}" == "1" ]]; then
+    _OBSERVER="${INFRA_DIR}/scripts/task-run-observer.mjs"
+    if [[ -f "$_OBSERVER" ]]; then
+        JARVIS_OBSERVE_TASK_ID="$TASK_ID" \
+        JARVIS_OBSERVE_DURATION="${_TASK_DURATION:-0}" \
+        JARVIS_OBSERVE_EXIT="${EXIT_CODE:-0}" \
+        JARVIS_OBSERVE_SNIPPET="${RESULT:0:500}" \
+          node "$_OBSERVER" 2>>"${BOT_HOME}/logs/cron.log" &
+        disown
+    fi
+fi
+
 # event_trigger 디바운스 동기화: LaunchAgent 직접 실행도 event-watcher last_run에 기록
 # → event-watcher/rag-watch가 중복 실행하지 않도록 방지 (ADR: 이중 트리거 방지)
 _EVENT_TRIGGER_FIELD=$(echo "$TASK_CONFIG" | jq -r '.event_trigger // empty' 2>/dev/null || true)
