@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-17T13:23:31.641Z",
+  "generatedAt": "2026-06-17T21:17:05.415Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 130,
+  "totalTasks": 133,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -11,14 +11,14 @@
     "record-lead": 8,
     "library": 1,
     "growth-lead": 7,
-    "brand-lead": 4,
+    "brand-lead": 5,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 33
+    "uncategorized": 35
   },
   "typeDistribution": {
     "prompt": 41,
-    "script": 89
+    "script": 92
   },
   "groups": [
     {
@@ -2108,6 +2108,38 @@
       },
       "tasks": [
         {
+          "id": "auditor-cross-validator-runner",
+          "name": "Auditor 교차 검증 (Cross-Validation)",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "auditor-cross-validator.mjs",
+          "team": {
+            "id": "brand-lead",
+            "name": "마케팅실 (OSS·블로그)"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "event",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/auditor-cross-validator-runner.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/auditor-cross-validator-runner-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-auditor-cross-validator-runner-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "brand-weekly",
           "name": "브랜드팀 주간 보고 (Brand)",
           "schedule": "0 8 * * 2",
@@ -3380,6 +3412,38 @@
           }
         },
         {
+          "id": "cluster-guard-init-cl-1b6f71eed569a8b7",
+          "name": "오답승격 클러스터 가드 초기화 (cl-1b6f71eed569a8b7)",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "mistake-cluster-guard.mjs",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "event",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/cluster-guard-init-cl-1b6f71eed569a8b7.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/cluster-guard-init-cl-1b6f71eed569a8b7-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-cluster-guard-init-cl-1b6f71eed569a8b7-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "compound-review",
           "name": "Compound Engineering 주간 복기",
           "schedule": "30 20 * * 0",
@@ -3860,6 +3924,38 @@
           }
         },
         {
+          "id": "post-fix-verification-runner",
+          "name": "/verify 자동 재검증 파이프라인",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "post-fix-verification.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": null,
+          "priority": "event",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/post-fix-verification-runner.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/post-fix-verification-runner-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-post-fix-verification-runner-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
           "id": "proactive-engine",
           "name": "선제적 말걸기 엔진",
           "schedule": "0 9,14,19 * * *",
@@ -3911,11 +4007,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/promoter-auto-close.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/promoter-auto-close-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-promoter-auto-close-*.log",
