@@ -77,12 +77,9 @@ SUMMARY="${PASS_COUNT}/${TOTAL} passed"
 if [[ $FAIL_COUNT -gt 0 ]]; then SUMMARY="${SUMMARY}, ${FAIL_COUNT} FAILED"; fi
 
 # Determine exit code (0 if no failures, 1 if there are failures)
-FINAL_EXIT_CODE=0
-if [[ $FAIL_COUNT -gt 0 ]]; then FINAL_EXIT_CODE=1; fi
-
-log "RESULT: ${SUMMARY} (exit: ${FINAL_EXIT_CODE})"
-
 if [[ $FAIL_COUNT -gt 0 ]]; then
+    log "RESULT: ${SUMMARY} (exit: 1)"
+
     # 실패 항목 추출
     FAILED_ITEMS=$(echo "$OUTPUT" | grep "❌ FAIL" | sed 's/❌ FAIL: //' | tr '\n' ', ' | sed 's/,$//')
     ALERT_MSG="E2E 자가진단 실패 (${FAIL_COUNT}건): ${FAILED_ITEMS}"
@@ -100,10 +97,15 @@ if [[ $FAIL_COUNT -gt 0 ]]; then
             -d "$ALERT_MSG" \
             "${NTFY_SERVER}/${NTFY_TOPIC}" > /dev/null 2>&1 || true
     fi
-else
-    log "OK: ${SUMMARY}"
-fi
 
-# 오래된 결과 정리 (30일 초과)
-find "$(dirname "$RESULT_FILE")" -name "*.txt" -mtime +30 -delete 2>/dev/null || true
-exit "$FINAL_EXIT_CODE"
+    # 오래된 결과 정리 (30일 초과)
+    find "$(dirname "$RESULT_FILE")" -name "*.txt" -mtime +30 -delete 2>/dev/null || true
+    exit 1
+else
+    log "RESULT: ${SUMMARY} (exit: 0)"
+    log "OK: ${SUMMARY}"
+
+    # 오래된 결과 정리 (30일 초과)
+    find "$(dirname "$RESULT_FILE")" -name "*.txt" -mtime +30 -delete 2>/dev/null || true
+    exit 0
+fi
