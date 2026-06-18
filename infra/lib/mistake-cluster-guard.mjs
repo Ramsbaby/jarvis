@@ -84,6 +84,62 @@ const CLUSTER_DEFINITIONS = {
     escalationPath: 'ceo-approval-for-design-fix',
     ttl_days: 30,
   },
+  'cl-fd25ae4c34818568': {
+    name: 'Sensitive Info & Health Advice Misclassification',
+    seedPattern: '용도 명시 후에도 민감 정보 포함 & 수신자 속성 오분류 & 절대값 표현',
+    memberPatterns: [
+      '용도 명시 후에도 민감 정보 포함',
+      '민감 정보 포함 버전 재작성 요청',
+      '여러 상품 분석 시 소유자 대상 오분류',
+      '임신 준비 관계자 권장사항 오적용',
+      '제품명 명시 없이 영양제 복용량을 절대적으로 표현 후 편차 인정',
+    ],
+    guards: [
+      // Guard 1: 응답 생성 후 통합 필터 파이프라인 자동 실행
+      {
+        id: 'response-guard-pipeline-auto',
+        type: 'post-generation-hook',
+        action: 'invoke_response_guard_pipeline',
+        params: { timeout_secs: 30 },
+        description: '모든 응답에 대해 3개 가드(민감정보, 수신자매칭, 절대값) 자동 체이닝',
+      },
+      // Guard 2: 민감 정보 탐지 및 자동 재작성
+      {
+        id: 'pii-detection-rewrite',
+        type: 'sensitive-info-filter',
+        action: 'detect_and_rewrite_pii',
+        params: { auto_rewrite: true },
+        description: '개인정보 탐지 시 민감정보 제거하고 재작성 자동 트리거',
+      },
+      // Guard 3: 수신자-권장사항 속성 매칭 검증
+      {
+        id: 'recipient-attribute-matcher',
+        type: 'recipient-validator',
+        action: 'validate_recipient_health_advice',
+        params: { timeout_secs: 20 },
+        description: '응답의 대상자 속성(연령, 성별, 건강상태)과 권장사항 일치 여부 검증',
+      },
+      // Guard 4: 영양제·의약품 절대값 패턴 탐지
+      {
+        id: 'supplement-dose-validator',
+        type: 'medical-advice-filter',
+        action: 'detect_absolute_dose_patterns',
+        params: { auto_rewrite: true },
+        description: '단위 없는 절대값 용량 표현 탐지 및 개인차 고려 표현 강제',
+      },
+      // Guard 5: 클러스터 재발 추적
+      {
+        id: 'cluster-recurrence-tracker',
+        type: 'metric-collector',
+        action: 'track_recurrence_events',
+        params: { window_days: 7 },
+        description: '클러스터 재발 사건 기록 및 7일 내 재발 횟수 추적',
+      },
+    ],
+    escalationPath: 'health-advice-quality-review',
+    ttl_days: 60,
+    priority: 'critical',
+  },
 };
 
 class MistakeClusterGuard {
