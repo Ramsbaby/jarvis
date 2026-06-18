@@ -16,6 +16,7 @@ import {
 } from './sensitive-info-detector.mjs';
 import { validateAudienceMatch } from './audience-recommendation-matcher.mjs';
 import { validateNutritionDosage } from './nutrition-dosage-validator.mjs';
+import { validateForCluster } from './cluster-cl-fd25ae4c34818568-guard.mjs';
 
 /**
  * Result severity levels
@@ -39,6 +40,8 @@ export function validateResponse(responseText, options = {}) {
     autoMask = false,
     throwOnCritical = false,
     audienceAttributes = null,
+    responseId = null,
+    includeClusterAnalysis = true,
   } = options;
 
   if (!responseText || typeof responseText !== 'string') {
@@ -62,6 +65,20 @@ export function validateResponse(responseText, options = {}) {
     audienceAttributes
   );
   const dosageValidationResult = validateNutritionDosage(responseText);
+
+  // Run cluster-specific guard if enabled
+  let clusterAnalysis = null;
+  if (includeClusterAnalysis) {
+    try {
+      clusterAnalysis = validateForCluster(
+        responseText,
+        responseId || `response-${Date.now()}`
+      );
+    } catch (e) {
+      // Fail silently for cluster analysis errors - don't block main pipeline
+      console.error('Cluster analysis error:', e.message);
+    }
+  }
 
   // Compile issues with severity
   const allIssues = [];
