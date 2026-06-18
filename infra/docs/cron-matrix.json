@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-06-17T19:00:05.248Z",
-  "totalTasks": 130,
+  "generatedAt": "2026-06-18T19:00:05.767Z",
+  "totalTasks": 133,
   "source": "runtime/config/tasks.json",
   "modelDistribution": {
     "claude-sonnet-4-6": 21,
-    "claude-haiku-4-5-20251001": 38,
+    "claude-haiku-4-5-20251001": 39,
     "claude-opus-4-8": 3,
-    "<default>": 68
+    "<default>": 70
   },
   "channelDistribution": {
     "jarvis": 5,
     "jarvis-system": 42,
     "jarvis-market": 3,
     "jarvis-ceo": 25,
-    "<none>": 40,
+    "<none>": 43,
     "jarvis-career": 1,
     "jarvis-dev": 3,
     "jarvis-alerts": 2,
@@ -1103,6 +1103,16 @@
     ],
     "adhoc": [
       {
+        "id": "auditor-cross-validator-runner",
+        "name": "Auditor 교차 검증 (Cross-Validation)",
+        "schedule": "(adhoc)",
+        "model": "<default>",
+        "channel": "<none>",
+        "timeout": 60,
+        "maxBudget": "0.00",
+        "allowedTools": "Bash"
+      },
+      {
         "id": "bot-crash-classifier",
         "name": "봇 크래시 원인 분류 및 Discord 알림",
         "schedule": "(adhoc)",
@@ -1110,6 +1120,16 @@
         "channel": "jarvis-system",
         "timeout": 180,
         "maxBudget": "0.20",
+        "allowedTools": "Bash"
+      },
+      {
+        "id": "cluster-guard-init-cl-1b6f71eed569a8b7",
+        "name": "오답승격 클러스터 가드 초기화 (cl-1b6f71eed569a8b7)",
+        "schedule": "(adhoc)",
+        "model": "claude-haiku-4-5-20251001",
+        "channel": "<none>",
+        "timeout": 60,
+        "maxBudget": "0.00",
         "allowedTools": "Bash"
       },
       {
@@ -1160,6 +1180,16 @@
         "channel": "jarvis-system",
         "timeout": 240,
         "maxBudget": "0.30",
+        "allowedTools": "Bash"
+      },
+      {
+        "id": "post-fix-verification-runner",
+        "name": "/verify 자동 재검증 파이프라인",
+        "schedule": "(adhoc)",
+        "model": "<default>",
+        "channel": "<none>",
+        "timeout": 120,
+        "maxBudget": "0.00",
         "allowedTools": "Bash"
       },
       {

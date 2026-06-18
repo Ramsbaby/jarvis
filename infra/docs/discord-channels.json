@@ -1,9 +1,231 @@
 {
-  "generatedAt": "2026-06-17T19:00:05.355Z",
+  "generatedAt": "2026-06-18T19:00:05.965Z",
   "totalChannels": 13,
-  "totalTasks": 130,
+  "totalTasks": 133,
   "source": "runtime/config/tasks.json + infra/config/models.json",
   "channels": {
+    "<no-channel>": {
+      "taskCount": 43,
+      "tasks": [
+        {
+          "id": "memory-cleanup",
+          "schedule": "0 2 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "rate-limit-check",
+          "schedule": "*/30 * * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "update-usage-cache",
+          "schedule": "*/30 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "token-sync",
+          "schedule": "0 1 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "agent-batch-commit",
+          "schedule": "30 8 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "session-sync",
+          "schedule": "*/15 * * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "memory-expire",
+          "schedule": "0 3 * * 1",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "dev-event-bus",
+          "schedule": "50 22 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "dev-event-watcher",
+          "schedule": "0 23 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "stale-task-watcher",
+          "schedule": "*/30 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "gen-system-overview",
+          "schedule": "5 4 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "gen-gotchas",
+          "schedule": "0 3 * * 1",
+          "model": "<default>"
+        },
+        {
+          "id": "boram-daily-schedule",
+          "schedule": "30 7 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "rag-bench",
+          "schedule": "0 3 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "vault-sync",
+          "schedule": "0 */6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "vault-auto-link",
+          "schedule": "30 6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "jira-sync",
+          "schedule": "0 9 * * 1",
+          "model": "<default>"
+        },
+        {
+          "id": "profile-extractor",
+          "schedule": "30 0 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "context-extractor",
+          "schedule": "0 1 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "dev-task-runner",
+          "schedule": "*/5 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "entity-graph",
+          "schedule": "45 3 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "gen-indexes",
+          "schedule": "17 6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "jarvis-home-sync",
+          "schedule": "0 4 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "token-ledger-audit",
+          "schedule": "30 8 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "tune-task-params",
+          "schedule": "35 8 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "launchagents-audit",
+          "schedule": "13 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "tasks-prompt-path-audit",
+          "schedule": "23 3 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "mistake-extractor",
+          "schedule": "15 3 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "mistake-circuit-healthcheck",
+          "schedule": "0 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "backup-retention-daily",
+          "schedule": "0 4 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "runtime-rag-backup",
+          "schedule": "0 3 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "plist-bypass-autofix",
+          "schedule": "0 6 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "rag-index-consume",
+          "schedule": "30 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "kakao-token-refresh",
+          "schedule": "0 */5 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "legacy-plist-audit",
+          "schedule": "0 4 * * 0",
+          "model": "<default>"
+        },
+        {
+          "id": "cron-sync-hourly",
+          "schedule": "15 * * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "session-summaries-rotate",
+          "schedule": "30 3 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "followup-sync",
+          "schedule": "30 8 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "analysis-channel-cost-daily",
+          "schedule": "0 9 * * *",
+          "model": "<default>"
+        },
+        {
+          "id": "agent-sdk-billing-watch",
+          "schedule": "0 9 * * 1",
+          "model": "claude-sonnet-4-6"
+        },
+        {
+          "id": "cluster-guard-init-cl-1b6f71eed569a8b7",
+          "schedule": "(adhoc)",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "post-fix-verification-runner",
+          "schedule": "(adhoc)",
+          "model": "<default>"
+        },
+        {
+          "id": "auditor-cross-validator-runner",
+          "schedule": "(adhoc)",
+          "model": "<default>"
+        }
+      ],
+      "modelOverride": null,
+      "effortOverride": null
+    },
     "jarvis-system": {
       "taskCount": 42,
       "tasks": [
@@ -220,213 +442,6 @@
       ],
       "modelOverride": "opusplan",
       "effortOverride": "max"
-    },
-    "<no-channel>": {
-      "taskCount": 40,
-      "tasks": [
-        {
-          "id": "memory-cleanup",
-          "schedule": "0 2 * * *",
-          "model": "claude-haiku-4-5-20251001"
-        },
-        {
-          "id": "rate-limit-check",
-          "schedule": "*/30 * * * *",
-          "model": "claude-haiku-4-5-20251001"
-        },
-        {
-          "id": "update-usage-cache",
-          "schedule": "*/30 * * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "token-sync",
-          "schedule": "0 1 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "agent-batch-commit",
-          "schedule": "30 8 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "session-sync",
-          "schedule": "*/15 * * * *",
-          "model": "claude-haiku-4-5-20251001"
-        },
-        {
-          "id": "memory-expire",
-          "schedule": "0 3 * * 1",
-          "model": "claude-haiku-4-5-20251001"
-        },
-        {
-          "id": "dev-event-bus",
-          "schedule": "50 22 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "dev-event-watcher",
-          "schedule": "0 23 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "stale-task-watcher",
-          "schedule": "*/30 * * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "gen-system-overview",
-          "schedule": "5 4 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "gen-gotchas",
-          "schedule": "0 3 * * 1",
-          "model": "<default>"
-        },
-        {
-          "id": "boram-daily-schedule",
-          "schedule": "30 7 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "rag-bench",
-          "schedule": "0 3 * * 0",
-          "model": "<default>"
-        },
-        {
-          "id": "vault-sync",
-          "schedule": "0 */6 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "vault-auto-link",
-          "schedule": "30 6 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "jira-sync",
-          "schedule": "0 9 * * 1",
-          "model": "<default>"
-        },
-        {
-          "id": "profile-extractor",
-          "schedule": "30 0 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "context-extractor",
-          "schedule": "0 1 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "dev-task-runner",
-          "schedule": "*/5 * * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "entity-graph",
-          "schedule": "45 3 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "gen-indexes",
-          "schedule": "17 6 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "jarvis-home-sync",
-          "schedule": "0 4 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "token-ledger-audit",
-          "schedule": "30 8 * * 0",
-          "model": "<default>"
-        },
-        {
-          "id": "tune-task-params",
-          "schedule": "35 8 * * 0",
-          "model": "<default>"
-        },
-        {
-          "id": "launchagents-audit",
-          "schedule": "13 * * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "tasks-prompt-path-audit",
-          "schedule": "23 3 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "mistake-extractor",
-          "schedule": "15 3 * * *",
-          "model": "claude-haiku-4-5-20251001"
-        },
-        {
-          "id": "mistake-circuit-healthcheck",
-          "schedule": "0 * * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "backup-retention-daily",
-          "schedule": "0 4 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "runtime-rag-backup",
-          "schedule": "0 3 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "plist-bypass-autofix",
-          "schedule": "0 6 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "rag-index-consume",
-          "schedule": "30 * * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "kakao-token-refresh",
-          "schedule": "0 */5 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "legacy-plist-audit",
-          "schedule": "0 4 * * 0",
-          "model": "<default>"
-        },
-        {
-          "id": "cron-sync-hourly",
-          "schedule": "15 * * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "session-summaries-rotate",
-          "schedule": "30 3 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "followup-sync",
-          "schedule": "30 8 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "analysis-channel-cost-daily",
-          "schedule": "0 9 * * *",
-          "model": "<default>"
-        },
-        {
-          "id": "agent-sdk-billing-watch",
-          "schedule": "0 9 * * 1",
-          "model": "claude-sonnet-4-6"
-        }
-      ],
-      "modelOverride": null,
-      "effortOverride": null
     },
     "jarvis-ceo": {
       "taskCount": 25,
