@@ -760,3 +760,113 @@ cp ~/jarvis/runtime/config/tasks.json.bak-$TS ~/jarvis/runtime/config/tasks.json
 - 새 orphan 패턴이 또 발견되면 이 스크립트의 `LA_LABELS` / `TASKS_IDS` 배열에 추가만 하면
   되도록 데이터 분리 설계됨 — 매번 새 스크립트 만들지 말 것.
 
+---
+
+## Product Recommendation Guard (오답승격 클러스터 cl-4cc5f6afa4de4e5d)
+
+### Pre-Recommendation Verification Requirements
+
+**반복 실수 클러스터 cl-4cc5f6afa4de4e5d 방지**를 위해 제품 추천 전 다음 3가지 검증을 **필수**로 수행합니다:
+
+#### 1. 성분표 확인 (Ingredient Verification)
+- **필수**: 제품 성분표 URL 또는 스크린샷
+- **형식**:
+  - URL 형식: `https://...` 로 시작하는 제품 성분표 페이지 링크
+  - 스크린샷: 제품 상세 페이지에서 성분 정보가 명확히 보이는 이미지
+- **검증 로직**: `product-validator.js` - `validateProduct()` 함수 호출
+- **실패 시**: 추천 차단 → "성분표 URL/스크린샷을 먼저 확인해주세요" 메시지 반환
+
+#### 2. 재고 상태 확인 (Stock Status Verification)
+- **필수**: 재고 상태가 `IN_STOCK` 또는 `LOW_STOCK` 확인됨
+- **금지**: `OUT_OF_STOCK`, `UNKNOWN` 상태에서의 추천
+- **검증 로직**: `product-validator.js` - `canRecommend()` 함수
+- **실패 시**: 추천 차단 → "현재 재고 상태를 먼저 확인하고 추천해주세요" 메시지 반환
+
+#### 3. 화면 증거 첨부 (Screen Evidence)
+- **권장** (필수 아님): 제품 화면/스크린샷 첨부 시 신뢰도 상향
+- **포함 항목**:
+  - 제품 이름 (상품명)
+  - 성분표 섹션
+  - 재고 상태 표시
+  - 가격 정보
+- **예시**: "아래 스크린샷에서 보는 바와 같이..."
+
+### Integration Points
+
+#### A. Guard Pipeline Integration
+```
+Ask-Claude Response
+  ↓
+Guard Pipeline (guard-pipeline.mjs)
+  ├─ Sensitive Info Check
+  ├─ Audience-Recommendation Match
+  ├─ Nutrition Dosage Validation
+  └─ Cluster-Specific Guards
+       └─ cluster-cl-4cc5f6afa4de4e5d-guard.mjs
+            ├─ detectClusterPatterns() — Pattern detection
+            ├─ generateRemediationPlan() — Required verifications
+            └─ validateForCluster() — Full validation report
+```
+
+#### B. Product Validator Integration
+```javascript
+const ProductValidator = require('./lib/product-validator');
+const validator = new ProductValidator();
+
+// Before recommending a product
+const guardResult = await validator.canRecommend(productId);
+if (!guardResult.canRecommend) {
+  return {
+    error: guardResult.reason,  // "성분표 URL이 없습니다..."
+    recommendation: null
+  };
+}
+
+// Or use higher-order wrapper
+const result = await validator.withValidation(
+  productId,
+  async (validation) => {
+    // Actual recommendation logic here
+    return generateRecommendation(validation);
+  }
+);
+```
+
+### Cluster Guard CLI Usage
+
+```bash
+# Pattern detection
+node ~/.jarvis/infra/lib/guards/cluster-cl-4cc5f6afa4de4e5d-guard.mjs \
+  "제품을 추천합니다" detect
+
+# Full validation report
+node ~/.jarvis/infra/lib/guards/cluster-cl-4cc5f6afa4de4e5d-guard.mjs \
+  "제품을 추천합니다" validate response-123
+
+# Check cluster recurrence statistics
+node ~/.jarvis/infra/lib/guards/cluster-cl-4cc5f6afa4de4e5d-guard.mjs \
+  "" stats
+```
+
+### Monitoring & Metrics
+
+**Log Location**: `~/.jarvis/logs/cluster-detections/YYYY-MM-DD-cl-4cc5f6afa4de4e5d.jsonl`
+
+Each detection is logged with:
+- `responseId` — Unique response identifier
+- `detected` — True if any pattern matched
+- `patternCount` — Number of patterns triggered
+- `score` — Normalized severity score (0-10)
+- `patterns` — Array of specific pattern matches with severity
+
+**Recurrence Threshold**: 4 detections in 7 days → trigger structural guard
+
+### Related Files
+
+| File | Role |
+|------|------|
+| `lib/guards/cluster-cl-4cc5f6afa4de4e5d-guard.mjs` | Cluster-specific pattern detection |
+| `lib/product-validator.js` | Product ingredient/stock verification |
+| `lib/guards/guard-pipeline.mjs` | Unified validation pipeline |
+| `lib/guards/nutrition-dosage-validator.mjs` | Nutrition/dosage validation |
+
