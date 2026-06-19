@@ -43,23 +43,6 @@ if [ -f "$COMPACT_FLAG" ]; then
   echo "[$(ts)] [rag-compact] compact-needed 플래그 감지 — 쿨다운 우회" >> "$LOG"
 fi
 
-# ── A안 (2026-06-19): fragment 폭증 자동 압축 게이트 ──
-# 조각(fragment)이 임계 초과 시 쿨다운을 우회해 자동 압축한다.
-# gate-only 모드(매시간 감시 cron)는 임계 미달이면 압축 없이 즉시 종료 — 정기 압축과 빈도 분리.
-FRAGMENT_THRESHOLD="${RAG_FRAGMENT_THRESHOLD:-8000}"
-_frag_data_dir="${RAG_HOME}/lancedb/documents.lance/data"
-_frag_count=0
-if [ -d "$_frag_data_dir" ]; then
-  _frag_count=$(find "$_frag_data_dir" -maxdepth 1 -name '*.lance' 2>/dev/null | wc -l | tr -d ' ')
-fi
-if [ "${_frag_count:-0}" -gt "$FRAGMENT_THRESHOLD" ]; then
-  _bypass_cooldown=1
-  echo "[$(ts)] [rag-compact] fragment ${_frag_count} > ${FRAGMENT_THRESHOLD} — 자동 압축 트리거" >> "$LOG"
-elif [ "${RAG_FRAGMENT_GATE_ONLY:-0}" = "1" ]; then
-  echo "[$(ts)] [rag-compact] gate-only: fragment ${_frag_count} <= ${FRAGMENT_THRESHOLD} — skip" >> "$LOG"
-  exit 0
-fi
-
 # 6h 쿨다운 체크
 if [ "$_bypass_cooldown" -eq 0 ] && [ -f "$COOLDOWN_FILE" ]; then
   last=$(cat "$COOLDOWN_FILE" 2>/dev/null || echo 0)

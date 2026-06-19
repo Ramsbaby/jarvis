@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-18T19:00:06.592Z",
+  "generatedAt": "2026-06-18T21:17:05.257Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 133,
+  "totalTasks": 134,
   "teamDistribution": {
     "standup": 1,
     "president": 13,
@@ -14,11 +14,11 @@
     "brand-lead": 5,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 35
+    "uncategorized": 36
   },
   "typeDistribution": {
     "prompt": 41,
-    "script": 92
+    "script": 93
   },
   "groups": [
     {
@@ -3439,6 +3439,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-cluster-guard-init-cl-1b6f71eed569a8b7-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "cluster-guard-response-validation-cl-fd25ae4c34818568",
+          "name": "오답승격 클러스터 응답 검증 가드 (cl-fd25ae4c34818568)",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "run-guard-pipeline.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "event",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/cluster-guard-response-validation-cl-fd25ae4c34818568.log",
+              "exists": false
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/cluster-guard-response-validation-cl-fd25ae4c34818568-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-cluster-guard-response-validation-cl-fd25ae4c34818568-*.log",
               "exists": false
             }
           }
