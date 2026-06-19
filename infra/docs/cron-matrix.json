@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-06-18T19:00:05.767Z",
-  "totalTasks": 133,
+  "generatedAt": "2026-06-19T19:00:05.577Z",
+  "totalTasks": 134,
   "source": "runtime/config/tasks.json",
   "modelDistribution": {
     "claude-sonnet-4-6": 21,
-    "claude-haiku-4-5-20251001": 39,
+    "claude-haiku-4-5-20251001": 40,
     "claude-opus-4-8": 3,
     "<default>": 70
   },
@@ -13,7 +13,7 @@
     "jarvis-system": 42,
     "jarvis-market": 3,
     "jarvis-ceo": 25,
-    "<none>": 43,
+    "<none>": 44,
     "jarvis-career": 1,
     "jarvis-dev": 3,
     "jarvis-alerts": 2,
@@ -1125,6 +1125,16 @@
       {
         "id": "cluster-guard-init-cl-1b6f71eed569a8b7",
         "name": "오답승격 클러스터 가드 초기화 (cl-1b6f71eed569a8b7)",
+        "schedule": "(adhoc)",
+        "model": "claude-haiku-4-5-20251001",
+        "channel": "<none>",
+        "timeout": 60,
+        "maxBudget": "0.00",
+        "allowedTools": "Bash"
+      },
+      {
+        "id": "cluster-guard-response-validation-cl-fd25ae4c34818568",
+        "name": "오답승격 클러스터 응답 검증 가드 (cl-fd25ae4c34818568)",
         "schedule": "(adhoc)",
         "model": "claude-haiku-4-5-20251001",
         "channel": "<none>",

@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-06-18T19:00:05.965Z",
+  "generatedAt": "2026-06-19T19:00:05.654Z",
   "totalChannels": 13,
-  "totalTasks": 133,
+  "totalTasks": 134,
   "source": "runtime/config/tasks.json + infra/config/models.json",
   "channels": {
     "<no-channel>": {
-      "taskCount": 43,
+      "taskCount": 44,
       "tasks": [
         {
           "id": "memory-cleanup",
@@ -221,6 +221,11 @@
           "id": "auditor-cross-validator-runner",
           "schedule": "(adhoc)",
           "model": "<default>"
+        },
+        {
+          "id": "cluster-guard-response-validation-cl-fd25ae4c34818568",
+          "schedule": "(adhoc)",
+          "model": "claude-haiku-4-5-20251001"
         }
       ],
       "modelOverride": null,
