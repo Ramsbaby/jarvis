@@ -465,21 +465,104 @@ RLEOF
 done
 
 # --- Classify failure reason (detailed, for cron.log + proposals) ---
+# Enhanced version (2026-06-21): integrate classify_error() patterns + result_file fallback
+# This replaces the old 5-pattern logic with the comprehensive 12-pattern classify_error()
 classify_failure() {
     local exit_code="$1"
     local stderr_file="$2"
+    local result_file="${3:-$RESULT_TMP}"  # Optional 3rd arg: result file (for stdout classification)
 
+    # Build check_files array (priority: result → stderr)
+    local check_files=()
+    if [[ -f "$result_file" ]]; then check_files+=("$result_file"); fi
+    if [[ -f "$stderr_file" ]]; then check_files+=("$stderr_file"); fi
+
+    # [0] Timeout - non-retryable exit code
     if [[ $exit_code -eq 124 ]]; then
         echo "TIMEOUT"
-    elif [[ -f "$stderr_file" ]] && grep -qiE "rate.limit|429|overloaded|too many|hit your limit|you've hit|usage limit" "$stderr_file" 2>/dev/null; then
-        echo "RATE_LIMIT"
-    elif [[ -f "$stderr_file" ]] && grep -qiE "401|authentication|unauthorized|api.key" "$stderr_file" 2>/dev/null; then
-        echo "AUTH_ERROR"
-    elif [[ -f "$stderr_file" ]] && grep -qiE "context_length|too.long|too.large" "$stderr_file" 2>/dev/null; then
-        echo "CONTEXT_TOO_LONG"
-    else
-        echo "UNKNOWN"
+        return 0
     fi
+
+    # No files to check - return UNKNOWN
+    if [[ ${#check_files[@]} -eq 0 ]]; then
+        echo "UNKNOWN"
+        return 0
+    fi
+
+    # [1] EVALUATOR_FAIL - ask-claude.sh 응답 품질 검증 실패
+    if grep -qE "^EVALUATOR_FAIL:" "${check_files[@]}" 2>/dev/null; then
+        echo "EVALUATOR_FAIL"
+        return 0
+    fi
+
+    # [2] BUDGET_EXCEEDED - API 비용 한도 초과
+    if grep -qiE "error_max_budget_usd|budget exceeded|max.budget|예산 초과|예산초과|budget.cap|cost.*exceed|charge limit" "${check_files[@]}" 2>/dev/null; then
+        echo "BUDGET_EXCEEDED"
+        return 0
+    fi
+
+    # [3] RATE_LIMITED - API rate limit (429, "hit your limit", etc)
+    if grep -qiE "rate_limit|rate limit|error_rate_limit|RATE_LIMIT_ERROR|429|hit your limit|you've hit|usage limit|too many request|\[SUBTYPE\].*rate" "${check_files[@]}" 2>/dev/null; then
+        echo "RATE_LIMITED"
+        return 0
+    fi
+
+    # [4] TIMEOUT - 작업 초과 시간 (별도의 시간 초과 로직)
+    if grep -qiE "timeout|timed.out|execution.timeout|no.response.after|took.too.long|deadline exceeded" "${check_files[@]}" 2>/dev/null; then
+        echo "TIMEOUT"
+        return 0
+    fi
+
+    # [5] SOCKET_ERROR - 네트워크 소켓 오류
+    if grep -qiE "socket error|connection reset|broken pipe|reset by peer|connection aborted|lost connection|socket closed|EOF while reading" "${check_files[@]}" 2>/dev/null; then
+        echo "SOCKET_ERROR"
+        return 0
+    fi
+
+    # [6] OVERLOADED - 503 Service Unavailable
+    if grep -qiE "overloaded|503|capacity|temporarily unavailable|service.unavailable" "${check_files[@]}" 2>/dev/null; then
+        echo "OVERLOADED"
+        return 0
+    fi
+
+    # [7] AUTH_ERROR - 인증 실패 (401, api key invalid, etc)
+    if grep -qiE "authentication|unauthorized|401|invalid api key|fix external api key|not logged in|token expired|permission denied" "${check_files[@]}" 2>/dev/null; then
+        echo "AUTH_ERROR"
+        return 0
+    fi
+
+    # [8] CONTEXT_LENGTH - 컨텍스트 길이 초과
+    if grep -qiE "context_length|too.long|too.large|context.too|messages.too.long|input.too.long" "${check_files[@]}" 2>/dev/null; then
+        echo "CONTEXT_LENGTH"
+        return 0
+    fi
+
+    # [9] SCRIPT_MISSING - 스크립트 또는 커맨드 누락
+    if grep -qiE "no such file or directory|command not found|cannot find|file not found|does not exist" "${check_files[@]}" 2>/dev/null; then
+        echo "SCRIPT_MISSING"
+        return 0
+    fi
+
+    # [10] NETWORK_ERROR - DNS, TCP, curl 네트워크 오류
+    if grep -qiE "getaddrinfo|connection refused|econnrefused|network is unreachable|curl:.*\([67]\)|curl:.*\(28\)|dial tcp.*timeout|no route to host|temporary failure" "${check_files[@]}" 2>/dev/null; then
+        echo "NETWORK_ERROR"
+        return 0
+    fi
+
+    # [11] JSON_PARSE_ERROR - JSON 파싱 실패
+    if grep -qiE "parse error|invalid json|not valid json|unexpected token|json.decodeerror|cannot unmarshal" "${check_files[@]}" 2>/dev/null; then
+        echo "JSON_PARSE_ERROR"
+        return 0
+    fi
+
+    # [12] INVALID_RESPONSE - API 응답이 예상 형식과 다름
+    if grep -qiE "missing.*field|missing.*key|missing.*content|unexpected.*response|invalid.*response|malformed.*response" "${check_files[@]}" 2>/dev/null; then
+        echo "INVALID_RESPONSE"
+        return 0
+    fi
+
+    # Fallback: 알 수 없는 오류
+    echo "UNKNOWN"
 }
 
 # --- Check repeated failures and auto-propose ---
@@ -545,13 +628,9 @@ ${entry}" "$tracker" 2>/dev/null || true
 
 # All retries exhausted - classify, log, and alert
 STDERR_FILE="${BOT_HOME}/logs/claude-stderr-${TASK_ID}.log"
-# stdout(result)과 stderr 모두 확인 (rate limit 메시지는 stdout에 오는 경우 있음)
-FAIL_CLASS=$(classify_failure "$exit_code" "$STDERR_FILE")
-if [[ "$FAIL_CLASS" == "UNKNOWN" && -f "$RESULT_TMP" ]]; then
-    if grep -qiE "rate.limit|429|hit your limit|you've hit|usage limit|too many" "$RESULT_TMP" 2>/dev/null; then
-        FAIL_CLASS="RATE_LIMIT"
-    fi
-fi
+# stdout(result)과 stderr 모두 확인 (rate limit, budget, evaluator 메시지는 stdout에 오는 경우 있음)
+# classify_failure는 이제 RESULT_TMP를 3번째 인수로 지원하므로 직접 전달
+FAIL_CLASS=$(classify_failure "$exit_code" "$STDERR_FILE" "$RESULT_TMP")
 
 # 최후의 안전장치: RESULT_TMP에서 "sent id=" 발견 시 SUCCESS로 강제 전환 (exit=1 무시)
 # MT-3 버그: exit code 대신 출력 내용 기반 성공 판정 추가
