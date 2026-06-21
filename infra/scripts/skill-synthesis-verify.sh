@@ -34,8 +34,8 @@ echo ""
 
 # 3. skills.jsonl 현황
 if [[ -f "$SKILLS_FILE" ]]; then
-    today_count=$(grep -c "\"${TODAY}" "$SKILLS_FILE" 2>/dev/null || echo 0)
-    total_count=$(wc -l < "$SKILLS_FILE" 2>/dev/null | tr -d ' \n' || echo 0)
+    today_count=$(grep -c "\"${TODAY}" "$SKILLS_FILE" 2>/dev/null) || today_count=0
+    total_count=$(wc -l < "$SKILLS_FILE" 2>/dev/null | tr -d ' ') || total_count=0
     echo "📚 skills.jsonl — 오늘 **${today_count}건** / 누계 **${total_count}건**"
     if [[ "$today_count" -gt 0 ]]; then
         echo ""
