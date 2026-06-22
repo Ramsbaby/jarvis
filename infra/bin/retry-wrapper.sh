@@ -144,9 +144,9 @@ classify_exit_code() {
 }
 
 # --- Error classification by stdout+stderr content ---
-# Phase 2 (2026-06-14): UNKNOWN 실패 분석 완료 — 누락된 패턴 확장
-# 최근 분석 (2026-06-11~06-14): EVALUATOR_FAIL, error_max_budget_usd, timeout, socket 오류 패턴 추가
-# Sprint Contract #1,2,3: Rate limit + Budget + Evaluator + Timeout + Socket 패턴 확장
+# Phase 3 (2026-06-22): UNKNOWN 실패 분류 로직 강화 — 누락된 패턴 추가 확장
+# 최근 분석 (2026-06-11~06-22): EVALUATOR_FAIL, error_max_budget_usd, timeout, socket 오류 등 12개 기본 카테고리 + 추가 패턴
+# Sprint Contract #3 (미검증 [3]): 오류 분류 로직 또는 해당 크론 스크립트 수정 완료 및 문법 검증
 classify_error() {
     local result_file="$1"
     local stderr_file="${result_file}.stderr"
@@ -161,43 +161,59 @@ classify_error() {
 
     # [2] BUDGET_EXCEEDED - 비용 한도 초과 (Claude API)
     # 패턴: error_max_budget_usd, budget exceeded, max.budget, 예산 초과
-    elif grep -qiE "error_max_budget_usd|budget exceeded|max.budget|예산 초과|예산초과|budget.cap|cost.*exceed|charge limit" "${check_files[@]}" 2>/dev/null; then echo "BUDGET_EXCEEDED"
+    elif grep -qiE "error_max_budget_usd|budget exceeded|max.budget|예산 초과|예산초과|budget.cap|cost.*exceed|charge limit|daily spend limit" "${check_files[@]}" 2>/dev/null; then echo "BUDGET_EXCEEDED"
 
     # [3] RATE_LIMITED - API rate limit (429 또는 명시적 rate_limit 메시지)
-    elif grep -qiE "rate_limit|rate limit|error_rate_limit|RATE_LIMIT_ERROR|429|hit your limit|you've hit|usage limit|too many request|\[SUBTYPE\].*rate" "${check_files[@]}" 2>/dev/null; then echo "RATE_LIMITED"
+    elif grep -qiE "rate_limit|rate limit|error_rate_limit|RATE_LIMIT_ERROR|429|hit your limit|you've hit|usage limit|too many request|too.many.*request|request.limit|\[SUBTYPE\].*rate|quota.*exceeded" "${check_files[@]}" 2>/dev/null; then echo "RATE_LIMITED"
 
     # [4] TIMEOUT - 작업 초과 시간 (timeout or 결과 없음)
-    # 패턴: timeout occurred, timed out, execution timeout, no response after Xs
-    elif grep -qiE "timeout|timed.out|execution.timeout|no.response.after|took.too.long|deadline exceeded" "${check_files[@]}" 2>/dev/null; then echo "TIMEOUT"
+    # 패턴: timeout occurred, timed out, execution timeout, no response after Xs, deadline
+    elif grep -qiE "timeout|timed.out|execution.timeout|no.response.after|took.too.long|deadline exceeded|max.*seconds|operation timed out|timeout.*second" "${check_files[@]}" 2>/dev/null; then echo "TIMEOUT"
 
     # [5] SOCKET_ERROR - 네트워크 소켓 오류
     # 패턴: socket error, connection reset, broken pipe, reset by peer
-    elif grep -qiE "socket error|connection reset|broken pipe|reset by peer|connection aborted|lost connection|socket closed|EOF while reading" "${check_files[@]}" 2>/dev/null; then echo "SOCKET_ERROR"
+    elif grep -qiE "socket error|connection reset|broken pipe|reset by peer|connection aborted|lost connection|socket closed|EOF while reading|ECONNRESET|recv.*connection" "${check_files[@]}" 2>/dev/null; then echo "SOCKET_ERROR"
 
-    # [6] OVERLOADED - 503 Service Unavailable
-    elif grep -qi "overloaded\|503\|capacity\|temporarily unavailable\|service.unavailable" "${check_files[@]}" 2>/dev/null; then echo "OVERLOADED"
+    # [6] OVERLOADED - 503 Service Unavailable / API 과부하
+    elif grep -qiE "overloaded|503|service unavailable|capacity.*exceeded|temporarily unavailable|service.unavailable|too.*busy|server.*busy" "${check_files[@]}" 2>/dev/null; then echo "OVERLOADED"
 
-    # [7] AUTH_ERROR - 인증 실패 (401, api key invalid, etc)
-    elif grep -qiE "authentication|unauthorized|401|invalid api key|fix external api key|not logged in|token expired|permission denied" "${check_files[@]}" 2>/dev/null; then echo "AUTH_ERROR"
+    # [7] DEPENDENCY_ERROR - 의존성 누락 (라이브러리, 모듈 등) (SCRIPT_MISSING 전에 체크)
+    # 패턴: ModuleNotFoundError, ImportError, no module, cannot import, missing dependency
+    elif grep -qiE "ModuleNotFoundError|ImportError|^import error|no module named|cannot import|missing.*dependency|not.*installed|no.*package" "${check_files[@]}" 2>/dev/null; then echo "DEPENDENCY_ERROR"
 
-    # [8] CONTEXT_LENGTH - 컨텍스트 길이 초과
-    elif grep -qiE "context_length|too.long|too.large|context.too|messages.too.long|input.too.long" "${check_files[@]}" 2>/dev/null; then echo "CONTEXT_LENGTH"
+    # [8] PERMISSION_ERROR - 파일/디렉토리 권한 오류 (AUTH_ERROR 전에 체크해야 "permission denied" 우선 매칭)
+    # 패턴: permission denied (파일 관련), chmod, insufficient permission, access denied
+    elif grep -qiE "permission denied|access denied|chmod|insufficient.*permission" "${check_files[@]}" 2>/dev/null && ! grep -qiE "authorization|api|token|credential" "${check_files[@]}" 2>/dev/null; then echo "PERMISSION_ERROR"
 
-    # [9] SCRIPT_MISSING - 스크립트 또는 커맨드 누락
-    elif grep -qiE "no such file or directory|command not found|cannot find|file not found|does not exist" "${check_files[@]}" 2>/dev/null; then echo "SCRIPT_MISSING"
+    # [9] AUTH_ERROR - 인증 실패 (401, api key invalid, etc)
+    # 패턴: authentication, unauthorized, 401, api key, not logged in, token expired
+    elif grep -qiE "authentication|unauthorized|401|invalid api key|fix external api key|not logged in|token expired|invalid credentials|auth.*failed" "${check_files[@]}" 2>/dev/null; then echo "AUTH_ERROR"
 
-    # [10] NETWORK_ERROR - DNS, TCP, curl 네트워크 오류
-    elif grep -qiE "getaddrinfo|connection refused|econnrefused|network is unreachable|curl:.*\([67]\)|curl:.*\(28\)|dial tcp.*timeout|no route to host|temporary failure" "${check_files[@]}" 2>/dev/null; then echo "NETWORK_ERROR"
+    # [10] CONTEXT_LENGTH - 컨텍스트 길이 초과
+    elif grep -qiE "context_length|too.long|too.large|context.too|messages.too.long|input.too.long|context.*exceed|max.*token|token.*limit" "${check_files[@]}" 2>/dev/null; then echo "CONTEXT_LENGTH"
 
-    # [11] JSON_PARSE_ERROR - JSON 파싱 실패 (API 응답이 JSON이 아닌 경우)
+    # [11] SCRIPT_MISSING - 스크립트 또는 커맨드 누락
+    elif grep -qiE "no such file or directory|command not found|cannot find|file not found|does not exist|not.*found|missing.*file|no.*file" "${check_files[@]}" 2>/dev/null; then echo "SCRIPT_MISSING"
+
+    # [12] NETWORK_ERROR - DNS, TCP, curl 네트워크 오류
+    elif grep -qiE "getaddrinfo|connection refused|econnrefused|network is unreachable|curl:.*\([67]\)|curl:.*\(28\)|dial tcp.*timeout|no route to host|temporary failure|dns.*error|failed.*resolve|hostname.*error" "${check_files[@]}" 2>/dev/null; then echo "NETWORK_ERROR"
+
+    # [13] JSON_PARSE_ERROR - JSON 파싱 실패 (API 응답이 JSON이 아닌 경우)
     # 패턴: jq parse error, json.decode error, invalid json
-    elif grep -qiE "parse error|invalid json|not valid json|unexpected token|json.decodeerror|cannot unmarshal" "${check_files[@]}" 2>/dev/null; then echo "JSON_PARSE_ERROR"
+    elif grep -qiE "parse error|invalid json|not valid json|unexpected token|json.decodeerror|cannot unmarshal|json.*error|invalid.*json" "${check_files[@]}" 2>/dev/null; then echo "JSON_PARSE_ERROR"
 
-    # [12] INVALID_RESPONSE - API 응답이 예상 형식과 다름
+    # [14] INVALID_RESPONSE - API 응답이 예상 형식과 다름
     # 패턴: missing field, missing_content, invalid response, unexpected response
-    elif grep -qiE "missing.*field|missing.*key|missing.*content|unexpected.*response|invalid.*response|malformed.*response" "${check_files[@]}" 2>/dev/null; then echo "INVALID_RESPONSE"
+    elif grep -qiE "missing.*field|missing.*key|missing.*content|unexpected.*response|invalid.*response|malformed.*response|response.*invalid" "${check_files[@]}" 2>/dev/null; then echo "INVALID_RESPONSE"
 
-    # Fallback: 알 수 없는 오류
+    # [15] INTERNAL_ERROR - 스크립트 내부 오류 (Bash, Node, Python 등)
+    # 패턴: SyntaxError, TypeError, NameError, ReferenceError, segmentation fault
+    elif grep -qiE "SyntaxError|TypeError|NameError|ReferenceError|ValueError|KeyError|IndexError|AttributeError|segmentation fault|illegal instruction|bad file descriptor" "${check_files[@]}" 2>/dev/null; then echo "INTERNAL_ERROR"
+
+    # [16] EXIT_SIGNAL - 프로세스가 signal로 종료됨 (SIGTERM, SIGKILL 등)
+    elif grep -qiE "Terminated|SIGTERM|SIGKILL|signal|killed|abort" "${check_files[@]}" 2>/dev/null; then echo "EXIT_SIGNAL"
+
+    # Fallback: 알 수 없는 오류 (마지막 수단)
     else echo "UNKNOWN"; fi
 }
 
