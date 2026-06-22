@@ -1,0 +1,1 @@
+/Users/ramsbaby/openclaw/scripts/claude-token-sync.sh
