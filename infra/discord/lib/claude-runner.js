@@ -31,7 +31,7 @@ import {
   buildPrinciplesSection, buildFormatCoreSection, buildFormatDetailSection, buildKarpathyChecklistSection,
   buildFormatSection, buildToolsSection, buildToolsCodeDetailSection,
   buildSafetySection, buildUserContextSection, isCareerChannel, isVisualChannel,
-  buildOwnerPreferencesSection, buildOwnerPersonaSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
+  buildOwnerPreferencesSection, buildOwnerPersonaSection, buildDepthGuardSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
   buildWikiContextSection, buildAngerCorrectionSection,
   buildHarnessAutoTriggerSection, buildFactsKeywordSection, buildEvidenceMandateSection,
   buildOwnerTimeContext,
@@ -1078,6 +1078,12 @@ export async function* createClaudeSession(prompt, {
     // [2026-05-28] 감정 턴이면 buildOwnerPersonaSection이 emotional 페르소나 통째 반환
     const personaSection = buildOwnerPersonaSection({ botHome: BOT_HOME, emotionalTurn: _isEmotionalTurn });
     if (personaSection) systemParts.push('', personaSection);
+    // [2026-06-22] 깊이 가드를 별도 섹션(depth-guard, score 9)으로 독립 push — budget 절단 시
+    //   persona-rules(score 7)와 함께 통째로 잘리지 않게 분리. 감정 턴은 제외(감정 가드 주도).
+    if (!_isEmotionalTurn) {
+      const depthGuardSection = buildDepthGuardSection({ botHome: BOT_HOME });
+      if (depthGuardSection) systemParts.push('', depthGuardSection);
+    }
 
     // [2026-05-28] 감정 턴엔 도구 제약·시각화 정책 SKIP — 위로 응답엔 무관
     if (!_isEmotionalTurn) {

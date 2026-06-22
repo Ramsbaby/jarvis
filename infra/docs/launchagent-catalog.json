@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-14T19:00:05.158Z",
-  "totalLaunchAgents": 73,
-  "activeCount": 73,
+  "generatedAt": "2026-06-22T00:10:05.426Z",
+  "totalLaunchAgents": 72,
+  "activeCount": 72,
   "inactiveCount": 0,
   "source": "~/Library/LaunchAgents/ai.jarvis.*.plist + launchctl list",
   "agents": [
@@ -32,7 +32,7 @@
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/infra/scripts/audit-la-cron.sh",
       "active": true,
-      "pid": "5397",
+      "pid": "-",
       "lastExitCode": "0"
     },
     {
@@ -43,7 +43,7 @@
       "program": "/bin/bash ~/jarvis/infra/scripts/automation-budget.sh",
       "active": true,
       "pid": "-",
-      "lastExitCode": "0"
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.board",
@@ -132,17 +132,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/bot-preflight.sh",
       "active": true,
-      "pid": "96621",
-      "lastExitCode": "0"
-    },
-    {
-      "label": "ai.jarvis.docs-daily-regen",
-      "file": "ai.jarvis.docs-daily-regen.plist",
-      "schedule": "매일 04:00 KST",
-      "runAtLoad": false,
-      "program": "/bin/bash -c",
-      "active": true,
-      "pid": "5399",
+      "pid": "87823",
       "lastExitCode": "0"
     },
     {
@@ -152,7 +142,7 @@
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/infra/scripts/docs-freshness-audit.sh",
       "active": true,
-      "pid": "-",
+      "pid": "1627",
       "lastExitCode": "0"
     },
     {
@@ -163,7 +153,7 @@
       "program": "/bin/bash ~/jarvis/infra/bin/doctor-ledger-audit.sh",
       "active": true,
       "pid": "-",
-      "lastExitCode": "0"
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.env-key-emptiness-check",
@@ -192,8 +182,8 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/event-watcher.sh",
       "active": true,
-      "pid": "694",
-      "lastExitCode": "0"
+      "pid": "73491",
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.external-detect",
@@ -342,8 +332,8 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node ~/jarvis/runtime/discord/lib/orchestrator.mjs",
       "active": true,
-      "pid": "683",
-      "lastExitCode": "0"
+      "pid": "49015",
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.personal-snapshot",
@@ -382,8 +372,8 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/infra/scripts/proactive-engine-v2.sh",
       "active": true,
-      "pid": "699",
-      "lastExitCode": "0"
+      "pid": "72344",
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.prompt-bloat-audit",
@@ -422,7 +412,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node --max-old-space-size=150",
       "active": true,
-      "pid": "97226",
+      "pid": "89464",
       "lastExitCode": "0"
     },
     {
@@ -643,7 +633,7 @@
       "program": "/bin/bash ~/jarvis/infra/scripts/symlink-topology-audit.sh",
       "active": true,
       "pid": "-",
-      "lastExitCode": "1"
+      "lastExitCode": "0"
     },
     {
       "label": "ai.jarvis.sync-system-metrics",
@@ -672,8 +662,8 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/watchdog.sh",
       "active": true,
-      "pid": "670",
-      "lastExitCode": "0"
+      "pid": "73377",
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.weekly-response-critique",
@@ -723,7 +713,7 @@
       "program": "/opt/homebrew/bin/node ~/jarvis/infra/scripts/wiki-lint.mjs",
       "active": true,
       "pid": "-",
-      "lastExitCode": "0"
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.worktree-sync",

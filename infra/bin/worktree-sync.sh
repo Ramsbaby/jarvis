@@ -167,7 +167,7 @@ log "=== $SUMMARY ==="
 echo "$SUMMARY"
 
 # ── Discord 알림 (충돌 또는 failed 있을 때 또는 매번 — 환경변수로 제어) ─────
-SEND_ALWAYS="${WORKTREE_SYNC_DISCORD:-always}"
+SEND_ALWAYS="${WORKTREE_SYNC_DISCORD:-onfail}"  # 2026-06-22 노이즈 제거: 성공은 조용히, 충돌·실패 시만 송출 (기본 always→onfail)
 if [[ $DRY_RUN -eq 0 ]]; then
   if [[ $CONFLICTED -gt 0 || $FAILED -gt 0 || "$SEND_ALWAYS" == "always" ]]; then
     if [[ -f "$DISCORD_VISUAL" ]]; then

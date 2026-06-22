@@ -43,6 +43,22 @@ LATEST_HAIKU=$(jq -r '.currentLatest.haiku' "$POLICY_FILE")
 
 _log "audit start — latest: opus=$LATEST_OPUS sonnet=$LATEST_SONNET haiku=$LATEST_HAIKU"
 
+# === 그림자 경로 오타 가드 (2026-06-22 — ~/.jarvis/runtime/ → runtime/runtime/ 누설 재발 방지) ===
+# 배경: ~/.jarvis 가 ~/jarvis/runtime 심링크라, 설정에 ~/.jarvis/runtime/ 적으면 그림자 폴더에 데이터가 샘.
+#       ceo-digest 경영 리포트 ~50개가 그림자에만 쌓인 사고 후 주간 감사에 통합. 모델 검사와 독립 실행.
+if SHADOW_REPORT=$(bash "${JARVIS_HOME}/infra/scripts/shadow-path-guard.sh" 2>&1); then
+  _log "shadow-path PASS: 그림자 경로 오타 0건"
+else
+  _log "🚨 그림자 경로 오타 감지:"
+  printf '%s\n' "$SHADOW_REPORT" | tee -a "$LOG_FILE"
+  if [[ -f "$DISCORD_VISUAL" ]] && command -v discord_route_payload >/dev/null 2>&1; then
+    SP=$(jq -nc --arg ts "$(date +'%Y-%m-%d %H:%M KST')" \
+      --arg r "$(printf '%s\n' "$SHADOW_REPORT" | grep '⚠️' | head -3 | tr '\n' '|' | sed 's/|$//')" \
+      '{title:"🚨 그림자 경로 오타 감지", data:{"위반":($r|if .=="" then "(상세 로그 참조)" else . end), "조치":"~/.jarvis/runtime/ → ~/jarvis/runtime/ 교정"}, timestamp:$ts}')
+    discord_route_payload info "$SP" 2>&1 | tee -a "$LOG_FILE" || true
+  fi
+fi
+
 VIOLATIONS_TASKS=""
 VIOLATIONS_CODE=""
 TOTAL_VIOLATIONS=0

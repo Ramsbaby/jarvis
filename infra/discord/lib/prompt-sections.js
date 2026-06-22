@@ -347,23 +347,47 @@ export function buildOwnerPersonaSection({ botHome, emotionalTurn = false }) {
       return '';
     }
     let effective = content.trim();
-    if (emotionalTurn) {
-      // "## 질문 길이 ≠ 응답 깊이" 섹션부터 "## 인지 원칙" 직전까지 제거
-      // (분석 9항목 가드 + 모델 깊이 가드 = ~6,700자 분석 모드 중력원 제거)
-      const analysisStart = effective.indexOf('\n## 질문 길이');
-      const analysisEnd = effective.indexOf('\n## 인지 원칙');
-      if (analysisStart >= 0 && analysisEnd > analysisStart) {
-        effective = effective.slice(0, analysisStart) + effective.slice(analysisEnd);
-      }
-      // 분석 채널 매트릭스 섹션도 제거 (운영 메타 정보 — 감정 응답 불필요)
-      const matrixStart = effective.indexOf('\n## 분석 채널 매트릭스');
-      if (matrixStart >= 0) {
-        effective = effective.slice(0, matrixStart);
-      }
+    // [2026-06-22] 깊이 가드("## 질문 길이 ≠ 응답 깊이" ~ "## 모델 깊이 가드")를 항상 분리.
+    //   별도 buildDepthGuardSection이 score 9로 독립 push → budget 절단 시 persona 본체(score 7)와
+    //   통째로 잘리지 않음. (이전: 감정 턴에만 제거 → 비감정 분석 질문에서 persona-rules가 budget 절단으로
+    //   통째 drop 시 깊이 가드 5개가 snapshot에 0회 반영되던 구조 결함. 설계: autoplan 2026-06-22)
+    const analysisStart = effective.indexOf('\n## 질문 길이');
+    const analysisEnd = effective.indexOf('\n## 인지 원칙');
+    if (analysisStart >= 0 && analysisEnd > analysisStart) {
+      effective = effective.slice(0, analysisStart) + effective.slice(analysisEnd);
+    }
+    // 분석 채널 매트릭스 섹션도 제거 (운영 메타 정보 — 봇 응답에 불필요)
+    const matrixStart = effective.indexOf('\n## 분석 채널 매트릭스');
+    if (matrixStart >= 0) {
+      effective = effective.slice(0, matrixStart);
     }
     return `--- Owner Persona & Behaviour Rules (항상 준수) ---\n${effective}`;
   } catch (e) {
     console.error(`[persona] FATAL: ${personaPath} 로드 실패 — ${e.message}. 페르소나 가드 없이 응답 생성됨.`);
+    return '';
+  }
+}
+
+/**
+ * [2026-06-22] 깊이 가드 전용 섹션 — persona-rules에서 분리해 score 9로 독립 push.
+ *   분석채널 budget 절단(원본 median 28K vs 예산 12K) 시 persona 통째 drop으로
+ *   깊이 가드 5개(양날의검·이해관계·역설·메타동기·무기화)가 snapshot에 0회 반영되던 구조 결함 수리.
+ *   persona-discord.md "## 질문 길이 ≠ 응답 깊이" ~ "## 모델 깊이 가드" 추출. 감정 턴 제외(감정 가드 주도).
+ *   헤더 "응답 깊이 가드" → inferSectionName이 'depth-guard'(score 9, prompt-harness.js) 추론.
+ */
+export function buildDepthGuardSection({ botHome }) {
+  const personaPath = join(botHome, 'context', 'owner', 'persona-discord.md');
+  try {
+    if (!existsSync(personaPath)) return '';
+    const content = readFileSync(personaPath, 'utf-8');
+    const start = content.indexOf('## 질문 길이');
+    const end = content.indexOf('\n## 인지 원칙');
+    if (start < 0 || end <= start) return '';
+    const guard = content.slice(start, end).trim();
+    if (!guard) return '';
+    return `--- 응답 깊이 가드 (분석·예측·조언 — 항상 준수) ---\n${guard}`;
+  } catch (e) {
+    console.error(`[depth-guard] persona-discord.md 로드 실패 — ${e.message}`);
     return '';
   }
 }

@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-06-21T15:14:11.862Z",
+  "generatedAt": "2026-06-22T09:07:03.023Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 134,
+  "totalTasks": 133,
   "teamDistribution": {
     "standup": 1,
-    "president": 13,
+    "president": 12,
     "infra-lead": 17,
     "finance": 8,
     "trend-lead": 8,
@@ -18,7 +18,7 @@
   },
   "typeDistribution": {
     "prompt": 41,
-    "script": 93
+    "script": 92
   },
   "groups": [
     {
@@ -159,38 +159,6 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-board-meeting-pm-*.log",
-              "exists": false
-            }
-          }
-        },
-        {
-          "id": "board-perf-review",
-          "name": "에이전트 일일 성과 평가 및 승격/강등 처리",
-          "schedule": "0 18 * * *",
-          "scheduleHuman": "매일 18:00",
-          "type": "script",
-          "handler": "board-perf-review.sh",
-          "team": {
-            "id": "president",
-            "name": "대표실 (CEO·이사회·KPI)"
-          },
-          "discordChannel": "jarvis-ceo",
-          "model": null,
-          "priority": "system",
-          "maxBudget": "0.30",
-          "disabled": true,
-          "description": "30일 성과점수 기반 승격(150% 이상)/강등(40% 미만, -5 이하) 처리. 쿨다운: 승격 45일, 강등 30일.",
-          "logs": {
-            "stdout": {
-              "path": "~/jarvis/runtime/logs/board-perf-review.log",
-              "exists": false
-            },
-            "stderr": {
-              "path": "~/jarvis/runtime/logs/board-perf-review-err.log",
-              "exists": false
-            },
-            "claudeStderr": {
-              "pattern": "claude-stderr-board-perf-review-*.log",
               "exists": false
             }
           }
@@ -703,7 +671,7 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/log-cleanup.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/log-cleanup-err.log",
@@ -711,7 +679,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-log-cleanup-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },
@@ -3307,11 +3275,11 @@
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/agent-sdk-billing-watch-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-agent-sdk-billing-watch-*.log",
-              "exists": false
+              "exists": true
             }
           }
         },
@@ -4327,11 +4295,11 @@
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/wiki-contradiction-scan.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/wiki-contradiction-scan-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-wiki-contradiction-scan-*.log",

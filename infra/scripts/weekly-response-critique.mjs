@@ -166,7 +166,7 @@ JSON 형식으로 반환:
   const opts = {
     model: HAIKU,
     pathToClaudeCodeExecutable: CLAUDE_BIN,
-    maxTurns: 1,
+    maxTurns: 4,  // 2026-06-22 수리: maxTurns 1은 응답량 많을 때(203건) "Reached maximum turns(1)"로 분석 실패. 도구 왕복 여유 확보 — 효과는 다음 주 실행으로 검증 대기
   };
 
   let result = '';

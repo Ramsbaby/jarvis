@@ -41,7 +41,7 @@ log() { echo "[$(date '+%H:%M:%S')] $*" >> "${SELF_LOG:-/dev/null}"; }
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_DIR="$BOT_HOME/logs"
 LA_DIR="$HOME/Library/LaunchAgents"
-NOW=$(date '+%Y-%m-%d %H:%M:%S')
+NOW=$(date '+%Y-%m-%d')  # dedup 수리(2026-06-22): 본문 시각 제거 — 매 실행 변동이 digest를 바꿔 중복 송출 유발. 정확 시각은 self-log(L34)·NOW_EPOCH 보존
 NOW_EPOCH=$(date +%s)
 TODAY=$(date +%Y-%m-%d)
 YESTERDAY=$(date -v-1d +%Y-%m-%d 2>/dev/null || date -d 'yesterday' +%Y-%m-%d 2>/dev/null || echo "")

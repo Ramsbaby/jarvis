@@ -46,7 +46,7 @@ fi
 # ── A안 (2026-06-19): fragment 폭증 자동 압축 게이트 ──
 # 조각(fragment)이 임계 초과 시 쿨다운을 우회해 자동 압축한다.
 # gate-only 모드(매시간 감시 cron)는 임계 미달이면 압축 없이 즉시 종료 — 정기 압축과 빈도 분리.
-FRAGMENT_THRESHOLD="${RAG_FRAGMENT_THRESHOLD:-8000}"
+FRAGMENT_THRESHOLD="${RAG_FRAGMENT_THRESHOLD:-5000}"
 _frag_data_dir="${RAG_HOME}/lancedb/documents.lance/data"
 _frag_count=0
 if [ -d "$_frag_data_dir" ]; then

@@ -40,13 +40,17 @@ else
     exit 1
 fi
 
-# retention (7일 — 최근 1개만 유지)
+# retention (최신 1개만 유지 — 개수 기반. mtime+7일은 1주간 2개 공존 → 디스크 압박. 2026-06-22 keep-1 전환)
 deleted=0
+_keep=0
 while IFS= read -r old; do
-    rm -f "$old"
-    log "DELETE: $old (>${RETENTION_DAYS}일)"
-    deleted=$((deleted + 1))
-done < <(find "$BACKUP_DIR" -name 'rag-*.tar.gz' -mtime +${RETENTION_DAYS} 2>/dev/null)
+    _keep=$((_keep + 1))
+    if (( _keep > 1 )); then
+        rm -f "$old"
+        log "DELETE: $old (keep-1 retention)"
+        deleted=$((deleted + 1))
+    fi
+done < <(ls -t "$BACKUP_DIR"/rag-*.tar.gz 2>/dev/null)
 
 log "완료: 생성 1개, 삭제 $deleted개"
 echo "rag-backup: $ARCHIVE ($archive_size), deleted $deleted"

@@ -17,7 +17,7 @@ unset ANTHROPIC_API_KEY 2>/dev/null || true
 export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
 
 # Working directories
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_DIR="${BOT_HOME}/logs"
 RESULT_FILE="${LOG_DIR}/macro-briefing-result.json"
 

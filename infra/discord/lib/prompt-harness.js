@@ -169,13 +169,15 @@ export const SECTION_PRIORITY = Object.freeze({
   // Tier 10 — 절대 drop 금지
   'identity': 10, 'language': 10, 'persona-core': 10, 'persona-emotional': 10,
   // Tier 9
-  'safety': 9, 'channel-persona': 9, 'time-context': 9, 'principles': 9, 'format-core': 9, 'image-mode': 9,
+  'safety': 9, 'channel-persona': 9, 'time-context': 9, 'principles': 9, 'format-core': 9, 'image-mode': 9, 'depth-guard': 9,
   // Tier 8
-  'user-context': 8, 'memory': 8, 'hot-events': 8, 'owner-context': 8,
+  // [2026-06-22] depth-guard 신설(persona-rules에서 깊이 가드 분리, 통째 drop 방지) + rag-prefetch 6→8 상향
+  //   (분석채널 깊이의 두 축 = 깊이가드·RAG가 둘 다 budget 절단되던 구조 결함 수리. 설계: autoplan 2026-06-22)
+  'user-context': 8, 'memory': 8, 'hot-events': 8, 'owner-context': 8, 'rag-prefetch': 8,
   // Tier 7
   'preferences': 7, 'persona-rules': 7,
   // Tier 6
-  'rag-prefetch': 6, 'facts-keyword': 6, 'wiki-keyword': 6,
+  'facts-keyword': 6, 'wiki-keyword': 6,
   // Tier 5
   'skill-guard': 5, 'chronic-patterns': 5, 'evidence-mandate': 5,
   // Tier 4
@@ -297,6 +299,7 @@ function inferSectionName(headerText) {
   const lower = headerText.toLowerCase();
   // 한국어/이모지 패턴 매핑 — 2026-05-29 결함 수리 #10: 패턴 보강
   if (/owner context/.test(lower)) return 'owner-context';
+  if (/응답 깊이 가드|depth guard/.test(lower)) return 'depth-guard';
   if (/owner persona|persona & behaviour/.test(lower)) return 'persona-rules';
   if (/owner system preferences|preferences/.test(lower)) return 'preferences';
   if (/visual.*policy|visualization/.test(lower)) return 'visualization';
