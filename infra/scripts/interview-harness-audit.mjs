@@ -337,7 +337,9 @@ function checkC6() {
     for (const p of [runnerPath, fastPath]) {
       if (!existsSync(p)) continue;
       const src = readFileSync(p, 'utf-8');
-      const versions = [...src.matchAll(/\/\/ v(4\.\d+)/g)].map(m => m[1]);
+      // 2026-06-23 버그 수정: major 버전 4만 매칭하던 정규식(`v4.\d+`)이 v5.X 코드 태그를 못 봐
+      // codeVer를 v4.99로 오보 → 실제 v5.5인데 문서 불일치 오판. major를 \d+로 일반화(v6+ 대비).
+      const versions = [...src.matchAll(/\/\/ v(\d+\.\d+)/g)].map(m => m[1]);
       if (versions.length > 0) {
         const latest = versions.sort(cmpVer)[0];
         if (!codeVer || cmpVer(latest, codeVer.replace('v', '')) < 0) {
