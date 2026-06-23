@@ -39,6 +39,21 @@ fi
 echo $$ > "${LOCK_DIR}/pid"
 trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
 
+# ── 시스템 메모리 압박 게이트 (2026-06-23 freeze 사고 재발방지) ──
+# 16GB RAM 머신에서 28GB LanceDB 인덱싱이 메모리 압박(compressor/swap 폭증)을 유발해
+# 시스템 응답성이 급락(freeze 체감)하는 사고 발생. 시작 시점에 이미 압박이 높으면
+# 인덱싱을 다음 트리거(4h 주기 / LaunchAgent)로 연기해 추가 부하를 얹지 않는다.
+# 기존 Ollama 헬스체크 게이트와 동일 패턴 — 부하 상황에서 무거운 작업을 시작하지 않음.
+_loadavg=$(sysctl -n vm.loadavg 2>/dev/null | tr -d '{}' | awk '{print $1}')
+_swap_used=$(sysctl -n vm.swapusage 2>/dev/null | sed -nE 's/.*used = ([0-9]+)\..*/\1/p')
+_mem_pressure=$(sysctl -n kern.memorystatus_vm_pressure_level 2>/dev/null || echo 1)
+echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] 시작 부하: load=${_loadavg:-?} swap=${_swap_used:-?}MB pressure=${_mem_pressure:-?}" >> "$LOG"
+# pressure level: 1=정상, 2=경고, 4=위험. 경고 이상이거나 swap이 이미 2.5GB 초과면 연기.
+if [ "${_mem_pressure:-1}" -ge 2 ] || [ "${_swap_used:-0}" -gt 2560 ]; then
+  echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] SKIP: 시스템 메모리 압박(pressure=${_mem_pressure:-?}, swap=${_swap_used:-?}MB) — 인덱싱 연기, 다음 트리거에서 재시도" >> "$LOG"
+  exit 0
+fi
+
 COMPACT_FLAG="${INFRA_HOME}/state/rag-compact-needed"
 COMPACT_SH="${RAG_ROOT}/scripts/rag-compact-safe.sh"
 
