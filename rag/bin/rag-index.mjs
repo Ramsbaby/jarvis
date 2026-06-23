@@ -169,13 +169,23 @@ const _emergencySaveState = () => {
   }
   if (_globalState && Object.keys(_globalState).length > 0) {
     // 축소 보호: 기존 state보다 20% 이상 줄어들면 저장 거부
+    // 단, 줄어든 항목이 전부 디스크 부재(정당한 prune)면 허용 (2026-06-23 무한루프 수정 — saveState()와 동일 로직)
     try {
       const existingRaw = readFileSync(STATE_FILE, 'utf-8');
       const existingCount = (existingRaw.match(/"mtime"/g) || []).length; // 빠른 카운트
       const newCount = Object.keys(_globalState).length;
       if (existingCount > 100 && newCount < existingCount * 0.8) {
-        console.warn(`[rag-index] SIGTERM: state 축소 보호 발동 (${existingCount} → ${newCount}) — 저장 건너뜀`);
-        return;
+        let illegitimateDrop = false;
+        try {
+          const existing = JSON.parse(existingRaw);
+          for (const f of Object.keys(existing)) {
+            if (!(f in _globalState) && existsSync(f)) { illegitimateDrop = true; break; }
+          }
+        } catch { illegitimateDrop = true; /* 검증 실패 시 보수적으로 거부 */ }
+        if (illegitimateDrop) {
+          console.warn(`[rag-index] SIGTERM: state 축소 보호 발동 (${existingCount} → ${newCount}) — 저장 건너뜀 (디스크 존재 파일 누락)`);
+          return;
+        }
       }
     } catch { /* 기존 파일 읽기 실패 시 그냥 저장 진행 */ }
     try {
@@ -227,7 +237,7 @@ process.on('unhandledRejection', (reason) => {
 // rag-watch 인덱싱 중 동시 쓰기 방지: lock 파일만으로 판단 (레거시 호환 유지)
 // (rag-watch.mjs가 engine.indexFile() 직전에 lock 파일을 갱신함)
 const RAG_WATCH_LOCK = join(BOT_HOME, 'state', 'rag-watch-indexing.lock');
-import { statSync } from 'node:fs';
+import { statSync, existsSync } from 'node:fs';
 function isRagWatchActive() {
   // lock 파일이 2분 이내 갱신됐으면 현재 쓰기 중 → 이번 run 스킵.
   // 프로세스 존재 여부는 체크하지 않음 (rag-watch는 항상 실행 중이므로 무의미).
@@ -306,14 +316,30 @@ async function saveState(state) {
   // ─── 축소 보호: 기존 state 대비 20% 이상 줄어들면 저장 거부 ────────────────────
   // (emergency save 로직과 동일 — 4/25 07:30 풀 재인덱싱 재발 방지 가드)
   // 합법적 전체 재구축은 REBUILD_SENTINEL 경유 — 일반 saveState() path에 진입 X.
+  // 단, 줄어든 항목이 전부 "디스크에서 실제 삭제된 파일"이면 정당한 prune(line 898) 이므로 허용.
+  // (2026-06-23: 정당한 대량 prune을 사고로 오판해 state가 영구 동결되던 무한루프 수정)
   try {
     const existingRaw = readFileSync(STATE_FILE, 'utf-8');
     const existingCount = (existingRaw.match(/"mtime"/g) || []).length;
     if (existingCount > 100 && newCount < existingCount * 0.8) {
-      const msg = `state 축소 보호 발동 (${existingCount} → ${newCount}, 20%+ 감소)`;
-      console.warn(`[rag-index] 🛡️ ${msg} — 저장 거부, 풀 재인덱싱 차단`);
-      appendIncident('state 축소 차단', `${msg} — saveState() 거부. 의심 시나리오: index-state 손상 + 풀 재인덱싱 시도.`);
-      return; // 저장 거부 → 다음 run에서 정상 incremental 진행
+      // 줄어든 항목이 정당한 prune(원본 파일 디스크 부재)인지 검증 — 살아있는 파일이 빠지면 사고로 간주
+      let illegitimateDrop = false;
+      let survivorSample = '';
+      try {
+        const existing = JSON.parse(existingRaw);
+        const { existsSync } = await import('node:fs');
+        for (const f of Object.keys(existing)) {
+          if (!(f in state) && existsSync(f)) { illegitimateDrop = true; survivorSample = f; break; }
+        }
+      } catch { illegitimateDrop = true; /* 검증 실패 시 보수적으로 거부 */ }
+
+      if (illegitimateDrop) {
+        const msg = `state 축소 보호 발동 (${existingCount} → ${newCount}, 20%+ 감소)`;
+        console.warn(`[rag-index] 🛡️ ${msg} — 저장 거부: 디스크에 존재하는 파일이 누락됨 (예: ${survivorSample})`);
+        appendIncident('state 축소 차단', `${msg} — saveState() 거부. 의심 시나리오: index-state 손상 + 풀 재인덱싱 시도. 누락 예: ${survivorSample}`);
+        return; // 저장 거부 → 다음 run에서 정상 incremental 진행
+      }
+      console.warn(`[rag-index] ℹ️ state 축소 ${existingCount} → ${newCount}: 줄어든 항목 전부 디스크 부재 = 정당한 prune. 저장 허용.`);
     }
   } catch { /* 기존 파일 읽기 실패 시 그냥 저장 진행 */ }
 
