@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-22T21:17:05.383Z",
+  "generatedAt": "2026-06-23T21:17:05.113Z",
   "source": "~/jarvis/runtime/config/tasks.json",
   "totalTasks": 134,
   "teamDistribution": {
@@ -999,7 +999,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-token-sync-*.log",
-              "exists": false
+              "exists": true
             }
           }
         }
