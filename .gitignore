@@ -165,6 +165,13 @@ infra/context/owner/persona.md
 infra/context/owner/preferences.md
 infra/context/owner/visualization.md
 infra/context/owner/persona-discord-emotional.md
+# 2026-06-23: negation !infra/context/** 가 owner .bak 백업까지 추적시키는 구멍 차단.
+# (persona-discord.md.bak 등 백업 파일은 PII 카테고리 — public repo 노출 금지)
+infra/context/**/*.bak-*
+infra/context/**/*.bak.*
+# rag 스크립트 백업 (위생 — infra/scripts/*.bak-* 와 동일 정책을 rag/ 에도 적용)
+rag/scripts/*.bak-*
+rag/bin/*.bak-*
 runtime/state/cli-session-starts.json
 runtime/state/anger-signals.jsonl
 runtime/state/intent-category-vectors.json
