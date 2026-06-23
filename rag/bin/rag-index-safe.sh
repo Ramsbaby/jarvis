@@ -5,7 +5,7 @@
 
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}"
 export ORT_NUM_THREADS="${ORT_NUM_THREADS:-2}"
-export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${HOME}/.local/bin:${PATH}"
 
 # RAG 스크립트 위치 자동 감지 (이 스크립트 기준 상대경로)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
