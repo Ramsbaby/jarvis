@@ -162,6 +162,44 @@ echo ""
 echo "---"
 echo "💡 0건이면 LLM이 패턴 없다고 판단 = 정상 동작. 3일 연속 0건이면 프롬프트 검토 권장."
 
+echo ""
+echo "### 🛡️ COMPLETION GUARD INTEGRATION (완료 검증 훅)"
+echo ""
+
+# 6-1. Cluster completion guard 호출 (cl-f6921eb1d5ea4c87 전용)
+CLUSTER_GUARD_SCRIPT="${HOME}/jarvis/infra/scripts/cluster-completion-guard-cl-f6921eb1d5ea4c87.sh"
+if [[ -f "$CLUSTER_GUARD_SCRIPT" ]]; then
+    # council-insight 작업의 SKILL 합성 완료 여부 검증
+    today_skills=$(grep "\"${TODAY}" "$SKILLS_FILE" 2>/dev/null || true)
+
+    if [[ -n "$today_skills" ]]; then
+        expected_skills=$(echo "$today_skills" | wc -l | tr -d ' ')
+        # grades.jsonl에서 실제 평가된 항목 수
+        if [[ -f "$GRADES_FILE" ]]; then
+            evaluated_skills=$(grep "\"${TODAY}" "$GRADES_FILE" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+        else
+            evaluated_skills=0
+        fi
+
+        # 완료 검증
+        if bash "$CLUSTER_GUARD_SCRIPT" --verify --task "skill-synthesis-verify" \
+            --total "$expected_skills" --completed "$evaluated_skills" 2>&1; then
+            echo ""
+            echo "  ✅ Skill synthesis completion guard: PASS (${evaluated_skills}/${expected_skills} evaluated)"
+        else
+            echo ""
+            echo "  ⚠️ Skill synthesis completion guard: FAIL (${evaluated_skills}/${expected_skills} evaluated)"
+            echo "     → 부분 평가 감지됨 - 모든 오늘 생성된 Skill에 대한 평가 필수"
+        fi
+    else
+        echo "  ℹ️ Cluster completion guard: 오늘 Skill 없음 — 검증 생략"
+    fi
+    echo ""
+else
+    echo "  ⚠️ Cluster guard script not found: $CLUSTER_GUARD_SCRIPT"
+    echo ""
+fi
+
 # 7. 🔗 SKILL → wiki/_facts.md 브릿지 (학습된 패턴 봇 응답에 반영)
 FACTS_FILE="${HOME}/jarvis/runtime/wiki/ops/_facts.md"
 if [[ -f "$SKILLS_FILE" ]]; then

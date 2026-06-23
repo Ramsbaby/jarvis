@@ -84,6 +84,65 @@ const CLUSTER_DEFINITIONS = {
     escalationPath: 'ceo-approval-for-design-fix',
     ttl_days: 30,
   },
+  'cl-f6921eb1d5ea4c87': {
+    name: 'Partial Completion False Declaration (전체 합계 명시 후 부분만 처리)',
+    seedPattern: '전체 합계 명시 후 부분 데이터만 계산 — 누락 미감지',
+    memberPatterns: [
+      '전체 합계 명시 후 부분 데이터만 계산 (누락 미감지)',
+      '부분 조치 후 완료 선언 (skill-synthesis-verify 수정만)',
+      '부분 중단 후 안전 상태 단언 — 나머지 인덱싱 프로세스 미발견',
+      '검증 없이 추정을 사실처럼 보고 — 고아 DB 용량 합산',
+    ],
+    guards: [
+      // Guard 1: 작업 완료 선언 전 자동 검증 (전체 vs 완료)
+      {
+        id: 'enforce-completion-evidence',
+        type: 'pre-completion-hook',
+        action: 'validate_completion_count',
+        params: {
+          timeout_secs: 60,
+          require_full_evidence: true,
+          min_completion_ratio: 1.0,
+        },
+        description: '작업 완료 선언 시 "전체 N건 중 N건 처리 완료" 형식 강제 및 부분 완료 차단',
+      },
+      // Guard 2: completion-validator와의 통합 (부분 처리 미감지 방지)
+      {
+        id: 'completion-validator-integration',
+        type: 'validator-hook',
+        action: 'invoke_completion_validator',
+        params: { timeout_secs: 30 },
+        description: 'completion-validator.sh를 호출하여 대상 전체 목록과 실제 완료 항목 자동 대조',
+      },
+      // Guard 3: 누락 항목 탐지 (차집합 계산)
+      {
+        id: 'missing-items-detector',
+        type: 'diff-checker',
+        action: 'detect_missing_items',
+        params: { auto_report: true },
+        description: '대상 목록과 완료 목록의 차집합을 계산하여 누락 항목 자동 리포팅',
+      },
+      // Guard 4: 부분 처리 후 완료 선언 차단
+      {
+        id: 'partial-completion-blocker',
+        type: 'declaration-blocker',
+        action: 'block_partial_declaration',
+        params: { allow_partial: false },
+        description: 'completed/total < 1.0 시 완료 선언 스크립트 실행 자체를 차단 (exit 1)',
+      },
+      // Guard 5: 클러스터 재발 추적 (최근 7일)
+      {
+        id: 'cluster-recurrence-tracker',
+        type: 'metric-collector',
+        action: 'track_recurrence_events',
+        params: { window_days: 7 },
+        description: '부분 처리 오선언 재발 사건 기록 및 7일 내 재발 횟수 추적',
+      },
+    ],
+    escalationPath: 'completion-evidence-review',
+    ttl_days: 30,
+    priority: 'high',
+  },
   'cl-fd25ae4c34818568': {
     name: 'Sensitive Info & Health Advice Misclassification',
     seedPattern: '용도 명시 후에도 민감 정보 포함 & 수신자 속성 오분류 & 절대값 표현',
