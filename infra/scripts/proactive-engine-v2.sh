@@ -6,7 +6,7 @@
 # 결정: ~/jarvis/runtime/ledger/deep-interview-2026-05-14.jsonl
 #
 # v2 full (2026-05-15): 5패턴 전체 구현 완료
-#   ① 맥락 추적: 삼성물산 팔로업 · AWS SAA D-day
+#   ① 맥락 추적: 특정기업 팔로업 · AWS SAA D-day
 #   ② 이벤트 감지: 크론 실패 · OAuth 만료 선제 경고
 #   ④ 위험 경고: TQQQ 손절선 돌파
 #   ⑤ 위트: 아침 인사 (09~11h)

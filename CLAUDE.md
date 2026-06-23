@@ -113,7 +113,7 @@ node ~/jarvis/infra/scripts/gen-tasks-index.mjs
 3. **상호 참조 명시**: 양쪽에 "동일 룰이 다른 SSoT에도 적용됨" 1줄 메모
 
 #### 사고 사례 (영구 학습)
-2026-05-25 — jarvis-core.md L16에 "삼성물산 발표일 예측 패턴 매칭" BLOCKING 사고 사례 명시되어 있었으나 **CLI 전용**이었고 디스코드 봇 persona-discord.md에 미적용. 결과: 같은 도메인·같은 질문 유형에서 디스코드 봇이 깊이 부족 응답. V1-V5 진단 후 A+B 수정으로 양쪽 동시 적용 완료. 상세: `~/jarvis/runtime/wiki/meta/learned-mistakes.md` 5/25 entry (line 17).
+2026-05-25 — jarvis-core.md L16에 "특정기업 발표일 예측 패턴 매칭" BLOCKING 사고 사례 명시되어 있었으나 **CLI 전용**이었고 디스코드 봇 persona-discord.md에 미적용. 결과: 같은 도메인·같은 질문 유형에서 디스코드 봇이 깊이 부족 응답. V1-V5 진단 후 A+B 수정으로 양쪽 동시 적용 완료. 상세: `~/jarvis/runtime/wiki/meta/learned-mistakes.md` 5/25 entry (line 17).
 
 #### 자기검열 (BLOCKING 룰 등재 직전 필수)
 1. 이 룰이 CLI 행동만 가드하는가, 디스코드 봇도 가드해야 하는가?

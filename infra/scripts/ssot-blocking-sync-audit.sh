@@ -2,7 +2,7 @@
 # ssot-blocking-sync-audit.sh — CLI ↔ 디스코드 봇 BLOCKING 룰 양쪽 SSoT 동기화 점검
 #
 # 2026-05-25 신설 — Surface Memory Boundary 메타 가드의 코드 hook.
-# 사고 사례: 2026-05-25 jarvis-core.md L16 "삼성물산 발표일 예측" 사고 사례가
+# 사고 사례: 2026-05-25 jarvis-core.md L16 "특정기업 발표일 예측" 사고 사례가
 #            CLI 전용 룰로만 존재하고 persona-discord.md에 미주입 → 디스코드 봇 깊이 부족 응답.
 #            "룰만 등재되고 hook 없으면 학습 무효" 패턴.
 #

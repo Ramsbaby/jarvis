@@ -15,7 +15,7 @@
 
 - 면접관이 자주 파는 약점 영역(STAR 취약점)을 데이터로 찾아 집중 노출
 - 매 라운드 답변을 LLM 평가관이 채점 → 개선 궤적 추적
-- 회사별 시나리오(삼성물산, SK 등) 전용 Q&A로 실전 대비
+- 회사별 시나리오(특정 대기업 등) 전용 Q&A로 실전 대비
 
 ---
 
@@ -73,7 +73,7 @@ fast-path 내부의 `isRalphMode` 플래그로 두 동작 경로를 분기한다
 | `ralph-rounds.jsonl` | `runtime/state/` | 라운드별 요약 |
 | `ralph-forbid-list.json` | `runtime/state/` | 출제 금지 질문 패턴 목록 (cap: 100) |
 | `ralph-dynamic-questions.json` | `runtime/state/` | LLM 생성 동적 질문 캐시 (mtime + 약점 시그니처 일치 시 재사용) |
-| `scenarios/samsung-cnt.json` | `runtime/state/` | 삼성물산 시나리오 (v9.2, Q&A 100문항, instantRisk 21개) |
+| `scenarios/samsung-cnt.json` | `runtime/state/` | 대기업 시나리오 (v9.2, Q&A 100문항, instantRisk 21개) |
 | `openai-ledger.jsonl` | `runtime/state/` | 토큰 비용 원장 |
 | `interview-fast-path-circuit.json` | `runtime/state/` | 서킷 브레이커 상태 (fails·openUntil) |
 
@@ -166,7 +166,7 @@ LLM 결과는 항상 상위 판정이다.
 **점수 역전 감지** (DYN avg > BASE avg by ≥ 0.3): 캐시 삭제 + Discord 알림.
 → 동적 질문이 오히려 더 쉬우면(약점 노출 실패) 자동으로 재생성을 강제한다.
 
-### 6-3. 시나리오 모드 (삼성물산 등)
+### 6-3. 시나리오 모드 (대기업 등)
 
 `INTERVIEW_ACTIVE_SCENARIO=samsung-cnt` 환경변수로 활성화.
 시나리오 Q&A 100문항에서 instantRisk 우선 10문항 선택.

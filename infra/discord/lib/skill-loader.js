@@ -328,7 +328,7 @@ export function matchSkills({ channelName, messageText }) {
 }
 
 // Slash command interceptor — `/skill-name args...` 형태 메시지를 스킬 호출로 해석
-// CLI의 `/mock-interview 삼성물산` 과 동일한 경험을 디스코드에 제공.
+// CLI의 `/mock-interview 지원회사` 과 동일한 경험을 디스코드에 제공.
 // 매칭 성공 시 { skill, args } 반환, 실패 시 null.
 export function matchSkillByCommand(messageText) {
   const text = (messageText || '').trim();

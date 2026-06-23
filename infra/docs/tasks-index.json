@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-22T09:07:03.023Z",
+  "generatedAt": "2026-06-22T21:17:05.383Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 133,
+  "totalTasks": 134,
   "teamDistribution": {
     "standup": 1,
     "president": 12,
@@ -14,11 +14,11 @@
     "brand-lead": 5,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 36
+    "uncategorized": 37
   },
   "typeDistribution": {
     "prompt": 41,
-    "script": 92
+    "script": 93
   },
   "groups": [
     {
@@ -977,7 +977,7 @@
           "schedule": "0 1 * * *",
           "scheduleHuman": "매일 01:00",
           "type": "script",
-          "handler": "claude-token-sync.py",
+          "handler": "token-sync.sh",
           "team": {
             "id": "infra-lead",
             "name": "SRE실 (인프라·신뢰성)"
@@ -3855,6 +3855,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-mistake-pattern-analyzer-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "monitoring-pre-check",
+          "name": "모니터링 인프라 사전 점검",
+          "schedule": null,
+          "scheduleHuman": "(none)",
+          "type": "script",
+          "handler": "monitoring-pre-check.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": null,
+          "model": "claude-haiku-4-5-20251001",
+          "priority": "event",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": null,
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/monitoring-pre-check.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/monitoring-pre-check-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-monitoring-pre-check-*.log",
               "exists": false
             }
           }

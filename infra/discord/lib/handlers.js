@@ -761,8 +761,8 @@ export async function handleMessage(message, state) {
 
       // ── follow-ups.json subject 기반 한국어 키워드 감지 (2026-05-28) ────────
       // 이유: proactive-engine.json follow_ups는 Python 엔진의 STATE(영문 키, "samsung-ct-interview")
-      //       → 사용자가 한국어로 "삼성물산 떨어졌어" 말해도 매칭 안 됨.
-      // 수정: follow-ups.json items의 subject 필드("삼성물산 기술면접")로 매칭
+      //       → 사용자가 한국어로 "특정회사 떨어졌어" 말해도 매칭 안 됨.
+      // 수정: follow-ups.json items의 subject 필드("특정회사 기술면접")로 매칭
       //       → hot-events.json 기록 → claude-runner가 전채널 주입.
       try {
         const _msg = message.content;
@@ -2570,7 +2570,7 @@ ${ragContextBlock}
     //       그 외 채널의 면접 패턴 감지 가드는 false로 영구 차단.
     // 복구 방법: 아래 false를 chName === INTERVIEW_CHANNEL로 되돌림 (단 사용자 명시 결재 후).
     if (false && chName === INTERVIEW_CHANNEL && hasInterviewPattern && !hasSkillTrigger && !mockActive) {
-      const guardMsg = `🎤 면접 전형 질문 감지됨.\n\n이 채널은 일반 커리어 상담 채널이라 자동으로 1인칭 면접 답변을 만들지 않습니다 (할루시네이션 방지).\n\n**모의면접 답변 만들려면:**\n\`/mock-interview 삼성물산\` (슬래시 커맨드)\n또는 \`면접 연습해줘: 조직 실수 경험 질문\` (자연어)\n\n**그냥 질문 자체에 대한 상담이면:** "상담 모드로 답해줘"라고 덧붙여 주세요.`;
+      const guardMsg = `🎤 면접 전형 질문 감지됨.\n\n이 채널은 일반 커리어 상담 채널이라 자동으로 1인칭 면접 답변을 만들지 않습니다 (할루시네이션 방지).\n\n**모의면접 답변 만들려면:**\n\`/mock-interview 지원회사\` (슬래시 커맨드)\n또는 \`면접 연습해줘: 조직 실수 경험 질문\` (자연어)\n\n**그냥 질문 자체에 대한 상담이면:** "상담 모드로 답해줘"라고 덧붙여 주세요.`;
       await message.reply(guardMsg).catch(() => message.channel.send(guardMsg));
       await streamer.finalize();
       try {

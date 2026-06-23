@@ -1,7 +1,7 @@
 // slash-proxy.js — 슬래시 커맨드가 SSoT 스킬을 호출할 때 사용하는 프록시 매핑.
 //
 // 흐름:
-// 1. 사용자가 `/mock-interview 삼성물산` 슬래시 커맨드 실행
+// 1. 사용자가 `/mock-interview 지원회사` 슬래시 커맨드 실행
 // 2. commands.js가 registerSlashProxy(channelId, userId, content) 호출 후
 //    `interaction.channel.send(content)` — 봇 이름으로 채널에 메시지 발송
 // 3. handlers.js의 messageCreate가 이 봇 메시지를 받으면 consumeSlashProxy로

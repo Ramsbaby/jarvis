@@ -215,7 +215,7 @@ async function registerSlashCommands(clientId, guildId) {
 
   // ---------------------------------------------------------------------------
   // SSoT 스킬 자동 등록 — ~/jarvis/runtime/skills/*.md 를 Discord 슬래시 커맨드로 승격
-  // CLI의 `/mock-interview 삼성물산` 경험을 디스코드에서 그대로 재현.
+  // CLI의 `/mock-interview 지원회사` 경험을 디스코드에서 그대로 재현.
   // 중복 이름은 기존 하드코딩 커맨드가 우선 (스킬 무시).
   // ---------------------------------------------------------------------------
   // [2026-05-28] Intent classifier 워밍업 — 첫 호출 콜드 스타트 timeout 방지

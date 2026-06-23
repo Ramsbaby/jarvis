@@ -675,7 +675,7 @@ export async function* createClaudeSession(prompt, {
   _budgetMode = 'normal',  // Progressive Compaction: 'normal' | 'lean'
 } = {}) {
   // 0. 슬래시 커맨드 인터셉터 — `/skillname args` 형태면 스킬 로드 + 인자를 프롬프트로
-  // CLI의 `/mock-interview 삼성물산` 경험을 디스코드에서도 동일하게 제공 (SSoT 공유).
+  // CLI의 `/mock-interview 지원회사` 경험을 디스코드에서도 동일하게 제공 (SSoT 공유).
   let _injectedSkillBody = null;
   try {
     const { matchSkillByCommand } = await import('./skill-loader.js');
