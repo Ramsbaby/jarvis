@@ -629,7 +629,10 @@ export class RAGEngine {
         const res = await fetch(OLLAMA_EMBED_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: EMBEDDING_MODEL, input: batch }),
+          // 2026-06-23: keep_alive 추가 — 임베딩 모델을 인덱싱 동안 GPU 상주시켜
+          // 5분 유휴 언로드 → 재로드 지연(수십초) → 60s 타임아웃 초과 → 서킷 OPEN 폭주를 차단.
+          // 매 batch 요청이 keep_alive를 갱신하므로 인덱싱 진행 중 모델이 계속 상주한다.
+          body: JSON.stringify({ model: EMBEDDING_MODEL, input: batch, keep_alive: process.env.RAG_EMBED_KEEP_ALIVE || '30m' }),
           // 2026-05-07: 30s → 60s 상향 (batch 50개 처리 안정 마진).
           signal: AbortSignal.timeout(Number(process.env.RAG_EMBED_TIMEOUT_MS) || 60_000),
         });
