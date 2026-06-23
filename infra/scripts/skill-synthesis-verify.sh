@@ -166,7 +166,14 @@ echo ""
 echo "### 🛡️ COMPLETION GUARD INTEGRATION (완료 검증 훅)"
 echo ""
 
-# 6-1. Cluster completion guard 호출 (cl-f6921eb1d5ea4c87 전용)
+# 6-1. Cluster completion guard 호출 (cl-f6921eb1d5ea4c87 전용) — [2] 강제 증거 출력 가드
+#
+# 핵심 메커니즘:
+#   1. skills.jsonl에서 TODAY 패턴으로 모든 오늘 Skill 추출
+#   2. grades.jsonl에서 TODAY 필터로 실제 평가된 항목 정확히 계산
+#   3. "전체 N건 중 N건 처리 완료" 형식 강제 출력
+#   4. 부분 평가 시 exit code 1로 완료 선언 차단
+
 CLUSTER_GUARD_SCRIPT="${HOME}/jarvis/infra/scripts/cluster-completion-guard-cl-f6921eb1d5ea4c87.sh"
 if [[ -f "$CLUSTER_GUARD_SCRIPT" ]]; then
     # council-insight 작업의 SKILL 합성 완료 여부 검증
@@ -174,22 +181,46 @@ if [[ -f "$CLUSTER_GUARD_SCRIPT" ]]; then
 
     if [[ -n "$today_skills" ]]; then
         expected_skills=$(echo "$today_skills" | wc -l | tr -d ' ')
-        # grades.jsonl에서 실제 평가된 항목 수
+
+        # grades.jsonl에서 실제 평가된 항목 수 (엄격한 date 필드 기반)
         if [[ -f "$GRADES_FILE" ]]; then
-            evaluated_skills=$(grep "\"${TODAY}" "$GRADES_FILE" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+            # date 필드에 TODAY를 포함하는 항목만 카운트 (타임스탬프 문제 방지)
+            evaluated_skills=$(python3 << PYTHON_EOF 2>/dev/null || echo 0
+import json
+import sys
+count = 0
+try:
+    with open("$GRADES_FILE", "r") as f:
+        for line in f:
+            if line.strip():
+                obj = json.loads(line)
+                if obj.get("date") == "$TODAY":
+                    count += 1
+except:
+    pass
+print(count)
+PYTHON_EOF
+)
         else
             evaluated_skills=0
         fi
 
-        # 완료 검증
+        # [2] 강제 증거 출력 가드: 부분 완료 차단
+        #
+        # 로직:
+        #   - expected_skills == evaluated_skills: 모든 Skill 평가 완료 → PASS
+        #   - expected_skills > evaluated_skills: 부분 평가 감지 → FAIL + 부분 처리 오선언 방지
+
         if bash "$CLUSTER_GUARD_SCRIPT" --verify --task "skill-synthesis-verify" \
             --total "$expected_skills" --completed "$evaluated_skills" 2>&1; then
             echo ""
             echo "  ✅ Skill synthesis completion guard: PASS (${evaluated_skills}/${expected_skills} evaluated)"
         else
             echo ""
-            echo "  ⚠️ Skill synthesis completion guard: FAIL (${evaluated_skills}/${expected_skills} evaluated)"
-            echo "     → 부분 평가 감지됨 - 모든 오늘 생성된 Skill에 대한 평가 필수"
+            echo "  ❌ Skill synthesis completion guard: FAIL (${evaluated_skills}/${expected_skills} evaluated)"
+            echo "     → cl-f6921eb1d5ea4c87 클러스터 가드: 부분 평가 감지됨"
+            echo "     → 모든 오늘 생성된 Skill에 대한 평가 필수"
+            echo "     → 현황: 전체 ${expected_skills}건 중 ${evaluated_skills}건만 평가됨"
         fi
     else
         echo "  ℹ️ Cluster completion guard: 오늘 Skill 없음 — 검증 생략"
