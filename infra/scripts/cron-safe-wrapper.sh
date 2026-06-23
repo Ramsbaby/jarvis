@@ -1,10 +1,11 @@
 #!/bin/bash
 # cron-safe-wrapper.sh
 # Jarvis 크론 래퍼: 각 크론 작업의 실패를 감지하고 로깅 + 알림 처리
-# 사용: cron-safe-wrapper.sh <task-name> <command> [args...]
+# 사용: cron-safe-wrapper.sh <task-name> <timeout-seconds> <command> [args...]
 
 TASK_NAME="${1:-unknown}"
-shift || true
+TIMEOUT_SEC="${2:-300}"
+shift 2 || true
 
 CRON_LOG="${HOME}/jarvis/runtime/logs/cron.log"
 TEMP_STDOUT=$(mktemp)
@@ -27,16 +28,20 @@ if [[ -f "$LOCK_FILE" ]]; then
   LOCK_AGE=$(($(date '+%s') - $(stat -f '%m' "$LOCK_FILE" 2>/dev/null || echo 0)))
   if [[ $LOCK_AGE -gt 1800 ]]; then
     rm -f "$LOCK_FILE"
+  else
+    # 락파일이 유효하면 중복 실행으로 스킵
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$TASK_NAME] SKIPPED — Lock: Duplicate execution is skipped" >> "$CRON_LOG"
+    exit 99
   fi
 fi
 
 touch "$LOCK_FILE"
 trap "rm -f '$LOCK_FILE'" EXIT
 
-# 크론 작업 실행 및 결과 캡처
+# 크론 작업 실행 및 결과 캡처 (timeout 적용)
 DURATION_START=$(date '+%s%N')
 
-"$@" > "$TEMP_STDOUT" 2> "$TEMP_STDERR"
+timeout "$TIMEOUT_SEC" "$@" > "$TEMP_STDOUT" 2> "$TEMP_STDERR"
 EXIT_CODE=$?
 
 DURATION_END=$(date '+%s%N')
@@ -49,6 +54,8 @@ ORIG_EXIT_CODE=$EXIT_CODE
 # 상태 결정
 if [[ $EXIT_CODE -eq 0 ]]; then
   STATUS="SUCCESS"
+elif [[ $EXIT_CODE -eq 124 ]]; then
+  STATUS="TIMEOUT"
 else
   STATUS="FAILED"
 fi
