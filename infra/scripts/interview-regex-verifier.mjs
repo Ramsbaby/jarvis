@@ -37,6 +37,37 @@ const MIN_NUMERIC_HITS = 1;
 // 1인칭 임계: 답변에 1인칭 0회면 1인칭 부재 경고 (low)
 const MIN_FIRST_PERSON = 1;
 
+// ─────────────────────────────────────────────────────────────
+// 개념 정확성 가드 (2026-06-23): 면접봇이 틀린 기술 개념을 답변으로 생성·승인하는 것 차단.
+//   ground truth: 노션 면접 질답 23,000줄(/tmp/notion-interview.txt) 실측. 손으로 13개를
+//   지어내면 정상 표현을 오인(오탐)할 위험 → 크롤에서 확인된 UNAMBIGUOUS 2개만 등재.
+//   각 항목은 정답형/부정문을 면죄(negation guard)해 올바른 답변이 FAIL나지 않게 함.
+//   concept-error 1건이라도 적중 시 deterministic FAIL — 사실 오류는 승인 절대 금지.
+// ─────────────────────────────────────────────────────────────
+const CONCEPT_ERRORS = [
+  {
+    name: 'redis-setnx-expire-atomic',
+    hint: 'SETNX+EXPIRE는 별도 두 명령이라 원자적이지 않음. 원자형은 SET key val NX PX millis 단일 명령(또는 Lua). "SETNX+EXPIRE가 원자적"은 면접 즉사.',
+    test: (t) => {
+      if (!/SETNX/i.test(t)) return false;                                 // SETNX 명시 언급 없으면 무관
+      const claimsAtomic = /SETNX[\s\S]{0,40}EXPIRE[\s\S]{0,30}원자/i.test(t);  // 두 명령 조합을 원자적이라 긍정 주장
+      if (!claimsAtomic) return false;
+      const negated = /원자[^.]{0,12}(않|못|아니|불가)/.test(t);            // "원자적이지 않/못" → 정답형 면죄
+      return !negated;
+    },
+  },
+  {
+    name: 'grpc-5byte-header',
+    hint: 'gRPC의 5바이트는 HTTP/2 프레임 "헤더"가 아니라 프레임 페이로드 내 길이 프리픽스(1B 압축플래그+4B 길이). HTTP/2 프레임 헤더는 9바이트.',
+    test: (t) => {
+      const claimsHeader = /gRPC[\s\S]{0,30}5\s*바이트[\s\S]{0,15}헤더|5\s*바이트[\s\S]{0,15}헤더[\s\S]{0,20}프레이밍/i.test(t);
+      if (!claimsHeader) return false;
+      const understood = /9\s*바이트|프리픽스|프리앰블|length-?prefix|페이로드/i.test(t);  // 정확히 이해한 표현 → 면죄
+      return !understood;
+    },
+  },
+];
+
 /**
  * Hybrid regex/script verifier.
  * @param {string} answer  SHORT+DETAIL 합본
@@ -158,11 +189,26 @@ export function regexVerify(answer, scenario, opts = {}) {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // 8. 개념 정확성 가드 (틀린 기술 개념 — deterministic FAIL 후보)
+  // ─────────────────────────────────────────────────────────────
+  for (const ce of CONCEPT_ERRORS) {
+    if (ce.test(text)) {
+      flagged.push({
+        type: 'concept-error',
+        name: ce.name,
+        hint: ce.hint,
+        severity: 'high',
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // breakdown + verdict
   // ─────────────────────────────────────────────────────────────
   const highCount = flagged.filter(f => f.severity === 'high').length;
   const mediumCount = flagged.filter(f => f.severity === 'medium').length;
   const lowCount = flagged.filter(f => f.severity === 'low').length;
+  const conceptErrorCount = flagged.filter(f => f.type === 'concept-error').length;
 
   let verdict;
   let deterministic;
@@ -173,7 +219,12 @@ export function regexVerify(answer, scenario, opts = {}) {
   //   - 그 외는 모두 LLM fallback (회색지대 보전, 정확도 우선)
   // 초기 R1 fixture 정확도 17% precision 측정 결과로 임계 강화 (2026-04-28).
   // PASS criterion 미달 시 LLM-only fallback이 안전 기본값.
-  if (highCount >= 2) {
+  if (conceptErrorCount >= 1) {
+    // 개념 오류는 사실 오류 — 1건이라도 deterministic FAIL (정답형은 CONCEPT_ERRORS의 negation guard로 이미 제외됨)
+    verdict = 'FAIL';
+    deterministic = true;
+    llmFallbackHint = `concept-error:${flagged.filter(f => f.type === 'concept-error').map(f => f.name).join(',')}`;
+  } else if (highCount >= 2) {
     // forbid 2건 이상은 명백한 위반 — LLM 호출 불필요
     verdict = 'FAIL';
     deterministic = true;
@@ -269,6 +320,31 @@ import { homedir } from 'node:os';
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
+
+  // --self-test: 개념 정확성 가드 오탐 0 검증 (오답형 FAIL / 정답형 통과)
+  if (args.includes('--self-test')) {
+    const cases = [
+      // [라벨, 답변텍스트, concept-error 적중 기대]
+      ['SETNX 오류(원자 주장)', 'Redis는 싱글스레드라 SETNX + EXPIRE가 원자적으로 동작하여 분산락에 적합합니다.', true],
+      ['SETNX 정답(부정문)', 'SETNX + EXPIRE는 키 설정과 TTL이 원자적으로 처리되지 않습니다. 그래서 SET key val NX PX 30000 단일 명령을 씁니다.', false],
+      ['SETNX 정답(단일명령)', 'SET key value NX PX 30000으로 키 설정과 TTL을 원자적으로 처리합니다.', false],
+      ['gRPC 오류(헤더)', 'gRPC도 내부적으로 5바이트 헤더로 프레이밍합니다.', true],
+      ['gRPC 정답(프리픽스)', 'gRPC는 HTTP/2 프레임 페이로드에 5바이트 길이 프리픽스를 붙입니다. 프레임 헤더는 9바이트입니다.', false],
+      ['무관 정상답변', 'gRPC와 R2DBC로 인증서버를 재설계해 인스턴스를 30대에서 5~8대로 줄였습니다.', false],
+    ];
+    let pass = 0, fail = 0;
+    for (const [label, text, expect] of cases) {
+      const r = regexVerify(text, {});
+      const hits = r.flagged.filter(f => f.type === 'concept-error');
+      const got = hits.length > 0;
+      const ok = got === expect;
+      ok ? pass++ : fail++;
+      console.log(`${ok ? '✅' : '❌'} ${label}: concept=${got} (기대 ${expect}) verdict=${r.verdict}${got ? ' → ' + hits.map(h => h.name).join(',') : ''}`);
+    }
+    console.log(`\n개념 정확성 가드 자가테스트: ${pass} PASS / ${fail} FAIL`);
+    process.exit(fail ? 1 : 0);
+  }
+
   const opt = { fixture: '', scenario: '' };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--fixture') opt.fixture = args[++i];

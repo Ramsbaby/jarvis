@@ -36,7 +36,10 @@ fi
 mkdir -p "$LOG_DIR"
 
 # 기본 옵션 — concurrency=4, per-gap=2000 (2026-04-30 v4.77 기본값 상향)
-DEFAULT_ARGS=(--apply-forbid --apply-insights --include-followups --include-misses --per-gap 2000 --incremental-every 5 --concurrency 4)
+# --hybrid-verifier (2026-06-23): regex 사전검증 활성화 — 결정적 실패(개념오류/forbid≥2)만 LLM 없이 FAIL
+#   처리(비용 절감), 나머지는 LLM fallback. 개념 정확성 가드(CONCEPT_ERRORS)가 이 경로로만 작동하므로 기본 포함.
+#   안전성: 큐레이트 정답 452개 스캔 시 개념오류 오탐 0건 실측(2026-06-23).
+DEFAULT_ARGS=(--apply-forbid --apply-insights --include-followups --include-misses --per-gap 2000 --incremental-every 5 --concurrency 4 --hybrid-verifier)
 
 USER_ARGS=("$@")
 

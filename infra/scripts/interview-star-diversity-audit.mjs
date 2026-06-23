@@ -5,10 +5,16 @@
 //          사고(2026-06-12 O사 사례) 재발 방지 — 분포 결함은 답변 단건 채점으로는 안 보임.
 // LLM 호출 0회 — 기존 채널 피드·채점 원장만 분석. DRYRUN 1주 후 자동 정식 전환.
 //
-// 검사 3종:
-//   V1 매몰: 최근 답변 중 단일 STAR 점유율 > 40% (표본 ≥ 5)
-//   V2 게이트 위반: STAR-13(메타에이전트)이 허용 3유형(AI 도입/자산화/자기주도) 외 질문에 등장
-//   V3 연속 반복: 같은 STAR 본문이 3회 연속
+// 검사 5종:
+//   V1  매몰: 최근 답변 중 단일 STAR 점유율 > 40% (표본 ≥ 5)
+//   V1b 훈련 매몰: ralph 훈련 답변 단일 STAR 점유율 > 40% (표본 ≥ 10)
+//   V1c 메타 편중: 메타에이전트(STAR-13)가 2회 연속 — AI 답변이 단일 사례에 매몰 (노션 분석 약점 #5)
+//   V2  게이트 위반: STAR-13(메타에이전트)이 허용 3유형(AI 도입/자산화/자기주도) 외 질문에 등장
+//   V2b 메타 단일재료: AI 직무 질문 ≥2개에 메타에이전트만 동원 — 다른 AI STAR 0개
+//   V3  연속 반복: 같은 STAR 본문이 3회 연속
+// V1c·V2b 추가 배경(2026-06-23): 노션 면접 질답 23,000줄 분석 결과 "AI 직무 질문에 면접봇이
+//   메타에이전트(사내 AI 비서) 1개로만 답하는 편중"이 V1(40% 임계)·V3(3연속)로는 안 잡힘 —
+//   다른 비-AI STAR와 섞이면 점유율 40% 미만이고, AI 질문이 띄엄띄엄이면 3연속도 아님.
 // 위반 시: Discord #jarvis-interview 경보 + dev-queue에 수리 제안 자동 등록(pending).
 
 import { readFileSync, existsSync, appendFileSync } from 'node:fs';
@@ -18,8 +24,9 @@ import { join } from 'node:path';
 import { STAR_KEYWORDS, STAR13_META_RE, STAR13_ALLOWED_Q_RE } from '../discord/lib/interview-fast-path.js';
 
 const HOME = homedir();
-const FEED = join(HOME, 'jarvis/runtime/state/channel-feed/jarvis-interview.jsonl');
-const SELF_LEDGER = join(HOME, 'jarvis/runtime/ledger/interview-diversity-audit.jsonl');
+// 경로는 env로 덮어쓰기 가능 — 합성 픽스처로 V1~V2b 검증할 때 실제 코드 경로를 그대로 테스트하기 위함.
+const FEED = process.env.DIVERSITY_FEED || join(HOME, 'jarvis/runtime/state/channel-feed/jarvis-interview.jsonl');
+const SELF_LEDGER = process.env.DIVERSITY_LEDGER || join(HOME, 'jarvis/runtime/ledger/interview-diversity-audit.jsonl');
 const WINDOW_DAYS = 14;
 const DOMINANCE_THRESHOLD = 0.4;
 const MIN_SAMPLE = 5;
@@ -64,7 +71,7 @@ for (const r of recent) {
 }
 
 // v1.1 (수리 #3): 훈련(ralph) 답변 보조 분포 — 채널 피드에 안 쌓이는 훈련 매몰 사각 보완.
-const INSIGHTS = join(HOME, 'jarvis/runtime/state/ralph-insights.jsonl');
+const INSIGHTS = process.env.DIVERSITY_INSIGHTS || join(HOME, 'jarvis/runtime/state/ralph-insights.jsonl');
 const ralphStarCount = {};
 let ralphTotal = 0;
 if (existsSync(INSIGHTS)) {
@@ -80,6 +87,9 @@ if (existsSync(INSIGHTS)) {
 
 const starCount = {};
 let prev = null, maxRun = 0, run = 0;
+let prev13 = false, meta13Run = 0, meta13MaxRun = 0;   // V1c: 메타에이전트(STAR-13) 연속 추적
+const aiDomainStars = new Set();                        // V2b: AI 도메인 질문에 동원된 STAR 집합
+let aiDomainPairs = 0;
 const gateViolations = [];
 for (const p of pairs) {
   const stars = detectStars(p.a);
@@ -88,7 +98,17 @@ for (const p of pairs) {
   run = (main && main === prev) ? run + 1 : 1;
   maxRun = Math.max(maxRun, run);
   prev = main;
-  if (stars.includes('STAR-13') && !GATE_ALLOWED_Q.test(p.q)) {
+  // V1c: STAR-13은 detectStars에서 마지막에 push되어 main(=stars[0])이 아닐 수 있음 → 위치 무관하게 등장 여부로 연속 추적.
+  const has13 = stars.includes('STAR-13');
+  meta13Run = has13 ? (prev13 ? meta13Run + 1 : 1) : 0;
+  meta13MaxRun = Math.max(meta13MaxRun, meta13Run);
+  prev13 = has13;
+  // V2b: AI 도메인 질문(게이트 허용 유형)에 동원된 STAR 수집 — 메타 단일재료 탐지.
+  if (GATE_ALLOWED_Q.test(p.q)) {
+    aiDomainPairs++;
+    for (const s of stars) aiDomainStars.add(s);
+  }
+  if (has13 && !GATE_ALLOWED_Q.test(p.q)) {
     gateViolations.push({ q: p.q.slice(0, 60), aHead: p.a.slice(0, 60) });
   }
 }
@@ -112,11 +132,18 @@ if (gateViolations.length)
   violations.push(`V2 게이트 위반 ${gateViolations.length}건: 비허용 질문에 메타에이전트 등장 — 첫 사례 질문: "${gateViolations[0].q}"`);
 if (maxRun >= 3)
   violations.push(`V3 연속 반복: 같은 STAR ${maxRun}회 연속`);
+// V1c (2026-06-23): 메타에이전트(STAR-13) 연속 ≥2회 — AI 직무 답변이 단일 사례에 매몰 (노션 분석 약점 #5)
+if (meta13MaxRun >= 2)
+  violations.push(`V1c 메타 편중: 메타에이전트(STAR-13)가 ${meta13MaxRun}회 연속 등장 — AI 답변 단일재료 매몰(다른 AI 경험 미동원 의심)`);
+// V2b (2026-06-23): AI 도메인 질문 ≥2개인데 동원된 STAR가 메타에이전트뿐 — 다른 AI STAR 0개
+if (aiDomainPairs >= 2 && aiDomainStars.size > 0 && [...aiDomainStars].every(s => s === 'STAR-13'))
+  violations.push(`V2b 메타 단일재료: AI 직무 질문 ${aiDomainPairs}개에 메타에이전트(STAR-13)만 동원 — 다른 AI STAR 0개`);
 
 const entry = {
   ts: new Date().toISOString(), windowDays: WINDOW_DAYS, samples: total,
   starCount, dominant: dominant ? dominant[0] : null, dominanceRatio: +dominanceRatio.toFixed(2),
-  maxRun, gateViolations: gateViolations.length, violations,
+  maxRun, meta13MaxRun, aiDomainPairs, aiDomainStars: [...aiDomainStars],
+  gateViolations: gateViolations.length, violations,
   ralphSamples: ralphTotal, ralphStarCount, warnings,
   status: violations.length ? 'violation' : (warnings.length ? 'insufficient_sample' : 'ok'),
 };
@@ -130,6 +157,7 @@ console.log(`🎭 면접봇 STAR 분포 감사 (최근 ${WINDOW_DAYS}일, 답변
 console.log(`   분포: ${JSON.stringify(starCount)}`);
 console.log(`   최다: ${dominant ? `${dominant[0]} ${Math.round(dominanceRatio * 100)}%` : '없음'} · 최대 연속 ${maxRun}회 · 게이트 위반 ${gateViolations.length}건`);
 console.log(`   훈련(ralph) 분포: 표본 ${ralphTotal}건 ${ralphDominant ? `최다 ${ralphDominant[0]} ${Math.round(ralphRatio * 100)}%` : ''}`);
+console.log(`   메타 편중: STAR-13 최대 연속 ${meta13MaxRun}회 / AI 직무질문 ${aiDomainPairs}건 동원 STAR [${[...aiDomainStars].join(', ') || '없음'}]`);
 for (const w of warnings) console.log(`   ⚠️ ${w}`);
 console.log(violations.length ? `   🚨 위반 ${violations.length}건:\n   - ${violations.join('\n   - ')}` : (warnings.length ? '   ⚠️ 판정 보류 (표본 부족)' : '   ✅ 위반 없음'));
 if (dryrun) console.log('   [DRYRUN — 경보·큐 등록 생략]');
