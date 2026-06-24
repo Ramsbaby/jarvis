@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-23T21:17:05.113Z",
+  "generatedAt": "2026-06-24T07:24:30.242Z",
   "source": "~/jarvis/runtime/config/tasks.json",
-  "totalTasks": 134,
+  "totalTasks": 135,
   "teamDistribution": {
     "standup": 1,
     "president": 12,
@@ -14,11 +14,11 @@
     "brand-lead": 5,
     "audit-lead": 22,
     "secretary": 8,
-    "uncategorized": 37
+    "uncategorized": 38
   },
   "typeDistribution": {
     "prompt": 41,
-    "script": 93
+    "script": 94
   },
   "groups": [
     {
@@ -3919,6 +3919,38 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-owner-judgments-extract-*.log",
+              "exists": false
+            }
+          }
+        },
+        {
+          "id": "owner-state-engine",
+          "name": "참견 v3 — 주인님 상태 엔진",
+          "schedule": "0 21 * * *",
+          "scheduleHuman": "매일 21:00",
+          "type": "script",
+          "handler": "owner-state-engine.sh",
+          "team": {
+            "id": "uncategorized",
+            "name": "미분류"
+          },
+          "discordChannel": "jarvis-info",
+          "model": null,
+          "priority": "daily",
+          "maxBudget": "0.00",
+          "disabled": false,
+          "description": "참견 v3 (Owner State Engine). 스크립트 기본 OSE_DRYRUN=true — 1주 DRYRUN(~2026-07-01) 후 production 결정. 통찰 0이면 침묵. discord-route info. CRON-INTRODUCTION-CHECKLIST 통과. production 전환 시 proactive-engine v1 폐기 예정.",
+          "logs": {
+            "stdout": {
+              "path": "~/jarvis/runtime/logs/owner-state-engine.log",
+              "exists": true
+            },
+            "stderr": {
+              "path": "~/jarvis/runtime/logs/owner-state-engine-err.log",
+              "exists": false
+            },
+            "claudeStderr": {
+              "pattern": "claude-stderr-owner-state-engine-*.log",
               "exists": false
             }
           }
