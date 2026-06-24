@@ -614,6 +614,19 @@ export async function handleMessage(message, state) {
   }
 
   // ── proactive-engine 피드백 루프 (2026-05-27) ────────────────────────────
+  // owner-state 양방향: #jarvis 통찰 메시지에 답글(reply) 달면 그 통찰을 answered로 연결.
+  // reference(답글 대상)가 있을 때만 — 일반 발화는 절대 매칭 안 함(오연결 방지).
+  if (senderIsOwner && message.channel.id === process.env.OWNER_ALERT_CHANNEL_ID && message.reference?.messageId && message.content) {
+    try {
+      const { findInsightsByDiscordMsg, updateStatus } = await import('../../lib/owner-state/insight-store.mjs');
+      const _ids = findInsightsByDiscordMsg(message.reference.messageId);
+      if (_ids.length) {
+        for (const _iid of _ids) updateStatus(_iid, 'answered', message.content.slice(0, 500));
+        log('info', '[owner-state] 답글→통찰 연결', { count: _ids.length, msgId: message.reference.messageId });
+      }
+    } catch (e) { log('debug', '[owner-state] 양방향 연결 실패', { error: e?.message }); }
+  }
+
   // 문제: proactive-engine은 독립 프로세스라 Discord 채널 대화를 전혀 모름.
   // 해결: 오너 발화에서 채용 결과·시험 결과 키워드 감지 → proactive-engine.json 자동 업데이트.
   if (senderIsOwner && message.content) {
