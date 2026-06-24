@@ -2,7 +2,8 @@
 
 > **SSoT**: 이 파일이 면접봇 시스템의 단일 기획 원본입니다.
 > **압축본**: `~/jarvis/runtime/context/interview-bot-profile.md` (Jarvis 세션 자동 주입용)
-> **최종 업데이트**: 2026-06-23 · 현재 버전: v5.5
+> **최종 업데이트**: 2026-06-24 · 현재 버전: v5.6
+> **v5.6 (2026-06-24, STAR_LOOKUP 자동 생성 — SSoT 단일화)**: fast-path에 손으로 베껴두던 `STAR_LOOKUP` 하드코딩을 제거하고, user-profile.md(SSoT) 각 STAR의 메타 라인(`<!-- lookup: ... -->`)에서 런타임 자동 생성하도록 전환. 동기화 끊김으로 누락됐던 STAR-15·16·17·18·S1·S3·S4(⭐1순위 답변 포함)를 등재. 파서 `star-lookup.mjs`를 fast-path(`getStarLookup()`)와 `interview-ssot-audit.mjs`가 공유 → SSoT가 갈라질 수 없는 구조. 검증: 회귀 0(기존 14개 일치)·신규 STAR 식별 4/4·ssot-audit warn 8→1.
 > **v5.5 (2026-06-06~12, 독립 감사 적발 수리 #1~#4)**: ① 행동(behavioral) 질문(약점·강점·실패·극복·동기)을 STAR 스토리로 처리 ② STAR-13(메타에이전트) 게이트 결정적 사후 검증 강화 — 캐시 직접 서빙이 buildSystemPrompt 게이트를 우회하던 구멍 차단, SHORT 경로도 게이트 검사, 위반 시 재생성 강제(재생성 답변도 재검증). (코드 태그 기준 — 문서 동기화 2026-06-23)
 > **v5.4 (2026-06-06~07)**: 면접 답변 가독성·일관성 — 마크다운 볼드(**) 제거("말하듯 편하게"), cache-hit 직접 송출 경로도 볼드 제거 일관 적용, SHORT/DETAIL 경험 불일치 차단.
 > **v5.3 (2026-06-12)**: O사 실면접 STAR 매몰 사고 수리 — ① scoped profile 폐지(직전 STAR만 주입하던 v4.82 최적화가 v5.0 꼬리질문 감지 제거 후 전 질문에 적용되어, 한 번 쓴 STAR가 유일한 재료로 남는 자가증식 매몰 루프 유발) ② STAR-13(메타에이전트) 전역 화이트리스트 게이트 신설(허용 3유형 외 전 질문 금지) ③ user-profile STAR-13 본문 2,242→1,415자 다이어트(상세는 wiki/career/_facts.md 보존). 상세 불변식: interview-bot-profile.md #13·#14.
@@ -128,6 +129,22 @@ PDF에 `(회사A)`, `(회사B)` 등 회사명이 표기되어 있어도
 
 - 면접관은 PDF를 보며 질문했을 뿐, 회사명 정정 발언은 탈락 시그널이다.
 - `companyMismatchBlock` 프롬프트 블록이 시나리오 활성 시 항상 주입된다.
+
+### 4-7. STAR_LOOKUP은 user-profile.md에서 자동 생성 (v5.6+)
+
+`STAR_LOOKUP`(Frankenstein 차단용 STAR별 projects/techs/numbers 룩업)은 **코드에 하드코딩하지 않는다.**
+user-profile.md 각 STAR 섹션의 메타 라인에서 `star-lookup.mjs`의 `parseStarLookup()`이 런타임 생성한다.
+
+```
+### STAR-N. 제목 (회사)
+<!-- lookup: key=STAR-N-slug | projects=A,B | techs=C,D | numbers=1,2 | desc=한 줄 설명 -->
+```
+
+- **공유 파서**: fast-path(`getStarLookup()`, mtime 캐시)와 `interview-ssot-audit.mjs`가 동일 `parseStarLookup()`을 import. SSoT가 갈라질 수 없다.
+- **새 STAR 추가**: user-profile.md에 STAR 섹션 + 메타 라인 1줄만 추가 → 코드 수정 없이 자동 반영.
+- **메타 라인 누락 = LOOKUP 제외**: STAR-J3처럼 면접 답변에서 의도적으로 빼려면 메타 라인을 두지 않는다.
+- **numbers는 메타에 수동 명시**: 본문 산문 자동 추출 금지(메타 설명 숫자 오염 → Frankenstein 차단 약화 방지).
+- **배경**: 2026-06-24 — 하드코딩 복사본이 SSoT를 못 따라가 STAR-15~18·S1·S3·S4 누락. 자동 생성으로 근본 차단.
 
 ---
 

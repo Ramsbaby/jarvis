@@ -12,6 +12,7 @@
  *   node interview-ssot-audit.mjs --notify  # 분기 시 Discord webhook 송출 (jarvis-interview)
  */
 import { readFileSync, existsSync } from 'node:fs';
+import { parseStarLookup } from '../discord/lib/star-lookup.mjs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -117,30 +118,23 @@ function extractNumberTokens(text) {
   return [...tokens];
 }
 
-// fast-path.js의 STAR_LOOKUP 객체 추출
+// STAR_LOOKUP 추출 — fast-path.js는 더 이상 하드코딩하지 않고 user-profile.md(SSoT)의
+// 메타 라인(<!-- lookup: ... -->)에서 런타임 생성한다(2026-06-24 수리). audit도 동일
+// 파서를 공유하므로, 이 검사는 사실상 "본문 산문 ↔ 메타 라인" 정합성 + 메타 라인 누락
+// STAR 검출이 된다. fast-path의 정규식 추출과 달리 SSoT가 갈라질 수 없는 구조.
 function parseFastPathStars() {
-  if (!existsSync(FP_PATH)) return {};
-  const content = readFileSync(FP_PATH, 'utf-8');
-  const lookupMatch = content.match(/const STAR_LOOKUP = \{([\s\S]*?)^\};/m);
-  if (!lookupMatch) return {};
+  if (!existsSync(UP_PATH)) return {};
+  const lookup = parseStarLookup(readFileSync(UP_PATH, 'utf-8'));
   const stars = {};
-  const lookupBody = lookupMatch[1];
-  const entries = lookupBody.matchAll(/'(STAR-[A-Z0-9]+(?:-[a-z]+)*)'\s*:\s*\{([\s\S]*?)\n  \},?/g);
-  for (const entry of entries) {
-    const fpId = entry[1];
-    const block = entry[2];
+  for (const [fpId, info] of Object.entries(lookup)) {
     const upId = fpId.match(/^(STAR-[A-Z0-9]+)/)?.[1];
     if (!upId) continue;
-    const extractList = (re) => {
-      const m = block.match(re);
-      return m ? [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1]) : [];
-    };
     stars[upId] = {
       fpId,
-      numbers: extractList(/numbers:\s*\[([^\]]*)\]/),
-      techs: extractList(/techs:\s*\[([^\]]*)\]/),
-      projects: extractList(/projects:\s*\[([^\]]*)\]/),
-      desc: block.match(/desc:\s*'([^']*)'/)?.[1] || '',
+      numbers: info.numbers,
+      techs: info.techs,
+      projects: info.projects,
+      desc: info.desc,
     };
   }
   return stars;
