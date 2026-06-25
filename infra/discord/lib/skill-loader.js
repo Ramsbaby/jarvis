@@ -26,7 +26,7 @@ import { homedir } from 'node:os';
 const SKILLS_DIRS = [
   { path: join(homedir(), '.jarvis', 'skills'), pattern: 'flat' },
   { path: join(homedir(), '.claude', 'commands'), pattern: 'mixed' },
-  { path: join(homedir(), '.claude', 'skills'), pattern: 'flat' },
+  { path: join(homedir(), '.claude', 'skills'), pattern: 'mixed' },
 ];
 
 function parseFrontmatter(content) {

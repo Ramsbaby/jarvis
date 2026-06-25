@@ -31,9 +31,16 @@ log "source: $RAG_SRC ($src_size)"
 TMP_ARCHIVE="/tmp/rag-${TS}-$$.tar.gz"
 # write.lock 파일은 제외 (실행 중이면 깨진 스냅샷 될 수 있음)
 if tar --exclude='write.lock' --exclude='*.tmp' -czf "$TMP_ARCHIVE" -C "$(dirname "$RAG_SRC")" "$(basename "$RAG_SRC")" 2>>"$LOG"; then
+    # 무결성 검증(2026-06-25 [H4]): tar 가 성공 종료해도 인덱싱 중 파일 회전으로
+    # 깨진 아카이브가 될 수 있다. -tzf 로 전체 엔트리를 읽어 검증, 실패 시 폐기(거짓 OK 차단).
+    if ! tar -tzf "$TMP_ARCHIVE" >/dev/null 2>>"$LOG"; then
+        rm -f "$TMP_ARCHIVE"
+        log "ERROR: tar 무결성 검증 실패 — 깨진 백업 폐기 (다음 주기 재시도)"
+        exit 1
+    fi
     mv "$TMP_ARCHIVE" "$ARCHIVE"
     archive_size=$(du -sh "$ARCHIVE" 2>/dev/null | awk '{print $1}')
-    log "OK: $ARCHIVE ($archive_size)"
+    log "OK: $ARCHIVE ($archive_size, 무결성 검증 통과)"
 else
     rm -f "$TMP_ARCHIVE"
     log "ERROR: tar 실패"

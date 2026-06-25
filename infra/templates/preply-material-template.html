@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════════
+  Preply 한국어 교재 표준 템플릿 (SSoT) — 2026-06-25
+  보람님(Preply 한국어 강사) 교재 제작용. /preply-material 스킬이 사용.
+
+  ★ 이 템플릿이 보장하는 5가지 (오늘 겪은 반복을 구조로 차단):
+    1. 한영 병기: 모든 단어·문법·예문에 .en / .en-note 로 영어 동시.
+    2. 정답 안전: 퀴즈 정답은 .quiz-opts[data-answer], 워크시트는
+       .ws-pick[data-correct] — HTML/PDF 어디에도 정답 흔적이 없다.
+       (✓ 마커나 <strong> 정답을 쓰지 말 것! PDF에서 노출된다.)
+    3. 정적 HTML: 모든 유닛·탭을 정적으로 둔다. JS 동적 렌더 금지.
+    4. 인쇄 안전: @media print 에 탭 펼침 + break-inside:avoid +
+       유닛별 page-break 완비 → PDF 변환 시 잘림 없음.
+    5. 이미지 안정화: 외부 이미지는 onerror fallback 필수.
+       가능하면 data:image/...;base64 로 임베드(오프라인·변환 안정).
+
+  ★ 작성법: <!-- UNIT START --> ~ <!-- UNIT END --> 블록을 유닛 수만큼
+    복제하고 내용만 채운다. u1 → u2 → u3 ... 으로 id 증가.
+    유닛 헤더 색상은 uh-1 ~ uh-4 순환.
+
+  ★ PDF 변환: node ~/jarvis/infra/scripts/preply-html2pdf.mjs <이파일.html>
+  ════════════════════════════════════════════════════════════════════
+-->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{교재 제목}}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;color:#333;line-height:1.6;
+     background:linear-gradient(160deg,#FFF5F5 0%,#FFFBEC 35%,#F0F8FF 70%,#F0FFF6 100%)}
+.cover{background:linear-gradient(135deg,#b71c1c 0%,#1a237e 100%);color:#fff;padding:70px 30px;text-align:center}
+.cover .flags{font-size:2.5em;margin-bottom:15px}
+.cover h1{font-size:2.6em;font-weight:900;letter-spacing:-1px;margin-bottom:6px}
+.cover h2{font-size:1.2em;font-weight:400;opacity:.85;margin-bottom:16px}
+.cover .meta{display:inline-block;background:rgba(255,255,255,.15);border-radius:20px;padding:8px 20px;font-size:.9em}
+nav{background:#fff;border-bottom:3px solid #b71c1c;padding:12px 20px;position:sticky;top:0;z-index:999;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+nav a{padding:5px 14px;border-radius:20px;text-decoration:none;color:#555;font-size:.82em;font-weight:600;border:1.5px solid #ddd;transition:.2s}
+nav a:hover{background:#b71c1c;color:#fff;border-color:#b71c1c}
+.unit{max-width:860px;margin:36px auto;background:#fff;border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,.13);overflow:hidden}
+.unit-header{padding:26px 30px;color:#fff}
+.uh-1{background:linear-gradient(135deg,#b71c1c,#e53935)}
+.uh-2{background:linear-gradient(135deg,#1565c0,#1e88e5)}
+.uh-3{background:linear-gradient(135deg,#2e7d32,#43a047)}
+.uh-4{background:linear-gradient(135deg,#e65100,#fb8c00)}
+.unit-header .num{font-size:.82em;opacity:.75;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:5px}
+.unit-header h2{font-size:1.7em;font-weight:900;margin-bottom:3px}
+.unit-header .sub{font-size:.95em;opacity:.85}
+.unit-tabs{display:flex;border-bottom:2px solid #f0f0f0;padding:0 30px;background:#fafafa;gap:2px}
+.tab-btn{padding:13px 18px;font-size:.88em;font-weight:700;color:#888;border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;border-radius:12px 12px 0 0;transition:.2s}
+.tab-btn.active{color:#b71c1c;border-bottom-color:#b71c1c}
+.tab-content{padding:26px 30px;display:none}
+.tab-content.active{display:block}
+.sec{margin-bottom:24px}
+.sec-title{font-size:.95em;font-weight:800;color:#b71c1c;border-left:3px solid #b71c1c;padding-left:10px;margin-bottom:12px}
+.sec-title .en-note{display:block;font-size:.78em;color:#888;font-weight:400;font-style:italic;margin-top:2px}
+.obj-box{background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:14px 16px}
+.obj-box li{font-size:.93em;margin-bottom:8px;padding-left:4px}
+.en-note{display:block;font-size:.8em;color:#666;font-style:italic;margin-top:2px}
+.photo-wrap{margin-bottom:4px;border-radius:8px;overflow:hidden;background:#f0f0f0}
+.unit-photo{width:100%;max-height:220px;object-fit:cover;display:block}
+.img-box-fallback{background:linear-gradient(135deg,#b71c1c,#1a237e);color:#fff;padding:40px 20px;text-align:center;border-radius:8px;font-size:1.3em}
+.photo-credit{font-size:.7em;color:#aaa;text-align:right;margin:2px 0 14px}
+.vocab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.vcard{background:#f8f9fa;border:1.5px solid #eee;border-radius:14px;padding:12px 14px;box-shadow:0 3px 16px rgba(0,0,0,.07)}
+.vcard .ko{font-size:1.1em;font-weight:800;color:#1565c0}
+.vcard .en{font-size:.82em;color:#666;margin-top:3px}
+.dialog-box{background:#e8f4fd;border:1px solid #bee3f8;border-radius:8px;padding:16px}
+.d-line{display:flex;gap:10px;margin-bottom:9px;align-items:flex-start}
+.d-speaker{font-weight:800;color:#1565c0;min-width:58px;font-size:.88em;padding-top:1px}
+.d-text-wrap{display:flex;flex-direction:column}
+.d-text{font-size:.93em;line-height:1.55}
+.d-trans{font-size:.8em;color:#777;font-style:italic;margin-top:2px;line-height:1.4}
+.grammar-box{background:#fce4ec;border-left:4px solid #b71c1c;border-radius:0 8px 8px 0;padding:14px 16px}
+.grammar-box .gpoint{font-weight:800;margin-bottom:6px;font-size:.93em}
+.grammar-box li{font-size:.9em;margin-bottom:4px}
+.grammar-detail{background:#fff3e0;border-left:3px solid #e65100;border-radius:0 6px 6px 0;padding:10px 14px;margin-top:8px}
+.grammar-detail .gd-title{font-size:.85em;font-weight:800;color:#e65100;margin-bottom:6px}
+.grammar-detail li{font-size:.87em;margin-bottom:6px}
+.key-point{background:linear-gradient(135deg,#FFFDE7,#FFF9C4);border:2px solid #FFD54F;border-radius:12px;padding:13px 16px;margin-top:14px;font-size:.88em;line-height:1.7}
+.key-point strong{color:#E65100;display:block;margin-bottom:4px;font-size:.95em}
+.key-point .kp-en{color:#1565C0;font-size:.88em;display:block;margin-top:8px;font-weight:600;background:rgba(21,101,192,.09);border-radius:8px;padding:6px 10px;border-left:3px solid #90CAF9}
+.extra-examples{background:#F8F9FA;border-radius:10px;padding:12px 14px;margin-top:10px;border-left:3px solid #90CAF9}
+.extra-examples p{font-size:.88em;margin-bottom:5px;color:#555}
+.extra-examples .ex-ko{font-weight:700;color:#1565C0}
+.extra-examples .ex-en{color:#888;font-size:.85em}
+.exercise-box{background:#f3e5f5;border:1px solid #ce93d8;border-radius:8px;padding:14px 16px}
+.exercise-box .etitle{font-weight:800;color:#6a1b9a;margin-bottom:8px;font-size:.9em}
+.exercise-box li,.exercise-box p{font-size:.9em;margin-bottom:6px}
+.culture-box{background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:14px 16px}
+.culture-box .ctopic{font-weight:800;color:#2e7d32;margin-bottom:8px;font-size:.93em}
+.culture-box li{font-size:.9em;margin-bottom:6px}
+.blank{display:inline-block;border-bottom:1.5px solid #555;min-width:80px;margin:0 3px}
+/* Quiz — 정답은 .quiz-opts[data-answer] 에만. 옵션 텍스트엔 정답 표시 금지 */
+.quiz-item{margin-bottom:18px;padding:16px;background:#f8f9fa;border-radius:14px;border:1.5px solid #e4e4e4}
+.quiz-q{font-weight:700;font-size:.93em;margin-bottom:8px;color:#333}
+.quiz-q .qnum{display:inline-block;background:#1565c0;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;line-height:22px;font-size:.8em;margin-right:6px}
+.quiz-opts{list-style:none;padding:0}
+.quiz-opts li{cursor:pointer;padding:10px 15px;border-radius:10px;border:2px solid #ececec;margin-bottom:6px;transition:all .2s;background:#fff;font-size:.9em;color:#444}
+.quiz-opts li::before{content:attr(data-v)')  ';font-weight:700;color:#1565c0}
+.quiz-opts li:hover{background:#EEF7FF;border-color:#90CAF9;transform:translateX(4px)}
+.quiz-correct{background:#E8F5E9!important;border-color:#66BB6A!important;color:#1B5E20!important;font-weight:800}
+.quiz-wrong{background:#FFEBEE!important;border-color:#EF9A9A!important;color:#B71C1C!important}
+.quiz-fb{margin-top:10px;font-weight:700;font-size:.88em;padding:8px 14px;border-radius:10px;display:block}
+/* Worksheet */
+.ws-block{background:#f8f9fa;border-radius:8px;padding:14px 16px;margin-bottom:14px;border:1px solid #e0e0e0}
+.ws-block .ws-title{font-weight:800;color:#6a1b9a;font-size:.9em;margin-bottom:8px}
+.ws-block li,.ws-block p{font-size:.9em;margin-bottom:6px}
+.ws-pick{cursor:pointer;display:inline-block;padding:2px 8px;border-radius:6px;border:2px solid #ddd;margin:0 3px;background:#fff;color:#444;transition:all .18s}
+.ws-pick:hover{background:#EEF7FF;border-color:#90CAF9}
+.ws-pick-correct{background:#E8F5E9!important;border-color:#66BB6A!important;color:#1B5E20!important;font-weight:800;pointer-events:none}
+.ws-pick-wrong{background:#FFEBEE!important;border-color:#EF9A9A!important;color:#B71C1C!important;pointer-events:none}
+.ws-pick-disabled{pointer-events:none;opacity:.7}
+.ws-choice-result{font-size:.82em;font-weight:700;margin-left:6px}
+/* Roleplay */
+.rp-card{border:2px solid #e65100;border-radius:10px;padding:16px;margin-bottom:14px;background:#fff8f0}
+.rp-card .rp-title{font-weight:800;color:#e65100;font-size:.92em;margin-bottom:8px}
+.rp-card p{font-size:.9em;line-height:1.55;margin-bottom:5px}
+.rp-card .rp-include{background:#fff3e0;border-radius:6px;padding:8px 10px;font-size:.86em;margin-top:8px}
+ul{padding-left:18px}
+li{margin-bottom:3px}
+/* ★ 인쇄/PDF 안전 — 탭 전부 펼침 + 카드 잘림 방지 + 유닛별 페이지 분리 */
+@media print{
+  nav,.unit-tabs{display:none}
+  .tab-content{display:block!important}
+  .vcard,.quiz-item,.grammar-box,.grammar-detail,.key-point,.culture-box,
+  .dialog-box,.ws-block,.rp-card,.warn-box,.exercise-box,.extra-examples,
+  .obj-box,.d-line,.sec{break-inside:avoid;page-break-inside:avoid}
+  .unit{box-shadow:none;page-break-after:always;margin:0}
+  .unit:last-child{page-break-after:auto}
+}
+@media(max-width:600px){.vocab-grid{grid-template-columns:1fr 1fr}.unit-header h2{font-size:1.4em}.tab-btn{padding:10px;font-size:.8em}}
+</style>
+</head>
+<body>
+
+<header class="cover">
+  <div class="flags">🇰🇷 🇺🇸</div>
+  <h1>{{교재 제목 (한글)}}</h1>
+  <h2>{{교재 부제 (영어)}}</h2>
+  <div class="meta">대상: {{학습자}} &nbsp;·&nbsp; 수준: {{TOPIK 레벨}} &nbsp;·&nbsp; UNIT 1–{{N}}</div>
+</header>
+
+<nav>
+  <!-- 유닛 수만큼 목차 링크. 한글 + (영어는 생략 가능) -->
+  <a href="#u1">1단원 {{제목}}</a>
+  <a href="#u2">2단원 {{제목}}</a>
+</nav>
+
+<!-- ════════════════════════════ UNIT START (이 블록을 유닛 수만큼 복제) ════════════════════════════ -->
+<section class="unit" id="u1">
+  <div class="unit-header uh-1"><!-- 색상: uh-1~uh-4 순환 -->
+    <div class="num">UNIT 01</div>
+    <h2>{{유닛 제목 (한글)}}</h2>
+    <div class="sub">{{유닛 제목 (영어)}}</div>
+  </div>
+  <div class="unit-tabs">
+    <button class="tab-btn active" onclick="showTab('u1','tb')">📖 교재</button>
+    <button class="tab-btn" onclick="showTab('u1','qz')">📋 퀴즈</button>
+    <button class="tab-btn" onclick="showTab('u1','ws')">✏️ 워크시트</button>
+    <button class="tab-btn" onclick="showTab('u1','rp')">🎭 롤플레이</button>
+  </div>
+
+  <!-- ─── 교재 탭 ─── -->
+  <div id="u1-tb" class="tab-content active">
+    <div class="sec">
+      <div class="sec-title">🎯 학습 목표<span class="en-note">{{Learning objectives in English}}</span></div>
+      <div class="obj-box"><ul>
+        <li>{{목표 1 (한글)}}<span class="en-note">{{Objective 1 (English)}}</span></li>
+        <li>{{목표 2 (한글)}}<span class="en-note">{{Objective 2 (English)}}</span></li>
+      </ul></div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">📸 단원 이미지</div>
+      <div class="photo-wrap">
+        <!-- 외부 이미지는 반드시 onerror fallback. 오프라인 안정성 위해 base64 임베드 권장 -->
+        <img src="{{이미지 URL}}" alt="{{설명}}" class="unit-photo"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+        <div class="img-box-fallback" style="display:none">{{이모지}} {{유닛 제목}}</div>
+      </div>
+      <div class="photo-credit">Photo: Unsplash (free use)</div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">📚 핵심 어휘<span class="en-note">Key Vocabulary</span></div>
+      <div class="vocab-grid">
+        <!-- 단어마다 한글(.ko) + 영어(.en) 동시. 한영 병기 필수 -->
+        <div class="vcard"><div class="ko">{{단어}}</div><div class="en">{{영어 뜻}}</div></div>
+        <div class="vcard"><div class="ko">{{단어}}</div><div class="en">{{영어 뜻}}</div></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">💬 대화문<span class="en-note">Dialogue</span></div>
+      <div class="dialog-box">
+        <div class="d-line"><span class="d-speaker">{{화자}}</span>
+          <div class="d-text-wrap"><span class="d-text">{{한국어 대사}}</span><span class="d-trans">{{English translation}}</span></div></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">📐 문법 포인트 — {{문법 (한글)}}<span class="en-note">{{Grammar point in English}}</span></div>
+      <div class="grammar-box">
+        <div class="gpoint">{{핵심 규칙 (한글)}}</div>
+        <ul><li>{{예문/규칙}}</li></ul>
+      </div>
+      <div class="grammar-detail">
+        <div class="gd-title">📌 {{상세 제목}} / {{English title}}</div>
+        <ul>
+          <!-- 변환표 등: 각 항목에 한글 + 영어 뜻 즉시 병기 -->
+          <li><span style="color:#555">{{단어}} <em>({{영어}})</em></span> → <strong>{{변환형}}</strong> <em style="color:#1565C0;font-size:.87em">({{English meaning}})</em></li>
+        </ul>
+      </div>
+      <div class="key-point">
+        <strong>🔑 {{핵심 요약 제목 (한글)}}</strong>
+        {{핵심 내용 (한글)}}
+        <span class="kp-en">{{Same point explained in English}}</span>
+      </div>
+      <div class="extra-examples">
+        <p><span class="ex-ko">{{예문 (한글)}}</span> <span class="ex-en">{{English}}</span></p>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">✍️ 연습 문제<span class="en-note">Exercises</span></div>
+      <div class="exercise-box">
+        <div class="etitle">A. {{연습 제목}}</div>
+        <p>{{문제 — 정답 자리는}} <span class="blank"></span> {{로}}</p>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">🌍 문화 토론<span class="en-note">Culture Discussion</span></div>
+      <div class="culture-box">
+        <div class="ctopic">💬 {{토론 주제 (한글)}}</div>
+        <ul><li>{{논점 (한글)}}<span class="en-note">{{Point in English}}</span></li></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 퀴즈 탭 ─── 정답은 .quiz-opts 의 data-answer 에만! 옵션 텍스트엔 ✓ 절대 금지 -->
+  <div id="u1-qz" class="tab-content">
+    <div class="quiz-item">
+      <div class="quiz-q"><span class="qnum">1</span>{{질문}}</div>
+      <ul class="quiz-opts" data-answer="b"><!-- 정답이 b번이면 data-answer="b" -->
+        <li data-v="a">{{선택지 A}}</li>
+        <li data-v="b">{{선택지 B = 정답이지만 표시 없음}}</li>
+        <li data-v="c">{{선택지 C}}</li>
+        <li data-v="d">{{선택지 D}}</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ─── 워크시트 탭 ─── '맞는 단어 고르기'는 .ws-pick + data-correct. <strong> 정답 금지 -->
+  <div id="u1-ws" class="tab-content">
+    <div class="ws-block">
+      <div class="ws-title">A. {{번역/쓰기 제목}}</div>
+      <p>① {{English sentence}} → <span class="blank" style="min-width:200px"></span></p>
+    </div>
+    <div class="ws-block">
+      <div class="ws-title">B. 맞는 단어 고르기</div>
+      <!-- 정답엔 data-correct="true", 오답엔 표시 없음. 둘 다 .ws-pick -->
+      <p>① {{문장}} ( <span class="ws-pick" data-correct="true">{{정답}}</span> / <span class="ws-pick">{{오답}}</span> )</p>
+    </div>
+  </div>
+
+  <!-- ─── 롤플레이 탭 ─── -->
+  <div id="u1-rp" class="tab-content">
+    <div class="rp-card">
+      <div class="rp-title">🎭 {{카드 제목}}</div>
+      <p>{{상황 설명 (한글)}}</p>
+      <div class="rp-include"><strong>포함할 것:</strong> {{체크리스트}}</div>
+    </div>
+  </div>
+</section>
+<!-- ════════════════════════════ UNIT END ════════════════════════════ -->
+
+<script>
+// 탭 전환
+function showTab(unit, tab){
+  document.querySelectorAll('#'+unit+'-tb, #'+unit+'-qz, #'+unit+'-ws, #'+unit+'-rp')
+    .forEach(function(el){ el.classList.remove('active'); });
+  document.querySelectorAll('#'+unit+' .tab-btn, [id="'+unit+'"] .tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  var sec = document.getElementById(unit);
+  if(sec) sec.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+  var target = document.getElementById(unit+'-'+tab);
+  if(target) target.classList.add('active');
+  if(event && event.target) event.target.classList.add('active');
+}
+// 퀴즈 채점 — 정답은 .quiz-opts[data-answer] 에서만 읽는다 (옵션 텍스트엔 정답 흔적 없음)
+(function(){
+  function init(){
+    document.querySelectorAll('.quiz-opts').forEach(function(opts){
+      var answerV = opts.getAttribute('data-answer');
+      if(!answerV) return;
+      var done = false;
+      opts.querySelectorAll('li').forEach(function(li){
+        li.addEventListener('click', function(){
+          if(done) return; done = true;
+          var sel = li.getAttribute('data-v');
+          var fb = document.createElement('div'); fb.className='quiz-fb';
+          if(sel===answerV){
+            li.classList.add('quiz-correct');
+            fb.textContent='✅ 정답이에요! Correct! 🎉';
+            fb.style.background='#E8F5E9'; fb.style.color='#2E7D32';
+          } else {
+            li.classList.add('quiz-wrong');
+            var cl = opts.querySelector('li[data-v="'+answerV+'"]');
+            if(cl) cl.classList.add('quiz-correct');
+            fb.textContent='❌ 정답은 '+answerV.toUpperCase()+'번! Keep going 💪';
+            fb.style.background='#FFEBEE'; fb.style.color='#B71C1C';
+          }
+          opts.parentNode.appendChild(fb);
+        });
+      });
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+// 워크시트 '맞는 단어 고르기' 채점 — data-correct 기반
+(function(){
+  function init(){
+    document.querySelectorAll('.ws-block p').forEach(function(p){
+      var picks = p.querySelectorAll('.ws-pick');
+      if(!picks.length) return;
+      var done = false;
+      picks.forEach(function(sp){
+        sp.addEventListener('click', function(){
+          if(done) return; done = true;
+          var ok = sp.dataset.correct === 'true';
+          var r = document.createElement('span'); r.className='ws-choice-result';
+          if(ok){ sp.classList.add('ws-pick-correct'); r.style.color='#2E7D32'; r.textContent=' ✅ 정답!'; }
+          else {
+            sp.classList.add('ws-pick-wrong');
+            picks.forEach(function(s2){ if(s2.dataset.correct==='true') s2.classList.add('ws-pick-correct'); else s2.classList.add('ws-pick-disabled'); });
+            r.style.color='#B71C1C'; r.textContent=' ❌ 다시!';
+          }
+          p.appendChild(r);
+        });
+      });
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+</script>
+</body>
+</html>

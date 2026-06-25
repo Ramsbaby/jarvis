@@ -12,7 +12,7 @@ import * as arrow from 'apache-arrow';
 import { readFile, readdir, stat, readFile as readFileAsync } from 'node:fs/promises';
 import { join, extname, dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { appendFileSync, mkdirSync, rmdirSync, statSync, readFileSync, existsSync } from 'node:fs';
+import { appendFileSync, mkdirSync, rmdirSync, statSync, readFileSync, existsSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { LANCEDB_PATH, RAG_LOCK_DIR, INFRA_HOME, ENTITY_GRAPH_PATH, ensureDirs } from './paths.mjs';
@@ -765,6 +765,10 @@ export class RAGEngine {
         } catch(_) {}
       }
 
+      // 심볼릭 링크 경로 정규화 (2026-06-25 [H3] 재발 방지): ~/.jarvis ↔ ~/jarvis/runtime
+      // 둘은 symlink로 같은 파일이나 경로 문자열이 달라, id(`${filePath}:i`)·source 가 갈리면
+      // mergeInsert('id')가 중복 삽입한다. 물리 경로로 통일해 이중 인덱싱을 원천 차단.
+      try { filePath = realpathSync(filePath); } catch (_) { /* 파일 부재 시 원본 유지 */ }
       const safeSource = filePath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       const chunkType  = isCode ? `code-${CODE_EXT_LANG[fileExt] || 'unknown'}` : 'markdown';
       const expiresAt  = opts.ttlMs ? Date.now() + opts.ttlMs : 0;
@@ -871,6 +875,8 @@ export class RAGEngine {
           );
         } catch(_) {}
       }
+      // 심볼릭 링크 경로 정규화 (2026-06-25 [H3]) — fresh rebuild 경로도 id·source 물리 경로 통일.
+      try { filePath = realpathSync(filePath); } catch (_) { /* 파일 부재 시 원본 유지 */ }
       const chunkType = isCode ? `code-${CODE_EXT_LANG[fileExt] || 'unknown'}` : 'markdown';
       return chunks.map((chunk, i) => ({
         id: `${filePath}:${i}`,

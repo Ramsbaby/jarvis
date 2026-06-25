@@ -10,8 +10,9 @@
 set -euo pipefail
 
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
-BOARD_DB="${BOARD_DIR:-${BOT_HOME}/board}/data/board.db"
-BOARD_BACKUP_DIR="${BOARD_DIR:-${BOT_HOME}/board}/data/backups"
+# jarvis-board는 BOT_HOME(runtime)과 별도 트리. 실제 DB는 ~/jarvis-board/data/board.db (2026-06-25 경로 정정)
+BOARD_DB="${BOARD_DIR:-${HOME}/jarvis-board}/data/board.db"
+BOARD_BACKUP_DIR="${BOARD_DIR:-${HOME}/jarvis-board}/data/backups"
 RAG_DIR="${BOT_HOME}/rag/lancedb"
 RAG_BACKUP_DIR="${BOT_HOME}/backups"
 
@@ -25,7 +26,9 @@ BACKUP_TYPE="${1:-board}"
 # ── Board DB 백업 ─────────────────────────────────────────────────────────────
 if [[ "$BACKUP_TYPE" == "board" || "$BACKUP_TYPE" == "all" ]]; then
   if [[ ! -f "$BOARD_DB" ]]; then
-    log "WARN board.db 없음: $BOARD_DB"
+    # 거짓 완료 차단(Iron Law 2): DB가 없으면 비정상 종료 — L83 "완료" 로깅에 도달 금지
+    log "ERROR board.db 없음 — 백업 실패: $BOARD_DB"
+    exit 1
   else
     STAMP=$(date '+%Y%m%d-%H%M%S')
     DEST="${BOARD_BACKUP_DIR}/board-${STAMP}.db"
