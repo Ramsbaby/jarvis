@@ -834,7 +834,7 @@ export async function* createClaudeSession(prompt, {
   //
   // [2026-05-29 결함 수리 #2] 분석 채널은 감정 분류 무시 (RAG·_facts·channel-persona 보호).
   //   사고: "이번 분기 매출 진짜 답답하다" → emotional 오인 → 분석 깊이 손실.
-  const _ANALYSIS_CH_FOR_EMOTION = ['1471694919339868190', '1469905074661757049', '1475786634510467186', '1469190686145384513'];
+  const _ANALYSIS_CH_FOR_EMOTION = ['1471694919339868190', '1475786634510467186', '1469190686145384513'];
   const _isAnalysisChannel = channelId && _ANALYSIS_CH_FOR_EMOTION.includes(channelId);
 
   // 스레드 단위 감정 상태 캐시 (Map 크기 제한: 200 스레드)
@@ -1030,8 +1030,12 @@ export async function* createClaudeSession(prompt, {
     const matchedSkills = matchSkills({ channelName, messageText: prompt });
     // [2026-05-22 v8] 상담·감정 채널은 스킬 본문 자동 주입 스킵 (슬래시 명시는 살림).
     // lightweight 모드 폐기와 별개로 유지 — 4200자 스킬 본문 컨텍스트 비대 방지 단일 책임.
+    // [2026-06-27] jarvis-preply-tutor 제외 — 교재 채널은 preply-material 스킬 본문이 항상 켜져야
+    //   '100KB HTML 통째 생성 금지 + 골드 복사 후 디스크 부분수정' 규칙이 적용된다. SKIP 시 봇이
+    //   규칙 없이 교재를 통째로 재생성 → 출력토큰 폭증(건당 10K+·최대 128K 실측). 토큰 절약 목적의
+    //   SKIP이 정작 토큰 폭증을 막는 규칙까지 차단하던 자기모순 해소.
     const _SKILL_AUTO_INJECT_SKIP_CHANNELS = new Set([
-      'jarvis', 'jarvis-career', 'jarvis-boram', 'jarvis-ceo', 'jarvis-market', 'jarvis-preply-tutor',
+      'jarvis', 'jarvis-career', 'jarvis-boram', 'jarvis-ceo', 'jarvis-market',
     ]);
     const _skipAutoSkillsForChannel = channelName && _SKILL_AUTO_INJECT_SKIP_CHANNELS.has(channelName);
     // 토큰 폭증 차단: guard 스킬 누적 시 상한 (감사관 B 결함 대응 2026-05-28)
@@ -1198,7 +1202,7 @@ export async function* createClaudeSession(prompt, {
   // 옵션 2: 분석 채널이면 키워드 무관 무조건 호출. 비용 vs 일관성 균형 — 짧은 prompt(<15자, 인사류)만 제외.
   // 채널 한정: jarvis-career / jarvis-dev / jarvis-ceo / jarvis-market (분석 도메인만).
   {
-    const _ANALYSIS_CH = ['1471694919339868190', '1469905074661757049', '1475786634510467186', '1469190686145384513'];
+    const _ANALYSIS_CH = ['1471694919339868190', '1475786634510467186', '1469190686145384513'];
     const _promptStr = String(prompt || '').trim();
     // [2026-05-28] 감정 턴엔 RAG 사전 주입 SKIP — 분석 컨텍스트가 위로 응답 톤 망침
     // [2026-06-07] 이미지 첨부(코딩테스트·SAP) 시도 RAG 사전 주입 SKIP — 코딩 문제 풀이에 커리어
@@ -1672,7 +1676,7 @@ export async function* createClaudeSession(prompt, {
   //   _classifiedIntent는 위에서 이미 emotional/analytical/code/casual 중 하나로 분류됨.
   //   분석 채널(jarvis-career 등)은 분류 결과 override해서 analytical 강제 (도메인 가드).
   let _intentBudgetMode = _classifiedIntent;
-  if (!_emotionalTurnEarly && channelId && ['1471694919339868190', '1469905074661757049', '1475786634510467186', '1469190686145384513'].includes(channelId)) {
+  if (!_emotionalTurnEarly && channelId && ['1471694919339868190', '1475786634510467186', '1469190686145384513'].includes(channelId)) {
     // 분석 채널 — 감정 발화가 아니면 analytical로 override (RAG·_facts 보장)
     _intentBudgetMode = 'analytical';
   }
