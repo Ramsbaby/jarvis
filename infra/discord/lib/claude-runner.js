@@ -1583,6 +1583,38 @@ export async function* createClaudeSession(prompt, {
             log('error', 'PreToolUse Read-guard threw (fail-open)', { error: err?.message });
           }
 
+          // 2026-06-28: 교재 통째 재작성(Write) 물리 차단 — 모든 preply 소실 사고의 근본.
+          // 캐서린 퀴즈·케이리 숨은뜻 89개·이모지·영어·로마자가 전부 '기존 교재 통째 재작성'으로
+          // 날아갔다. SKILL.md 규칙(설득)으론 안 막혀(케이리 때 규칙1 있었는데 무시됨) → 행동 자체를 차단.
+          // 이미 존재하는 교재 HTML은 Write 금지, Edit(부분 수정)만 허용. 신규 생성(미존재)은 통과.
+          try {
+            if (input.tool_name === 'Write' && input.tool_input?.file_path) {
+              const fp = String(input.tool_input.file_path);
+              const isMaterial = /한국어수업_.*\.html$/i.test(fp)
+                || /(preply|kaylie|michelle|catherine|lara|luz|annie|마흘리|벤지|체리|엘리사|알리사|케이리|미쉘|캐서린|라라|루즈|애니)[^/]*\.html$/i.test(fp);
+              let exists = false;
+              try { statSync(fp); exists = true; } catch { /* 미존재 = 신규 생성 → 허용 */ }
+              if (isMaterial && exists) {
+                log('warn', 'PreToolUse: 교재 통째 재작성(Write) 차단 → Edit 권고', { fp: fp.slice(-60) });
+                try {
+                  const ledgerDir = join(HOME, 'jarvis/runtime', 'state');
+                  mkdirSync(ledgerDir, { recursive: true });
+                  appendFileSync(join(ledgerDir, 'permission-denied.jsonl'),
+                    JSON.stringify({ ts: new Date().toISOString(), source: 'discord-bot', tool: 'Write', blocked: 'preply-material-rewrite', fp: fp.slice(-80) }) + '\n');
+                } catch { /* best-effort */ }
+                return {
+                  hookSpecificOutput: {
+                    hookEventName: 'PreToolUse',
+                    permissionDecision: 'deny',
+                    permissionDecisionReason: `기존 교재(${fp.split('/').pop()})를 Write로 통째 덮어쓰면 이전 섹션이 소실됩니다(케이리 숨은뜻 89개 소실 사고). 탭·섹션 추가/수정은 반드시 Edit로 해당 부분만 바꾸세요. 통째 교체가 정말 필요하면 preply-student.sh로 백업 후 새 파일명으로 만드세요.`,
+                  },
+                };
+              }
+            }
+          } catch (err) {
+            log('error', 'PreToolUse 교재가드 threw (fail-open)', { error: err?.message });
+          }
+
           try {
             const blocked = checkSensitivePath(input.tool_name, input.tool_input);
             if (blocked) {
