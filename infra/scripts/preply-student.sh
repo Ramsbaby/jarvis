@@ -18,7 +18,7 @@ set -euo pipefail
 
 JARVIS="${HOME}/jarvis"
 REGISTRY="${JARVIS}/runtime/config/preply-students.json"
-DESKTOP="${HOME}/Desktop"
+MATERIAL_DIR="${PREPLY_MATERIAL_DIR:-${HOME}/jarvis/runtime/preply-materials}"
 DISCORD_DIR="${JARVIS}/infra/discord"
 PDF_SCRIPT="${JARVIS}/infra/scripts/preply-html2pdf.mjs"
 UPLOAD_SCRIPT="${JARVIS}/infra/scripts/preply-upload.mjs"
@@ -58,16 +58,16 @@ for s in reg["students"]:
 PY
 }
 
-# 데스크탑에서 학생 한글명이 들어간 최신 html
+# 교재 폴더에서 학생 한글명이 들어간 최신 html
 resolve_latest() { # <korean-name>
   local kn="$1"
-  ls -t "$DESKTOP"/*"$kn"*.html 2>/dev/null | head -1 || true
+  ls -t "$MATERIAL_DIR"/*"$kn"*.html 2>/dev/null | head -1 || true
 }
 
 cmd_list() {
   echo "📚 보람님 학생 교재 현황"
   echo "─────────────────────────────"
-  python3 - "$REGISTRY" "$DESKTOP" <<'PY'
+  python3 - "$REGISTRY" "$MATERIAL_DIR" <<'PY'
 import json,sys,glob,os
 reg=json.load(open(sys.argv[1])); desk=sys.argv[2]
 gs=reg["_meta"]["gold_standard_file"].replace("~",os.path.expanduser("~"))
@@ -87,7 +87,7 @@ cmd_latest() {
   local name="${1:-}"; [ -n "$name" ] || err "학생 이름 필요: preply-student.sh latest <학생>"
   local kn; kn="$(reg_field "$name" name_ko)"; kn="${kn:-$name}"
   local f; f="$(resolve_latest "$kn")"
-  [ -n "$f" ] || err "$kn 의 교재 파일을 데스크탑에서 찾지 못함"
+  [ -n "$f" ] || err "$kn 의 교재 파일을 교재 폴더에서 찾지 못함"
   echo "$f"
 }
 
@@ -96,7 +96,7 @@ cmd_new() {
   local kn; kn="$(reg_field "$name" name_ko)"; kn="${kn:-$name}"
   local units; units="$(reg_field "$name" units)"; units="${units:-1-4}"
   local fname="${2:-한국어수업_${kn}_Unit${units}.html}"
-  local dest="$DESKTOP/$fname"
+  local dest="$MATERIAL_DIR/$fname"
   local gs; gs="$(gold_standard)"
   [ -f "$gs" ] || err "골드스탠다드 파일 없음: $gs"
   [ -e "$dest" ] && err "이미 존재함: $dest (덮어쓰지 않음 — 다른 이름 지정)"
