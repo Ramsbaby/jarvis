@@ -34,7 +34,7 @@ import {
   buildOwnerPreferencesSection, buildOwnerPersonaSection, buildDepthGuardSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
   buildWikiContextSection, buildAngerCorrectionSection,
   buildHarnessAutoTriggerSection, buildFactsKeywordSection, buildEvidenceMandateSection,
-  buildOwnerTimeContext,
+  buildOwnerTimeContext, buildPreplyStudentSection,
 } from './prompt-sections.js';
 import { getPromptHarness, Tier } from './prompt-harness.js';
 import { loadHandoff, formatHandoffForPrompt } from './session-handoff.js';
@@ -1072,6 +1072,21 @@ export async function* createClaudeSession(prompt, {
     }
   } catch (skillErr) {
     log('warn', 'Skill loader failed (non-critical)', { error: skillErr.message });
+  }
+
+  // [2026-06-28] preply 채널: 학생 프로필 + 영구 규칙 자동 주입.
+  // 사고: 봇이 라라 등 등록된 학생을 "프로필 기록 없음"이라 하고(보람님 "또 말하게 하냐" 불만),
+  //   permanent_rules(점수금지·정답지분리)를 반복 위반. SKILL 설득으론 행동이 안 바뀌어 데이터를 직접 주입.
+  if (channelName === 'jarvis-preply-tutor') {
+    try {
+      const preplySection = buildPreplyStudentSection({ messageText: prompt, botHome: BOT_HOME });
+      if (preplySection) {
+        systemParts.push('', preplySection);
+        log('info', 'preply 학생 프로필 + 영구규칙 주입', { channelName });
+      }
+    } catch (e) {
+      log('warn', 'preply profile inject failed (non-critical)', { error: e?.message });
+    }
   }
 
   // Owner system preferences (Stable) — survives session resets & bot restarts

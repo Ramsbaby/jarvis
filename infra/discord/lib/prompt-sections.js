@@ -934,3 +934,56 @@ export function buildOwnerTimeContext({ botHome }) {
   return `--- 오너 시간 컨텍스트 ---\n${lines.join('\n')}`;
 }
 
+// preply 학생 프로필 + 영구 규칙 자동 주입 (2026-06-28)
+// 사고: 봇이 라라 등 이미 등록된 학생을 "프로필 기록 없음"이라 하고(보람님 "또 말하게 하냐" 불만),
+//   permanent_rules(점수금지·정답지분리·정답숨김)를 반복 위반. SKILL.md "list로 읽어라" 설득으론
+//   봇 행동이 안 바뀜 → 데이터를 컨텍스트에 직접 주입(행동 의존 제거). RAG 사전주입과 동일 원리.
+export function buildPreplyStudentSection({ messageText, botHome }) {
+  try {
+    if (!botHome) return '';
+    const regPath = join(botHome, 'config', 'preply-students.json');
+    if (!existsSync(regPath)) return '';
+    const reg = JSON.parse(readFileSync(regPath, 'utf-8'));
+    const students = reg.students || [];
+    const text = (messageText || '').toLowerCase();
+    const parts = [];
+
+    // 영구 규칙은 항상 주입 (모든 교재 작업에 BLOCKING 적용)
+    const pr = reg._meta?.permanent_rules;
+    if (pr) {
+      const rules = Object.entries(pr)
+        .filter(([k]) => !k.startsWith('_'))
+        .map(([k, v]) => `· [${k}] ${v}`)
+        .join('\n');
+      if (rules) parts.push('📌 영구 교재 규칙 (BLOCKING — 매번 적용, 보람님이 반복 지적한 항목):\n' + rules);
+    }
+
+    // 메시지에 언급된 학생 프로필 주입 ("기록 없음" 오류 차단)
+    const mentioned = students.filter((s) => {
+      const names = [s.name_ko, s.name_en, ...(s.alt_names || [])].filter(Boolean);
+      return names.some((n) => text.includes(String(n).toLowerCase()));
+    });
+    if (mentioned.length) {
+      for (const s of mentioned) {
+        parts.push(
+          `👤 학생 [${s.name_ko}/${s.name_en || ''}] 프로필 (레지스트리에 있음 — "프로필 기록 없음"이라 절대 말하지 말 것):\n` +
+          `· 나라=${s.country || '?'} / 나이=${s.age || '?'} / 레벨=${s.level || '?'} / 테마=${s.theme || '?'}\n` +
+          `· 관심사=${(s.interests || []).join('·') || '(notes 참조)'} / 목표=${s.goal || '?'} / 유닛=${s.units || '?'} / 최근유닛=${s.last_unit || '?'}\n` +
+          `· is_trial=${s.is_trial} / 숙제PDF필요=${s.needs_homework_pdf} / 자료유형=${s.material_type || 'standard'} / 최신파일=${s.latest_file || '?'}\n` +
+          `· 비고=${s.notes || ''}`
+        );
+      }
+    } else {
+      parts.push(
+        '👥 등록 학생: ' + students.map((s) => `${s.name_ko}(${s.name_en || ''})`).join(', ') +
+        '\n— 작업 대상이 누구인지 확인하고, 상세 프로필은 `preply-student.sh list`로 조회. 학생 정보를 추측하거나 "없다"고 단정 금지.'
+      );
+    }
+
+    if (!parts.length) return '';
+    return '--- 📚 preply 학생 프로필 + 영구 규칙 (레지스트리 자동 주입) ---\n' + parts.join('\n\n');
+  } catch {
+    return '';
+  }
+}
+
