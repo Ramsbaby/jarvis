@@ -980,6 +980,13 @@ export function buildPreplyStudentSection({ messageText, botHome }) {
       );
     }
 
+    // 쓰기 안내: 새 정보를 받으면 레지스트리에 즉시 반영 (다음에 또 묻지 않도록)
+    parts.push(
+      '✍️ 보람님이 새 학생 정보나 기존 학생의 변경 정보를 주면, 작업과 함께 ' +
+      '`bash ~/jarvis/infra/scripts/preply-student.sh upsert <학생명> \'{"country":"...","age":0,"interests":["..."]}\'` 로 ' +
+      '즉시 레지스트리에 저장하라(말로만 "저장했다" 금지 — 케이리 사고). 교재 전송(send)은 최신파일을 자동 갱신한다.'
+    );
+
     if (!parts.length) return '';
     return '--- 📚 preply 학생 프로필 + 영구 규칙 (레지스트리 자동 주입) ---\n' + parts.join('\n\n');
   } catch {

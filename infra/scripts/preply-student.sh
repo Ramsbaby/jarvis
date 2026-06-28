@@ -392,6 +392,72 @@ cmd_send() {
     done
   fi
   ( cd "$DISCORD_DIR" && node "$UPLOAD_SCRIPT" "$@" )
+
+  # [2026-06-28] 전송 성공 후 latest_file 자동 갱신 (행동 의존 없는 레지스트리 최신화).
+  # 봇이 레지스트리 갱신을 잊어도 send가 자동으로 학생의 최신 교재 경로를 기록 → stale 방지.
+  local _arg _hf _kn
+  for _arg in "$@"; do
+    case "$_arg" in
+      *.html)
+        _hf="${_arg/#\~/$HOME}"
+        [ -f "$_hf" ] || continue
+        _kn="$(basename "$_hf" | sed -E 's/한국어수업_([^_]+)_.*/\1/')"
+        if [ -n "$_kn" ] && [ "$_kn" != "$(basename "$_hf")" ]; then
+          python3 - "$REGISTRY" "$_kn" "$_hf" <<'PY' || true
+import json, sys, os
+reg_path, kn, fp = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    reg = json.load(open(reg_path))
+except Exception:
+    sys.exit(0)
+short = fp.replace(os.path.expanduser('~'), '~')
+for s in reg['students']:
+    names = [n for n in [s.get('name_ko'), s.get('name_en'), *s.get('alt_names', [])] if n]
+    if kn in names:
+        s['latest_file'] = short
+        json.dump(reg, open(reg_path, 'w'), ensure_ascii=False, indent=2)
+        print(f'  📝 레지스트리 자동 갱신: {kn} 최신파일 → {os.path.basename(fp)}', file=sys.stderr)
+        break
+PY
+        fi
+        ;;
+    esac
+  done
+}
+
+# upsert <학생한글명> '<JSON필드>' — 멱등 등록/갱신. 봇이 새 학생 정보를 받으면 즉시 호출.
+# 사고: 보람님이 케이리 정보를 줬는데 봇이 "저장"이라 말만 하고 레지스트리에 안 넣어 다음에 또 물음.
+cmd_upsert() {
+  local name="${1:-}"; [ -n "$name" ] || err "사용법: preply-student.sh upsert <학생명> '<JSON필드>'"
+  local fields="${2:-}"; [ -n "$fields" ] || fields='{}'  # ${2:-{}} 는 bash가 오파싱(끝에 } 추가)하므로 분리
+  python3 - "$REGISTRY" "$name" "$fields" <<'PY'
+import json, sys
+reg_path, name, fields_json = sys.argv[1], sys.argv[2], sys.argv[3]
+reg = json.load(open(reg_path))
+try:
+    fields = json.loads(fields_json)
+    if not isinstance(fields, dict): fields = {}
+except Exception:
+    fields = {}
+found = None
+for s in reg['students']:
+    names = [n for n in [s.get('name_ko'), s.get('name_en'), *s.get('alt_names', [])] if n]
+    if name in names:
+        found = s; break
+if found:
+    for k, v in fields.items():
+        if v is not None: found[k] = v
+    action = '갱신'
+else:
+    new = {'name_ko': name, 'name_en': fields.get('name_en', ''), 'theme': '미확인',
+           'interests': [], 'is_trial': False, 'needs_homework_pdf': False,
+           'is_gold_standard': False, 'status': '수업진행중'}
+    new.update(fields)
+    reg['students'].append(new)
+    action = '신규 등록'
+json.dump(reg, open(reg_path, 'w'), ensure_ascii=False, indent=2)
+print(f'✅ {name} {action} 완료 (총 {len(reg["students"])}명)')
+PY
 }
 
 sub="${1:-}"; shift || true
@@ -402,6 +468,7 @@ case "$sub" in
   verify) cmd_verify "$@" ;;
   pdf)    cmd_pdf "$@" ;;
   send)   cmd_send "$@" ;;
+  upsert) cmd_upsert "$@" ;;
   *) cat >&2 <<EOF
 preply-student.sh — 보람님 학생별 교재 헬퍼
   list                      학생 + 최신 파일 목록
@@ -410,6 +477,7 @@ preply-student.sh — 보람님 학생별 교재 헬퍼
   verify <파일>             퀴즈 유실·정답 노출·타학생 잔존 검사
   pdf <파일> [추가...]       학생 전송용 PDF 변환
   send "<메시지>" <파일...>  jarvis-preply-tutor 채널에 첨부 업로드
+  upsert <학생> '<JSON>'    학생 프로필 멱등 등록/갱신 (새 정보 받으면 즉시)
 EOF
      exit 1 ;;
 esac
