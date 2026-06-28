@@ -6,6 +6,24 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ---
 
+## [2026-06-27] — README & Scale Refresh
+
+**Scope**: README/README.ko refresh reflecting 262 commits since the last update (5/8 → 6/27) + zombie LaunchAgent cleanup.
+
+### Added
+
+- README highlights for new subsystems: **Compound Learning** (mistake clusters → permanent behavioural rules), **Proactive Owner State Engine** (infers focus/mood, speaks first), **Response Quality Gates** (auto-regenerates shallow/over-asserted replies), **Image→Memory pipeline**, **3-tier notification routing**.
+- Dynamic GitHub badges (stars / forks / last-commit) + **Contributing & Support** section with a ⭐ CTA.
+
+### Changed
+
+- Corrected stale scale numbers across both READMEs: **99→256 scripts**, **40+→135 scheduled tasks**, **11→94 LaunchAgents**, **16+→40+ skills**.
+- Synced `README.ko.md` with the English version (was lagging: Node 18→22, Ollama Required→Optional, missing Claude CLI badge).
+
+### Removed
+
+- Disabled `com.jarvis.oss-promo` zombie LaunchAgent — deprecated since 2026-04-21, woke every Friday only to log a no-op and exit. plist preserved as `.disabled-20260627` (reversible).
+
 ## [Unreleased] — 2026-05-13
 
 **Scope**: Claude Code marketplace launch + 5 atomic commits (`c6493b1` → `4a817fa` → `c1022eb` → `3fc0d73` → `c426c68`)

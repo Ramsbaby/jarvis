@@ -7,9 +7,9 @@
 > **🔧 리팩터링 공지 (2026-04-20)**: `career-*` / `job-*` 모듈이 커밋 `e74f168` 에서 `profile-*` / `inbox-*` 로 개명되었습니다. (오너 의존성을 제거한 일반화 네이밍)
 > 과거 커밋 메시지·클로즈된 이슈는 여전히 옛 이름을 참조할 수 있습니다. **현재 HEAD 의 네이밍이 정식입니다.**
 
-> **📋 최근 업데이트 (2026-04-22 → 2026-05-08)**: 132개 커밋 · 370개 파일 · +28,680 / −1,761 줄.
-> 핵심 변경: `/verify` 7-게이트 감사관 하네스 · Privacy Guard (PII/시크릿 pre-push 차단) · OAuth 자가 복구 (G5/G6) · Iron Law 4 적용 (OAuth 전용) · 토큰 원장 누적-인식 집계 (분석 도구가 21~4675배 비용 부풀림 정정).
-> **실측 7일 크론 LLM 비용: $9.42** (이론값; Claude Max 구독으로 실 청구 0). 자세한 내용은 [CHANGELOG.md](CHANGELOG.md) 참조.
+> **📋 최근 업데이트 (2026-05-08 → 2026-06-27)**: 262개 커밋 — 지난 README 갱신 이후 프로젝트가 약 40% 성장.
+> 핵심 변경: **복리 학습**(오답 클러스터를 영구 행동 규칙으로 자동 승격 — 같은 실수 재발 차단) · **능동 참견 엔진**(집중·기분을 추론해 먼저 말 검) · **응답 품질 게이트**(얕거나 단정적인 답변 자동 재생성) · **이미지→메모리 배관**(스크린샷이 장기 기억으로) · **알림 3등급 분리**(심각도별 채널).
+> **현재 규모**: 자동화 스크립트 256개 · 예약 작업 135개 · LaunchAgent 94개 · 스킬 40개+. **실측 7일 크론 LLM 비용: $9.42** (이론값; 구독 시 실 청구 0). 자세한 내용은 [CHANGELOG.md](CHANGELOG.md) 참조.
 
 > **🧩 Claude Code 플러그인 (2026-05-13)**: `jarvis-goal` · `jarvis-deep-interview` · `jarvis-plan-review` — Anthropic `/goal`(비가역 가드 추가) · Sorbh/interview-me(수렴형 게이팅) · gstack `/plan-ceo-review`(11섹션) 한국어 환경에서 영문 OSS-safe로 포팅.
 > 설치: `/plugin marketplace add Ramsbaby/jarvis` · 플러그인 상세는 [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) 참조.
@@ -20,9 +20,16 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Ramsbaby/jarvis/stargazers"><img src="https://img.shields.io/github/stars/Ramsbaby/jarvis?style=social" alt="Stars"></a>
+  <a href="https://github.com/Ramsbaby/jarvis/network/members"><img src="https://img.shields.io/github/forks/Ramsbaby/jarvis?style=social" alt="Forks"></a>
+  <a href="https://github.com/Ramsbaby/jarvis/commits"><img src="https://img.shields.io/github/last-commit/Ramsbaby/jarvis" alt="Last commit"></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
-  <img src="https://img.shields.io/badge/Node.js-18+-green.svg" alt="Node.js">
-  <img src="https://img.shields.io/badge/Ollama-Required-orange.svg" alt="Ollama">
+  <img src="https://img.shields.io/badge/Node.js-22+-green.svg" alt="Node.js">
+  <img src="https://img.shields.io/badge/Claude_CLI-Required-blue.svg" alt="Claude CLI">
+  <img src="https://img.shields.io/badge/Ollama-Optional-orange.svg" alt="Ollama">
   <img src="https://img.shields.io/badge/Privacy-100%25_Local-brightgreen.svg" alt="Privacy">
 </p>
 
@@ -53,19 +60,19 @@ API 과금 없이 Claude 구독만으로 돌아갑니다. 데이터는 100% 내 
 
 | 계층 | 구성 | 역할 |
 |:---:|------|------|
-| **접점** | Discord (텍스트 + 음성) | 24/7 대화 인터페이스. 16+ 슬래시 커맨드, 버튼, 음성 인식 |
+| **접점** | Discord (텍스트 + 음성) | 24/7 대화 인터페이스. 40+ 스킬/커맨드, 버튼, 음성 인식 |
 | **두뇌** | Claude + 8개 AI 에이전트 팀 | 대화, 분석, 코드 작성, 의사결정 |
 | **하네스** | Prompt Harness + Progressive Compaction + Session Handoff | 계층형 프롬프트 로딩 (토큰 77% 절약), 3단계 컨텍스트 관리 (40K/60K/80K), 세션 간 구조화된 상태 전달 |
 | **기억** | RAG (LanceDB) + **LLM Wiki** + 인사이트 레이어 + **중요도 게이트** | 10,000+ 문서 검색 + Stateful 위키 + 행동 메트릭 + Mem0 패턴 점수 기반 필터링 (score ≥ 3만 저장) |
 | **방어** | BoundedMap + Error Ledger + API Semaphore + Failure Rule Engine | 메모리 누수 방지, 에러 원장, API 동시 호출 보호, 실패 패턴 자동 학습 |
-| **자동화** | 99 스크립트 + 40+ 크론 (macOS: LaunchAgent, Linux: PM2) | 자가 복구, 새벽 감사, 뉴스 브리핑, 코드 자동 실행 |
+| **자동화** | 256 스크립트 + 135 예약 작업 (macOS: LaunchAgent 94개, Linux: PM2) | 자가 복구, 새벽 감사, 뉴스 브리핑, 코드 자동 실행 |
 | **연동** | MCP + Google Calendar + GitHub | 외부 서비스 통합 |
 
 ## 핵심 기능
 
 | | 기능 | 설명 |
 |---|------|------|
-| 💬 | **Discord 봇** | 24/7 채팅. 스트리밍 응답, 음성 인식(Whisper STT), 채널별 페르소나, 16+ 슬래시 커맨드 |
+| 💬 | **Discord 봇** | 24/7 채팅. 스트리밍 응답, 음성 인식(Whisper STT), 채널별 페르소나, 40+ 슬래시 커맨드 |
 | 👥 | **멀티유저** | 유저별 격리된 메모리, 페어링 코드로 신규 유저 등록, 가족 모드(프라이버시 경계) |
 | 📚 | **RAG 지식 베이스** | 장기 기억. BM25 + 벡터 하이브리드 검색, 10,000+ 문서 |
 | 🗂️ | **LLM Wiki** | [Karpathy 3-layer 패턴](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (Raw/Wiki/Schema) 기반. 4개 인제스트 경로: 실시간 키워드 라우팅, 백그라운드 LLM 소화(Haiku), 야간 배치 합성(03:30), 주간 린트(일요일 04:00). 도메인 위키(`career`/`trading`/`ops`/`knowledge`) + 사용자별 페이지. Discord봇·Board API·Map NPC가 위키를 참조. 지식이 복리로 축적 — 새 정보가 기존 페이지를 업데이트 |
@@ -73,6 +80,9 @@ API 과금 없이 Claude 구독만으로 돌아갑니다. 데이터는 100% 내 
 | 📋 | **Dev-Queue** | AI가 추출한 작업 항목을 자동 큐잉 → `jarvis-coder.sh`가 자동 실행 — 손 안 대고 개발 |
 | 🤖 | **8개 AI 팀** | Council, Infra, Record, Brand, Career, Academy, Trend, Recon — 전문 에이전트 |
 | 🔧 | **자가 복구** | 워치독 자동 재시작, LaunchAgent 가디언(3분), 새벽 코드 감사, 크론 실패 추적 |
+| 🧬 | **복리 학습** | 오답 클러스터를 자동 감지해 영구 행동 규칙으로 승격 — 일회성 수정이 아니라 *규칙*이 누적되어 같은 실수가 재발하지 않음. 자가 개선 가드레일이 시간이 갈수록 늘어남 |
+| 👁️ | **능동 참견** | Owner State Engine이 활동 신호로 현재 집중·기분을 추론해 **먼저 말 검** — 단순 반응형 Q&A가 아님 |
+| ✅ | **응답 품질 게이트** | 얕거나, 단정적이거나, 감정이 메마른 답변을 자동 감지해 전송 전에 재생성 |
 | 🏗️ | **프롬프트 하네스** | [Anthropic 하네스 엔지니어링](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) — Tier 0(핵심, 항상 <3KB) / Tier 1(맥락적, 키워드 트리거). Progressive Compaction 40K/60K/80K 3단계. 시스템 프롬프트 77% 감소 |
 | 🛡️ | **방어 레이어** | BoundedMap(메모리 누수 방지), Error Ledger(JSONL 에러 원장), API Semaphore(동시 호출 보호), Failure Rule Engine(실패 패턴 자동 학습), Symlink Health Check(매시간 검증) |
 | 📢 | **알림 포맷터** | 크론 메시지에 자동 헤더(`> 🟢/🟡/🔴 태스크명 · HH:MM KST`), 노이즈 게이트(순수 성공 전송 생략), 심각도 기반 Discord Embed(Uptime Kuma 패턴) |
@@ -85,7 +95,7 @@ API 과금 없이 Claude 구독만으로 돌아갑니다. 데이터는 100% 내 
 |---|:---:|:---:|:---:|:---:|
 | **메모리 구조** | RAG + **LLM Wiki** + 인사이트 레이어 (메트릭 기반) | 파일 기반 (CLAUDE.md + Auto Dream) | 전량 주입 (모든 메모리를 매번 로드) | 3단계 수면 사이클 (Light → REM → Deep) |
 | **트렌드 감지** | O (토픽 빈도 변화, 엔티티 모멘텀) | X | X | O (REM 단계에서 패턴 추출) |
-| **자동화/크론** | 99 스크립트 + 자가 복구 | X (CLI 도구) | X | 크론 1개 (dreaming sweep) |
+| **자동화/크론** | 256 스크립트 + 자가 복구 | X (CLI 도구) | X | 크론 1개 (dreaming sweep) |
 | **자율 코딩** | O (Dev-Queue → jarvis-coder) | X | X | X |
 | **멀티유저** | O (격리 메모리 + 가족 모드) | X (단일 사용자) | X (단일 사용자) | X (단일 에이전트) |
 | **비용** | $0 (Claude 구독 내) | $0 (구독 포함) | $0 (무료 포함) | $0 (오픈소스) |
@@ -331,7 +341,7 @@ BM25 + Ollama 벡터 하이브리드 검색 (`snowflake-arctic-embed2`, 1024-dim
 </p>
 <p align="center"><em>자동 시스템 점검: 10개 서비스를 6시간마다 모니터링</em></p>
 
-Jarvis는 실행만 하지 않습니다 — **스스로 복구합니다.** 99개 스크립트, 11개 LaunchAgent, 40+ 크론, 4층 자가 복구 (`bot-heal` → `process-recovery` → `cron-auditor` → `auto-diagnose`):
+Jarvis는 실행만 하지 않습니다 — **스스로 복구합니다.** 256개 스크립트, 94개 LaunchAgent, 135개 예약 작업, 4층 자가 복구 (`bot-heal` → `process-recovery` → `cron-auditor` → `auto-diagnose`):
 
 | | 하는 일 | 주기 |
 |---|---|---|
@@ -437,6 +447,14 @@ jarvis/
 - **인사이트 리포트 없음** — `BOT_HOME=~/.jarvis node rag/bin/insight-distill.mjs`
 
 </details>
+
+## 기여 & 지원
+
+Jarvis는 공개적으로 개발됩니다. 도움이 되셨거나 아키텍처가 흥미로우셨다면 **⭐ 하나가 큰 힘이 됩니다** — 다른 분들이 이 프로젝트를 발견하는 데도 도움이 됩니다.
+
+- 🐛 **버그나 아이디어가 있으신가요?** [이슈](https://github.com/Ramsbaby/jarvis/issues)를 열어주세요.
+- 🔧 **기여하고 싶으신가요?** PR 환영합니다 — [프로젝트 구조](#프로젝트-구조)로 먼저 파악하세요.
+- 💬 **질문이 있으신가요?** [디스커션](https://github.com/Ramsbaby/jarvis/discussions)에서 시작하세요.
 
 ## 라이선스
 

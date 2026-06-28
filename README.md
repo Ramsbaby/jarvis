@@ -7,9 +7,9 @@
 > **🔧 Refactor Notice (2026-04-20)**: Modules `career-*` / `job-*` were renamed to `profile-*` / `inbox-*` in commit `e74f168` to reflect a more generic, owner-agnostic abstraction.
 > Legacy commit messages and closed issues may still reference the old names. **Current HEAD is the canonical naming.**
 
-> **📋 Recent Updates (2026-04-22 → 2026-05-08)**: 132 commits · 370 files · +28,680 / −1,761 lines.
-> Highlights: `/verify` 7-Gate auditor harness · Privacy Guard (PII/secrets pre-push) · OAuth self-healing (G5/G6) · Iron Law 4 enforcement · Token-ledger cumulative-aware aggregation (analytics tools were inflating costs 21–4675× before fix).
-> **Verified 7-day cron LLM cost: $9.42** (theoretical API price; runs $0 on Claude Max subscription). See [CHANGELOG.md](CHANGELOG.md) for details.
+> **📋 Recent Updates (2026-05-08 → 2026-06-27)**: 262 commits — the project grew ~40% since the last README refresh.
+> Highlights: **Compound Learning** (mistake clusters auto-promoted to permanent behavioural rules — the same error stops recurring) · **Proactive Owner State Engine** (infers your focus/mood and speaks first) · **Response Quality Gates** (auto-regenerates shallow or over-asserted replies) · **Image→Memory pipeline** (screenshots flow into long-term memory) · **3-tier notification routing** (severity-split channels).
+> **Scale now**: 256 automation scripts · 135 scheduled tasks · 94 LaunchAgents · 40+ skills. **Verified 7-day cron LLM cost: $9.42** (theoretical API price; $0 on a Claude subscription). See [CHANGELOG.md](CHANGELOG.md).
 
 > **🧩 Claude Code Plugins (2026-05-13)**: `jarvis-goal` · `jarvis-deep-interview` · `jarvis-plan-review` — Anthropic `/goal` port with irreversibility guard, Sorbh/interview-me convergent gating port, gstack `/plan-ceo-review` 11-section port. All OSS-safe English.
 > Install: `/plugin marketplace add Ramsbaby/jarvis` · See [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) for plugin details.
@@ -17,6 +17,12 @@
 <p align="center">
   <strong>AI operations platform that manages itself 24/7</strong><br>
   Discord Bot + RAG Knowledge Base + Insight Layer + Self-Healing Automation
+</p>
+
+<p align="center">
+  <a href="https://github.com/Ramsbaby/jarvis/stargazers"><img src="https://img.shields.io/github/stars/Ramsbaby/jarvis?style=social" alt="Stars"></a>
+  <a href="https://github.com/Ramsbaby/jarvis/network/members"><img src="https://img.shields.io/github/forks/Ramsbaby/jarvis?style=social" alt="Forks"></a>
+  <a href="https://github.com/Ramsbaby/jarvis/commits"><img src="https://img.shields.io/github/last-commit/Ramsbaby/jarvis" alt="Last commit"></a>
 </p>
 
 <p align="center">
@@ -44,7 +50,7 @@
 > **"An AI assistant that audits your systems, analyses news, and writes code — while you sleep."**
 
 Message it on Discord and it chats. Send a voice message and it understands. Drop a file and it remembers.
-Overnight, 99 automation scripts run cron jobs. If a service dies, it self-recovers within 3 minutes.
+Overnight, 256 automation scripts run 135 scheduled tasks. If a service dies, it self-recovers within 3 minutes.
 Every dawn, it analyses your behavioural patterns and responds knowing what you're focused on right now.
 Zero API charges — runs on a Claude subscription. 100% of your data stays on your machine.
 
@@ -54,19 +60,19 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 
 | Layer | Components | Role |
 |:---:|------|------|
-| **Interface** | Discord (text + voice) | 24/7 conversational UI. 16+ slash commands, buttons, voice recognition |
+| **Interface** | Discord (text + voice) | 24/7 conversational UI. 40+ skills/commands, buttons, voice recognition |
 | **Brain** | Claude + 8 AI agent teams | Chat, analysis, code generation, decision-making |
 | **Harness** | Prompt Harness + Progressive Compaction + Session Handoff | Tiered prompt loading (77% token savings), 3-stage context management (40K/60K/80K), structured state transfer between sessions |
 | **Memory** | RAG (LanceDB) + **LLM Wiki** + Insight Layer + **Importance Gate** | 10,000+ doc search + Stateful wiki + behavioural metrics + Mem0-style scoring (score ≥ 3 only stored) |
 | **Defense** | BoundedMap + Error Ledger + API Semaphore + Failure Rule Engine | Memory leak prevention, silent error tracking, concurrent API protection, auto pattern matching for known failures |
-| **Automation** | 99 scripts + 40+ crons (LaunchAgents on macOS, PM2 on Linux) | Self-healing, dawn audits, news briefing, auto code execution |
+| **Automation** | 256 scripts + 135 scheduled tasks (94 LaunchAgents on macOS, PM2 on Linux) | Self-healing, dawn audits, news briefing, auto code execution |
 | **Integration** | MCP + Google Calendar + GitHub | External service connectivity |
 
 ## Core Features
 
 | | Feature | Description |
 |---|---------|-------------|
-| 💬 | **Discord Bot** | 24/7 chat with streaming, voice recognition (Whisper STT), per-channel personas, 16+ slash commands |
+| 💬 | **Discord Bot** | 24/7 chat with streaming, voice recognition (Whisper STT), per-channel personas, 40+ slash commands |
 | 👥 | **Multi-User** | Per-user isolated memory, pairing codes for new users, family mode with privacy boundaries |
 | 📚 | **RAG Knowledge Base** | Long-term memory. BM25 + vector hybrid search across 10,000+ documents |
 | 🗂️ | **LLM Wiki** | [Karpathy's 3-layer pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) (Raw/Wiki/Schema). 4 ingest paths: realtime keyword routing, background LLM digest (Haiku), nightly batch synthesis (03:30), weekly lint (Sunday 04:00). Domain wikis (`career`/`trading`/`ops`/`knowledge`) + per-user pages. Feeds Discord bot, Board API, and Map NPCs. Knowledge compounds — new info updates existing pages, not appends |
@@ -74,6 +80,9 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 | 📋 | **Dev-Queue** | AI-extracted action items auto-queued, then auto-executed by `jarvis-coder.sh` — hands-free development |
 | 🤖 | **8 AI Teams** | Council, Infra, Record, Brand, Career, Academy, Trend, Recon — each with specialised agents |
 | 🔧 | **Self-Healing** | Watchdog auto-restart, LaunchAgent guardian (3min), dawn code audits, cron failure tracking |
+| 🧬 | **Compound Learning** | Mistake clusters are auto-detected and promoted to permanent behavioural rules — the same error stops recurring because the *rule* accumulates, not just the one-off fix. Self-improving guard rails grow over time |
+| 👁️ | **Proactive Engagement** | An Owner State Engine infers your current focus and mood from activity signals and **speaks first** — not just reactive Q&A |
+| ✅ | **Response Quality Gates** | Auto-detects shallow, over-asserted, or emotionally-flat replies and regenerates them before they're sent |
 | 🏗️ | **Prompt Harness** | [Anthropic harness engineering](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) — Tier 0 (core, always <3KB) / Tier 1 (contextual, keyword-triggered). Progressive Compaction at 40K/60K/80K tokens. 77% system prompt reduction |
 | 🛡️ | **Defense Layers** | BoundedMap (memory leak prevention), Error Ledger (JSONL audit trail), API Semaphore (concurrent call protection), Failure Rule Engine (auto pattern learning), Symlink Health Check (hourly validation) |
 | 📢 | **Notification Formatter** | Cron messages get auto-headers (`> 🟢/🟡/🔴 taskname · HH:MM KST`), noise gate (suppress pure-success), severity-based Discord Embeds (Uptime Kuma pattern) |
@@ -86,7 +95,7 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 |---|:---:|:---:|:---:|:---:|
 | **Memory** | RAG + **LLM Wiki** + Insight Layer | File-based (CLAUDE.md + Auto Dream) | Inject-all (every memory, every turn) | 3-phase sleep cycle (Light → REM → Deep) |
 | **Trend Detection** | Yes (topic freq shifts, entity momentum) | No | No | Yes (REM-phase pattern extraction) |
-| **Automation** | 99 scripts + self-healing | No (CLI tool) | No | 1 cron (dreaming sweep) |
+| **Automation** | 256 scripts + self-healing | No (CLI tool) | No | 1 cron (dreaming sweep) |
 | **Autonomous Coding** | Yes (Dev-Queue → jarvis-coder) | No | No | No |
 | **Multi-User** | Yes (isolated memory + family mode) | No (single user) | No (single user) | No (single agent) |
 | **Cost** | $0 (Claude subscription) | $0 (subscription) | $0 (free tier) | $0 (open source) |
@@ -375,7 +384,7 @@ Jarvis doesn't just chat — it **writes code**.
 </p>
 <p align="center"><em>Automated system health check: 10 services monitored every 6 hours</em></p>
 
-Jarvis doesn't just run — it **heals itself**. 99 automation scripts, 11 LaunchAgents, 40+ cron jobs. Multi-layer self-recovery + systemic defense:
+Jarvis doesn't just run — it **heals itself**. 256 automation scripts, 94 LaunchAgents, 135 scheduled tasks. Multi-layer self-recovery + systemic defense:
 
 **Harness (Anthropic 4-function pattern)**:
 - **Guides**: Tiered prompt loading — Tier 0 (always, <3KB) / Tier 1 (keyword-triggered)
@@ -501,6 +510,14 @@ jarvis/
 - **Full troubleshooting**: [`infra/CLAUDE-SETUP-GUIDE.md`](infra/CLAUDE-SETUP-GUIDE.md#6-troubleshooting)
 
 </details>
+
+## Contributing & Support
+
+Jarvis is built in the open. If it helped you — or you just find the architecture interesting — **a ⭐ means a lot** and helps others discover it.
+
+- 🐛 **Found a bug or have an idea?** Open an [issue](https://github.com/Ramsbaby/jarvis/issues).
+- 🔧 **Want to contribute?** PRs welcome — see the [project structure](#project-structure) to get oriented.
+- 💬 **Questions?** Start a [discussion](https://github.com/Ramsbaby/jarvis/discussions).
 
 ## License
 
