@@ -1,0 +1,29 @@
+{
+  "_comment": "Apollo owner-business preferences — TEMPLATE. Copy to runtime/private/apollo-owner-prefs.json (git-ignored) and fill in real values. Apollo + heist/hustler/herald/hit read the runtime file; until it exists they run on this template and every threshold check is a placeholder, not a real guardrail.",
+  "owner_name": "",
+  "finance": {
+    "minimum_cash_buffer": null,
+    "currency": "USD",
+    "spend_threshold_requiring_approval": null,
+    "notes": "min buffer = Heist flags any withdrawal that would drop cash below this; spend threshold = Hustler/Apollo escalate spend at or above this for owner sign-off."
+  },
+  "businesses": [
+    {
+      "name": "",
+      "type": "",
+      "notes": "One entry per separate legal/operational entity. Hustler keeps metrics separate per business."
+    }
+  ],
+  "outreach": {
+    "brand_voice": "",
+    "preauthorized_templates": []
+  },
+  "technology": {
+    "tools_in_use": [],
+    "critical_systems": []
+  },
+  "tax": {
+    "jurisdictions": [],
+    "notes": "e.g. federal + state/province; Heist tracks filing deadlines against these."
+  }
+}
