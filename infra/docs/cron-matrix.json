@@ -1,19 +1,20 @@
 {
-  "generatedAt": "2026-06-22T00:10:05.259Z",
-  "totalTasks": 134,
+  "generatedAt": "2026-07-06T00:10:05.449Z",
+  "totalTasks": 135,
   "source": "runtime/config/tasks.json",
   "modelDistribution": {
     "claude-sonnet-4-6": 21,
-    "claude-haiku-4-5-20251001": 40,
-    "claude-opus-4-8": 3,
-    "<default>": 70
+    "claude-haiku-4-5-20251001": 41,
+    "claude-opus-4-6": 1,
+    "<default>": 70,
+    "claude-opus-4-8": 2
   },
   "channelDistribution": {
     "jarvis": 5,
     "jarvis-system": 42,
     "jarvis-market": 3,
-    "jarvis-ceo": 25,
-    "<none>": 44,
+    "jarvis-ceo": 24,
+    "<none>": 45,
     "jarvis-career": 1,
     "jarvis-dev": 3,
     "jarvis-alerts": 2,
@@ -21,7 +22,8 @@
     "jarvis-blog": 4,
     "jarvis-lite": 1,
     "jarvis-inbox": 1,
-    "jarvis-interview": 2
+    "jarvis-interview": 2,
+    "jarvis-info": 1
   },
   "groups": {
     "daily": [
@@ -46,16 +48,6 @@
         "allowedTools": null
       },
       {
-        "id": "board-perf-review",
-        "name": "에이전트 일일 성과 평가 및 승격/강등 처리",
-        "schedule": "0 18 * * *",
-        "model": "<default>",
-        "channel": "jarvis-ceo",
-        "timeout": 120,
-        "maxBudget": "0.30",
-        "allowedTools": null
-      },
-      {
         "id": "memory-cleanup",
         "name": "메모리 정리",
         "schedule": "0 2 * * *",
@@ -74,6 +66,16 @@
         "timeout": 300,
         "maxBudget": "1.00",
         "allowedTools": "Read"
+      },
+      {
+        "id": "owner-state-engine",
+        "name": "참견 v3 — 주인님 상태 엔진",
+        "schedule": "0 21 * * *",
+        "model": "<default>",
+        "channel": "jarvis-info",
+        "timeout": 300,
+        "maxBudget": "0.00",
+        "allowedTools": "Bash"
       },
       {
         "id": "dev-event-watcher",
@@ -139,7 +141,7 @@
         "id": "news-briefing",
         "name": "뉴스 브리핑",
         "schedule": "0 6 * * *",
-        "model": "claude-opus-4-8",
+        "model": "claude-opus-4-6",
         "channel": "jarvis",
         "timeout": 300,
         "maxBudget": "0.50",
@@ -1190,6 +1192,16 @@
         "channel": "jarvis-system",
         "timeout": 240,
         "maxBudget": "0.30",
+        "allowedTools": "Bash"
+      },
+      {
+        "id": "monitoring-pre-check",
+        "name": "모니터링 인프라 사전 점검",
+        "schedule": "(adhoc)",
+        "model": "claude-haiku-4-5-20251001",
+        "channel": "<none>",
+        "timeout": 60,
+        "maxBudget": "0.00",
         "allowedTools": "Bash"
       },
       {

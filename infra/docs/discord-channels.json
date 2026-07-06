@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-06-22T00:10:05.340Z",
-  "totalChannels": 13,
-  "totalTasks": 134,
+  "generatedAt": "2026-07-06T00:10:05.518Z",
+  "totalChannels": 14,
+  "totalTasks": 135,
   "source": "runtime/config/tasks.json + infra/config/models.json",
   "channels": {
     "<no-channel>": {
-      "taskCount": 44,
+      "taskCount": 45,
       "tasks": [
         {
           "id": "memory-cleanup",
@@ -224,6 +224,11 @@
         },
         {
           "id": "cluster-guard-response-validation-cl-fd25ae4c34818568",
+          "schedule": "(adhoc)",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "monitoring-pre-check",
           "schedule": "(adhoc)",
           "model": "claude-haiku-4-5-20251001"
         }
@@ -449,7 +454,7 @@
       "effortOverride": "max"
     },
     "jarvis-ceo": {
-      "taskCount": 25,
+      "taskCount": 24,
       "tasks": [
         {
           "id": "weekly-report",
@@ -542,11 +547,6 @@
           "model": "<default>"
         },
         {
-          "id": "board-perf-review",
-          "schedule": "0 18 * * *",
-          "model": "<default>"
-        },
-        {
           "id": "geeknews-bench-report",
           "schedule": "0 9 * * 1",
           "model": "claude-haiku-4-5-20251001"
@@ -596,7 +596,7 @@
         {
           "id": "news-briefing",
           "schedule": "0 6 * * *",
-          "model": "claude-opus-4-8"
+          "model": "claude-opus-4-6"
         },
         {
           "id": "calendar-alert",
@@ -760,6 +760,18 @@
           "id": "inbox-alert",
           "schedule": "0 9 * * *",
           "model": "claude-haiku-4-5-20251001"
+        }
+      ],
+      "modelOverride": null,
+      "effortOverride": null
+    },
+    "jarvis-info": {
+      "taskCount": 1,
+      "tasks": [
+        {
+          "id": "owner-state-engine",
+          "schedule": "0 21 * * *",
+          "model": "<default>"
         }
       ],
       "modelOverride": null,

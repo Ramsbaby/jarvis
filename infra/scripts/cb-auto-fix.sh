@@ -79,15 +79,13 @@ if [[ "$FIXED" == false ]] && echo "$RECENT_LOGS" | grep -q "No such file or dir
                 FIX_SUMMARY="누락 디렉토리 자동 생성: $MISSING_PATH"
             } || true
         elif [[ "$EXPANDED_PATH" == *.sh ]]; then
-            # 스크립트 파일인 경우 — 빈 stub 생성
-            mkdir -p "$PARENT_DIR" 2>/dev/null || true
+            # 스크립트 파일인 경우 — 2026-07-03 수정(독립감사 #5 적발):
+            #   exit-0 가짜 성공 stub 자동 생성은 '침묵 실패 제조기' — 해당 크론이 영원히
+            #   성공 보고하며 기능은 사망. stub을 만들지 않고 실패로 남기고 critical 알림만 발송.
             if [[ ! -f "$EXPANDED_PATH" ]]; then
-                printf '#!/usr/bin/env bash\n# Auto-generated stub by cb-auto-fix.sh\necho "TODO: %s 구현 필요"\nexit 0\n' \
-                    "$(basename "$EXPANDED_PATH")" > "$EXPANDED_PATH"
-                chmod +x "$EXPANDED_PATH"
-                _log "스크립트 stub 생성: $EXPANDED_PATH"
-                FIXED=true
-                FIX_SUMMARY="누락 스크립트 stub 생성: $MISSING_PATH (내용은 수동 구현 필요)"
+                _log "누락 스크립트 감지(stub 자동생성 안 함): $EXPANDED_PATH"
+                _discord "🚨 **CB Auto-Fix**: 누락 스크립트 \`${MISSING_PATH}\` — 자동 stub 생성 금지(침묵실패 방지). 수동 구현 또는 크론 비활성 필요."
+                # FIXED=false 유지 → 실패가 정직하게 드러남
             fi
         else
             # 부모 디렉토리만 생성

@@ -12,6 +12,12 @@
 
 set -euo pipefail
 
+# guards.sh import — 반복 실수 클러스터 cl-a1a431b0e672e736 방어
+source "${BOT_HOME:-${HOME}/.jarvis}/infra/lib/guards.sh" 2>/dev/null || {
+  printf '[%s] ERROR: Failed to source guards.sh\n' "$(date +%s)" >&2
+  exit 1
+}
+
 # 설정
 BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 if [[ ! -d "$BOT_HOME" ]]; then

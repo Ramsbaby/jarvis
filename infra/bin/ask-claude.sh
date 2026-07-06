@@ -105,6 +105,17 @@ echo 'ref: refs/heads/main' > "$WORK_DIR/.git/HEAD"
 # Layer 4: Empty plugins directory
 mkdir -p "$WORK_DIR/.empty-plugins"
 
+# --- Runtime guards (Cluster cl-a1a431b0e672e736: assertion before verification) ---
+# Source guard functions for pre-action verification (경로/프로세스/파일 미확인 후 단언 방지)
+source "${BOT_HOME}/lib/guards.sh" 2>/dev/null || true
+# Validate critical paths before proceeding
+assert_directory_exists "$WORK_DIR" "work directory" -w || exit 1
+assert_directory_exists "$RESULTS_DIR" "results directory" -w || exit 1
+assert_directory_exists "$(dirname "$LOG_FILE")" "log directory" -w || exit 1
+assert_directory_exists "$(dirname "$PID_FILE")" "pid directory" -w || exit 1
+assert_variable_set "BOT_HOME" "bot home" || exit 1
+assert_variable_set "TASK_ID" "task id" || exit 1
+
 # Sleep prevention (double defense with launchd)
 if $IS_MACOS; then
   caffeinate -i -w $$ &
@@ -117,6 +128,15 @@ START_TIME=$(date +%s)
 # --- Build system prompt with context (sourced module) ---
 source "${BOT_HOME}/lib/context-loader.sh"
 load_context
+
+# --- Requirement check guard (Cluster cl-28e5202af0584c23): Extract and track requirements ---
+# Pre-execution: Extract requirements from prompt
+if [[ -f "${BOT_HOME}/lib/requirement-check-guard.sh" ]]; then
+    source "${BOT_HOME}/lib/requirement-check-guard.sh" 2>/dev/null || true
+    if command -v check_requirements_pre >/dev/null 2>&1; then
+        check_requirements_pre "$TASK_ID" "$PROMPT" 2>/dev/null || true
+    fi
+fi
 
 # --- Board approval reactions removed (board system not included) ---
 
@@ -168,6 +188,31 @@ if command -v rca_gate_check >/dev/null 2>&1; then
         exit 1
     fi
 fi
+
+# --- Token Budget Guard (ADR-013): 누적 비용 상한 초과 시 조기 종료 ---
+# 목적: 에이전틱 루프의 토큰 폭주 방지. 예산 초과 시 exit 2 (비정상 종료 없음).
+# 체크 순서: 1) 태스크별 누적 예산, 2) 일일 전체 한도
+_TOKEN_BUDGET_GUARD="${BOT_HOME}/lib/token-budget-guard.mjs"
+if command -v node >/dev/null 2>&1 && [[ -f "$_TOKEN_BUDGET_GUARD" ]]; then
+    _GUARD_ARGS=(--task "$TASK_ID")
+    [[ -n "${MAX_BUDGET:-}" ]] && _GUARD_ARGS+=(--max-budget "$MAX_BUDGET")
+    [[ -n "${JARVIS_DAILY_CAP_USD:-}" ]] && _GUARD_ARGS+=(--daily-cap "$JARVIS_DAILY_CAP_USD")
+    _GUARD_RESULT=$(node "$_TOKEN_BUDGET_GUARD" check "${_GUARD_ARGS[@]}" 2>&1)
+    _GUARD_EXIT=$?
+    if [[ $_GUARD_EXIT -eq 2 ]]; then
+        # 예산 초과: 경고 로그 + 조기 종료 (exit 2)
+        log_jsonl "blocked" "token_budget_guard: budget exceeded — ${_GUARD_RESULT}" "0"
+        printf '[%s] TOKEN_BUDGET_GUARD BLOCKED task=%s reason=%s\n' \
+            "$(date '+%F %H:%M:%S')" "$TASK_ID" "$_GUARD_RESULT" >&2
+        record_outcome "$TASK_ID" "false" "0" "0" 2>/dev/null || true
+        exit 2
+    elif [[ $_GUARD_EXIT -ne 0 ]]; then
+        # 가드 자체 오류 — 실행 차단하지 않고 경고만 기록
+        log_jsonl "warn" "token_budget_guard: guard error (exit $_GUARD_EXIT) — proceeding" "0"
+    fi
+    unset _GUARD_ARGS _GUARD_RESULT _GUARD_EXIT
+fi
+unset _TOKEN_BUDGET_GUARD
 
 # --- Execute LLM call (claude -p with multi-provider fallback) ---
 # Prevent nested claude detection (but preserve CLAUDECODE for OAuth credential inheritance)
@@ -322,19 +367,23 @@ ROOT_CAUSE_VERDICT="pass"
 ROOT_CAUSE_REASON=""
 ROOT_CAUSE_BLOCKED=false
 ROOT_CAUSE_LIB="${BOT_HOME}/lib/root-cause-validator.sh"
-if [[ -f "$ROOT_CAUSE_LIB" ]]; then
+# NOTE: root-cause-validator.sh uses bash 4.3+ features (nameref) not available in macOS bash 3.2
+# Skip validation if not supported in current shell (compatibility mode)
+if [[ -f "$ROOT_CAUSE_LIB" && ${BASH_VERSINFO[0]:-0} -ge 4 ]]; then
     # shellcheck source=/dev/null
-    source "$ROOT_CAUSE_LIB"
-    validate_root_cause "$TASK_ID" "$RESULT" "$PROMPT" || true
-    if [[ "$ROOT_CAUSE_BLOCKED" == "true" ]]; then
-        log_jsonl "error" "root_cause_analysis_blocked: ${ROOT_CAUSE_REASON}" "$DURATION"
-        echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-root-cause-fail.json"
-        record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
-        # stdout으로 에러 메시지 (retry-wrapper가 분류에 사용)
-        echo "ROOT_CAUSE_ANALYSIS_REQUIRED: ${ROOT_CAUSE_REASON}"
-        exit 1
-    elif [[ "$ROOT_CAUSE_VERDICT" == "warn" ]]; then
-        log_jsonl "warn" "root_cause_analysis_warn: ${ROOT_CAUSE_REASON}" "$DURATION"
+    source "$ROOT_CAUSE_LIB" 2>/dev/null || true
+    if command -v validate_root_cause_analysis >/dev/null 2>&1; then
+        validate_root_cause_analysis "$TASK_ID" "$RESULT" "$PROMPT" 2>/dev/null || true
+        if [[ "$ROOT_CAUSE_BLOCKED" == "true" ]]; then
+            log_jsonl "error" "root_cause_analysis_blocked: ${ROOT_CAUSE_REASON}" "$DURATION"
+            echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-root-cause-fail.json"
+            record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
+            # stdout으로 에러 메시지 (retry-wrapper가 분류에 사용)
+            echo "ROOT_CAUSE_ANALYSIS_REQUIRED: ${ROOT_CAUSE_REASON}"
+            exit 1
+        elif [[ "$ROOT_CAUSE_VERDICT" == "warn" ]]; then
+            log_jsonl "warn" "root_cause_analysis_warn: ${ROOT_CAUSE_REASON}" "$DURATION"
+        fi
     fi
 fi
 
@@ -353,6 +402,22 @@ RESULT=$(printf '%s' "$RESULT" | sed '/^결과를 .*에 저장했습니다/d; /^
   printf '# Task: %s\nDate: %s\n\n## Prompt\n%s\n\n## Result\n%s\n' \
     "$TASK_ID" "$(date -u +%Y-%m-%d)" "$PROMPT" "$RESULT"
 } > "$RESULT_FILE"
+
+# --- Post-save file validation (Cluster cl-dcd8ff3443b1f052: 파일 저장 후 자동 검증) ---
+# 파일 저장/업로드 후 경로, 크기, 내용을 자동으로 검증하는 가드
+if [[ -f "${BOT_HOME}/lib/post-save-file-guard.sh" ]]; then
+  source "${BOT_HOME}/lib/post-save-file-guard.sh" 2>/dev/null || true
+  # 결과 파일 검증 (실패해도 진행 계속 — graceful)
+  if command -v validate_and_report_file >/dev/null 2>&1; then
+    validate_and_report_file "$RESULT_FILE" "" "ask-claude-result-$TASK_ID" 2>/dev/null || true
+  fi
+fi
+
+# --- Requirement check guard (Cluster cl-28e5202af0584c23): Validate output meets requirements ---
+# Post-execution: Check if generated output meets extracted requirements
+if command -v check_requirements_post >/dev/null 2>&1; then
+    check_requirements_post "$TASK_ID" "$RESULT_FILE" 2>/dev/null || true
+fi
 
 # --- Auto-insights: 결과에서 인사이트 추출 후 Vault에 저장 ---
 record_insight "$TASK_ID" "$RESULT" || true
@@ -392,6 +457,108 @@ except (FileNotFoundError, json.JSONDecodeError):
 
 log_jsonl "success" "Completed in ${DURATION}s" "$DURATION" "$COST_EXTRA"
 record_outcome "$TASK_ID" "true" "$(( DURATION * 1000 ))" "${COST_USD:-0}" || true
+
+# --- Guard: File state cache & contradiction detection (Cluster cl-6f0c8cc1df90e995) ---
+# 파일 상태 혼동 및 일관성 부재 방어: 파일 조작 전 상태를 1회만 조회하여 응답 전체에 고정
+# 동일 응답 내 파일 존재/부재 모순 감지 시 Tier 2 경고 자동 로깅
+if [[ -f "${BOT_HOME}/lib/file-state-cache.sh" && -f "${BOT_HOME}/lib/file-state-contradiction-guard.sh" ]]; then
+    source "${BOT_HOME}/lib/file-state-cache.sh" 2>/dev/null || true
+    source "${BOT_HOME}/lib/file-state-contradiction-guard.sh" 2>/dev/null || true
+
+    # [1] 응답 시작: 파일 상태 캐시 초기화 (RESPONSE_ID 설정)
+    export RESPONSE_ID="${TASK_ID}-$(date -u +%s)-$$"
+    init_file_state_cache "$RESPONSE_ID" 2>/dev/null || true
+
+    # [2] 응답 종료: 파일 상태 모순 감지
+    if [[ -n "$RAW_OUTPUT" ]]; then
+        # 파일 상태 모순 검사
+        if ! guard_file_state_contradictions "$TASK_ID" "$RAW_OUTPUT" 2>/dev/null; then
+            # 모순 감지 시 dev-queue에 자동 Tier 2 작업 등록
+            if [[ -f "${BOT_HOME}/lib/file-state-dev-queue-bridge.sh" ]]; then
+                source "${BOT_HOME}/lib/file-state-dev-queue-bridge.sh" 2>/dev/null || true
+                enqueue_file_state_contradiction_task "$TASK_ID" "파일 상태 모순 감지: 응답 내 존재/부재 상태 불일치" "ERROR" 2>/dev/null || true
+            fi
+            log_jsonl "warn" "File state contradiction detected — Tier 2 analysis task enqueued (cluster=cl-6f0c8cc1df90e995)" "0"
+        fi
+
+        # 캐시된 상태와 응답 내용 최종 검증
+        if ! validate_file_state_consistency "$RESPONSE_ID" "$RAW_OUTPUT" 2>/dev/null; then
+            log_jsonl "warn" "File state cache consistency check: potential mismatch in cached vs reported states" "0"
+        fi
+    fi
+
+    # [3] 캐시 정리 (응답 종료 후 7일 이상 된 캐시 제거)
+    cleanup_old_caches 7 2>/dev/null || true
+fi
+
+# --- Guard: Completion safety check (Cluster cl-d062d5d4b813f265) ---
+# 완료 선언 키워드 감지 시 도구 호출 히스토리 검증 (파일 미열람 후 단언 방지)
+# Source guard library for completion safety verification
+if [[ -f "${BOT_HOME}/lib/guard-completion-check.sh" ]]; then
+    source "${BOT_HOME}/lib/guard-completion-check.sh" 2>/dev/null || true
+
+    # Extract PROMPT from context if available (fallback to empty if not in scope)
+    GUARD_USER_MESSAGE="${PROMPT:-}"
+
+    # Extract tool_calls from RAW_OUTPUT and run safety check
+    if [[ -n "$RAW_OUTPUT" ]]; then
+        if ! check_completion_safety_from_claude_output "$GUARD_USER_MESSAGE" "$RAW_OUTPUT" "$TASK_ID" 2>/dev/null; then
+            # Guard check failed — log alert but don't block output (soft warning)
+            log_jsonl "warn" "Completion safety check FAILED — potential file/path verification issue detected" "0"
+        fi
+    fi
+fi
+
+# --- Guard: File existence assertion validator (Cluster cl-3dbad2477e65b7b7) ---
+# 파일 존재 판단 오류 클러스터 방어: 응답의 파일 단언과 실제 존재 여부 대조
+# 후처리 검증 로직 — 기존 동작 차단 없음 (경고 로깅만)
+if [[ -f "${BOT_HOME}/lib/file-existence-validator.sh" ]]; then
+    source "${BOT_HOME}/lib/file-existence-validator.sh" 2>/dev/null || true
+
+    if command -v validate_file_assertions >/dev/null 2>&1; then
+        # RESULT 텍스트에서 파일 단언 검증
+        if ! validate_file_assertions "$RESULT" "$WORK_DIR" 2>/dev/null; then
+            log_jsonl "warn" "File existence assertion validation: potential mismatch detected" "0"
+        fi
+    fi
+fi
+
+# --- Guard: File validation after completion (Cluster cl-dcd8ff3443b1f052) ---
+# 파일 저장/업로드 직후 경로 존재, 크기, 언어 비율을 자동 검증
+# 검증 실패 시 경고 로그 및 상세 보고서 생성 (기존 동작 차단 없음)
+if [[ -f "${BOT_HOME}/lib/file-validator.sh" ]] && command -v jq >/dev/null 2>&1; then
+    source "${BOT_HOME}/lib/file-validator.sh" 2>/dev/null || true
+
+    # RAW_OUTPUT에서 저장된 파일 경로 추출 (Write, Edit, Bash 도구 결과)
+    # 형식 예: {"saved_to": "/path/to/file", ...} 또는 기타 파일 경로 언급
+    if [[ -n "$RAW_OUTPUT" ]]; then
+        # jq를 사용하여 저장된 파일 경로 추출 시도
+        SAVED_FILES=$(echo "$RAW_OUTPUT" | jq -r '.saved_files[]? // .file_path // empty' 2>/dev/null || echo "")
+
+        # 경로가 없으면 출력 텍스트에서 간단히 추출 시도
+        if [[ -z "$SAVED_FILES" ]]; then
+            SAVED_FILES=$(echo "$RAW_OUTPUT" | grep -oE '/(tmp|home|Users|jarvis)[^ "]*\.(pdf|txt|md|json|html|csv)' 2>/dev/null || true)
+        fi
+
+        # 저장된 파일이 있으면 검증 수행
+        if [[ -n "$SAVED_FILES" ]]; then
+            while IFS= read -r file_path; do
+                [[ -z "$file_path" ]] && continue
+                [[ ! -e "$file_path" ]] && continue  # 존재하지 않으면 스킵
+
+                # 파일 검증 실행 (경로 존재, 크기 > 0 확인)
+                if ! validate_file "$file_path" 2>/dev/null; then
+                    log_jsonl "warn" "File validation FAILED — file might be corrupted or incomplete: $file_path" "0"
+                fi
+            done <<< "$SAVED_FILES"
+        fi
+    fi
+
+    # Cluster guard integration (cl-dcd8ff3443b1f052)
+    if [[ -f "${BOT_HOME}/lib/cluster-guard-cl-dcd8ff3443b1f052.sh" ]]; then
+        bash "${BOT_HOME}/lib/cluster-guard-cl-dcd8ff3443b1f052.sh" "$RAW_OUTPUT" "$TASK_ID" 2>/dev/null || true
+    fi
+fi
 
 # --- Agent Self-Note hook (Dreaming) ---
 # 태스크 성공 완료 후 에이전트가 패턴/실수/제안을 ~/jarvis/runtime/agent-notes/에 저장.

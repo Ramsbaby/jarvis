@@ -20,6 +20,10 @@
 
 set -euo pipefail
 
+# --- Runtime guards (Cluster cl-a1a431b0e672e736: path assertion before verification) ---
+source "${HOME}/jarvis/infra/lib/guards.sh" 2>/dev/null || true
+assert_variable_set "HOME" "home directory" || exit 1
+
 # DRY_RUN 조기 초기화 (set -u nounset 안티패턴 해결)
 DRY_RUN="${CRON_MASTER_DRY_RUN:-0}"
 
@@ -28,6 +32,7 @@ DRY_RUN="${CRON_MASTER_DRY_RUN:-0}"
 # stdout은 Discord 라우팅을 위해 순수하게 유지 (dedup digest 계산 영향 최소화)
 SELF_LOG="${HOME}/jarvis/runtime/logs/cron-master-self.log"
 mkdir -p "$(dirname "$SELF_LOG")"
+assert_directory_exists "$(dirname "$SELF_LOG")" "cron-master log directory" -w || exit 1
 # 헤더는 self-log에만 기록 (stdout에 누출되면 Discord 전송 skip 시 빈 쓰레기 전송됨)
 {
   echo ""
@@ -49,7 +54,7 @@ CUTOFF=$(date -v-24H '+%Y-%m-%d %H:%M:%S' 2>/dev/null \
   || date -d '24 hours ago' '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "1970-01-01 00:00:00")
 
 # 감지 원장 (일 단위 시계열 — 주간 추세 분석 기반)
-DAILY_LEDGER="${HOME}/.jarvis/state/cron-master-daily.jsonl"
+DAILY_LEDGER="${HOME}/jarvis/runtime/state/cron-master-daily.jsonl"
 mkdir -p "$(dirname "$DAILY_LEDGER")"
 
 # 어제 엔트리 조회
@@ -163,7 +168,7 @@ fi
 #   stub이 무단 침투하는 설계 결함 발견 (2026-04-20 초기 구현에서 19개 침범).
 #   유령 스크립트는 감지만 하고 주인님이 수동으로 판단·처리한다.
 
-REPAIR_LEDGER="${HOME}/.jarvis/state/cron-master-ledger.jsonl"
+REPAIR_LEDGER="${HOME}/jarvis/runtime/state/cron-master-ledger.jsonl"
 mkdir -p "$(dirname "$REPAIR_LEDGER")"
 REPAIRS=()
 
@@ -510,7 +515,7 @@ fi
 #   3) JARVIS_CRON_FORCE_REPORT=1 이면 항상 강제 전송 (디버깅용).
 # allowEmptyResult=true 로 tasks.json 설정되어 있어 빈 출력 허용.
 
-LAST_DIGEST_FILE="${HOME}/.jarvis/state/cron-master-last-digest.txt"
+LAST_DIGEST_FILE="${HOME}/jarvis/runtime/state/cron-master-last-digest.txt"
 mkdir -p "$(dirname "$LAST_DIGEST_FILE")"
 
 # 현재 이슈 digest 계산 (정렬된 ISSUES + PERMA_FAILS 합쳐 hash)
@@ -563,13 +568,15 @@ fi
 if [[ "$should_emit" != "1" ]]; then
   # Discord 전송 skip. self-log에만 기록하고 조용히 종료.
   log "변화 없음 (digest=${current_digest:0:12}…). Discord 전송 skip."
+  # 디제스트 저장 (dedup 상태 유지 필수, 2026-07-06 버그수정)
+  echo "$current_digest" > "$LAST_DIGEST_FILE"
   exit 0
 fi
 
 # ── 4.9. plist-bypass-autofix 통계 수집 (2026-04-22) ─────────────────────────
 # plist-bypass-autofix.sh가 남긴 ledger를 파싱해 오늘의 감지→수정→검증 통계 수집.
 # BYPASS 재발 방지 가드의 가시화 — 감지만 하고 끝나지 않도록 리포트에 건수 표기.
-BYPASS_AUTOFIX_LEDGER="${HOME}/.jarvis/state/plist-bypass-autofix.jsonl"
+BYPASS_AUTOFIX_LEDGER="${HOME}/jarvis/runtime/state/plist-bypass-autofix.jsonl"
 BYPASS_AUTOFIX_SUMMARY=""
 BYPASS_AUTOFIX_TARGETS=()
 if [[ -f "$BYPASS_AUTOFIX_LEDGER" ]]; then
@@ -678,6 +685,5 @@ if [[ -n "$BYPASS_AUTOFIX_SUMMARY" ]]; then
   echo "  · 원장: ${BYPASS_AUTOFIX_LEDGER}"
 fi
 
-# digest 저장 (리포트 출력 후 — dedup을 위해 should_emit 결정 후에 저장)
-echo "$current_digest" > "$LAST_DIGEST_FILE"
-log "리포트 출력 완료 및 digest 저장 (${current_digest:0:12}…)"
+# digest 저장은 위 should_emit 판단 시 수행됨 (should_emit 판정 후 항상 저장)
+log "리포트 출력 완료 (${current_digest:0:12}…)"

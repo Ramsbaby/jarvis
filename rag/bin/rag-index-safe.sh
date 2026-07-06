@@ -39,18 +39,27 @@ fi
 echo $$ > "${LOCK_DIR}/pid"
 trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
 
-# ── 시스템 메모리 압박 게이트 (2026-06-23 freeze 사고 재발방지) ──
-# 16GB RAM 머신에서 28GB LanceDB 인덱싱이 메모리 압박(compressor/swap 폭증)을 유발해
-# 시스템 응답성이 급락(freeze 체감)하는 사고 발생. 시작 시점에 이미 압박이 높으면
-# 인덱싱을 다음 트리거(4h 주기 / LaunchAgent)로 연기해 추가 부하를 얹지 않는다.
-# 기존 Ollama 헬스체크 게이트와 동일 패턴 — 부하 상황에서 무거운 작업을 시작하지 않음.
+# ── 시스템 메모리 압박 게이트 (2026-06-23 freeze 사고 재발방지 · 2026-07-07 재보정) ──
+# 16GB RAM 머신에서 28GB LanceDB 풀 리빌드가 메모리 압박을 유발해 시스템 응답성이 급락(freeze)한 사고 방지용.
+# [2026-07-07 재보정] 기존 "swap_used > 2560MB(2.5GB)면 SKIP" 규칙은 과보수적이었음:
+#   머신 baseline swap이 6~7GB로 상승 → 게이트가 영구 SKIP → 6일간 인덱싱 정지(큐 2,445 적체) 사고.
+#   실측: swap 6GB·pressure=1 상태에서도 임베딩 정상(~150ms)·인덱싱 정상(1,691소스 성공)이었음.
+#   즉 절대 swap량은 freeze의 신뢰 지표가 아니었음 → OS의 실제 압박 레벨(pressure≥2)을 1차 신호로 쓰고,
+#   swap 여유가 소진 임박(free<400MB)일 때만 2차 backstop으로 연기한다.
+# RAG_INDEX_FORCE=1: 운영자 수동 우회 (기본 꺼짐). 큐 적체 시 감시 하 1회 배수용. 자동 크론은 설정 안 함.
 _loadavg=$(sysctl -n vm.loadavg 2>/dev/null | tr -d '{}' | awk '{print $1}')
 _swap_used=$(sysctl -n vm.swapusage 2>/dev/null | sed -nE 's/.*used = ([0-9]+)\..*/\1/p')
+_swap_free=$(sysctl -n vm.swapusage 2>/dev/null | sed -nE 's/.*free = ([0-9]+)\..*/\1/p')
 _mem_pressure=$(sysctl -n kern.memorystatus_vm_pressure_level 2>/dev/null || echo 1)
-echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] 시작 부하: load=${_loadavg:-?} swap=${_swap_used:-?}MB pressure=${_mem_pressure:-?}" >> "$LOG"
-# pressure level: 1=정상, 2=경고, 4=위험. 경고 이상이거나 swap이 이미 2.5GB 초과면 연기.
-if [ "${_mem_pressure:-1}" -ge 2 ] || [ "${_swap_used:-0}" -gt 2560 ]; then
-  echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] SKIP: 시스템 메모리 압박(pressure=${_mem_pressure:-?}, swap=${_swap_used:-?}MB) — 인덱싱 연기, 다음 트리거에서 재시도" >> "$LOG"
+echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] 시작 부하: load=${_loadavg:-?} swap_used=${_swap_used:-?}MB swap_free=${_swap_free:-?}MB pressure=${_mem_pressure:-?}" >> "$LOG"
+# pressure level: 1=정상, 2=경고, 4=위험.
+if [ "${RAG_INDEX_FORCE:-0}" = "1" ]; then
+  echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] FORCE=1 수동 우회 — 압박 게이트 무시 (운영자 감시 하 배수). load=${_loadavg:-?} swap_used=${_swap_used:-?}MB pressure=${_mem_pressure:-?}" >> "$LOG"
+elif [ "${_mem_pressure:-1}" -ge 2 ]; then
+  echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] SKIP: OS 메모리 압박 레벨 ${_mem_pressure} (경고/위험) — 인덱싱 연기, 다음 트리거에서 재시도" >> "$LOG"
+  exit 0
+elif [ "${_swap_free:-99999}" -lt 400 ]; then
+  echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] SKIP: 스왑 여유 ${_swap_free}MB (<400MB, 소진 임박) — 인덱싱 연기, 다음 트리거에서 재시도" >> "$LOG"
   exit 0
 fi
 

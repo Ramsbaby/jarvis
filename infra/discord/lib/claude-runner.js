@@ -482,7 +482,7 @@ const memoryHashCache = new Map();
 const _extractCooldown = new Map();
 
 // 감정 트리거 반복 카운터: 채널별 감정 발화 횟수 추적 (디스크 영속화 — 재시작 후에도 유지)
-const _EMOTION_COUNTS_FILE = join(homedir(), '.jarvis/state/emotion-trigger-counts.json');
+const _EMOTION_COUNTS_FILE = join(homedir(), 'jarvis/runtime/state/emotion-trigger-counts.json');
 const _emotionTriggerCounts = (() => {
   const m = new Map();
   try {
@@ -495,7 +495,7 @@ const _emotionTriggerCounts = (() => {
 })();
 function _saveEmotionCounts() {
   try {
-    const dir = join(homedir(), '.jarvis/state');
+    const dir = join(homedir(), 'jarvis/runtime/state');
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(_EMOTION_COUNTS_FILE, JSON.stringify(Object.fromEntries(_emotionTriggerCounts)));
   } catch { /* non-critical — 저장 실패해도 동작은 계속 */ }
@@ -732,12 +732,7 @@ export async function* createClaudeSession(prompt, {
   const activeUserProfile = getUserProfile(userId);
   const isOwner = activeUserProfile?.type === 'owner' || activeUserProfile?.role === 'owner';
   const isGuest = !activeUserProfile;
-  try {
-    const { appendFileSync } = await import('node:fs');
-    appendFileSync('/tmp/jarvis-guard-debug.log',
-      `  → createClaudeSession | userId=${userId} | activeProfile=${activeUserProfile ? JSON.stringify({role:activeUserProfile.role,name:activeUserProfile.name}) : 'null'} | isOwner=${isOwner} | isGuest=${isGuest}\n`
-    );
-  } catch {}
+  // privacy: 디버그 로그 제거 2026-07-03 (사용자 데이터가 world-readable /tmp/jarvis-guard-debug.log에 기록되던 것)
 
   // 4a. Build user context section (SSoT: prompt-sections.js)
   // 2026-05-21: channelName 전달 → career 채널 아닐 때 STAR 29KB 슬라이스 (채널별 분리 Phase 1)
@@ -1081,8 +1076,11 @@ export async function* createClaudeSession(prompt, {
     try {
       const preplySection = buildPreplyStudentSection({ messageText: prompt, botHome: BOT_HOME });
       if (preplySection) {
-        systemParts.push('', preplySection);
-        log('info', 'preply 학생 프로필 + 영구규칙 주입', { channelName });
+        // [2026-07-01] score:10(절대 drop 금지) 객체로 push. 기존엔 문자열이라 헤더 추론 실패 →
+        //   unnamed(점수5) 강등 → 프롬프트 예산 초과 시 매 턴 잘려, 보람님 영구규칙과 거짓완료 방지
+        //   가드가 LLM에 미도달하던 근본원인 수리(/investigate 워크플로 2026-07-01, drop 원장 실측).
+        systemParts.push('', { content: preplySection, name: 'preply-rules', score: 10 });
+        log('info', 'preply 학생 프로필 + 영구규칙 주입 (score10 보호)', { channelName });
       }
     } catch (e) {
       log('warn', 'preply profile inject failed (non-critical)', { error: e?.message });

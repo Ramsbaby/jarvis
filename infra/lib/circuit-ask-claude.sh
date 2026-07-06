@@ -17,6 +17,12 @@
 #
 # 동시 다발성 LA(주인님 환경 122 task)에서 안전하도록 flock으로 원자 갱신.
 
+# guards.sh import — 반복 실수 클러스터 cl-a1a431b0e672e736 방어
+source "${BOT_HOME:-${HOME}/.jarvis}/infra/lib/guards.sh" 2>/dev/null || {
+  printf '[%s] ERROR: Failed to source guards.sh\n' "$(date +%s)" >&2
+  exit 1
+}
+
 CIRCUIT_FILE="${BOT_HOME:-${HOME}/jarvis/runtime}/state/circuit-ask-claude.json"
 CIRCUIT_LEDGER="${BOT_HOME:-${HOME}/jarvis/runtime}/ledger/circuit-ask-claude.jsonl"
 

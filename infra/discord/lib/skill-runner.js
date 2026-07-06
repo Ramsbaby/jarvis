@@ -74,7 +74,7 @@ export async function loadSkillPrompt(skillName) {
  * @param {string} skillName — doctor·status·brief·tqqq·retro·oops·autoplan·crisis·deploy
  * @param {string} userMessage — 주인님 자연어 발화
  * @param {object} options
- * @param {string} [options.model] — 기본 claude-sonnet-4-6
+ * @param {string} [options.model] — 기본 claude-sonnet-5
  * @param {number} [options.maxTokens] — 기본 4096
  * @param {object} [options.context] — 추가 context (channelId, userId 등)
  * @returns {Promise<{text:string, skill:string, model:string, usage:object}>}
@@ -154,7 +154,7 @@ Jarvis 환경에서는 다음으로 해석:
   // 4) Claude 호출 — API 키 있으면 fetch, 없으면 SDK query (구독제 Claude Max 지원).
   //    claude-runner.js:522-544 autoExtractMemory 패턴 재사용.
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  const model = options.model || (apiKey ? 'claude-sonnet-4-6' : 'claude-sonnet-4-6');
+  const model = options.model || (apiKey ? 'claude-sonnet-5' : 'claude-sonnet-5');
   const maxTokens = options.maxTokens || 4096;
 
   try {

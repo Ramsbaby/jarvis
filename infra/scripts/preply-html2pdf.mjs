@@ -57,7 +57,7 @@ async function convertOne(browser, htmlPath) {
   const abs = path.resolve(htmlPath);
   if (!fs.existsSync(abs)) {
     console.error(`⚠️  파일 없음: ${abs}`);
-    return { ok: false, path: abs };
+    return { ok: false, path: abs, error: 'ENOENT' };
   }
   const outPath = abs.replace(/\.html?$/i, '') + '.pdf';
   const page = await browser.newPage();
@@ -94,12 +94,33 @@ async function convertOne(browser, htmlPath) {
       margin: { top: '12mm', bottom: '12mm', left: '10mm', right: '10mm' },
     });
 
-    const kb = Math.round(fs.statSync(outPath).size / 1024);
-    console.log(`✅ ${path.basename(outPath)} (${kb}KB)`);
-    return { ok: true, path: outPath, kb };
+    // [2026-07-05 가드] PDF 생성 후 검증
+    const stats = fs.statSync(outPath);
+    const sizeBytes = stats.size;
+    const sizeKB = Math.round(sizeBytes / 1024);
+
+    // 검증 1: 파일 크기 (10KB 미만 = 손상/렌더링 실패 의심)
+    if (sizeBytes < 10 * 1024) {
+      console.error(`⚠️  PDF 크기 이상: ${path.basename(outPath)} (${sizeKB}KB < 10KB 임계) — 렌더링 실패 의심`);
+      return { ok: false, path: abs, error: 'SMALL_PDF', size: sizeKB };
+    }
+
+    // 검증 2: PDF 매직 넘버 확인 (손상 파일 탐지)
+    const head = Buffer.alloc(4);
+    const fd = fs.openSync(outPath, 'r');
+    fs.readSync(fd, head, 0, 4, 0);
+    fs.closeSync(fd);
+    const magic = head.toString('ascii', 0, 4);
+    if (!magic.startsWith('%PDF')) {
+      console.error(`❌ PDF 손상: ${path.basename(outPath)} — 매직 넘버 ${JSON.stringify(magic)} (기대값: %PDF)`);
+      return { ok: false, path: abs, error: 'INVALID_PDF', size: sizeKB };
+    }
+
+    console.log(`✅ ${path.basename(outPath)} (${sizeKB}KB) — 검증 완료`);
+    return { ok: true, path: outPath, size: sizeKB };
   } catch (e) {
     console.error(`❌ 변환 실패: ${path.basename(abs)} — ${e.message}`);
-    return { ok: false, path: abs };
+    return { ok: false, path: abs, error: 'CONVERSION_ERROR', message: e.message };
   } finally {
     await page.close();
   }

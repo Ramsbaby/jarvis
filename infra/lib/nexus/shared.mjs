@@ -54,12 +54,24 @@ export function mkError(data, meta = {}) {
 // ---------------------------------------------------------------------------
 // Telemetry
 // ---------------------------------------------------------------------------
+// 2026-07-03 신설(독립감사 #1 적발): 텔레메트리에 Discord 봇 토큰·웹훅·Claude 토큰이
+//   평문 기록되던 것 차단. 기록 직전 직렬화 문자열에서 시크릿 패턴을 마스킹.
+function maskSecrets(s) {
+  return s
+    .replace(/mfa\.[\w-]{84}/g, '[MASKED_DISCORD_TOKEN]')
+    .replace(/[MN][A-Za-z0-9_-]{23}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,40}/g, '[MASKED_DISCORD_TOKEN]')
+    .replace(/https?:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+/g, '[MASKED_WEBHOOK]')
+    .replace(/sk-ant-[a-zA-Z0-9_-]{10,}/g, '[MASKED_ANTHROPIC]')
+    .replace(/(CLAUDE_CODE_OAUTH_TOKEN=)[A-Za-z0-9_-]+/g, '$1[MASKED]')
+    .replace(/Bearer\s+[A-Za-z0-9._-]{20,}/g, 'Bearer [MASKED]');
+}
+
 export function logTelemetry(tool, durationMs, meta = {}) {
   const ts = new Date().toISOString();
   try {
     appendFileSync(
       TELEMETRY_FILE,
-      JSON.stringify({ ts, tool, duration_ms: durationMs, ...meta }) + '\n'
+      maskSecrets(JSON.stringify({ ts, tool, duration_ms: durationMs, ...meta })) + '\n'
     );
   } catch { /* never block on telemetry */ }
   // Phase 0 Sensor: 표면 통합 ledger (Discord/CLI/MCP 합본 분석용)
@@ -67,7 +79,7 @@ export function logTelemetry(tool, durationMs, meta = {}) {
     mkdirSync(STATE_DIR, { recursive: true });
     appendFileSync(
       MCP_SENSOR_FILE,
-      JSON.stringify({ ts, source: detectMcpSource(), tool, duration_ms: durationMs, ...meta }) + '\n'
+      maskSecrets(JSON.stringify({ ts, source: detectMcpSource(), tool, duration_ms: durationMs, ...meta })) + '\n'
     );
   } catch { /* sensor는 텔레메트리보다 엄격히 비차단 */ }
 }

@@ -43,7 +43,7 @@ async function main() {
         const sels = '.answer-box,.ans-reveal,.answer-reveal,.answer,[class*="answer"],[class*="reveal"],[id*="ans-"]';
         const out = [];
         document.querySelectorAll(sels).forEach((el) => {
-          const s = getComputedStyle(el);
+          const s = window.getComputedStyle(el);
           const visible = el.offsetParent !== null && s.display !== 'none'
             && s.visibility !== 'hidden' && parseFloat(s.opacity || '1') > 0.1;
           const txt = (el.textContent || '').trim();
@@ -71,7 +71,7 @@ async function main() {
     const tinyRatio = await page.evaluate(() => {
       const els = [...document.querySelectorAll('p,li,td,div,span')].filter((e) => (e.textContent || '').trim().length > 8 && e.children.length === 0);
       if (!els.length) return 0;
-      const tiny = els.filter((e) => parseFloat(getComputedStyle(e).fontSize) < 12).length;
+      const tiny = els.filter((e) => parseFloat(window.getComputedStyle(e).fontSize) < 12).length;
       return tiny / els.length;
     });
     if (tinyRatio > 0.35) issues.push({ level: 'WARN', msg: `본문 ${Math.round(tinyRatio * 100)}%가 12px 미만 작은 글씨 (보람님 "글씨 크게")` });

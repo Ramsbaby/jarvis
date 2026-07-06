@@ -14,6 +14,12 @@
 
 set -euo pipefail
 
+# guards.sh import — 반복 실수 클러스터 cl-a1a431b0e672e736 방어
+source "${BOT_HOME:-${HOME}/.jarvis}/infra/lib/guards.sh" 2>/dev/null || {
+  printf '[%s] ERROR: Failed to source guards.sh\n' "$(date +%s)" >&2
+  exit 1
+}
+
 # 설정
 BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 LOG_DIR="${BOT_HOME}/logs"
@@ -38,11 +44,15 @@ log() {
 initialize() {
   mkdir -p "$STATE_DIR" "$REPORT_DIR"
 
+  # 디렉토리 존재 검증 (guards.sh)
+  assert_directory_exists "$STATE_DIR" "blindspot state directory" || return 1
+  assert_directory_exists "$REPORT_DIR" "report directory" || return 1
+
   # 필수 파일 확인
-  if [[ ! -f "$CRON_LOG" ]]; then
-    log "WARN" "cron.log not found: $CRON_LOG"
+  assert_file_readable "$CRON_LOG" "cron log file" || {
+    log "WARN" "cron.log not found or not readable: $CRON_LOG"
     return 1
-  fi
+  }
 }
 
 # 패턴 1: 반복 실패 태스크 식별 (7일간 3회 이상 실패)

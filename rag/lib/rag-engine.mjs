@@ -475,14 +475,22 @@ export class RAGEngine {
   }
 
   _withDeletedFilter(query) {
-    // deleted 컬럼이 지원되는 경우에만 필터링 적용
-    let q = this._supportsDeleted ? query.where('deleted IS NULL OR deleted = false') : query;
-    // is_latest: false 인 청크는 더 최신 버전이 존재 → 검색 제외
-    // nullable 컬럼이므로 NULL = 마이그레이션 전 기존 레코드 → 최신으로 간주
-    if (this._supportsIsLatest)  q = q.where('is_latest IS NULL OR is_latest = true');
-    // expires_at: NULL 또는 0 = 영구, >0 = TTL; 만료된 청크 제외
-    if (this._supportsExpiresAt) q = q.where(`expires_at IS NULL OR expires_at = 0 OR expires_at > ${Date.now()}`);
-    return q;
+    // 2026-07-03 수정(독립감사 #4 적발): 연쇄 .where()는 @lancedb 0.26.x에서 AND가 아니라
+    //   last-wins 대체 → deleted/is_latest 필터가 조용히 버려지고 expires_at만 적용되던 잠복 결함.
+    //   _activeFilterExpr()의 단일 AND 표현식으로 where() 1회 호출해 3조건 모두 적용.
+    const expr = this._activeFilterExpr();
+    return expr ? query.where(expr) : query;
+  }
+
+  // _withDeletedFilter와 동일한 활성 조건을 countRows()용 SQL 문자열로 반환.
+  // getStats가 행 전체(벡터 포함 ~5KB/행)를 실체화하지 않고 서버측 카운트만 하도록 분리
+  // (2026-07-03 수정: 29만 행 toArray → 호출당 +1.5GB RSS 사고의 근본 원인)
+  _activeFilterExpr() {
+    const conds = [];
+    if (this._supportsDeleted)   conds.push('(deleted IS NULL OR deleted = false)');
+    if (this._supportsIsLatest)  conds.push('(is_latest IS NULL OR is_latest = true)');
+    if (this._supportsExpiresAt) conds.push(`(expires_at IS NULL OR expires_at = 0 OR expires_at > ${Date.now()})`);
+    return conds.length ? conds.join(' AND ') : undefined;
   }
 
   // --- Enrichment ---
@@ -1490,8 +1498,8 @@ export class RAGEngine {
     for (let _statsAttempt = 1; _statsAttempt <= 2; _statsAttempt++) {
       try {
         if (this._supportsDeleted) {
-          const activeRows = await this._withDeletedFilter(this.table.query()).toArray();
-          totalChunks = activeRows.length;
+          // 2026-07-03 수정: toArray() 전량 실체화(벡터 포함 +1.5GB RSS) → 서버측 countRows(필터)로 교체
+          totalChunks = await this.table.countRows(this._activeFilterExpr());
         } else {
           totalChunks = await this.table.countRows();
         }

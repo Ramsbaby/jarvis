@@ -7,8 +7,10 @@ set -euo pipefail
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 CONFIG="${BOT_HOME}/config/monitoring.json"
 
-# --- Config check ---
-[[ -f "$CONFIG" ]] || { echo "ERROR: $CONFIG not found" >&2; exit 1; }
+# --- Runtime guards (Cluster cl-a1a431b0e672e736: path assertion before verification) ---
+source "${HOME}/jarvis/infra/lib/guards.sh" 2>/dev/null || true
+assert_directory_exists "$BOT_HOME" "bot home" || exit 1
+assert_file_readable "$CONFIG" "monitoring config" || exit 1
 
 # --- Discord 중복 전송 방어 게이트 ---
 # 같은 TASK_ID가 DEDUP_WINDOW_S 이내 Discord로 이미 전송된 경우 차단

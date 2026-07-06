@@ -345,7 +345,7 @@ function buildPrompt(sessionBodies) {
 - 오너가 대안을 제시하며 수정을 요구
 - Jarvis가 "죄송합니다 / 잘못 보고 / 확인 못했다"처럼 자체 정정한 경우
 - **Jarvis 자기검열 실패 사례**: "단언했/실측 없이/검증 전 OK 선언/추정을 사실처럼 보고" — Iron Law 6 (VERIFY BEFORE DECLARE) 위반
-- **SSoT 위반**: 기존 파일 미탐색 + 신규 중복 생성 ("~/.claude/commands/와 ~/.jarvis/ # ALLOW-DOTJARVISskills/ 양쪽에 같은 이름")
+- **SSoT 위반**: 기존 파일 미탐색 + 신규 중복 생성 ("~/.claude/commands/와 ~/jarvis/runtime/ # ALLOW-DOTJARVISskills/ 양쪽에 같은 이름")
 - **자동화 파이프라인 마비 미인지**: circuit OPEN, 추출 0건, 24h 무감지 등 메타 시스템 결함을 Jarvis 본인이 놓친 경우
 - **할루시네이션 / 편향**: 파일 미열람 상태에서 코드 단언, 첫 응답 단언 편향, 가정을 사실처럼 진술
 
@@ -702,6 +702,21 @@ async function main() {
     try {
       appendMistakes(final);
       log(`learned-mistakes.md에 ${final.length}건 append 완료`);
+
+      // ── Post-save file validation (Cluster cl-dcd8ff3443b1f052: 파일 저장 후 자동 검증) ──
+      // 파일 저장/업로드 후 경로, 크기, 내용을 자동으로 검증하는 가드
+      try {
+        const postSaveGuard = join(dirname(MISTAKES_FILE), '..', '..', 'lib', 'post-save-file-guard.sh');
+        const { execSync } = await import('child_process');
+        execSync(`bash "${postSaveGuard}" "${MISTAKES_FILE}" "ko" "mistake-extractor-learned-mistakes" 2>/dev/null || true`, {
+          timeout: 5000,
+          stdio: 'pipe',
+        });
+        log(`post-save validation: learned-mistakes.md 검증 완료`);
+      } catch (e) {
+        // 검증 실패해도 진행 계속 (graceful)
+        log(`post-save validation 오류 (무시): ${e.message}`);
+      }
     } catch (e) {
       log(`append 실패: ${e.message}`);
       console.log(`❌ append 실패: ${e.message}`);

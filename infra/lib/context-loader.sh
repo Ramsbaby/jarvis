@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # context-loader.sh — Build system prompt from RAG, task context, context-bus, history, cross-team depends
+
+# --- Import runtime guards (Cluster cl-a1a431b0e672e736 defense) ---
+source "${HOME}/jarvis/infra/lib/guards.sh" 2>/dev/null || true
 #
 # Context Assembly Pipeline — "안정 접두어 + 동적 접미어" 분리
 #
@@ -30,7 +33,7 @@
 #
 # "Session File" = Persistent disk storage (loaded once)
 #   - _capabilities.md, insight-report.md, etc. (SESSION FILES)
-#   - Stored in: ~/.jarvis/docs/, ~/.jarvis/context/
+#   - Stored in: ~/jarvis/runtime/docs/, ~/jarvis/runtime/context/
 #   - Lifetime: Persistent on disk
 #   - Cost: Disk space only
 #
@@ -56,6 +59,16 @@
 load_context() {
     SYSTEM_PROMPT=""
     CTX_SECTION_SIZES=""
+
+    # --- Pre-action guard (Cluster cl-a1a431b0e672e736): BOT_HOME 경로 미확인 후 단언 방지 ---
+    if [[ -z "${BOT_HOME:-}" ]]; then
+        printf '[context-loader] ERROR: BOT_HOME not set\n' >&2
+        return 1
+    fi
+    if ! assert_directory_exists "$BOT_HOME" "BOT_HOME" 2>/dev/null; then
+        printf '[context-loader] ERROR: BOT_HOME does not exist: %s\n' "$BOT_HOME" >&2
+        return 1
+    fi
 
     # -- Continue Sites: JARVIS_CONTEXT_MODE에 따른 컨텍스트 레벨 제어 --
     # none    = 시스템 프롬프트 전체 생략 (Stage 4: 프롬프트 단순화)

@@ -179,7 +179,9 @@ export const SECTION_PRIORITY = Object.freeze({
   // Tier 6
   'facts-keyword': 6, 'wiki-keyword': 6,
   // Tier 5
-  'skill-guard': 5, 'chronic-patterns': 5, 'evidence-mandate': 5,
+  // [2026-07-01] skill-guard 5→8 상향: 스킬 본문(preply-material 등)이 채널 프롬프트 예산 초과 시
+  //   매 턴 drop되어 보람님 교재 규칙이 LLM에 미도달하던 근본원인 수리(drop 원장 실측 1,675건). 설계 근거: /investigate 워크플로 2026-07-01.
+  'skill-guard': 8, 'chronic-patterns': 5, 'evidence-mandate': 5,
   // Tier 4
   'channel-feed': 4, 'handoff': 4, 'anger-section': 4, 'harness-section': 4,
   // Tier 3

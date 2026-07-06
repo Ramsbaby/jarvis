@@ -151,10 +151,13 @@ _llm_claude_cli() {
     # CLAUDE_CODE_OAUTH_TOKEN이 이미 주입돼 있으면(bot-cron 경유) 그대로 존중.
     local _run=(env ANTHROPIC_API_KEY= CLAUDECODE="${CLAUDECODE:-}")
     local _iso_token_file="${HOME}/.claude-bot/.long-lived-token"
+    local _token_to_use=""
     if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+        _token_to_use="${CLAUDE_CODE_OAUTH_TOKEN}"
         _run+=(CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}")
     elif [[ -s "$_iso_token_file" ]]; then
-        _run+=(CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_iso_token_file")")
+        _token_to_use="$(cat "$_iso_token_file")"
+        _run+=(CLAUDE_CODE_OAUTH_TOKEN="$_token_to_use")
     else
         log_warn "격리 토큰 없음 — 메인 credentials.json 폴백 (갱신 경쟁 위험)"
     fi
@@ -201,10 +204,54 @@ except:
         # 인증 실패(401) 즉시 Discord critical 알림 — 야간 침묵 사망 방지 (2026-06-11 사고).
         # alert-send.sh 자체 쿨다운(기본 300s)이 폭주를 막는다. 실패해도 본 함수 결과에 영향 없음.
         if grep -qiE "Failed to authenticate|authentication_error" "$stderr_tmp" "$output" 2>/dev/null; then
-            bash "${HOME}/jarvis/infra/scripts/alert-send.sh" critical \
-                "🔑 claude 배치 인증 실패 (401)" \
-                "task=${TASK_ID:-unknown} model=${model:-auto} — OAuth 토큰 사망 의심. long-lived-token-healthcheck·oauth-incident-ledger 확인 필요" \
-                >/dev/null 2>&1 || true
+            # 2026-06-30: AUTH_ERROR 재시도 로직 강화
+            # - 격리 토큰이 존재하고 유효하면 즉시 3회 재시도 (5s 간격)
+            # - healthcheck 성공 여부와 무관하게 재시도 (토큰 자체는 유효)
+            local _iso_token_file="${HOME}/.claude-bot/.long-lived-token"
+            if [[ -s "$_iso_token_file" ]]; then
+                log_info "AUTH_ERROR 감지 — 격리 토큰 존재, 3회 재시도 시작"
+                local _retry_count=0
+                local _retry_max=3
+                local _retry_success=false
+
+                while (( _retry_count < _retry_max )); do
+                    (( _retry_count++ ))
+                    log_info "AUTH_ERROR 재시도 ${_retry_count}/${_retry_max} (sleep 5s)"
+                    sleep 5
+
+                    local _retry_output="${output}.retry${_retry_count}"
+                    local _retry_stderr
+                    _retry_stderr=$(mktemp)
+                    "${_run[@]}" "${cmd[@]}" < /dev/null > "$_retry_output" 2>"$_retry_stderr"
+                    local _retry_exit=$?
+
+                    if [[ $_retry_exit -eq 0 && -s "$_retry_output" ]]; then
+                        log_info "AUTH_ERROR 재시도 ${_retry_count} 성공 (exit=0)"
+                        cp "$_retry_output" "$output"
+                        rm -f "${output}".retry* "$_retry_stderr"
+                        rm -f "$stderr_tmp"
+                        _retry_success=true
+                        break
+                    else
+                        log_warn "AUTH_ERROR 재시도 ${_retry_count} 실패 (exit=$_retry_exit)"
+                        rm -f "$_retry_output" "$_retry_stderr"
+                    fi
+                done
+
+                if [[ "$_retry_success" != "true" ]]; then
+                    log_error "AUTH_ERROR 3회 재시도 모두 실패 — critical alert 발송"
+                    bash "${HOME}/jarvis/infra/scripts/alert-send.sh" critical \
+                        "🔑 claude 배치 인증 실패 (401 — 3회 재시도 후 실패)" \
+                        "task=${TASK_ID:-unknown} model=${model:-auto} — 격리 토큰은 존재하나 API 거부. OAuth 토큰 폐기 또는 API 서비스 이슈 의심" \
+                        >/dev/null 2>&1 || true
+                fi
+            else
+                log_error "AUTH_ERROR 감지 — 격리 토큰 파일 누락 (메인 폴백 사용 중) — critical alert"
+                bash "${HOME}/jarvis/infra/scripts/alert-send.sh" critical \
+                    "🔑 claude 배치 인증 실패 (401 — 격리 토큰 누락)" \
+                    "task=${TASK_ID:-unknown} model=${model:-auto} — 격리 토큰이 없어 메인 credentials.json 사용 (갱신 경쟁 위험)" \
+                    >/dev/null 2>&1 || true
+            fi
         fi
     fi
     rm -f "$stderr_tmp"

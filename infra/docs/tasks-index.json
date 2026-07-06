@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-24T07:24:30.242Z",
+  "generatedAt": "2026-07-06T21:17:05.707Z",
   "source": "~/jarvis/runtime/config/tasks.json",
   "totalTasks": 135,
   "teamDistribution": {
@@ -954,7 +954,7 @@
           "model": "claude-haiku-4-5-20251001",
           "priority": "daily",
           "maxBudget": "0.50",
-          "disabled": false,
+          "disabled": true,
           "description": null,
           "logs": {
             "stdout": {
@@ -1447,7 +1447,7 @@
             "name": "전략기획실 (트렌드·뉴스)"
           },
           "discordChannel": "jarvis",
-          "model": "claude-opus-4-8",
+          "model": "claude-opus-4-6",
           "priority": "daily",
           "maxBudget": "0.50",
           "disabled": false,
@@ -3650,16 +3650,16 @@
           "model": null,
           "priority": "normal",
           "maxBudget": "0.30",
-          "disabled": true,
+          "disabled": false,
           "description": "com.jarvis.entity-graph plist 이관. SSoT 정합화.",
           "logs": {
             "stdout": {
               "path": "~/jarvis/runtime/logs/entity-graph.log",
-              "exists": false
+              "exists": true
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/entity-graph-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-entity-graph-*.log",
@@ -3947,7 +3947,7 @@
             },
             "stderr": {
               "path": "~/jarvis/runtime/logs/owner-state-engine-err.log",
-              "exists": false
+              "exists": true
             },
             "claudeStderr": {
               "pattern": "claude-stderr-owner-state-engine-*.log",
