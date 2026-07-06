@@ -14,7 +14,7 @@ const HOME = process.env.HOME;
 const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
 const OUT_DIR = join(BOT_HOME, 'state/owner-state');
 const KAKAO_CAL = '6ucgla9qclkiielcajug4j148446klr3@import.calendar.google.com';
-const GOOGLE_ACCOUNT = process.env.GOOGLE_ACCOUNT || 'yuiopnm1931@gmail.com';
+const GOOGLE_ACCOUNT = process.env.GOOGLE_ACCOUNT || ''; // 개인 이메일 하드코딩 제거 — runtime/.env의 GOOGLE_ACCOUNT 사용
 
 mkdirSync(OUT_DIR, { recursive: true });
 

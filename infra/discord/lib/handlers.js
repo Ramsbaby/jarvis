@@ -16,7 +16,7 @@ import { getCareerCodingMode, setCareerCodingMode, parseCodingModeCommand, getOw
 // v3.3 P0-D: interview-fast-path 모듈 eager import로 RAG warmup IIFE를 봇 기동 시 트리거.
 // dynamic import 시점(첫 질의)에 warmup하면 의미 없음 — 여기서 선행 실행.
 import './interview-fast-path.js';
-import { writeFileSync, rmSync, readFileSync, existsSync, renameSync, appendFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, rmSync, readFileSync, existsSync, renameSync, appendFileSync, mkdirSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
@@ -548,9 +548,7 @@ export async function handleMessage(message, state) {
   // ---------------------------------------------------------------------------
   const senderProfile = getUserProfile(effectiveAuthor.id);
   try {
-    appendFileSync('/tmp/jarvis-guard-debug.log',
-      `  → senderProfile check | author.id=${effectiveAuthor?.id} | profile=${senderProfile ? JSON.stringify({role:senderProfile.role, name:senderProfile.name}) : 'null'}\n`
-    );
+    void 0; // privacy: 디버그 로그 제거 2026-07-03 (사용자 데이터가 world-readable /tmp에 기록되던 것)
   } catch {}
   const senderIsOwner = senderProfile?.type === 'owner' || senderProfile?.role === 'owner';
 
@@ -1455,6 +1453,31 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
           processingMsgIds.delete(message.id);
           return;
         }
+
+        // ── 면접관 모드 (interviewer-mode.js) — 봇이 면접관이 되어 질문하고 주인님이 직접 답하는 실전 모의면접 ──
+        // "○○ 면접 시작"(회사명+면접 시작) → 세션 시작. 세션 활성 중 메시지 = 답변 → 봇이 꼬리/다음 질문.
+        // "면접 종료" → 총평 후 해제. 세션 비활성 + 시작/종료 명령 아님 → 아래 fast-path(답변 도우미)로 폴백.
+        try {
+          const iv = await import('./interviewer-mode.js');
+          const ivCmd = iv.detectInterviewerCommand(trimmed);
+          if (ivCmd.type === 'start') {
+            await iv.startInterview(message, ivCmd.company);
+            processingMsgIds.delete(message.id);
+            return;
+          }
+          if (ivCmd.type === 'end') {
+            await iv.endInterview(message);
+            processingMsgIds.delete(message.id);
+            return;
+          }
+          if (iv.isInterviewActive(message.channel.id)) {
+            await iv.handleInterviewAnswer(message, userPrompt);
+            processingMsgIds.delete(message.id);
+            return;
+          }
+        } catch (err) {
+          log('error', 'interviewer-mode dispatch failed', { error: err.message });
+        }
       }
 
       const { runInterviewFastPath } = await import('./interview-fast-path.js');
@@ -1772,6 +1795,16 @@ ${extracted}
         promptLen: userPrompt.length,
       });
 
+      // [2026-07-01] preply 채널 거짓완료 방지(P1): 실행 전 스킬·규칙 파일 mtime 스냅샷 → 턴 종료 시 대조.
+      const _preplyRecordTargets = chName === 'jarvis-preply-tutor'
+        ? [join(process.env.HOME || '', '.claude/skills/preply-material/SKILL.md'),
+           join(_BOT_HOME, 'config', 'preply-students.json')]
+        : [];
+      const _preplyMtimeBefore = {};
+      for (const _f of _preplyRecordTargets) {
+        try { _preplyMtimeBefore[_f] = statSync(_f).mtimeMs; } catch { _preplyMtimeBefore[_f] = 0; }
+      }
+
       // AbortController replaces proc.kill()
       const abortController = new AbortController();
 
@@ -1840,9 +1873,7 @@ ${extracted}
         attachments: imageAttachments,
         userId: (() => {
           try {
-            appendFileSync('/tmp/jarvis-guard-debug.log',
-              `  → before createClaudeSession | effectiveAuthor.id=${effectiveAuthor?.id} | viaSlashProxy=${message._viaSlashProxy} | clientUserId=${message.client?.user?.id}\n`
-            );
+            void 0; // privacy: 디버그 로그 제거 2026-07-03 (사용자 데이터가 world-readable /tmp에 기록되던 것)
           } catch {}
           return effectiveAuthor.id;
         })(),
@@ -2189,6 +2220,25 @@ ${extracted}
 
           if (lastAssistantText.length > 20) {
             saveConversationTurn(originalPrompt, lastAssistantText, chName, effectiveAuthor.id);
+            // [2026-07-01] 거짓완료 방지 훅(P1): preply에서 봇이 "스킬/규칙에 기록·저장 완료"라 했는데
+            //   실제 대상 파일이 이번 턴에 안 바뀌었으면 경고를 덧붙인다. LLM이 도구 호출 없이 완료를
+            //   주장할 수 있는 리스크(Iron Law 2)의 코드 백스톱. 파일이 바뀌었으면(정상 저장) 조용히 통과.
+            try {
+              if (_preplyRecordTargets.length) {
+                const _claimsRecord = /(스킬|규칙|영구\s*규칙|SKILL)/.test(lastAssistantText)
+                  && /(기록|저장|등재|반영)\s*(완료|했습니다|됐습니다)|저장됐습니다|기록\s*완료|저장\s*완료/.test(lastAssistantText);
+                if (_claimsRecord) {
+                  let _changed = false;
+                  for (const _f of _preplyRecordTargets) {
+                    try { if (statSync(_f).mtimeMs > (_preplyMtimeBefore[_f] || 0)) { _changed = true; break; } } catch { /* ignore */ }
+                  }
+                  if (!_changed) {
+                    await thread.send('⚠️ 방금 스킬·규칙에 "저장/기록 완료"라고 했지만 **실제 파일이 바뀌지 않았습니다** — 저장이 안 됐을 수 있어요. 스킬·규칙 파일 수정은 Claude Code CLI에서 확실히 처리하는 게 좋습니다.');
+                    log('warn', 'preply false-completion detected (claimed record, no file change)', { chName });
+                  }
+                }
+              }
+            } catch (_hookErr) { log('debug', 'preply record-verify hook error', { error: _hookErr?.message }); }
             // channel-feed 기록 복원 (2026-05-28): 4월 16일 이후 미기록 버그 수정
             appendFeed(chName, 'user', originalPrompt);
             appendFeed(chName, 'jarvis', lastAssistantText);
@@ -2587,13 +2637,7 @@ ${ragContextBlock}
       await message.reply(guardMsg).catch(() => message.channel.send(guardMsg));
       await streamer.finalize();
       try {
-        appendFileSync('/tmp/jarvis-guard-debug.log',
-          `\n[${new Date().toISOString()}] BLOCKED\n` +
-          `  channel: ${chName}\n` +
-          `  prompt: ${userPrompt.slice(0, 300)}\n` +
-          `  hasInterviewPattern: ${hasInterviewPattern}\n` +
-          `  hasSkillTrigger: ${hasSkillTrigger}\n`
-        );
+        void 0; // privacy: 디버그 로그 제거 2026-07-03 (사용자 발화가 world-readable /tmp에 기록되던 것)
       } catch {}
       log('info', 'Interview question blocked', {
         channel: chName,
