@@ -182,3 +182,11 @@ infra/config/code-routing-config.json
 infra/discord/lib/coding-verify.js
 infra/docs/CODE_ROUTING_COST_ANALYSIS.md
 runtime/state/ralph-forbid-list.json
+
+# 구직·면접 개인정보 일체 — public repo 노출 금지 (2026-07-07 주인님 지시)
+#   지원 회사명·이직 사유·실명 등 PII 포함. Privacy 가드와 이중 방어.
+infra/discord/lib/interviewer-mode.js
+infra/scripts/career-bzpp-search.py
+infra/scripts/career-daily.sh
+infra/scripts/interview-md2html.mjs
+infra/scripts/interview-ralph-start-focused.sh
