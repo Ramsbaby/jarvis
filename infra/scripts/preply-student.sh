@@ -64,6 +64,52 @@ resolve_latest() { # <korean-name>
   ls -t "$MATERIAL_DIR"/*"$kn"*.html 2>/dev/null | head -1 || true
 }
 
+# [2026-07-05 가드] 사용 가능한 PDF 변환 스크립트 탐색
+available_pdf_scripts() {
+  local scripts=()
+  local i=1
+  # infra/scripts 에서 *html2pdf* 파일 찾기
+  for script in "${JARVIS}"/infra/scripts/*html2pdf*; do
+    [ -f "$script" ] || continue
+    local name desc
+    name="$(basename "$script")"
+    # 첫 줄 주석에서 설명 추출 (있으면)
+    if [[ "$name" == *.mjs ]] || [[ "$name" == *.js ]]; then
+      desc=$(sed -n '3,5p' "$script" | grep -E '^\s*(//|/\*)' | head -1 | sed 's/^[[:space:]]*[/*]*[/]*[[:space:]]*//' | sed 's/\*\/$//')
+    else
+      desc=$(sed -n '2,3p' "$script" | grep '^#' | head -1 | sed 's/^#[[:space:]]*//')
+    fi
+    desc="${desc:-(설명 없음)}"
+    scripts+=("$name|$desc|$script")
+    ((i++))
+  done
+
+  if [ ${#scripts[@]} -eq 0 ]; then
+    echo "❌ PDF 변환 스크립트를 찾을 수 없습니다: ${JARVIS}/infra/scripts/*html2pdf*" >&2
+    return 1
+  fi
+
+  # 스크립트 목록 출력
+  echo "🔧 사용 가능한 PDF 변환 스크립트:"
+  local idx=1
+  for entry in "${scripts[@]}"; do
+    IFS='|' read -r name desc path <<<"$entry"
+    echo "  $idx. $name — $desc"
+    ((idx++))
+  done
+  echo ""
+
+  # 선택된 스크립트 경로 반환 (첫 번째 또는 지정된 번호)
+  local choice="${1:-1}"
+  if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#scripts[@]} ]; then
+    echo "❌ 잘못된 선택: $choice (1-${#scripts[@]} 범위)" >&2
+    return 1
+  fi
+
+  IFS='|' read -r _ _ path <<<"${scripts[$((choice-1))]}"
+  echo "$path"
+}
+
 cmd_list() {
   echo "📚 보람님 학생 교재 현황"
   echo "─────────────────────────────"
@@ -100,11 +146,45 @@ cmd_new() {
   local gs; gs="$(gold_standard)"
   [ -f "$gs" ] || err "골드스탠다드 파일 없음: $gs"
   [ -e "$dest" ] && err "이미 존재함: $dest (덮어쓰지 않음 — 다른 이름 지정)"
+
+  # [2026-07-03] 신규 파일 생성 가드: 프로필이 완성되었는지 확인
+  # 학생 프로필(level/goal/theme)이 미확인이면 복사 차단 → 프로필 먼저 입력하도록 강제
+  local level; level="$(reg_field "$name" level)"; level="${level:-}"
+  local goal; goal="$(reg_field "$name" goal)"; goal="${goal:-}"
+  local theme; theme="$(reg_field "$name" theme)"; theme="${theme:-}"
+
+  if [ -z "$level" ] || [ "$level" = "미확인" ] || [ "$level" = "None" ]; then
+    err "❌ 신규 파일 생성 차단: $kn 의 프로필(level) 미확인. 먼저 프로필을 완성하세요.
+
+    preply-student.sh upsert '$kn' '{\"level\": \"초급\"}'
+
+    또는 Discord에서 보람님에게 확인 후 레지스트리에 입력하세요."
+  fi
+
+  if [ -z "$goal" ] || [ "$goal" = "미확인" ] || [ "$goal" = "None" ]; then
+    err "❌ 신규 파일 생성 차단: $kn 의 프로필(goal) 미확인. 먼저 프로필을 완성하세요.
+
+    preply-student.sh upsert '$kn' '{\"goal\": \"travel/culture/hobby\"}'
+
+    또는 Discord에서 보람님에게 확인 후 레지스트리에 입력하세요."
+  fi
+
+  if [ -z "$theme" ] || [ "$theme" = "미확인" ] || [ "$theme" = "None" ]; then
+    err "❌ 신규 파일 생성 차단: $kn 의 프로필(theme) 미확인. 먼저 프로필을 완성하세요.
+
+    preply-student.sh upsert '$kn' '{\"theme\": \"K-pop/K-drama/business\"}'
+
+    또는 Discord에서 보람님에게 확인 후 레지스트리에 입력하세요."
+  fi
+
+  # 프로필 완성 확인 완료 → 파일 복사
   cp "$gs" "$dest"
-  echo "✅ 골드스탠다드 복사 완료 → $dest"
+  echo "✅ 신규 파일 생성 완료 → $dest"
+  echo "   프로필: 수준=$level / 목표=$goal / 테마=$theme"
   echo "   원본: $(basename "$gs")"
   echo "   ⚠️ 이제 인라인 재생성(100KB 통째 출력) 금지. 이 파일을 디스크에서 섹션별로 수정하세요."
   echo "   재구성 후: preply-student.sh verify \"$dest\""
+  echo "   그리고: preply-profile-verify.sh check '$kn' \"$dest\""
 }
 
 cmd_verify() {
@@ -135,8 +215,9 @@ cmd_verify() {
   local quizopt ansreveal quizq
   quizopt=$( { grep -o 'class="quiz-opt"' "$f" || true; } | wc -l | tr -d ' ')
   quizq=$(   { grep -o 'class="quiz-q"'   "$f" || true; } | wc -l | tr -d ' ')
-  ansreveal=$(grep -co 'ans-reveal' "$f" || true)
-  echo "퀴즈 보기(quiz-opt): $quizopt · 문항(quiz-q): $quizq · 정답클릭공개(ans-reveal): $ansreveal"
+  # 정답 공개 메커니즘: ans-reveal / answer-box / answer-reveal 어느 클래스든 인정 (2026-07-06 — 클래스 드리프트로 answer-box 교재가 오탐 FAIL나던 문제 해소).
+  ansreveal=$( { grep -coE 'ans-reveal|answer-box|answer-reveal' "$f" || true; } | tr -d ' ')
+  echo "퀴즈 보기(quiz-opt): $quizopt · 문항(quiz-q): $quizq · 정답공개(reveal/answer-box): $ansreveal"
   if [ "$quizopt" -eq 0 ]; then
     if [ "$is_song" -eq 1 ]; then
       local mbox cbox
@@ -168,6 +249,55 @@ cmd_verify() {
     fail=$((fail+1))
   else
     echo "정답 정적 노출(✓·정답텍스트): 0 ✅"
+  fi
+
+  # ── 퀴즈 정답 정합성 검사 (2026-07-06 신설 — 보람님 6일 반복 불만 기계 차단) ──
+  # 근본원인: 기존 검사는 ans-reveal·<strong>정답 마커만 봐서, 실제 교재가 쓰는
+  #   answer-box(display:none로 숨김)·checkAnswer(정답키) 구조의 노출·오류를 통째로 놓쳤다.
+  #   → 보람님이 "정답이 보인다/두개다/보기에 영어뜻이 있다"를 6일간 반복 지적(#48~#589).
+  local quiz_out quiz_fail quiz_warn
+  quiz_out=$(python3 - "$f" <<'PYEOF'
+import re, sys
+from collections import OrderedDict
+html = open(sys.argv[1], encoding="utf-8").read()
+fail = warn = 0; msgs = []
+# 1) answer-box 상시노출 — display:none 규칙이 없으면 정답 텍스트가 화면·PDF에 그대로 보인다.
+if 'answer-box' in html and not re.search(r'\.answer-box[^{]*\{[^}]*display\s*:\s*none', html):
+    msgs.append('FAIL|정답 상시노출: answer-box에 display:none 없음 — 정답이 화면·PDF에 그대로 보임'); fail += 1
+# 2) checkAnswer 정답키 ↔ 보기 data-val 정합성 (문항별 그룹핑)
+opts = re.findall(r'<div class="quiz-opt"\s+data-val="([^"]*)"[^>]*onclick="checkAnswer\(this,\s*[\x27]([^\x27]*)[\x27]\s*,\s*[\x27]([^\x27]*)[\x27]\)"[^>]*>(.*?)</div>', html, re.S)
+items = OrderedDict()
+for val, key, iid, text in opts:
+    t = re.sub('<[^>]+>', '', text).strip()
+    items.setdefault(iid, {'keys': set(), 'opts': []})
+    items[iid]['keys'].add(key); items[iid]['opts'].append((val, t))
+for iid, d in items.items():
+    vals = [v for v, _ in d['opts']]
+    if len(d['keys']) > 1:
+        msgs.append(f'FAIL|정답키 불일치(문항 {iid}): 보기마다 정답 지정이 다름'); fail += 1; continue
+    key = next(iter(d['keys'])) if d['keys'] else None
+    correct = [t for v, t in d['opts'] if v == key]
+    if len(correct) == 0:
+        msgs.append(f'FAIL|정답 불일치(문항 {iid}): 정답키 "{key}"에 맞는 보기 0개'); fail += 1
+    elif len(correct) > 1:
+        msgs.append(f'FAIL|정답 중복(문항 {iid}): 정답 보기 {len(correct)}개 — 보람님 "정답이 두개"'); fail += 1
+    if len(set(vals)) < len(vals):
+        msgs.append(f'FAIL|보기 data-val 중복(문항 {iid}): {vals}'); fail += 1
+    for v, t in d['opts']:
+        if re.search(r'[A-Za-z]{3,}', t):
+            msgs.append(f'WARN|보기에 영어 병기(문항 {iid}): "{t[:24]}" — 답 유추(보람님 "보기 영어뜻")'); warn += 1; break
+print(f'{fail} {warn}')
+for m in msgs: print(m)
+PYEOF
+)
+  read -r quiz_fail quiz_warn <<< "$(echo "$quiz_out" | head -1)"
+  if [ "${quiz_fail:-0}" -gt 0 ] || [ "${quiz_warn:-0}" -gt 0 ]; then
+    echo "$quiz_out" | tail -n +2 | while IFS='|' read -r lvl msg; do
+      [ "$lvl" = "FAIL" ] && echo "  ❌ FAIL: $msg" || echo "  ⚠️ WARN: $msg"
+    done
+    fail=$((fail + ${quiz_fail:-0})); warn=$((warn + ${quiz_warn:-0}))
+  else
+    echo "퀴즈 정답 정합성(노출·중복·영어병기): 0 ✅"
   fi
 
   # 인쇄 안전 CSS
@@ -248,6 +378,24 @@ print('\n'.join(out))
     warn=$((warn+1))
   else
     echo "타 학생/테마 잔존: 없음 ✅"
+  fi
+
+  # ── 학생 정식 이름 표기 검사 (2026-07-06 — 프로필오타 반복 불만 흡수) ──
+  # 보람님이 "루스가 아니라 루즈/나오미가 아니라 야다이"를 반복 지적. 레지스트리 정식명이 교재에 없으면 오타 의심.
+  local reg_ko
+  reg_ko=$(python3 -c "
+import json
+reg=json.load(open('$REGISTRY'))
+for s in reg['students']:
+    names=[n for n in [s.get('name_ko'),s.get('name_en'),*s.get('alt_names',[])] if n]
+    if '$target_kn' in names:
+        print(s.get('name_ko','')); break
+" 2>/dev/null || true)
+  if [ -n "$reg_ko" ] && ! grep -qF "$reg_ko" "$f"; then
+    echo "  ⚠️ WARN: 학생 정식 이름 '$reg_ko' 이 교재 본문에 없음 — 오타/다른 이름 의심 (보람님 '○가 아니라 △로 기록' 반복)"
+    warn=$((warn+1))
+  elif [ -n "$reg_ko" ]; then
+    echo "학생 정식 이름 표기('$reg_ko'): 있음 ✅"
   fi
 
   # ── 보람님 영구 선호 규칙 (2026-06-27 사흘치 반복 지적 → 영구 게이트화) ──
@@ -364,10 +512,88 @@ PYEOF
 }
 
 cmd_pdf() {
-  [ "$#" -ge 1 ] || err "파일 필요: preply-student.sh pdf <파일> [추가파일...]"
-  [ -f "$PDF_SCRIPT" ] || err "PDF 변환기 없음: $PDF_SCRIPT"
-  ( cd "$DISCORD_DIR" && node "$PDF_SCRIPT" "$@" )
+  # [2026-07-05 가드] PDF 생성 명시적 스크립트 선택 + 검증
+  local script_choice="" script_path=""
+
+  # 옵션 파싱: --script-choice=<번호>
+  local files=()
+  for arg in "$@"; do
+    case "$arg" in
+      --script-choice=*)
+        script_choice="${arg#--script-choice=}"
+        ;;
+      *)
+        files+=("$arg")
+        ;;
+    esac
+  done
+
+  [ "${#files[@]}" -ge 1 ] || err "파일 필요: preply-student.sh pdf [--script-choice=N] <파일> [추가파일...]"
+
+  # 스크립트 선택
+  if [ -z "$script_choice" ]; then
+    # 대화형 선택 (사용자 입력 필요)
+    if [ -t 0 ]; then  # stdin이 터미널이면
+      available_pdf_scripts || err "스크립트 선택 실패"
+      read -p "선택하세요 (기본값: 1): " script_choice
+      script_choice="${script_choice:-1}"
+    else
+      # 비대화형 모드 (cron/배치) → 기본값 사용
+      script_choice="1"
+    fi
+  fi
+
+  # 선택 스크립트 경로 획득
+  script_path=$(available_pdf_scripts "$script_choice" 2>&1 | tail -1) || \
+    err "스크립트 선택 실패: --script-choice=$script_choice"
+
+  echo "📋 선택됨: $(basename "$script_path")"
+  echo ""
+
+  # [2026-07-05] cl-33ab3e59820bd8c8 가드: PDF 변환 전 정답 영어 힌트 사전 검사
+  local _eng_guard="${JARVIS}/infra/guards/answer-english-hint-guard.sh"
+  if [ -f "$_eng_guard" ]; then
+    local _pdf_fail=0
+    for _pf in "${files[@]}"; do
+      case "$_pf" in
+        *.html)
+          local _pfh="${_pf/#\~/$HOME}"
+          [ -f "$_pfh" ] || continue
+          if ! bash "$_eng_guard" "$_pfh"; then
+            _pdf_fail=1
+          fi
+          ;;
+      esac
+    done
+    if [ "$_pdf_fail" -eq 1 ]; then
+      err "PDF 변환 차단 — 정답 선택지 영어 힌트 발견. 수정 후 다시 실행하세요."
+    fi
+  fi
+
+  # PDF 변환 실행 + 결과 검증
+  local _conv_out _conv_fail=0
+  _conv_out=$( cd "$DISCORD_DIR" && node "$script_path" "${files[@]}" 2>&1 ) || _conv_fail=$?
+  echo "$_conv_out"
+
+  # 변환 실패 시 오류 발생 (Iron Law 6: 거짓 성공 보고 금지)
+  if [ $_conv_fail -ne 0 ]; then
+    err "PDF 변환 실패 (종료 코드: $_conv_fail). HTML 대체 업로드는 차단됩니다."
+  fi
+
+  # 생성된 PDF 파일 추적 기록 (cmd_send에서 검증용)
+  local _pdf_manifest="${BOT_HOME}/.pdf-manifest"
+  mkdir -p "$(dirname "$_pdf_manifest")"
+  for _pf in "${files[@]}"; do
+    case "$_pf" in
+      *.html)
+        local _pfh="${_pf/#\~/$HOME}"
+        local _pdf_f="${_pfh%.*}.pdf"
+        [ -f "$_pdf_f" ] && echo "$_pfh|$_pdf_f|$(date +%s)" >> "$_pdf_manifest"
+        ;;
+    esac
+  done
 }
+
 
 cmd_send() {
   # --force: 검증 실패해도 강제 전송 (정말 필요할 때만)
@@ -375,17 +601,133 @@ cmd_send() {
   if [ "${1:-}" = "--force" ]; then force=1; shift; fi
   [ "$#" -ge 2 ] || err "사용법: preply-student.sh send [--force] \"<메시지>\" <파일1> [파일2 ...]"
   [ -f "$UPLOAD_SCRIPT" ] || err "업로더 없음: $UPLOAD_SCRIPT"
-  # 전송 전 HTML 자동 검증 게이트 — 손상 파일이 학생에게 가는 것을 구조적으로 차단.
+
+  # [2026-07-05 가드] HTML 대체 업로드 차단: HTML은 대응 PDF와 함께만 업로드 가능
+  # Iron Law 6 준수: PDF 생성이 성공했는지 확인하고, 없으면 HTML 업로드 거절
+  local _pdf_manifest="${BOT_HOME}/.pdf-manifest"
   if [ "$force" -eq 0 ]; then
-    local arg _h
+    local arg _h _pdf_path
     for arg in "$@"; do
       case "$arg" in
         *.html)
           _h="${arg/#\~/$HOME}"
           [ -f "$_h" ] || continue
+
+          # HTML을 보내려는데, 대응하는 PDF 생성 기록이 있는지 확인
+          _pdf_path="${_h%.*}.pdf"
+          local _pdf_found=0
+
+          # 1. manifest 파일에서 확인 (최근 PDF 생성 기록)
+          if [ -f "$_pdf_manifest" ] && grep -q "^${_h}|" "$_pdf_manifest"; then
+            _pdf_found=1
+          fi
+
+          # 2. 또는 .pdf 파일이 .html 파일과 같은 시간대에 생성되었는지 확인
+          if [ "$_pdf_found" -eq 0 ] && [ -f "$_pdf_path" ]; then
+            local _html_mtime _pdf_mtime _time_diff
+            _html_mtime=$(stat -f %m "$_h" 2>/dev/null || echo 0)
+            _pdf_mtime=$(stat -f %m "$_pdf_path" 2>/dev/null || echo 0)
+            _time_diff=$(((_html_mtime - _pdf_mtime) * 1))
+            # HTML이 PDF보다 최근이 아니면 (±60초 허용) → PDF가 이미 있음
+            if [ "$_time_diff" -le 60 ] && [ "$_time_diff" -ge -60 ]; then
+              _pdf_found=1
+            fi
+          fi
+
+          # 3. 아무 기록도 없으면 → HTML만 업로드하려는 시도 → 차단!
+          if [ "$_pdf_found" -eq 0 ]; then
+            echo "" >&2
+            echo "🚫 HTML 대체 업로드 차단 (Iron Law 6 준수)" >&2
+            err "❌ $(basename "$_h") 에 대한 유효한 PDF 변환 기록이 없습니다.
+
+이유: PDF 생성이 성공하지 않았거나, 이전에 생성되었습니다.
+       (데이터 손상/렌더링 실패 위험)
+
+해결:
+1. 먼저 PDF를 생성하세요:
+   preply-student.sh pdf $(basename "$_h")
+
+2. 생성 후에 다시 전송하세요:
+   preply-student.sh send \"메시지\" $(basename "$_h") ${_pdf_path##*/}
+
+3. 정말 필요하면 강제 전송 (위험):
+   preply-student.sh send --force \"메시지\" $(basename "$_h")"
+          fi
+          ;;
+      esac
+    done
+  fi
+
+  # 전송 전 HTML 자동 검증 게이트 — 손상 파일이 학생에게 가는 것을 구조적으로 차단.
+  if [ "$force" -eq 0 ]; then
+    local arg _h _kn
+    for arg in "$@"; do
+      case "$arg" in
+        *.html)
+          _h="${arg/#\~/$HOME}"
+          [ -f "$_h" ] || continue
+          # [2026-07-06] 파일 형식 규칙 (파일전송 반복 불만 흡수: "요약본·숙제는 PDF로 올려")
+          case "$(basename "$_h")" in
+            *요약본*|*숙제*|*정답지*)
+              warn "⚠️ '$(basename "$_h")'를 HTML로 전송 — 요약본·숙제·정답지는 PDF로 보내는 게 원칙입니다(보람님 반복 요청). PDF를 함께/대신 올리세요." ;;
+          esac
           if ! cmd_verify "$_h"; then
             echo "" >&2
             err "검증 실패 — 전송 차단. 위 FAIL 항목 수정 후 다시 보내세요. (강제 전송: send --force ...)"
+          fi
+          # [2026-07-05] cl-33ab3e59820bd8c8 가드: 정답 선택지 영어 힌트 검사
+          # 문법 문제 정답에 영어 번역이 노출되면 학생이 한국어를 판단하기 전에 답을 알게 됨.
+          local _eng_guard="${JARVIS}/infra/guards/answer-english-hint-guard.sh"
+          if [ -f "$_eng_guard" ]; then
+            if ! bash "$_eng_guard" "$_h"; then
+              echo "" >&2
+              err "영어 힌트 가드 FAIL — 정답 선택지에 영어 번역 노출. 수정 후 전송하세요. (강제: send --force ...)"
+            fi
+          fi
+          # [2026-07-06] 렌더 아이 게이트 — 소스 grep이 아닌 "실제 렌더 화면"으로 정답 노출·A4·글씨 판정.
+          #   정답 클래스명이 answer-box/ans-reveal/answer-reveal로 제각각이라 소스 검사가 6일간 뚫린 것을,
+          #   렌더 상태(클릭 전 화면에 정답이 보이는가)로 근본 차단한다. 새 구조가 나와도 화면에 보이면 걸린다.
+          local _render="${JARVIS}/infra/scripts/preply-render-check.mjs" _rout _rc
+          if [ -f "$_render" ]; then
+            echo "👁️  렌더 아이 검사 (보람님이 볼 실제 화면)..."
+            _rout=$(cd "$DISCORD_DIR" && node "$_render" "$_h" 2>/dev/null); _rc=$?
+            if [ "$_rc" -eq 2 ]; then
+              echo "$_rout" | python3 -c "import json,sys; d=json.load(sys.stdin); [print('  ❌ FAIL:',i['msg']) for i in d['issues'] if i['level']=='FAIL']" 2>/dev/null >&2 || true
+              err "렌더 아이 FAIL — 화면에 정답이 보이거나 레이아웃 문제. 수정 후 전송하세요. (강제: send --force ...)"
+            elif [ "$_rc" -eq 0 ]; then
+              echo "$_rout" | python3 -c "import json,sys; d=json.load(sys.stdin); [print('  ⚠️ ',i['msg']) for i in d['issues'] if i['level']=='WARN']" 2>/dev/null || true
+              echo "👁️  렌더 아이 통과 ✅"
+            fi
+            # _rc==1(렌더 자체 오류)은 비차단 — 가용성 우선(검사 실패가 전송을 막지 않음)
+          fi
+          # [2026-07-06] 렌더 아이 2층 — 스크린샷을 "보람 눈"(LLM 비전)으로 검토.
+          #   1층(DOM 상태)이 못 잡는 주관적 품질(레이아웃·질문/정답 중복·전반 완성도)을 전송 전 포착.
+          #   API 실패·rate limit·토큰 문제 시 비차단(1층+verify가 이미 방어) — verdict=FAIL일 때만 차단.
+          local _vision="${JARVIS}/infra/scripts/preply-vision-check.mjs" _vout _vrc
+          if [ -f "$_vision" ]; then
+            echo "👁️‍🗨️  보람 눈 검토 (비전)..."
+            _vout=$(cd "$DISCORD_DIR" && node "$_vision" "$_h" 2>/dev/null); _vrc=$?
+            if [ "$_vrc" -eq 2 ]; then
+              echo "$_vout" | python3 -c "import json,sys; d=json.load(sys.stdin); [print('  ❌ FAIL:',i['msg']) for i in d['issues'] if i.get('level')=='FAIL']" 2>/dev/null >&2 || true
+              err "보람 눈(비전) 검토 FAIL — 위 문제 수정 후 전송하세요. (강제: send --force ...)"
+            elif [ "$_vrc" -eq 0 ]; then
+              echo "👁️‍🗨️  보람 눈 검토 통과 ✅"
+            else
+              echo "   (비전 검토 건너뜀 — rate limit/불가. 1층 렌더 검사로 방어됨)"
+            fi
+          fi
+          # [2026-07-03] 프로필 검증 단계 추가 — 교재가 학생 프로필을 반영했는지 확인
+          _kn="$(basename "$_h" | sed -E 's/한국어수업_([^_]+)_.*/\1/')"
+          if [ -n "$_kn" ] && [ "$_kn" != "$(basename "$_h")" ]; then
+            local profile_verify_script="${JARVIS}/infra/scripts/preply-profile-verify.sh"
+            if [ -f "$profile_verify_script" ]; then
+              echo "📋 프로필 반영 검증 중..."
+              if ! bash "$profile_verify_script" check "$_kn" "$_h"; then
+                echo "" >&2
+                warn "⚠️ 교재가 학생 프로필을 충분히 반영하지 않을 수 있습니다."
+                warn "   위 경고를 검토 후 필요시 강제 전송: send --force ..."
+              fi
+            fi
           fi
           ;;
       esac
