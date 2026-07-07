@@ -283,6 +283,12 @@ for iid, d in items.items():
         msgs.append(f'FAIL|정답 중복(문항 {iid}): 정답 보기 {len(correct)}개 — 보람님 "정답이 두개"'); fail += 1
     if len(set(vals)) < len(vals):
         msgs.append(f'FAIL|보기 data-val 중복(문항 {iid}): {vals}'); fail += 1
+    # 2026-07-07 신설: 보기 텍스트 중복 (data-val은 다른데 텍스트가 같은 경우 — 말고 Unit2 Q2 사고).
+    # data-val 검사(위)는 "키가 같은가"만 보고, 서로 다른 보기가 같은 문장인 경우는 못 잡는다.
+    texts = [t for _, t in d['opts']]
+    if len(set(texts)) < len(texts):
+        dupes = sorted({t for t in texts if texts.count(t) > 1})
+        msgs.append(f'FAIL|보기 텍스트 중복(문항 {iid}): {dupes} — 서로 다른 보기인데 문장이 같음'); fail += 1
     for v, t in d['opts']:
         if re.search(r'[A-Za-z]{3,}', t):
             msgs.append(f'WARN|보기에 영어 병기(문항 {iid}): "{t[:24]}" — 답 유추(보람님 "보기 영어뜻")'); warn += 1; break
@@ -344,6 +350,31 @@ print(round(sum(ens)/len(ens),1) if ens else 0)
     if python3 -c "import sys; sys.exit(0 if float('$cnote_avgen') < 15 else 1)" 2>/dev/null; then
       echo "  ⚠️ WARN: 문화비교 영어 설명 부족 (블록당 평균 ${cnote_avgen}단어 < 15) — 영어 3~4문장으로 보강"
       warn=$((warn+1))
+    fi
+    # 2026-07-07 신설: 줄 단위 한영 병기 누락 검사 — 기존 "블록당 평균 15단어"는 집계라
+    # 한 블록 안에서 특정 줄 몇 개가 통째로 번역 누락돼도 평균만 맞으면 통과했다(말고 Unit2, 7곳 누락 사고).
+    # 휴리스틱: 블록을 li/p/br 단위 줄로 쪼개, 한글 3글자+ 있는데 영문 3글자+ 단어가 0개인 줄을 누락으로 본다.
+    cnote_lines=$(python3 -c "
+import re
+html=open('$f').read()
+notes=re.findall(r'class=\"[^\"]*compare-note[^\"]*\"[^>]*>(.*?)</div>', html, re.S)
+missing=0
+for n in notes:
+    lines=re.split(r'<li[^>]*>|</li>|<br\s*/?>|<p[^>]*>|</p>', n)
+    for line in lines:
+        text=re.sub('<[^>]+>',' ',line).strip()
+        if not text: continue
+        has_kr=len(re.findall(r'[가-힣]', text)) >= 3
+        has_en=len(re.findall(r'[A-Za-z]{3,}', text)) >= 1
+        if has_kr and not has_en:
+            missing+=1
+print(missing)
+" 2>/dev/null || echo 0)
+    if [ "${cnote_lines:-0}" -gt 0 ]; then
+      echo "  ⚠️ WARN: 문화비교 줄 단위 한영 병기 누락 ${cnote_lines}곳 — 블록 평균은 통과해도 개별 줄이 번역 누락일 수 있음(말고 Unit2 패턴)"
+      warn=$((warn+1))
+    else
+      echo "문화비교 줄 단위 한영 병기: 누락 없음 ✅"
     fi
   fi
 
@@ -732,6 +763,32 @@ cmd_send() {
           ;;
       esac
     done
+    # [2026-07-07 신설] 규칙128의 반대 방향 누락 검사: "교재 본체는 HTML(+PDF)"인데
+    # 기존 게이트(위)는 "HTML만 보내는 것"만 막았지, "PDF만 보내고 HTML을 빠뜨리는 것"은
+    # 안 잡았다(말고 Unit2 사고 — 교재본체 PDF만 전송 → 보람님 "왜 PDF만 보내" 재지적).
+    local _arg2 _p _base _stem _sib_html_found=0 _pdf_body_seen=0
+    for _arg2 in "$@"; do
+      case "$_arg2" in
+        *.pdf)
+          _p="${_arg2/#\~/$HOME}"
+          _base="$(basename "$_p")"
+          case "$_base" in
+            *요약본*|*숙제*|*정답지*) continue ;;  # 이 3종은 PDF가 원칙 — 대상 아님
+          esac
+          _pdf_body_seen=1
+          _stem="${_p%.pdf}"
+          for _arg3 in "$@"; do
+            case "$_arg3" in
+              *.html)
+                [ "${_arg3/#\~/$HOME}" = "${_stem}.html" ] && _sib_html_found=1 ;;
+            esac
+          done
+          ;;
+      esac
+    done
+    if [ "$_pdf_body_seen" -eq 1 ] && [ "$_sib_html_found" -eq 0 ]; then
+      warn "⚠️ 교재 본체(수업교재)를 PDF만 전송 — 규칙: '교재 본체는 HTML(+PDF)' 동시 배포가 원칙입니다(보람님 반복 지적). HTML도 같이 첨부하세요."
+    fi
   fi
   ( cd "$DISCORD_DIR" && node "$UPLOAD_SCRIPT" "$@" )
 
@@ -802,6 +859,71 @@ print(f'✅ {name} {action} 완료 (총 {len(reg["students"])}명)')
 PY
 }
 
+# [2026-07-07 신설] 학생 종료 — 기본은 아카이브(되돌릴 수 있음). "--permanent"면 진짜 삭제.
+# 보람님(선생님)이 그 채널 안에서 학생 데이터에 대해 갖는 전권 — 재확인 없이 즉시 실행.
+cmd_archive() {
+  local name="${1:-}"; [ -n "$name" ] || err "사용법: preply-student.sh archive <학생명>"
+  local archive_dir="${MATERIAL_DIR}/archive"
+  mkdir -p "$archive_dir"
+  python3 - "$REGISTRY" "$name" <<'PY'
+import json, sys
+reg_path, name = sys.argv[1], sys.argv[2]
+reg = json.load(open(reg_path))
+found = None
+for s in reg['students']:
+    names = [n for n in [s.get('name_ko'), s.get('name_en'), *s.get('alt_names', [])] if n]
+    if name in names:
+        found = s; break
+if not found:
+    print(f'❌ 학생 없음: {name}'); sys.exit(1)
+found['status'] = '종료(아카이브)'
+found['archived_at'] = __import__('time').strftime('%Y-%m-%dT%H:%M:%S')
+json.dump(reg, open(reg_path, 'w'), ensure_ascii=False, indent=2)
+print(f'✅ {name} 아카이브 완료 (레지스트리 status=종료, 파일은 이동 진행)')
+PY
+  # 해당 학생 파일들을 archive 폴더로 이동 (삭제 아님 — 되돌릴 수 있음)
+  local moved=0
+  shopt -s nullglob
+  for f in "${MATERIAL_DIR}"/*"${name}"*; do
+    [ -f "$f" ] || continue
+    mv "$f" "$archive_dir/"
+    moved=$((moved+1))
+  done
+  shopt -u nullglob
+  echo "📦 파일 ${moved}개 → $archive_dir 로 이동 (필요하면 되돌릴 수 있음)"
+}
+
+cmd_delete() {
+  local name="${1:-}"; [ -n "$name" ] || err "사용법: preply-student.sh delete <학생명> --permanent"
+  local flag="${2:-}"
+  if [ "$flag" != "--permanent" ]; then
+    err "영구삭제는 명시적으로 --permanent 플래그가 필요합니다: preply-student.sh delete <학생명> --permanent
+(되돌릴 수 있는 종료 처리만 원하면: preply-student.sh archive <학생명>)"
+  fi
+  python3 - "$REGISTRY" "$name" <<'PY'
+import json, sys
+reg_path, name = sys.argv[1], sys.argv[2]
+reg = json.load(open(reg_path))
+before = len(reg['students'])
+reg['students'] = [s for s in reg['students']
+                    if name not in [n for n in [s.get('name_ko'), s.get('name_en'), *s.get('alt_names', [])] if n]]
+after = len(reg['students'])
+if before == after:
+    print(f'❌ 학생 없음: {name}'); sys.exit(1)
+json.dump(reg, open(reg_path, 'w'), ensure_ascii=False, indent=2)
+print(f'✅ {name} 레지스트리에서 영구 삭제 완료')
+PY
+  local removed=0
+  shopt -s nullglob
+  for f in "${MATERIAL_DIR}"/*"${name}"* "${MATERIAL_DIR}/archive"/*"${name}"*; do
+    [ -f "$f" ] || continue
+    rm -f "$f"
+    removed=$((removed+1))
+  done
+  shopt -u nullglob
+  echo "🗑️  파일 ${removed}개 영구 삭제 완료 (복구 불가)"
+}
+
 sub="${1:-}"; shift || true
 case "$sub" in
   list)   cmd_list "$@" ;;
@@ -811,6 +933,8 @@ case "$sub" in
   pdf)    cmd_pdf "$@" ;;
   send)   cmd_send "$@" ;;
   upsert) cmd_upsert "$@" ;;
+  archive) cmd_archive "$@" ;;
+  delete)  cmd_delete "$@" ;;
   *) cat >&2 <<EOF
 preply-student.sh — 보람님 학생별 교재 헬퍼
   list                      학생 + 최신 파일 목록
@@ -820,6 +944,8 @@ preply-student.sh — 보람님 학생별 교재 헬퍼
   pdf <파일> [추가...]       학생 전송용 PDF 변환
   send "<메시지>" <파일...>  jarvis-preply-tutor 채널에 첨부 업로드
   upsert <학생> '<JSON>'    학생 프로필 멱등 등록/갱신 (새 정보 받으면 즉시)
+  archive <학생>            학생 종료 — 되돌릴 수 있음(레지스트리 status·파일 archive 폴더 이동)
+  delete <학생> --permanent 학생 영구 삭제 — 복구 불가(레지스트리 제거·파일 rm)
 EOF
      exit 1 ;;
 esac

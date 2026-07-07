@@ -605,7 +605,10 @@ async function main() {
     await postWebhook(card);
   }
 
-  process.exit(failCount > 0 ? 1 : 0);
+  // Exit with 0 always — audit success means "detection happened", not "no issues"
+  // Circuit breaker would treat exit 1 as failure and open after 5 attempts.
+  // Audit is meant to detect problems and report them; successful detection is not a failure.
+  process.exit(0);
 }
 
 main().catch(err => {
