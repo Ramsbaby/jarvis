@@ -263,7 +263,18 @@ export function buildUserContextSection({ activeUserProfile, ownerName, ownerTit
       if (!isInterviewMode) {
         const starMarker = '\n## 핵심 STAR 경험';
         const starIdx = profileCache.indexOf(starMarker);
+        // [2026-07-08] STAR 전체(≈14K토큰)는 예산상 상담 채널에 불가 → 각 STAR의 desc= 한줄요약만
+        //   추출(≈560토큰)해 "핵심 경력 요약"으로 복원. 상담 채널이 "일반론" 대신 실제 경험을 인지.
+        //   창작 0(기존 user-profile.md SSoT의 desc= 기계 추출). owner-context 섹션에 통합돼 score 8 보호 상속.
+        let starDescSummary = '';
         if (starIdx > 0) {
+          const starBody = profileCache.slice(starIdx);
+          const descs = [...starBody.matchAll(/desc=([^|]*?)(?:\s*-->)?$/gm)]
+            .map(m => m[1].trim()).filter(Boolean);
+          if (descs.length) {
+            starDescSummary = '\n\n## 핵심 경력 요약 (STAR 압축 — 상세는 필요 시 질문)\n'
+              + descs.map(d => `- ${d}`).join('\n');
+          }
           effectiveProfile = profileCache.slice(0, starIdx).trimEnd();
         }
         // 면접 답변 라우팅 룰 strip — '🚨 면접 답변 강제 라우팅' 섹션부터 '## 기본 정보' 직전까지 제거
@@ -274,15 +285,23 @@ export function buildUserContextSection({ activeUserProfile, ownerName, ownerTit
         if (routingStart >= 0 && routingEnd > routingStart) {
           effectiveProfile = effectiveProfile.slice(0, routingStart) + effectiveProfile.slice(routingEnd);
         }
+        // STAR 요약을 마지막에 append (면접 라우팅 strip 후 — 순서 안전)
+        effectiveProfile += starDescSummary;
       }
       // isInterviewMode === true 면 full profile 그대로 (면접 라우팅 + STAR 보존)
     }
     // [2026-05-22 v8] lightweight 모드 폐기 — brevity 라인은 user-profile.md SSoT에서 직접 제거 완료.
+    // [2026-07-08] 헤더+안내문+프로필을 단일 원소로 결합 — 프로필 본문(effectiveProfile)이
+    //   '--- Owner Context ---' 헤더와 분리된 독립 배열 원소라 enforceBudget의 inferSectionName이
+    //   못 잡아 unnamed(score 5)로 강등 → 예산 초과 시 최우선 drop되던 근본 결함 수리.
+    //   단일 원소로 결합하면 첫 줄 헤더가 잡혀 owner-context(score 8)로 승격, 상담 채널서 프로필 보호.
     return [
-      '--- Owner Context ---',
-      `지금 대화 중인 사람은 ${ownerName}(${ownerTitle}님, GitHub: ${githubUsername})이다. 오너가 "나 누구야?" 등으로 물으면 프로필 기반으로 답한다.`,
-      effectiveProfile,
-    ].filter(Boolean);
+      [
+        '--- Owner Context ---',
+        `지금 대화 중인 사람은 ${ownerName}(${ownerTitle}님, GitHub: ${githubUsername})이다. 오너가 "나 누구야?" 등으로 물으면 프로필 기반으로 답한다.`,
+        effectiveProfile,
+      ].filter(Boolean).join('\n\n'),
+    ];
   }
   return [
     '--- 사용자 컨텍스트 ---',

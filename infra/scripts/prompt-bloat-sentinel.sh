@@ -98,6 +98,20 @@ for f in mani.get("files", []):
         ret = f.get("writeRetention", "?")
         violations.append(f"파일 비대: {f['path']} = {sz//1024}KB > cap {cap//1024}KB (retention: {ret})")
 
+# (3) [2026-07-08] hot-events cli-session 오염 감시 — writer 차단(stop-cli-hot-events.sh)·이중필터
+#     우회로 백그라운드 크론 이벤트가 다시 쌓이는지 조기 탐지. 오염 98% 사고(봇 맥락 오염→얕은 답) 재발 방지.
+try:
+    _he = json.load(open(os.path.join(bot_home, "context/owner/hot-events.json")))
+    _evs = _he.get("events", [])
+    if len(_evs) >= 5:
+        _cli = sum(1 for e in _evs if e.get("channel") == "cli-session")
+        _ratio = _cli / len(_evs)
+        if _ratio > 0.5:
+            violations.append(f"hot-events 오염: cli-session {_cli}/{len(_evs)}건 ({int(_ratio*100)}%) — "
+                              f"writer 우회 재오염 의심 (stop-cli-hot-events.sh·collect-snapshot·claude-runner 필터 점검)")
+except Exception:
+    pass
+
 if violations:
     print(json.dumps({"count": len(violations), "lines": violations}, ensure_ascii=False))
 PY

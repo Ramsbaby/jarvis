@@ -10,9 +10,11 @@ import { homedir } from 'node:os';
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const USERS_DIR = join(BOT_HOME, 'state', 'users');
 
-// Family 채널용 노이즈 fact 필터 — 컴팩션 아티팩트·세션 메타 텍스트 제거
-// 너무 광범위한 userid 패턴 대신 정확한 노이즈 패턴만 차단
-const FAMILY_JUNK_RE = /^\[userid:|compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조/i;
+// 세션 메타·컴팩션 아티팩트·마크다운 조각 필터 — session-summarizer 등이 대화 요약본을
+// 정규식+50자 윈도우로 재파싱해 만든 파편이 "사실"로 저장되던 것을 addFact 진입부에서 차단.
+// [2026-07-08] 죽은 코드(선언만·미호출)였던 것을 실제 저장 게이트로 승격 + 파편 마커 확장.
+//   주의: 정상 추출 사실(예 "면접 일정·포트폴리오 수치")은 구조 마커가 없어 통과. 세션/마크다운 구조만 매칭.
+const FAMILY_JUNK_RE = /^\[userid:|compacted at|<!--|-->|사용자 의도|완료된 작업|미완 작업|핵심 참조|세션 요약|^글자 수:\s|^\s*###\s|^\s*\|.*\|.*\||^-{3,}$|^L\d{2,}:/i;
 
 // 카테고리 자동 감지 — 텍스트 키워드 기반 분류
 // 주의: CATEGORY_LIMITS/MONITOR_SOFT_LIMITS와 SSoT 정합성 유지 (카테고리 추가 시 3곳 동시 갱신)
@@ -127,6 +129,9 @@ export const userMemory = {
     }
     // facts는 string 또는 {text, addedAt[, category][, source]} 혼용 허용 (하위 호환)
     const normText = (f) => (typeof f === 'string' ? f : f?.text ?? '');
+    // [2026-07-08] 세션 메타·컴팩션 파편 저장 차단 (근본 재발 방지 — 모든 쓰기 경로 단일 게이트).
+    //   session-summarizer가 만드는 "compacted at…"·"### 사용자 의도"·마크다운 표 조각 등을 거부.
+    if (typeof fact === 'string' && FAMILY_JUNK_RE.test(fact)) return false;
     const exists = data.facts.some(f => normText(f) === fact);
     if (!exists) {
       const category = detectCategory(fact);

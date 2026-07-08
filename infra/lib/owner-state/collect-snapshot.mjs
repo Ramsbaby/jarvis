@@ -67,7 +67,8 @@ let hot_events = [];
 try {
   const j = JSON.parse(readFileSync(join(BOT_HOME, 'context/owner/hot-events.json'), 'utf-8'));
   hot_events = (j.events || [])
-    .filter(e => !e.expires || e.expires >= today)
+    // [2026-07-08] cli-session(백그라운드 크론) 이벤트 제외 — writer 차단의 이중 방어(재오염 시 봇 도달 차단)
+    .filter(e => (!e.expires || e.expires >= today) && e.channel !== 'cli-session')
     .slice(-15)
     .map(e => ({ date: e.date, channel: e.channel, summary: String(e.summary || '').slice(0, 200) }));
 } catch {}

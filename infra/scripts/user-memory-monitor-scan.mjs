@@ -92,6 +92,16 @@ function scan() {
       }
     }
 
+    // [2026-07-08] 파편 오염 감지 — session-summarizer류 파편(세션메타·컴팩션·마크다운 조각)이
+    //   다시 쌓이는지 비율 감시. 오너 기억 92% 오염(코딩테스트 파편 도배) 사고 재발 방지.
+    //   감지 전용 정규식(넓게) — user-memory.mjs FAMILY_JUNK_RE(저장 차단·앵커)와 목적이 다름.
+    const JUNK_RE = /compacted at|사용자 의도|완료된 작업|미완 작업|핵심 참조|세션 요약|글자 수:|^\s*###|^\s*\|.*\||^-{3,}|^L\d{2,}:/im;
+    const junkCount = facts.filter(f => JUNK_RE.test(typeof f === 'string' ? f : (f?.text ?? ''))).length;
+    if (total >= 10 && junkCount / total > 0.3) {
+      warnings.push(`- 🔴 파편 오염 ${junkCount}/${total}건 (${Math.round(junkCount / total * 100)}%) — session-summarizer류 재유입 의심 (addFact 필터·크론 점검)`);
+      allOk = false;
+    }
+
     if (warnings.length) {
       alerts.push({ name, userId, total, warnings });
     }

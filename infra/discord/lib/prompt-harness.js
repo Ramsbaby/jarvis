@@ -144,7 +144,7 @@ export function resetPromptHarness() {
 export const TOKEN_BUDGETS = Object.freeze({
   emotional: 3000,    // 감정 턴: 위로에 필요한 핵심만 (~12KB)
   casual:    4000,    // 잡담: 가볍게 (~16KB)
-  analytical: 12000,  // 분석/판단: 깊은 컨텍스트 허용 (~48KB) ↑ 2026-06-11
+  analytical: 18000,  // 분석/판단 ↑ 2026-07-08: 실측 조립량 21K 대비 12K는 매 응답 9K drop(budget-drops 1707건, owner-context 프로필까지 잘림) → 18K로 상향해 프로필·RAG·기억 공존 확보
   code:      9000,    // 코드 작업: serena·SSoT 필요 (~36KB) ↑ 2026-06-11
   default:   7000,    // 분류 안 됐을 때 (~28KB) ↑ 2026-06-11
 });

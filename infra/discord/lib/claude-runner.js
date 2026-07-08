@@ -1169,7 +1169,8 @@ export async function* createClaudeSession(prompt, {
       if (existsSync(_hotEvPath)) {
         const _hotData = JSON.parse(readFileSync(_hotEvPath, 'utf-8'));
         const _today = new Date().toISOString().slice(0, 10);
-        const _active = (_hotData.events || []).filter(e => !e.expires || e.expires >= _today);
+        // [2026-07-08] cli-session(백그라운드 크론) 이벤트 방어 필터 — writer 차단(stop-cli-hot-events.sh)의 이중 방어.
+        const _active = (_hotData.events || []).filter(e => (!e.expires || e.expires >= _today) && e.channel !== 'cli-session');
         if (_active.length) {
           // [2026-06-04] 비대화 차단: 783건 무cap 덤프 → 70K 토큰 점령 사고 수리.
           //   ① 최근 날짜순 상위 N건만 ② 헤더+본문을 단일 문자열로 병합(분리 push 시 본문이
