@@ -1490,6 +1490,41 @@ export class RAGEngine {
     }
   }
 
+  // [2026-07-08] DB에 등록된 전체 source 목록(distinct) 반환.
+  //   age-mem-discard가 index-state.json 대신 이 목록을 순회해 원본이 삭제된 유령 청크를 잡도록 함.
+  //   근본: prune(30분)이 state에서 삭제 항목을 먼저 비워 orphan cleanup(주1회)이 볼 대상 0개가 되던
+  //         순서 결함 우회. source 컬럼만 select(벡터 제외)라 메모리 부담 낮음. deleted=true는 제외.
+  async getAllSources() {
+    if (!this.table) return [];
+    const rows = await this._withDeletedFilter(this.table.query())
+      .select(['source']).limit(1_000_000).toArray();
+    return [...new Set(rows.map((r) => r.source).filter(Boolean))];
+  }
+
+  // [2026-07-08] 배치 soft-delete — 대량 유령 정리 시 deleteBySource 순차(100건/2분, watcher 장시간
+  //   중단 위험) 대신 IN 절로 묶어 처리. 벡터 재직렬화 없이 deleted 플래그만 update.
+  async deleteBySources(sources, batchSize = 500) {
+    this._assertWritable();
+    let done = 0;
+    for (let i = 0; i < sources.length; i += batchSize) {
+      const batch = sources.slice(i, i + batchSize);
+      const inList = batch
+        .map((s) => `'${String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`)
+        .join(',');
+      try {
+        await this.table.update({
+          where: `source IN (${inList})`,
+          values: { deleted: true, deleted_at: Date.now() },
+        });
+        done += batch.length;
+      } catch (e) {
+        console.error(`[rag-engine] deleteBySources batch ${i}-${i + batch.length} 실패: ${e.message?.slice(0, 140)}`);
+        throw e; // 배치 실패는 상위로 전파(부분 성공 감지)
+      }
+    }
+    return done;
+  }
+
   async getStats() {
     if (!this.table) return { totalChunks: 0, totalSources: 0 };
     // totalChunks는 독립적으로 획득 — totalSources 실패가 0으로 덮어쓰지 않도록 분리

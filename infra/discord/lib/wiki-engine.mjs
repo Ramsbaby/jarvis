@@ -24,6 +24,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { maskPII } from './mask-pii.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 export const WIKI_ROOT = join(BOT_HOME, 'wiki');
@@ -200,11 +201,9 @@ export function addFactToWiki(_userId, fact, opts = null) {
   // 🛡️ PII 마스킹 가드 (2026-04-26 영구 적용 — 오답노트 P3 fact-extractor 학습 차단)
   // 어제 마스킹 후 24h 내 재발 → fact-extractor가 보고문 학습 → 평문 PII 재적재 → wiki 오염.
   // 단일 SSoT 함수에서 차단하면 모든 호출 경로(session-summarizer/wiki-ingester/claude-runner) 보호.
-  // 이메일 로컬 부분 마스킹 + 도메인 보존 (컨텍스트 유지). 이미 마스킹된 형태(m***@)는 skip.
-  fact = String(fact || '').replace(
-    /([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
-    (match, local, domain) => local.includes('*') ? match : `${local[0]}***@${domain}`
-  );
+  // [2026-07-09] 공통 maskPII로 확장 — 기존 이메일만 → 실명·회사명·절대경로·도메인·시크릿·전화 전체.
+  //   단일 SSoT 함수라 모든 호출 경로(session-summarizer/wiki-ingester/claude-runner)를 한 곳에서 보호.
+  fact = maskPII(String(fact || ''));
 
   let domainOverride = null;
   let source = 'discord';

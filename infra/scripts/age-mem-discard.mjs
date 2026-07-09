@@ -55,52 +55,56 @@ log('=== AgeMem DISCARD 시작 ===');
 // ─────────────────────────────────────────────────────────────────────────────
 let orphanDeleted = 0;
 const orphanSources = [];
+const DRYRUN = process.env.DRYRUN === '1';
 
-if (!existsSync(INDEX_STATE)) {
-  wrn('index-state.json 없음 — Rule 1 건너뜀');
-} else {
-  let indexState = {};
+// [2026-07-08] index-state.json 대신 DB의 전체 source를 직접 순회 (순서 결함 수리).
+//   근본: rag-index prune(30분 주기)이 원본 삭제 항목을 index-state에서 즉시 제거 →
+//         state 기반 고아 탐지는 볼 대상이 항상 0건 → orphan cleanup 무력화.
+//         DB source(distinct)를 직접 조회해 원본이 사라진 유령 청크를 실제로 잡는다.
+//   DRYRUN=1: soft-delete 없이 유령 수만 집계 (대량 정리 전 검증용).
+{
+  // RAGEngine 동적 임포트 (임포트 실패 시 Rule 1 전체 건너뜀)
+  let engine = null;
   try {
-    indexState = JSON.parse(readFileSync(INDEX_STATE, 'utf-8'));
+    const mod = await import(RAG_ENGINE_PATH);
+    const { RAGEngine } = mod;
+    // [2026-07-08] LanceDB 경로 명시 — 크론 환경엔 BOT_HOME/JARVIS_RAG_HOME env가 없어
+    //   paths.mjs가 fallback(~/.local/share, 빈 DB)을 잡던 결함 수리. 실제 DB는 BOT_HOME/rag/lancedb.
+    const LANCEDB = join(BOT_HOME, 'rag', 'lancedb');
+    engine = new RAGEngine(LANCEDB);
+    await engine.init();
+    log(`RAGEngine 초기화 완료 (${DRYRUN ? 'DRYRUN — 삭제 없음' : 'write 모드'}) db=${LANCEDB.replace(HOME, '~')}`);
   } catch (e) {
-    wrn('index-state.json 파싱 실패:', e.message);
+    wrn('RAGEngine 초기화 실패:', e.message, '— Rule 1 건너뜀');
+    engine = null;
   }
 
-  const allSources      = Object.keys(indexState);
-  const orphanCandidates = allSources.filter(src => !existsSync(src));
-
-  log(`index-state.json: ${allSources.length}개 소스 / 고아 후보: ${orphanCandidates.length}개`);
-
-  if (orphanCandidates.length > 0) {
-    // RAGEngine 동적 임포트 (임포트 실패 시 Rule 1 전체 건너뜀)
-    let engine = null;
+  if (engine) {
+    let allSources = [];
     try {
-      const mod = await import(RAG_ENGINE_PATH);
-      const { RAGEngine } = mod;
-      engine = new RAGEngine();
-      await engine.init();
-      log('RAGEngine 초기화 완료 (write 모드)');
+      allSources = await engine.getAllSources();
     } catch (e) {
-      wrn('RAGEngine 초기화 실패:', e.message, '— Rule 1 건너뜀');
-      engine = null;
+      wrn('getAllSources 실패:', e.message);
     }
+    const orphanCandidates = allSources.filter(src => src && !existsSync(src));
+    log(`DB source: ${allSources.length}개 / 고아(원본없음): ${orphanCandidates.length}개${DRYRUN ? ' [DRYRUN]' : ''}`);
 
-    if (engine) {
-      for (const src of orphanCandidates) {
-        try {
-          await engine.deleteBySource(src);
-          log(`[고아 삭제] ${src.replace(HOME, '~')}`);
-          orphanDeleted++;
-          orphanSources.push(src);
-        } catch (e) {
-          wrn(`deleteBySource 실패 (${src.split('/').pop()}):`, e.message);
-        }
+    if (DRYRUN) {
+      orphanDeleted = orphanCandidates.length;
+    } else if (orphanCandidates.length > 0) {
+      // [2026-07-08] 배치 soft-delete(IN 절) — 순차(100건/2분) 대비 대폭 빠름 → watcher 중단 시간 최소화.
+      try {
+        orphanDeleted = await engine.deleteBySources(orphanCandidates);
+        log(`배치 soft-delete 완료: ${orphanDeleted}/${orphanCandidates.length}건`);
+      } catch (e) {
+        wrn(`deleteBySources 배치 실패(부분 처리 가능):`, e.message);
       }
     }
+    orphanSources.push(...orphanCandidates.slice(0, 20)); // 보고서용 샘플만(대량 나열 방지)
   }
 }
 
-log(`Rule 1 완료: orphan soft-delete ${orphanDeleted}건`);
+log(`Rule 1 완료: orphan ${DRYRUN ? '탐지(DRYRUN)' : 'soft-delete'} ${orphanDeleted}건`);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rule 2: Stale Report (30일+ 미참조)

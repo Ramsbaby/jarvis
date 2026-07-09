@@ -14,6 +14,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
+import { maskPII } from '../discord/lib/mask-pii.mjs';
 
 const HOME = homedir();
 const CLAUDE_PROJECTS = join(HOME, '.claude', 'projects');
@@ -115,7 +116,7 @@ function parseSession(filePath) {
 
     // 시스템 주입(긴 context prefix) 스킵 — user 메시지에서 RAG 등 주입된 데이터 제외
     // 실제 사용자 입력만 짧게 남김
-    const trimmedText = text.slice(0, MAX_CONTENT_LEN);
+    const trimmedText = _stripRepeatedLines(text.slice(0, MAX_CONTENT_LEN));
 
     turns.push({ role: type, text: trimmedText, ts });
   }
@@ -150,6 +151,15 @@ function toMarkdown(session, fileDate) {
   }
 
   return lines.join('\n');
+}
+
+// [2026-07-09] 극단 반복 라인(에러 스택·로그 덤프 재출력) 축약 — 같은 라인 5회+ 반복은 노이즈.
+//   보수적 품질 게이트: 턴 삭제 없이 반복 라인만 제거. 정상 대화는 반복이 적어 영향 없음.
+function _stripRepeatedLines(text) {
+  const lines = text.split('\n');
+  const cnt = {};
+  for (const l of lines) { const t = l.trim(); if (t) cnt[t] = (cnt[t] || 0) + 1; }
+  return lines.filter((l) => { const t = l.trim(); return !t || cnt[t] < 5; }).join('\n');
 }
 
 /** 상태 파일 로드/저장 */
@@ -225,7 +235,7 @@ async function main() {
         const outFile = join(INBOX, `claude-cli-${fileDate}-${shortId}.md`);
 
         if (!DRY_RUN) {
-          writeFileSync(outFile, md, 'utf-8');
+          writeFileSync(outFile, maskPII(md), 'utf-8'); // [2026-07-09] RAG 적재 전 PII 마스킹(실명·회사·경로·이메일)
         }
         log(`${DRY_RUN ? '[dry]' : 'saved'}: ${basename(outFile)} (${session.turns.length} turns)`);
         state.processed[filePath] = mtime;

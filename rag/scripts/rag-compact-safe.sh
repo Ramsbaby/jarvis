@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# [2026-07-09] LaunchAgent/cron 환경 PATH에 homebrew(node) 미포함 → 'node: command not found'(exit 127)로
+#   compact가 매시간 실패, fragment 6700+ 누적되던 결함 수리. rag-index-safe.sh:8과 동일 표준 PATH.
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${HOME}/.local/bin:${PATH}"
+
 # RAG 스크립트 위치 자동 감지 (symlink chain resolve — runtime/scripts에서 호출돼도 rag/scripts 기준으로)
 # runtime/rag/bin/과 rag/bin/은 별개 디렉토리이며 node_modules는 rag/에만 있음.
 _self="$0"
