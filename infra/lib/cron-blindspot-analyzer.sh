@@ -20,6 +20,16 @@ source "${BOT_HOME:-${HOME}/.jarvis}/infra/lib/guards.sh" 2>/dev/null || {
   exit 1
 }
 
+# Load execution verdict wrapper (Cluster cl-e30aee511af89e13: prevent stderr-based missjudgment)
+source "${BOT_HOME:-${HOME}/.jarvis}/lib/execution-verdict-wrapper.sh" 2>/dev/null || {
+  printf '[%s] WARN: Failed to source execution-verdict-wrapper.sh (non-fatal)\n' "$(date +%s)" >&2
+}
+
+# Load pre-execution guard (Cluster cl-e30aee511af89e13: prevent unnecessary re-execution)
+source "${BOT_HOME:-${HOME}/.jarvis}/lib/pre-execution-guard.sh" 2>/dev/null || {
+  printf '[%s] WARN: Failed to source pre-execution-guard.sh (non-fatal)\n' "$(date +%s)" >&2
+}
+
 # 설정
 BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 LOG_DIR="${BOT_HOME}/logs"
@@ -201,17 +211,52 @@ analyze_resource_correlation() {
 
 # 종합 분석 실행
 analyze() {
+  local task_id="cron-blindspot-analyzer"
   log "INFO" "크론 모니터링 맹점 분석 시작"
 
-  initialize || return 1
+  # Guard 1: Check if this task is already running or recently completed (cl-e30aee511af89e13)
+  if command -v check_task_status >/dev/null 2>&1; then
+    if ! check_task_status "$task_id"; then
+      log "INFO" "Task already completed or in progress. Skipping."
+      return 0
+    fi
+    # Mark task as running
+    mark_task_running "$task_id" "$$" 2>/dev/null || true
+  fi
 
-  analyze_repeated_failures
-  analyze_dependency_risks
-  analyze_timeout_appropriateness
-  analyze_resource_correlation
+  initialize || {
+    # Mark task failure if initialize fails
+    if command -v mark_task_failure >/dev/null 2>&1; then
+      mark_task_failure "$task_id" 1 2>/dev/null || true
+    fi
+    return 1
+  }
 
-  log "INFO" "크론 모니터링 맹점 분석 완료"
-  log "INFO" "분석 결과: $ANALYSIS_FILE"
+  local exit_code=0
+  analyze_repeated_failures || exit_code=$?
+  analyze_dependency_risks || exit_code=$?
+  analyze_timeout_appropriateness || exit_code=$?
+  analyze_resource_correlation || exit_code=$?
+
+  # Verdict: Use exit code to determine success (cl-e30aee511af89e13)
+  if [[ $exit_code -eq 0 ]]; then
+    log "INFO" "크론 모니터링 맹점 분석 완료 (exit code: $exit_code)"
+    log "INFO" "분석 결과: $ANALYSIS_FILE"
+
+    # Mark task success
+    if command -v mark_task_success >/dev/null 2>&1; then
+      mark_task_success "$task_id" "$exit_code" 2>/dev/null || true
+    fi
+  else
+    log "WARN" "크론 모니터링 맹점 분석 부분 실패 (exit code: $exit_code)"
+
+    # Mark task failure
+    if command -v mark_task_failure >/dev/null 2>&1; then
+      mark_task_failure "$task_id" "$exit_code" 2>/dev/null || true
+    fi
+  fi
+
+  return "$exit_code"
 }
 
 # 보고서 생성
