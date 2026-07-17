@@ -2807,7 +2807,10 @@ ${ragContextBlock}
     }
 
     // If nothing was produced, show generic error
-    if (!streamer.hasRealContent && runResult.lastAssistantText === '') {
+    // 2026-07-18: SDK가 무텍스트 턴에 반환하는 필러("No response requested.")도 무응답으로 정규화
+    // — 필러가 사용자에게 그대로 노출되고 recordError를 비켜가 재생기 사각지대가 되던 문제 차단
+    const _noRespFiller = /^no response requested\.?$/i.test((runResult.lastAssistantText || '').trim());
+    if ((!streamer.hasRealContent && runResult.lastAssistantText === '') || _noRespFiller) {
       await react(EMOJI.ERROR);
       const embed = new EmbedBuilder()
         .setColor(0xed4245)
