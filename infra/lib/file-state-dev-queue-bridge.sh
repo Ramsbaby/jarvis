@@ -75,23 +75,25 @@ enqueue_file_state_contradiction_task() {
 EOF
     )
 
-    # task-store에 저장 시도
+    # task-store에 저장 시도 — propose(pending 적재, promote 대기)로 등록
+    # 과거 enqueue 호출은 미존재 플래그(--status/--meta) + --title 누락으로 항상 실패했음 (2026-07-17 수리)
     if command -v node &>/dev/null; then
-        node "$task_store_cli" enqueue \
+        local propose_out
+        if propose_out=$(node "$task_store_cli" propose \
             --id "$new_task_id" \
-            --status "pending" \
+            --title "파일 상태 모순 분석 (Tier 2)" \
+            --prompt "$(echo "$meta_json" | jq -r '.prompt')" \
             --source "file-state-guard" \
-            --priority 1 \
-            --meta "$meta_json" 2>/dev/null || {
-            # node 실패 시 수동 JSON 기록
-            record_manual_task_entry "$new_task_id" "$original_task_id" "$violation_desc" "$severity"
-        }
+            --priority low 2>/dev/null) && echo "$propose_out" | grep -q '"action":"proposed"'; then
+            printf '[FSDQB] Proposed Tier 2 analysis task: %s (original=%s)\n' "$new_task_id" "$original_task_id" >&2
+            return 0
+        fi
+        # node/propose 실패 시 수동 JSON 기록
+        record_manual_task_entry "$new_task_id" "$original_task_id" "$violation_desc" "$severity"
     else
         # node 불가능 시 수동 기록
         record_manual_task_entry "$new_task_id" "$original_task_id" "$violation_desc" "$severity"
     fi
-
-    printf '[FSDQB] Enqueued Tier 2 analysis task: %s (original=%s)\n' "$new_task_id" "$original_task_id" >&2
     return 0
 }
 

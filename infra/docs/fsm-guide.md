@@ -570,3 +570,32 @@ cat ~/jarvis/runtime/config/dev-backlog.json | jq '.blocked_by'
 - **선행 필수 작업**:
   - `dashboard-null-handling`: sysMetrics null 처리 (진행 중)
   - `dashboard-aggregation-api`: 백엔드 집계 API (진행 중)
+
+---
+
+## 12. 2026-07-17 증보 — 독립 검증 게이트 + propose/promote/reject CLI
+
+> **FSM 상태·전이 테이블 무변경.** 아래는 기존 6상태 FSM 위에 얹힌 확장이다.
+
+### 독립 검증 게이트 (verify gate)
+
+- 위치: `lib/verify-gate.sh` (coder-functions.sh가 source), jarvis-coder의 `done` 전이 **직전** Step 6.5에서 호출 (legacy·Sprint Contract·그룹 3개 경로).
+- FAIL 시 전이: `running → queued` (재시도, `meta.verify_feedback`에 지적사항 저장 → 다음 시도 프롬프트 주입) 또는 maxRetries 소진 시 `running → failed` + discord-route critical 격상. **전부 기존 FSM 전이만 사용.**
+- fail-open: 검증 인프라 장애(ask-claude 비정상 종료·파싱 실패)는 통과 처리 (`SKIPPED_*`), 원장 `runtime/ledger/verify-gate.jsonl` 기록.
+- 토글: `JARVIS_VERIFY_GATE=enforce|warn|off` (기본 enforce).
+
+### CLI 추가 3종 (task-store.mjs)
+
+```bash
+# 제안 적재 — status='pending', 실행 이벤트 미발행 (enqueue와의 차이)
+node task-store.mjs propose --id <id> --title <t> [--prompt <p>] [--source <s>] [--priority high|medium|low]
+
+# 승격 — pending → queued (FSM transition 경유) + dev.task.queued 이벤트 발행
+node task-store.mjs promote <id> [triggeredBy]
+
+# 기각 — pending → skipped (FSM transition 경유, meta.rejectReason 기록)
+node task-store.mjs reject <id> [사유]
+```
+
+- 사용처: `action-dispatch.sh`(기존 호출부 — 유령 계약 실체화), `file-state-dev-queue-bridge.sh`(수리), insight pending 태스크 수동 승격.
+- 상세 배경: `dev-queue-v2.md` §13 참조.

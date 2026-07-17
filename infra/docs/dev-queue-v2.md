@@ -189,3 +189,31 @@ UPDATE tasks
 | 구현 공수 | 4~6시간 | 1~2시간 |
 
 **대표님 요청 "최대한 자동으로 돌아가게끔"에 맞춰 승인 게이트와 `batches` 테이블·새 상태를 모두 제거.** 박스 개념은 UI 그룹핑용 태그로만 살림.
+
+---
+
+## 13. v2.1 증보 — 독립 검증 게이트 (2026-07-17 · 루프 엔지니어링 이식)
+
+> **헌법 준수 확인**: v2의 3대 원칙(승인 게이트 없음 · FSM 상태 변경 없음 · 자동 실행 보존)은 **그대로 유지**된다. 아래 게이트는 사람 승인이 아니라 **자동 검증**이며, 새 상태를 만들지 않고 `done` 전이 "직전"에 끼어드는 함수 호출이다.
+
+### 무엇이 추가되었나
+
+- **`lib/verify-gate.sh`** (신규): jarvis-coder가 `done`을 선언하기 직전, **작업 에이전트와 별개 프롬프트의 독립 감사관**(ask-claude 경유, Read 전용)이 git diff를 태스크 요구와 대조해 PASS/FAIL 판정.
+  - 삽입 지점: `coder-functions.sh` Step 6.5 — legacy 경로·Sprint Contract 경로·그룹 경로 3곳 (LLM 실행 done 전이 전량 커버)
+  - FAIL 시: rollback + 지적사항을 `meta.verify_feedback`에 저장 후 재큐잉 → 같은 드레인 루프에서 재시도 시 프롬프트에 자동 주입. 기존 maxRetries(기본 2) 소진 시 failed + discord-route critical 격상
+  - **fail-open**: 검증 인프라 장애(서킷 open·예산 소진·타임아웃·파싱 실패)는 큐를 막지 않고 `SKIPPED_*`로 통과 (원장 기록)
+  - 모드: `JARVIS_VERIFY_GATE=enforce|warn|off` (기본 enforce) / 예산 `VERIFY_GATE_BUDGET` (기본 $0.15/회, ask-claude 경유로 서킷·일일 캡·token-ledger 상속)
+  - 원장: `runtime/ledger/verify-gate.jsonl` (append-only)
+  - 우회 가시화: completionCheck 즉시완료(`SKIPPED_PRECHECK`)·force-done 폴백(`BYPASS_FORCE_DONE`)도 원장에 기록
+  - 자기무력화 차단: diff가 게이트 의존 파일(ask-claude·llm-gateway·verify-gate·coder-functions·task-store 등)을 건드리면 `FAIL_GATE_TAMPER`로 무조건 불합격 — 검증 인프라 수정은 주인님 결재로 격상
+  - 안전 원복: 불합격 롤백은 reset --hard가 아니라 mixed reset + 추적 파일 한정 checkout — 타 프로세스의 신규 파일을 절대 삭제하지 않음 (잔존 > 삭제)
+- **`task-store.mjs` CLI 3종** (신규): `propose`(pending 적재·실행 이벤트 미발행) / `promote <id>`(pending→queued + dev.task.queued 이벤트) / `reject <id> [사유]`(pending→skipped). **기존 FSM 전이만 사용 — 상태 신설 없음.** `action-dispatch.sh`가 선언만 해두었던 유령 계약의 실체화이며, **기존 `enqueue` 자동 실행 경로는 무변경**.
+- **`file-state-dev-queue-bridge.sh` 수리**: 미존재 플래그(`--status/--meta`) + `--title` 누락으로 항상 실패하던 enqueue 호출을 `propose` 호출로 교체 (원래 의도였던 pending 적재 실현).
+
+### 왜 (근거)
+
+오답 원장 최상위 재발 클러스터가 "검증 없는 완료 선언"(156건·134건)이다. 텍스트 규칙으로 막지 못한 패턴을, 같은 에이전트의 자제력 대신 **별도 에이전트 검문소**라는 구조로 차단한다 (루프 엔지니어링의 서브에이전트 교차 검증 요소).
+
+### 롤백
+
+`JARVIS_VERIFY_GATE=off` 환경변수 1개로 즉시 무력화 (코드 롤백 불필요). verify-gate.sh 삭제 시에도 `type run_verify_gate` 가드로 게이트 없이 기존 흐름 그대로 동작.

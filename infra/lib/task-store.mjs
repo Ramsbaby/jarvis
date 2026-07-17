@@ -23,7 +23,7 @@ import { reportFormat, kstFooter } from '../discord/lib/formatters.js';
 process.on('SIGPIPE', () => process.exit(0));
 process.stdout.on('error', (err) => { if (err.code === 'EPIPE') process.exit(0); });
 import { mkdirSync, appendFileSync, readFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { canTransition } from './task-fsm.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
@@ -613,9 +613,76 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         if (eSrc !== 'bot-cron') {
           try {
             const emitScript = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'scripts', 'emit-event.sh');
-            execSync(`"${emitScript}" dev.task.queued '{"id":"${eId}"}'`, { timeout: 5000, stdio: 'ignore' });
+            // execFileSync 배열 인자 — 셸 미경유로 id 메타문자 주입 차단 (2026-07-17 리뷰 실증)
+            execFileSync(emitScript, ['dev.task.queued', JSON.stringify({ id: eId })], { timeout: 5000, stdio: 'ignore' });
           } catch { /* 이벤트 발행 실패해도 enqueue 자체는 성공 */ }
         }
+        break;
+      }
+      // 제안 적재 (승격 대기) — 발견물을 pending으로 넣고 promote/reject로 결정
+      // Usage: node task-store.mjs propose --id <id> --title <title> [--prompt <p>] [--priority high|medium|low] [--source <src>] [--type <type>] [--batch-id <bid>]
+      // enqueue와 달리 status='pending' + dev.task.queued 이벤트 미발행 (실행 트리거 없음)
+      case 'propose': {
+        const flagMapP = {};
+        for (let i = 0; i < args.length - 1; i++) {
+          if (args[i].startsWith('--')) flagMapP[args[i].slice(2)] = args[i + 1];
+        }
+        const { id: pId, title: pTitle, prompt: pPrompt, priority: pPrio = 'medium', source: pSrc = 'agent', type: pType = 'improvement', 'batch-id': pBatchId } = flagMapP;
+        if (!pId || !pTitle) { process.stderr.write('propose: --id and --title required\n'); process.exit(1); }
+        const dbP = getDb();
+        const existingP = dbP.prepare('SELECT status FROM tasks WHERE id=?').get(pId);
+        if (existingP && ['pending', 'queued', 'running'].includes(existingP.status)) {
+          process.stdout.write(JSON.stringify({ ok: true, action: 'skip', reason: 'already-open', id: pId, status: existingP.status }) + '\n');
+          break;
+        }
+        const PRIO_MAP_P = { high: 10, medium: 5, low: 1 };
+        const pPrioInt = PRIO_MAP_P[pPrio] ?? (parseInt(pPrio, 10) || 5);
+        // done은 terminal — REPLACE로 완료 이력·의존 해소를 파괴하지 않고 skip (재오픈은 새 id로)
+        if (existingP && existingP.status === 'done') {
+          process.stdout.write(JSON.stringify({ ok: true, action: 'skip', reason: 'already-terminal', id: pId, status: 'done' }) + '\n');
+          break;
+        }
+        // failed/skipped는 FSM 합법 전이(→pending)로 재제안 — meta·depends·parent_id 보존, propose 필드만 merge
+        if (existingP && ['failed', 'skipped'].includes(existingP.status)) {
+          const reopened = transition(pId, 'pending', {
+            triggeredBy: `${pSrc}/propose`,
+            extra: { retries: 0, priority: pPrioInt, name: pTitle, prompt: pPrompt ?? pTitle, type: pType, proposedAt: new Date().toISOString() },
+          });
+          process.stdout.write(JSON.stringify({ ok: true, action: 'proposed', id: pId, priority: pPrio, reopened: existingP.status, status: reopened.status }) + '\n');
+          break;
+        }
+        const pMeta = JSON.stringify({ name: pTitle, prompt: pPrompt ?? pTitle, source: pSrc, type: pType, proposedAt: new Date().toISOString() });
+        dbP.prepare('INSERT INTO tasks (id, status, priority, retries, depends, meta, updated_at, batch_id, source) VALUES (?,?,?,?,?,?,?,?,?)')
+          .run(pId, 'pending', pPrioInt, 0, '[]', pMeta, Date.now(), pBatchId ?? null, pSrc ?? null);
+        dbP.prepare('INSERT INTO task_transitions (task_id, from_status, to_status, triggered_by, created_at) VALUES (?,?,?,?,?)')
+          .run(pId, 'init', 'pending', pSrc + '/propose', Date.now());
+        process.stdout.write(JSON.stringify({ ok: true, action: 'proposed', id: pId, priority: pPrio }) + '\n');
+        break;
+      }
+      // 제안 승격 — pending → queued (FSM transition 경유) + 실행 이벤트 발행
+      // Usage: node task-store.mjs promote <id> [triggeredBy]
+      case 'promote': {
+        const [prId, prBy = 'owner'] = args;
+        if (!prId) { process.stderr.write('Usage: promote <id> [triggeredBy]\n'); process.exit(1); }
+        const promoted = transition(prId, 'queued', { triggeredBy: `${prBy}/promote` });
+        process.stdout.write(JSON.stringify({ ok: true, action: 'promoted', id: prId, status: promoted.status }) + '\n');
+        // execFileSync 배열 인자(셸 미경유) + id 문자셋 검증 — 이중 주입 방어 (2026-07-17 리뷰 실증)
+        if (/^[A-Za-z0-9._\-]+$/.test(prId)) {
+          try {
+            const emitScript = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'scripts', 'emit-event.sh');
+            execFileSync(emitScript, ['dev.task.queued', JSON.stringify({ id: prId })], { timeout: 5000, stdio: 'ignore' });
+          } catch { /* 이벤트 발행 실패해도 승격 자체는 성공 */ }
+        }
+        break;
+      }
+      // 제안 기각 — pending → skipped (FSM transition 경유)
+      // Usage: node task-store.mjs reject <id> [reason]
+      case 'reject': {
+        const [rjId, ...rjRest] = args;
+        if (!rjId) { process.stderr.write('Usage: reject <id> [reason]\n'); process.exit(1); }
+        const rjReason = rjRest.join(' ');
+        const rejected = transition(rjId, 'skipped', { triggeredBy: 'owner/reject', extra: rjReason ? { rejectReason: rjReason } : {} });
+        process.stdout.write(JSON.stringify({ ok: true, action: 'rejected', id: rjId, status: rejected.status }) + '\n');
         break;
       }
       // cron 태스크 ensure: DB에 없으면 queued로 삽입, failed/done이면 queued로 리셋
