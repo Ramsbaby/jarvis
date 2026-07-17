@@ -45,7 +45,9 @@ except Exception as e:
 fi
 
 EVENT_NAME="$1"
-PAYLOAD="${2:-{}}"
+# "${2:-{}}"는 bash 3.2 중괄호 오파싱으로 값 뒤에 '}'가 붙어 JSON 파괴 (2026-07-17 실측)
+PAYLOAD="${2:-}"
+[ -n "$PAYLOAD" ] || PAYLOAD='{}'
 
 # event_name 유효성: 영문자, 숫자, . _ - 만 허용
 if [[ ! "$EVENT_NAME" =~ ^[a-zA-Z0-9._-]+$ ]]; then
