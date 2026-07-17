@@ -30,7 +30,7 @@ import { handleInteraction } from './lib/commands.js';
 import { handleApprovalInteraction, pollL3Requests } from './lib/approval.js';
 import { t } from './lib/i18n.js';
 import { initAlertBatcher, botAlerts } from './lib/alert-batcher.js';
-import { recordError, sendRecoveryApologies } from './lib/error-tracker.js';
+import { recordError, sendRecoveryApologies, startErrorReplayer } from './lib/error-tracker.js';
 import { _loadPlaceholders, _savePlaceholders, cleanupOrphanPlaceholders } from './lib/streaming.js';
 import { closeRagEngine } from './lib/rag-helper.js';
 
@@ -526,6 +526,7 @@ client.once('clientReady', async () => {
 });
 
 const handlerState = { sessions, rateTracker, semaphore, activeProcesses, client };
+startErrorReplayer(client, handleMessage, handlerState, () => isShuttingDown); // 2026-07-17: 장애로 죽은 요청 자동 재생
 
 client.on('messageCreate', (message) => {
   if (isShuttingDown) return; // 종료 중 신규 세션 생성 차단 — orphan 방지

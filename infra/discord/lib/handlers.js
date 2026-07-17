@@ -1379,7 +1379,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
     const ctxEmoji = getContextualEmoji(userPrompt, hasImages);
     if (ctxEmoji) await react(ctxEmoji);
 
-    await thread.sendTyping();
+    await thread.sendTyping().catch(() => {}); // 2026-07-17: Discord typing 500 장애 시 응답 전체가 죽지 않도록 — 표시 실패는 비치명
     typingInterval = setInterval(() => {
       thread.sendTyping().catch(() => {});
     }, TYPING_INTERVAL_MS);
@@ -2067,7 +2067,24 @@ ${extracted}
                 via_nexus_test: message._viaNexusTest === true,
               }) + '\n');
             } else {
+              // 2026-07-11 수정: 빈 응답도 원장에 적재 (실패 사후 추적 가능하게).
+              // 사고 사례: 7일간 8건 빈 응답이 원장 미적재 → stop_reason null 추적 불가.
               log('warn', 'ledger 적재 누락 — respText 빈', { channel: chName, stopReason: event.stop_reason });
+              const ledgerDir = join(_BOT_HOME, 'ledger');
+              mkdirSync(ledgerDir, { recursive: true });
+              appendFileSync(join(ledgerDir, 'bot-response-bus.jsonl'), JSON.stringify({
+                ts: new Date().toISOString(),
+                channel: chName,
+                channel_id: effectiveChannelId,
+                session_id: resultSessionId,
+                response_chars: 0,
+                response_full: '',
+                empty_response: true,
+                cost_usd: event.cost_usd ?? 0,
+                stop_reason: event.stop_reason ?? null,
+                is_error: event.is_error ?? false,
+                via_nexus_test: message._viaNexusTest === true,
+              }) + '\n');
             }
           } catch (err) {
             log('warn', 'bot-response-bus append 실패', { error: err.message });
@@ -2811,7 +2828,7 @@ ${ragContextBlock}
       } else {
         await thread.send({ embeds: [embed] });
       }
-      recordError(thread.id, effectiveAuthor.id, 'no_response');
+      recordError(thread.id, effectiveAuthor.id, 'no_response', message.author?.bot ? null : message.id, message.channelId);
     }
   } catch (err) {
     log('error', 'handleMessage error', { error: err.message, stack: err.stack });
@@ -2837,7 +2854,7 @@ ${ragContextBlock}
         return handleMessage(message, { sessions, rateTracker, semaphore, activeProcesses, client });
       } catch (retryErr) {
         log('error', 'Auto-retry also failed', { error: retryErr.message });
-        recordError(target.id, effectiveAuthor.id, retryErr.message?.slice(0, 200));
+        recordError(target.id, effectiveAuthor.id, retryErr.message?.slice(0, 200), message.author?.bot ? null : message.id, message.channelId);
       }
     }
 
@@ -2849,7 +2866,7 @@ ${ragContextBlock}
     }
 
     // Claude 처리 오류만 사용자에게 알림 — 디버깅용 세션ID 포함
-    recordError(target.id, effectiveAuthor.id, err.message?.slice(0, 200));
+    recordError(target.id, effectiveAuthor.id, err.message?.slice(0, 200), message.author?.bot ? null : message.id, message.channelId);
     sendNtfy(`${process.env.BOT_NAME || 'Claude Bot'} Error`, err.message, 'high');
     // 에러 시에만 세션ID 표시 (디버깅 필요)
     const errSessionId = sessionId || sessions.get(sessionKey) || null;
