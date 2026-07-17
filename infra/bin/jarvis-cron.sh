@@ -36,7 +36,9 @@ _fsm_ensure() {
     ${NODE_SQLITE} "${FSM_STORE}" ensure "$1" "$1" "bot-cron" "" "" "$_batch" 2>/dev/null || true
 }
 _fsm_transition() {
-    local task_id="$1" to_status="$2" extra="${3:-{}}"
+    # "${3:-{}}"는 bash 3.2 중괄호 오파싱으로 값 뒤에 '}'가 붙어 extra JSON 파괴 (2026-07-17 실측)
+    local task_id="$1" to_status="$2" extra="${3:-}"
+    if [[ -z "$extra" ]]; then extra='{}'; fi
     ${NODE_SQLITE} "${FSM_STORE}" transition "$task_id" "$to_status" "bot-cron" "$extra" 2>/dev/null || true
 }
 # 공용 헬퍼 로드 — DRY (_fsm_discord_alert, _permanent_disable_task, _ledger_append).
@@ -45,6 +47,8 @@ if [[ -f "${BOT_HOME}/lib/cron-helpers.sh" ]]; then
     # shellcheck source=/dev/null
     source "${BOT_HOME}/lib/cron-helpers.sh"
 fi
+# egress 감사 라우터 — 모든 Discord 발송은 이 함수를 통해 중앙화
+source "${HOME}/jarvis/infra/lib/discord-route.sh" 2>/dev/null || true
 # ADR-007: Plugin system — regenerate effective-tasks.json, then use it
 if [[ -x "${BOT_HOME}/bin/plugin-loader.sh" ]]; then
     "${BOT_HOME}/bin/plugin-loader.sh" 2>/dev/null || true
@@ -606,17 +610,12 @@ case "$TASK_ID" in
     news-briefing)
         _insight_raw=$(echo "$RESULT" | awk '/💡 Jarvis 적용 가능 인사이트/{found=1} found{print}')
         if [[ -n "$_insight_raw" ]]; then
-            _ceo_webhook=$(jq -r '.webhooks["jarvis-ceo"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
-            if [[ -n "${_ceo_webhook:-}" ]]; then
-                _ceo_msg="📥 **뉴스 브리핑 인사이트 인계** ($(date '+%Y-%m-%d'))\n${_insight_raw}"
-                _payload=$(jq -n --arg m "$_ceo_msg" '{content: $m}')
-                curl -sS -X POST "$_ceo_webhook" \
-                    -H "Content-Type: application/json" \
-                    -d "$_payload" > /dev/null 2>&1 || true
-                log "인사이트 섹션 jarvis-ceo 채널 전송 완료"
-            fi
+            _ceo_msg="📥 **뉴스 브리핑 인사이트 인계** ($(date '+%Y-%m-%d'))
+${_insight_raw}"
+            discord_route_raw "jarvis-ceo" "$_ceo_msg" || true
+            log "인사이트 섹션 jarvis-ceo 채널 전송 완료"
         fi
-        unset _insight_raw _ceo_webhook _ceo_msg _payload
+        unset _insight_raw _ceo_msg
         ;;
 esac
 
@@ -625,15 +624,8 @@ case "$TASK_ID" in
     daily-summary|council-insight)
         _fsm_summary=$(${NODE_SQLITE} "${FSM_STORE}" fsm-summary 2>/dev/null || true)
         if [[ -n "$_fsm_summary" ]]; then
-            _webhook=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
-            if [[ -n "${_webhook:-}" ]]; then
-                _payload=$(jq -n --arg m "$_fsm_summary" '{content: $m}')
-                curl -sS -X POST "$_webhook" \
-                    -H "Content-Type: application/json" \
-                    -d "$_payload" > /dev/null 2>&1 || true
-                log "FSM 상태 요약 Discord 전송 완료"
-            fi
-            unset _webhook _payload
+            discord_route_raw "jarvis-system" "$_fsm_summary" || true
+            log "FSM 상태 요약 Discord 전송 완료"
         fi
         unset _fsm_summary
         ;;

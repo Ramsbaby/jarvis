@@ -26,6 +26,20 @@ if [[ -r "$_OAUTH_ISO_FILE" ]]; then
     export CLAUDE_CODE_OAUTH_TOKEN="$(cat "$_OAUTH_ISO_FILE")"
 fi
 
+# Google Workspace 변수(비밀 아님: 계정 이메일·Tasks 리스트 ID)를 .env에서 명시 로드.
+# (2026-07-13 회귀 수정: 크론 env 상속이 끊겨 morning-standup의 gog 호출이
+#  'GOOGLE_ACCOUNT 미설정'으로 매일 실패. 전체 .env source는 시크릿 오염 위험 → 필요한 2개만 추출·export.)
+_JARVIS_ENV_FILE="${HOME}/jarvis/runtime/.env"
+if [[ -r "$_JARVIS_ENV_FILE" ]]; then
+    for _gk in GOOGLE_ACCOUNT GOOGLE_TASKS_LIST_ID; do
+        if [[ -z "${!_gk:-}" ]]; then
+            _gv="$(grep -E "^${_gk}=" "$_JARVIS_ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+            _gv="${_gv%\"}"; _gv="${_gv#\"}"   # 양끝 따옴표 제거
+            if [[ -n "$_gv" ]]; then export "${_gk}=${_gv}"; fi
+        fi
+    done
+fi
+
 # Batch mode: 크론 태스크는 기본적으로 토큰 절감 플래그 활성화
 # (llm-gateway.sh가 감지하여 --disable-slash-commands, --no-session-persistence,
 #  --setting-sources "" 를 claude -p에 추가)
@@ -33,8 +47,11 @@ fi
 #       (Claude CLI 미지원 옵션, context-mode orphan 원인 — ajqe-dispatch.mjs L101 참조)
 export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 INFRA_DIR="${HOME}/jarvis/infra"
+# discord egress 중앙화 — 모든 Discord 발송은 discord_route_raw/discord_route를 통해야 함
+# shellcheck source=/dev/null
+source "${INFRA_DIR}/lib/discord-route.sh" 2>/dev/null || true
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
 
@@ -47,7 +64,9 @@ _fsm_ensure() {
     ${NODE_SQLITE} "${FSM_STORE}" ensure "$1" "$1" "bot-cron" "" "" "$_batch" >/dev/null 2>&1 || true
 }
 _fsm_transition() {
-    local task_id="$1" to_status="$2" extra="${3:-{}}"
+    # "${3:-{}}"는 bash 3.2 중괄호 오파싱으로 값 뒤에 '}'가 붙어 extra JSON 파괴 (2026-07-17 실측)
+    local task_id="$1" to_status="$2" extra="${3:-}"
+    if [[ -z "$extra" ]]; then extra='{}'; fi
     ${NODE_SQLITE} "${FSM_STORE}" transition "$task_id" "$to_status" "bot-cron" "$extra" >/dev/null 2>&1 || true
 }
 # 공용 헬퍼 로드 — SSoT: infra/lib/cron-helpers.sh
@@ -165,19 +184,11 @@ _ttl_cleanup() {
         fi
     fi
 
-    # 3) Discord 알림 (jarvis-system 우선)
-    local _webhook
-    _webhook=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' \
-        "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
-    if [[ -n "${_webhook:-}" ]]; then
-        local _today _msg _payload
-        _today=$(TZ=Asia/Seoul date '+%Y-%m-%d')
-        _msg="🗑️ **TTL 만료 자동 제거**: \`${TASK_ID}\` — ttl=${_ttl}, addedAt=${_added}, removed=${_today}"
-        _payload=$(jq -n --arg m "$_msg" '{content: $m, allowed_mentions: {parse: []}}')
-        curl -sS -X POST "$_webhook" \
-            -H "Content-Type: application/json" \
-            -d "$_payload" > /dev/null 2>&1 || true
-    fi
+    # 3) Discord 알림 (jarvis-system) — discord_route_raw로 egress 중앙화
+    local _today _msg
+    _today=$(TZ=Asia/Seoul date '+%Y-%m-%d')
+    _msg="🗑️ **TTL 만료 자동 제거**: \`${TASK_ID}\` — ttl=${_ttl}, addedAt=${_added}, removed=${_today}"
+    discord_route_raw jarvis-system "$_msg" 2>/dev/null || true
 
     log "TTL_CLEANUP: 완료 — ${TASK_ID} 자동 제거됨"
 }
@@ -297,6 +308,10 @@ if [[ -n "$_INJECT_PREFIX" ]]; then
 fi
 unset _INJECT_PREFIX _alias _inject_path _inject_label
 
+# --- PROMPT에서 $BOT_HOME 변수 확장 ---
+# 프롬프트에서 $BOT_HOME 참조를 실제 경로로 교체
+PROMPT="${PROMPT//\$BOT_HOME/$BOT_HOME}"
+
 # --- 2026-05-12: Skill Synthesis PROMPT suffix 자동 주입 (위치 A) ---
 # skillSynthesis.enabled=true 태스크에 한해 PROMPT 끝에 SKILL_JSON 출력 지시를 동적 추가.
 # 강제 출력이 아닌 선택 — LLM이 패턴 없으면 생략 가능.
@@ -331,7 +346,8 @@ MODEL=$(echo "$TASK_CONFIG" | jq -r '.model // empty')
 # === Pilot Routing: DeepSeek/Qwen budget model routing (2026-05-25) ===
 # Phase 1-3 파일럿: 저난이도 크론을 DeepSeek V4-Flash 또는 Qwen으로 라우팅
 # config: pilot-routing-deepseek-qwen.json (status: active)
-if [[ -f "${BOT_HOME}/config/pilot-routing-deepseek-qwen.json" ]]; then
+# 예외: tasks.json에서 명시적 모델이 지정된 경우 라우팅 스킵 (tasks의 의도 존경)
+if [[ -z "$MODEL" && -f "${BOT_HOME}/config/pilot-routing-deepseek-qwen.json" ]]; then
     _pilot_config=$(cat "${BOT_HOME}/config/pilot-routing-deepseek-qwen.json" 2>/dev/null || echo '{}')
     _pilot_status=$(echo "$_pilot_config" | jq -r '.status // "inactive"')
 
@@ -598,6 +614,9 @@ if [[ -n "$SCRIPT" ]]; then
     # .mjs/.js 파일은 node로 명시적 실행, 아니면 shebang에 의존
     if [[ "$SCRIPT_PATH" == *.mjs || "$SCRIPT_PATH" == *.js ]]; then
         RESULT=$(node "$SCRIPT_PATH" "$SCRIPT_ARGS" 2>>"${BOT_HOME}/logs/cron.log") || EXIT_CODE=$?
+        if [[ $EXIT_CODE -ne 0 ]]; then
+            log "SCRIPT_EXIT: node script failed with exit code $EXIT_CODE"
+        fi
     else
         if [[ ! -x "$SCRIPT_PATH" ]]; then
             log "ERROR: script not executable: $SCRIPT_PATH"
@@ -611,6 +630,9 @@ if [[ -n "$SCRIPT" ]]; then
             exit 1
         fi
         RESULT=$("$SCRIPT_PATH" "$SCRIPT_ARGS" 2>>"${BOT_HOME}/logs/cron.log") || EXIT_CODE=$?
+        if [[ $EXIT_CODE -ne 0 ]]; then
+            log "SCRIPT_EXIT: shell script failed with exit code $EXIT_CODE"
+        fi
     fi
     # 세마포어 해제
     [[ -n "$_SCRIPT_SLOT" ]] && release_slot "$_SCRIPT_SLOT" 2>/dev/null || true
@@ -621,8 +643,14 @@ else
         RESULT=$(run_with_recovery "$TASK_ID" "$BOT_HOME/bin/retry-wrapper.sh" \
             "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" \
             "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+        if [[ $EXIT_CODE -ne 0 ]]; then
+            log "RETRY_WRAPPER_EXIT: recovery mode failed with exit code $EXIT_CODE"
+        fi
     else
         RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+        if [[ $EXIT_CODE -ne 0 ]]; then
+            log "RETRY_WRAPPER_EXIT: standard mode failed with exit code $EXIT_CODE"
+        fi
     fi
 fi
 
@@ -804,7 +832,7 @@ unset _reg_remaining
 _sk_enabled_b=$(echo "$TASK_CONFIG" | jq -r '.skillSynthesis.enabled // false')
 if [[ "$_sk_enabled_b" == "true" ]] && command -v jq >/dev/null 2>&1 \
     && printf '%s' "$RESULT" | grep -q "^SKILL_JSON:"; then
-    _sk_file="${HOME}/jarvis/runtime/runtime/skills/skills.jsonl"
+    _sk_file="${BOT_HOME}/skills/skills.jsonl"
     _sk_domain=$(echo "$TASK_CONFIG" | jq -r '.skillSynthesis.domain // "ops"')
     mkdir -p "$(dirname "$_sk_file")"
     _sk_added=0
@@ -878,12 +906,36 @@ if [[ "$TASK_ID" == "council-insight" ]] && command -v jq >/dev/null 2>&1 \
 fi
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
+# --- Post-run verify 훅: 실제 완료 결과 검증 ─────────────────────────────────────────
+# 목적: 자동화 완료 선언 전 HTTP status, 파일 존재, 프로세스 상태 확인
+# 실패 시 warning만 기록 (이미 성공 EXIT_CODE=0이므로 재실패 차단)
+_PHASE="post-verify"
+if [[ -x "${BOT_HOME}/lib/post-run-verify.sh" ]]; then
+    if "${BOT_HOME}/lib/post-run-verify.sh" "$TASK_ID" "$RESULT" "$ALLOWED_TOOLS" 2>>"${BOT_HOME}/logs/cron.log"; then
+        log "POST-VERIFY: ✓ passed"
+    else
+        log "POST-VERIFY: ⚠ warnings (see verify.log for details)"
+    fi
+else
+    log "WARN: post-run-verify.sh not found — skipping verify hook"
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 # --- Truncate result for non-Discord outputs (file, ntfy 등) ---
 # Discord는 route-result.sh 내 1990자 청킹이 처리하므로 pre-truncation 불필요.
 # file/ntfy 등 단일 출력용 라우터에는 RESULT_MAX_CHARS를 그대로 적용.
 _RESULT_FOR_NON_DISCORD="$RESULT"
 if [[ ${#_RESULT_FOR_NON_DISCORD} -gt $RESULT_MAX_CHARS ]]; then
     _RESULT_FOR_NON_DISCORD="${_RESULT_FOR_NON_DISCORD:0:$RESULT_MAX_CHARS}...(truncated)"
+fi
+
+# --- news-briefing: Discord 표시용에서 기계용 ```json_insights 블록 제거 ---
+# (2026-07-13 수정: JSON 원본이 그대로 노출 + 길이초과로 메시지 2분할되던 노이즈.
+#  결과 파일(runtime/results)에는 JSON 유지 → post-news-briefing-enqueue.sh 파싱 안전.
+#  사람이 읽는 '💡 인사이트' 산문 섹션은 보존, 중복 JSON만 제거.)
+_RESULT_FOR_DISCORD="$RESULT"
+if [[ "$TASK_ID" == "news-briefing" ]]; then
+    _RESULT_FOR_DISCORD="$(printf '%s\n' "$RESULT" | awk 'BEGIN{skip=0} /^```json_insights/{skip=1; next} skip==1 && /^```/{skip=0; next} skip==0{print}')"
 fi
 
 # --- Route output based on tasks.json output field ---
@@ -898,8 +950,8 @@ for mode in $OUTPUT_MODES; do
     if [[ -z "$RESULT" ]]; then continue; fi
     case "$mode" in
         discord)
-            # Discord: 원본 RESULT 전달 — route-result.sh 내 1990자 청킹이 분할 처리
-            "$BOT_HOME/bin/route-result.sh" discord "$TASK_ID" "$RESULT" "${DISCORD_CHANNEL:-}" || log "WARN: discord routing failed"
+            # Discord: 정제본 전달 (news-briefing은 json_insights 제거본) — route-result.sh 내 1990자 청킹이 분할 처리
+            "$BOT_HOME/bin/route-result.sh" discord "$TASK_ID" "$_RESULT_FOR_DISCORD" "${DISCORD_CHANNEL:-}" || log "WARN: discord routing failed"
             ;;
         ntfy)
             "$BOT_HOME/bin/route-result.sh" ntfy "$TASK_ID" "$_RESULT_FOR_NON_DISCORD" || log "WARN: ntfy routing failed"
@@ -945,26 +997,19 @@ case "$TASK_ID" in
             _insight_raw=$(echo "$_insight_raw" | awk '/^```json_insights/{skip=1} skip{if(/^```$/ || /^```[[:space:]]*$/) skip=0; next} {print}')
 
             if [[ -n "$_insight_raw" ]]; then
-                _ceo_webhook=$(jq -r '.webhooks["jarvis-ceo"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
-                if [[ -n "${_ceo_webhook:-}" ]]; then
-                    _ceo_header="📥 **뉴스 브리핑 인사이트 인계** ($(date '+%Y-%m-%d'))
-"
-                    _ceo_body="${_ceo_header}${_insight_raw}"
+                _ceo_body="📥 **뉴스 브리핑 인사이트 인계** ($(date '+%Y-%m-%d'))
+${_insight_raw}"
                     # 1990자 청킹 전송 (Discord 2000자 제한 대응)
-                    _ceo_total=${#_ceo_body}
-                    _ceo_offset=0
-                    while [[ $_ceo_offset -lt $_ceo_total ]]; do
-                        _ceo_chunk="${_ceo_body:$_ceo_offset:1990}"
-                        _payload=$(jq -n --arg m "$_ceo_chunk" '{content: $m, allowed_mentions: {parse: []}}')
-                        curl -sS -X POST "$_ceo_webhook" \
-                            -H "Content-Type: application/json" \
-                            -d "$_payload" > /dev/null 2>&1 || true
-                        _ceo_offset=$(( _ceo_offset + 1990 ))
-                        [[ $_ceo_offset -lt $_ceo_total ]] && sleep 1
-                    done
-                    echo "$_nb_now" > "$_nb_dedup"
-                    log "인사이트 섹션 jarvis-ceo 채널 전송 완료 (${_ceo_total}자, dedup 기록)"
-                fi
+                _ceo_total=${#_ceo_body}
+                _ceo_offset=0
+                while [[ $_ceo_offset -lt $_ceo_total ]]; do
+                    _ceo_chunk="${_ceo_body:$_ceo_offset:1990}"
+                    discord_route_raw "jarvis-ceo" "$_ceo_chunk" || true
+                    _ceo_offset=$(( _ceo_offset + 1990 ))
+                    [[ $_ceo_offset -lt $_ceo_total ]] && sleep 1
+                done
+                echo "$_nb_now" > "$_nb_dedup"
+                log "인사이트 섹션 jarvis-ceo 채널 전송 완료 (${_ceo_total}자, dedup 기록)"
             fi
         fi
         unset _nb_dedup _nb_now _nb_skip _nb_last _nb_elapsed
@@ -977,15 +1022,8 @@ case "$TASK_ID" in
     daily-summary|council-insight)
         _fsm_summary=$(${NODE_SQLITE} "${FSM_STORE}" fsm-summary 2>/dev/null || true)
         if [[ -n "$_fsm_summary" ]]; then
-            _webhook=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)
-            if [[ -n "${_webhook:-}" ]]; then
-                _payload=$(jq -n --arg m "$_fsm_summary" '{content: $m, allowed_mentions: {parse: []}}')
-                curl -sS -X POST "$_webhook" \
-                    -H "Content-Type: application/json" \
-                    -d "$_payload" > /dev/null 2>&1 || true
-                log "FSM 상태 요약 Discord 전송 완료"
-            fi
-            unset _webhook _payload
+            discord_route_raw "jarvis-system" "$_fsm_summary" || true
+            log "FSM 상태 요약 Discord 전송 완료"
         fi
         unset _fsm_summary
         ;;
