@@ -35,8 +35,8 @@ const WIKI_META_FACTS = join(JARVIS_ROOT, 'runtime', 'wiki', 'meta', '_facts.md'
 const DISCORD_ROUTE_SH = join(INFRA, 'lib', 'discord-route.sh');
 
 // 자비스 보드 API
-const BOARD_URL = 'https://board.ramsbaby.com';
-const BOARD_KEY = 'jarvis-board-internal-2026';
+const BOARD_URL = process.env.JARVIS_BOARD_URL || '';
+const BOARD_KEY = process.env.JARVIS_BOARD_KEY || '';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -105,6 +105,11 @@ async function registerBoardTask(item) {
     status: 'pending',
     tags: ['metacog', 'auto-queue', item.tier],
   };
+
+  if (!BOARD_URL || !BOARD_KEY) {
+    log(`⚠️ JARVIS_BOARD_URL/KEY 미설정 — 보드 등록 건너뜀 (${item.cluster_id})`);
+    return null;
+  }
 
   try {
     const res = await fetch(`${BOARD_URL}/api/dev-tasks`, {

@@ -1,5 +1,15 @@
 # Jarvis
 
+<p align="left">
+  <a href="https://github.com/Ramsbaby/jarvis/stargazers"><img src="https://img.shields.io/github/stars/Ramsbaby/jarvis?style=flat-square&logo=github" alt="Stars"></a>
+  <a href="https://github.com/Ramsbaby/jarvis/network/members"><img src="https://img.shields.io/github/forks/Ramsbaby/jarvis?style=flat-square&logo=github" alt="Forks"></a>
+  <a href="https://github.com/Ramsbaby/jarvis/issues"><img src="https://img.shields.io/github/issues/Ramsbaby/jarvis?style=flat-square" alt="Issues"></a>
+  <a href="https://github.com/Ramsbaby/jarvis/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Ramsbaby/jarvis?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/github/last-commit/Ramsbaby/jarvis?style=flat-square" alt="Last commit">
+  <img src="https://img.shields.io/badge/Claude_Code-plugin-8A2BE2?style=flat-square&logo=anthropic" alt="Claude Code plugin">
+</p>
+
+
 > **⚠️ Migration Notice (2026-04-17)**: Runtime data relocated from `~/.jarvis/` → `~/jarvis/runtime/`.
 > Existing installations: `~/.jarvis` remains as a backward-compatible symlink through **2026-10-17** (D+180).
 > Fresh installs: use `~/jarvis/runtime/` directly. See [docs/A2-MIGRATION.md](infra/docs/A2-MIGRATION.md) (upcoming).

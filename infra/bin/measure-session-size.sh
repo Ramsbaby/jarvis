@@ -13,7 +13,7 @@
 # 출력 예시:
 #   {
 #     "timestamp": "2026-06-14T09:00:00Z",
-#     "session_path": "/Users/ramsbaby/jarvis/context",
+#     "session_path": "~/jarvis/context",
 #     "total_bytes": 524288,
 #     "file_count": 42,
 #     "estimated_tokens": 65000,
