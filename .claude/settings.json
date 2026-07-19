@@ -213,8 +213,8 @@
     "phase": "evaluation",
     "status": "awaiting_owner_decision",
     "decisionCommands": {
-      "approve": "node /Users/ramsbaby/jarvis/infra/lib/task-store.mjs transition tech-claude-code-permission-nested-claude approved",
-      "reject": "node /Users/ramsbaby/jarvis/infra/lib/task-store.mjs transition tech-claude-code-permission-nested-claude rejected"
+      "approve": "node $HOME/jarvis/infra/lib/task-store.mjs transition tech-claude-code-permission-nested-claude approved",
+      "reject": "node $HOME/jarvis/infra/lib/task-store.mjs transition tech-claude-code-permission-nested-claude rejected"
     }
   }
 }
