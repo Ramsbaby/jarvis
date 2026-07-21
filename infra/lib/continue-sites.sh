@@ -365,7 +365,7 @@ run_with_recovery() {
         if [[ $exit_code -eq 0 ]]; then
             _cs_log "$task_id" 2 "context_minimal → SUCCESS"
             _cs_record_stat "$task_id" 2 "recovered"
-            cat "$result_tmp"
+            cat "$result_tmp" 2>/dev/null || true
             rm -f "$result_tmp" "$stderr_tmp"
             # 원래 환경 복원
             export JARVIS_CONTEXT_MODE="$original_context_mode"
@@ -399,7 +399,7 @@ run_with_recovery() {
         if [[ $exit_code -eq 0 ]]; then
             _cs_log "$task_id" 3 "model_downgrade → SUCCESS"
             _cs_record_stat "$task_id" 3 "recovered"
-            cat "$result_tmp"
+            cat "$result_tmp" 2>/dev/null || true
             rm -f "$result_tmp" "$stderr_tmp"
             export JARVIS_CONTEXT_MODE="$original_context_mode"
             return 0
@@ -431,7 +431,7 @@ run_with_recovery() {
     if [[ $exit_code -eq 0 ]]; then
         _cs_log "$task_id" 4 "prompt_simplified → SUCCESS"
         _cs_record_stat "$task_id" 4 "recovered"
-        cat "$result_tmp"
+        cat "$result_tmp" 2>/dev/null || true
         rm -f "$result_tmp" "$stderr_tmp"
         export JARVIS_CONTEXT_MODE="$original_context_mode"
         return 0
