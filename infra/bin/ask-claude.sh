@@ -323,6 +323,14 @@ if command -v node >/dev/null 2>&1 && [[ -f "$_TOKEN_BUDGET_GUARD" ]]; then
 fi
 unset _TOKEN_BUDGET_GUARD
 
+# --- Task state transition: queued → running (begin execution) ---
+# Ensure task is in 'running' state before claude execution
+# This prevents FSM validation errors in task-completion-workflow.sh
+if command -v node >/dev/null 2>&1 && [[ -f "${BOT_HOME}/lib/task-store.mjs" ]]; then
+    node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+        transition "$TASK_ID" running "ask-claude/execution-start" '{}' >/dev/null 2>&1 || true
+fi
+
 # --- Execute LLM call (claude -p with multi-provider fallback) ---
 # Prevent nested claude detection (but preserve CLAUDECODE for OAuth credential inheritance)
 # NOTE: Unsetting CLAUDECODE breaks OAuth authentication in cron environments
