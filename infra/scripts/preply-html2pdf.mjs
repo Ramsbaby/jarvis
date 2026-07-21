@@ -117,6 +117,15 @@ async function convertOne(browser, htmlPath) {
     }
 
     console.log(`✅ ${path.basename(outPath)} (${sizeKB}KB) — 검증 완료`);
+    // [2026-07-22 cluster cl-8a2b1b50fcd5ba63] 저널 훅: 파이프라인 체크포인트 저널에 실측 기록.
+    // best-effort — 훅이 없거나 실패해도 렌더 자체 성공/실패 결과는 그대로 유지 (파괴 금지).
+    try {
+      const guard = path.join(process.env.HOME || '', 'jarvis', 'infra', 'guards', 'pdf-pipeline-checkpoint.sh');
+      if (fs.existsSync(guard)) {
+        const { spawnSync } = await import('child_process');
+        spawnSync('bash', [guard, 'pdf-checkpoint', outPath], { timeout: 15000, stdio: 'ignore' });
+      }
+    } catch { /* 저널 훅 실패는 삼킨다 */ }
     return { ok: true, path: outPath, size: sizeKB };
   } catch (e) {
     console.error(`❌ 변환 실패: ${path.basename(abs)} — ${e.message}`);
