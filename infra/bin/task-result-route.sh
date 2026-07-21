@@ -212,6 +212,34 @@ get_webhook_url() {
     printf '%s' "$url"
 }
 
+# --- Channel ID resolver (bot-token send path용) ---
+get_channel_id() {
+    [[ -z "$CHANNEL" ]] && return 0
+    jq -r --arg ch "$CHANNEL" '.channel_ids[$ch] // empty' "$CONFIG" 2>/dev/null
+}
+
+# --- 통합 Discord 송출: channel_id 있으면 Bot API, 없으면 webhook ---
+_discord_curl() {
+    local payload="$1"
+    local channel_id
+    channel_id=$(get_channel_id)
+    if [[ -n "$channel_id" ]]; then
+        local token
+        token=$(grep -m1 '^DISCORD_TOKEN=' "${BOT_HOME:-$HOME/jarvis/runtime}/.env" 2>/dev/null | cut -d= -f2-)
+        curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "https://discord.com/api/v10/channels/${channel_id}/messages" \
+            -H "Authorization: Bot ${token}" \
+            -H "Content-Type: application/json" \
+            -d "$payload"
+    else
+        local webhook_url
+        webhook_url=$(get_webhook_url)
+        curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
+            -H "Content-Type: application/json" \
+            -d "$payload"
+    fi
+}
+
 # --- 송출 감사 원장 (2026-06-11 신설): 채널별 송출량·실패율 30일 추이 측정 기반 ---
 _route_audit_log() {
     local kind="$1" result="$2"
@@ -227,14 +255,10 @@ _route_audit_log() {
 # --- Rich embed sender (Discord color card) ---
 send_embed() {
     local embed_json="$1"
-    local webhook_url
-    webhook_url=$(get_webhook_url)
     local payload
     payload=$(jq -n --argjson embed "$embed_json" '{"embeds":[$embed], "allowed_mentions": {"parse": []}}')
     local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
-        -H "Content-Type: application/json" \
-        -d "$payload") || true
+    http_code=$(_discord_curl "$payload") || true
     if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
         echo "WARN: embed webhook returned HTTP $http_code" >&2
         _route_audit_log "embed" "failed:http_${http_code}"
@@ -246,8 +270,6 @@ send_embed() {
 # --- CV2 sender (Discord Components V2 container card) ---
 send_cv2() {
     local cv2_json="$1"
-    local webhook_url
-    webhook_url=$(get_webhook_url)
 
     local payload
     payload=$(node -e "
@@ -265,9 +287,7 @@ console.log(JSON.stringify({ flags: 32768, components: [container], allowed_ment
     if [[ -z "$payload" ]]; then return 0; fi
 
     local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
-        -H "Content-Type: application/json" \
-        -d "$payload") || true
+    http_code=$(_discord_curl "$payload") || true
     if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
         echo "WARN: cv2 webhook returned HTTP $http_code" >&2
         _route_audit_log "cv2" "failed:http_${http_code}"
@@ -279,8 +299,6 @@ console.log(JSON.stringify({ flags: 32768, components: [container], allowed_ment
 # --- Chart embed sender (QuickChart.io → Discord image embed) ---
 send_chart_embed() {
     local chart_json="$1"
-    local webhook_url
-    webhook_url=$(get_webhook_url)
 
     # Build QuickChart GET URL (node for safe URL encoding)
     local chart_url
@@ -290,9 +308,7 @@ send_chart_embed() {
     local payload
     payload=$(jq -n --arg url "$chart_url" '{"embeds":[{"image":{"url":$url},"color":3447003}], "allowed_mentions": {"parse": []}}')
     local http_code
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
-        -H "Content-Type: application/json" \
-        -d "$payload") || true
+    http_code=$(_discord_curl "$payload") || true
     if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
         echo "WARN: chart embed webhook returned HTTP $http_code" >&2
         _route_audit_log "chart" "failed:http_${http_code}"
@@ -366,8 +382,6 @@ _severity_embed_color_legacy_unused() {
 # --- Discord: 2000-char chunking (task-specific; simple sends use lib/discord-notify-bash.sh) ---
 route_to_discord() {
     local message="$1"
-    local webhook_url
-    webhook_url=$(get_webhook_url)
     local total=${#message}
     local offset=0
 
@@ -395,9 +409,7 @@ route_to_discord() {
             local payload
             payload=$(jq -n --arg content "$chunk" '{"content": $content, "flags": 4, "allowed_mentions": {"parse": []}}')
             local http_code
-            http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$webhook_url" \
-                -H "Content-Type: application/json" \
-                -d "$payload") || true
+            http_code=$(_discord_curl "$payload") || true
             if [[ "$http_code" != "200" && "$http_code" != "204" ]]; then
                 echo "ERROR: Discord webhook returned HTTP $http_code for task $TASK_ID" >&2
                 _route_audit_log "text" "failed:http_${http_code}"

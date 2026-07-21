@@ -106,19 +106,23 @@ function checkScheduleFollowup() {
     .toISOString().slice(0, 10);
 
   // 어제 날짜를 포함한 라인만 추출 + "면접/인터뷰" 키워드 + "회상/과거/이전" 같은 회고 문구 배제
-  const seenIds = new Set();
-  // v5.4-fix-2: 시각(HH:MM) 있는 라인 우선 — D-day 메모보다 진짜 일정 라인 채택
+  // v5.4-fix-3 (2026-07-13): 기록 날짜 접두사 `- [YYYY-MM-DD] [source:..]` 를 "어제"로 오인하던 버그 수정.
+  // 접두사를 떼어낸 '본문'에서만 어제 날짜를 매칭 → 기록일≠면접일 오탐 제거.
+  // 또한 취소·사퇴 등 '면접 후속'이 아닌 기록 제외(당근페이 취소를 "어제 면접"으로 묻던 오발동 차단).
+  const stripPrefix = (line) => line.replace(/^- \[\d{4}-\d{2}-\d{2}\] \[source:[^\]]+\] /, '');
   const candidateLines = content.split('\n')
-    .filter(line => line.includes(yesterday))
-    .filter(line => /면접|인터뷰|interview|코딩테스트|과제 제출/i.test(line))
-    .filter(line => !/회상|과거|이전\s|예전|지난해|작년/.test(line))
-    .filter(line => !/SSoT|sidecar|분기|통일|ingest|RAG|JSON\(|interviewDate|wiki\s|registry|audit/i.test(line))
-    .filter(line => /\d{1,2}:\d{2}|\d+분(?:\D|$)|\d+시(?:간|\D|$)|D-?\d|일정|예정|예약/i.test(line))
-    .map(line => ({
-      line,
-      score: (/\d{1,2}:\d{2}/.test(line) ? 100 : 0)  // HH:MM 시각 우선
-           + (/[가-힣]{2,5}\s*(?:물산|페이|증권|전자|건설|화학|카드|은행|뱅크|모터스)/.test(line) ? 50 : 0)  // 회사명
-           + (line.length > 100 ? 20 : 0),  // 정보 풍부도
+    .map(line => stripPrefix(line))
+    .filter(body => body.includes(yesterday))
+    .filter(body => /면접|인터뷰|interview|코딩테스트|과제 제출/i.test(body))
+    .filter(body => !/회상|과거|이전\s|예전|지난해|작년/.test(body))
+    .filter(body => !/취소|사퇴|불참|연기|거절|철회|포기/.test(body))  // 취소성 기록 = 면접 후속 아님
+    .filter(body => !/SSoT|sidecar|분기|통일|ingest|RAG|JSON\(|interviewDate|wiki\s|registry|audit/i.test(body))
+    .filter(body => /\d{1,2}:\d{2}|\d+분(?:\D|$)|\d+시(?:간|\D|$)|D-?\d|일정|예정|예약/i.test(body))
+    .map(body => ({
+      line: body,
+      score: (/\d{1,2}:\d{2}/.test(body) ? 100 : 0)  // HH:MM 시각 우선
+           + (/[가-힣]{2,5}\s*(?:물산|페이|증권|전자|건설|화학|카드|은행|뱅크|모터스)/.test(body) ? 50 : 0)  // 회사명
+           + (body.length > 100 ? 20 : 0),  // 정보 풍부도
     }))
     .sort((a, b) => b.score - a.score);
 
@@ -153,9 +157,9 @@ function checkSilence() {
 }
 
 // ── 메인 ──────────────────────────────────────────────────────────
-checkLunch();
-checkEvening();
-checkScheduleFollowup();
+// checkLunch();   // 비활성화 2026-07-13 — 주인님 지시: 매일 '점심 뭐 드셨어요' 일상 안부는 노이즈. 면접/일정 후속만 유지.
+// checkEvening();  // 비활성화 2026-07-13 — 동상(일상 저녁 안부 중단)
+checkScheduleFollowup();  // 유지: 실제 면접·일정 후속만 (의미 있는 질문)
 // checkSilence(); // 비활성화 2026-06-11 — CLI 대화는 active-work.json 미갱신 → 영구 오탐
 
 // 안전망: 같은 id 여러 번 push된 경우 dedupe (정규식 폭주 방지)

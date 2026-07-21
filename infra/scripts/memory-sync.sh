@@ -145,9 +145,14 @@ ${adr_list}
     fi
     export ANTHROPIC_API_KEY=""
 
+    # claude 절대경로 해석 (2026-07-13 수정: memory-sync 자체 LaunchAgent는 bot-cron의 PATH를
+    # 못 물려받아 bare 'claude'가 exit 127(명령 없음)로 실패 → Serena 메모리 갱신 매일 무산.
+    # ajqe-dispatch.mjs와 동일 패턴: ~/.local/bin/claude 우선, 부재 시 PATH의 claude fallback.)
+    _CLAUDE_BIN="$HOME/.local/bin/claude"
+    [ -x "$_CLAUDE_BIN" ] || _CLAUDE_BIN="claude"
     _claude_cmd=()
     if [[ -n "${_TIMEOUT_CMD:-}" ]]; then _claude_cmd+=("${_TIMEOUT_CMD}" 180); fi
-    _claude_cmd+=(claude -p "$prompt")
+    _claude_cmd+=("$_CLAUDE_BIN" -p "$prompt")
     if "${_claude_cmd[@]}" \
         --allowedTools "mcp__serena__read_memory,mcp__serena__edit_memory,mcp__serena__write_memory" \
         --mcp-config "$MCP_CONFIG" \

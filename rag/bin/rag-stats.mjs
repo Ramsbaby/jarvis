@@ -8,16 +8,43 @@
  * 사용법: node ~/jarvis/runtime/bin/rag-stats.mjs [--json]
  */
 
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { existsSync, statSync, readdirSync } from 'node:fs';
-import { LANCEDB_PATH, RAG_HOME, RAG_WRITE_LOCK } from '../lib/paths.mjs';
+import { fileURLToPath } from 'node:url';
+import { RAG_HOME, STATE_DIR } from '../lib/paths.mjs';
 
 const JSON_MODE = process.argv.includes('--json');
 
-// ── 경로 ──
-const DB_PATH     = LANCEDB_PATH;
-const SENTINEL    = join(RAG_HOME, '.rebuild-complete');
-const LOCK_FILE   = RAG_WRITE_LOCK;
+// ── 경로 결정 ──
+// paths.mjs는 env(JARVIS_RAG_HOME/BOT_HOME)가 없으면 ~/.local/share/jarvis/rag(XDG 폴백)로
+// 조용히 떨어진다. 소유자 머신에서 그 폴백은 비어있는 '유령 DB'라 rag-stats가 거짓 보고를 했다.
+// → env 미설정이면 저장소 상대의 진짜 런타임 DB가 채워져 있는지 확인해 그쪽으로 자동 교정한다.
+const ENV_SET = Boolean(process.env.JARVIS_RAG_HOME || process.env.BOT_HOME);
+
+let RAG_HOME_EFF  = RAG_HOME;
+let STATE_DIR_EFF = STATE_DIR;
+let PATH_SOURCE   = process.env.JARVIS_RAG_HOME ? 'JARVIS_RAG_HOME'
+  : process.env.BOT_HOME ? 'BOT_HOME' : 'XDG 폴백 (env 미설정)';
+let AUTO_REDIRECTED = false;
+
+if (!ENV_SET) {
+  const here        = dirname(fileURLToPath(import.meta.url));   // .../jarvis/rag/bin
+  const repoRuntime = join(here, '..', '..', 'runtime');         // .../jarvis/runtime
+  const repoRagHome = join(repoRuntime, 'rag');
+  if (existsSync(join(repoRagHome, 'lancedb', 'documents.lance'))) {
+    RAG_HOME_EFF    = repoRagHome;
+    STATE_DIR_EFF   = join(repoRuntime, 'state');
+    PATH_SOURCE     = 'repo-runtime 자동교정 (BOT_HOME 미설정)';
+    AUTO_REDIRECTED = true;
+  }
+}
+
+const DB_PATH   = join(RAG_HOME_EFF, 'lancedb');
+// 리빌드 상태의 SSoT는 시스템 전역이 쓰는 state/rag-rebuilding.json (존재=리빌드 중, 제거=완료).
+// rag-index.mjs가 이 파일을 생성/삭제한다. (구버전은 아무도 만들지 않는 RAG_HOME/.rebuild-complete를
+//  '없으면 리빌드 중'으로 해석 → 영구 거짓 "리빌드 중: 예"를 출력하던 단독 버그였다.)
+const SENTINEL  = join(STATE_DIR_EFF, 'rag-rebuilding.json');
+const LOCK_FILE = join(RAG_HOME_EFF, 'write.lock');
 
 function log(msg)  { if (!JSON_MODE) process.stdout.write(msg + '\n'); }
 function warn(msg) { if (!JSON_MODE) process.stderr.write('[warn] ' + msg + '\n'); }
@@ -36,11 +63,13 @@ async function main() {
   };
 
   // ── 리빌드/락 파일 확인 ──
-  result.locked    = existsSync(LOCK_FILE);
-  result.rebuilding = !existsSync(SENTINEL);  // sentinel 없으면 리빌드 진행 중 또는 미완료
+  result.locked     = existsSync(LOCK_FILE);
+  result.rebuilding = existsSync(SENTINEL);  // rag-rebuilding.json 존재 = 리빌드 진행 중
 
-  if (result.locked) warn('write lock active: ' + LOCK_FILE);
-  if (result.rebuilding) warn('rebuild sentinel missing — rebuild may be in progress');
+  if (AUTO_REDIRECTED) warn('BOT_HOME 미설정 — 저장소 런타임 DB로 자동 교정하여 보고: ' + DB_PATH);
+  else if (!ENV_SET)   warn('BOT_HOME 미설정 — XDG 폴백 경로 사용 중(비어있을 수 있음). 진짜 DB를 보려면: export BOT_HOME=~/jarvis/runtime');
+  if (result.locked)     warn('write lock active: ' + LOCK_FILE);
+  if (result.rebuilding) warn('rebuild in progress — sentinel present: ' + SENTINEL);
 
   // ── DB 존재 여부 ──
   const lancePath = join(DB_PATH, 'documents.lance');
@@ -94,6 +123,10 @@ async function main() {
     warn('getStats failed: ' + e.message);
   }
 
+  // ── 경로 출처 메타 (--json 소비자용, 추가 필드) ──
+  result.dbPath     = DB_PATH;
+  result.pathSource = PATH_SOURCE;
+
   // ── 출력 ──
   if (JSON_MODE) {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -101,12 +134,13 @@ async function main() {
     log('');
     log('=== RAG DB 상태 ===');
     log(`  DB 경로   : ${DB_PATH}`);
+    log(`  경로 출처  : ${PATH_SOURCE}`);
     log(`  DB 크기   : ${result.dbSizeKB.toLocaleString()} KB`);
     log(`  마지막 수정: ${result.lastModified ?? '알 수 없음'}`);
     log(`  청크(active): ${result.totalChunks.toLocaleString()}`);
     log(`  소스 파일  : ${result.totalSources.toLocaleString()}`);
     log(`  삭제(soft) : ${result.deletedChunks.toLocaleString()}`);
-    log(`  리빌드 중  : ${result.rebuilding ? '예 (sentinel 없음)' : '아니오'}`);
+    log(`  리빌드 중  : ${result.rebuilding ? '예 (rag-rebuilding.json 존재)' : '아니오'}`);
     log(`  Write 락   : ${result.locked ? '있음 (' + LOCK_FILE + ')' : '없음'}`);
     if (result.error) log(`  오류       : ${result.error}`);
     log('');

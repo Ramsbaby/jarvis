@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-07-06T00:10:05.518Z",
-  "totalChannels": 14,
+  "generatedAt": "2026-07-20T00:10:05.558Z",
+  "totalChannels": 16,
   "totalTasks": 135,
   "source": "runtime/config/tasks.json + infra/config/models.json",
   "channels": {
@@ -205,7 +205,7 @@
         {
           "id": "agent-sdk-billing-watch",
           "schedule": "0 9 * * 1",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "cluster-guard-init-cl-1b6f71eed569a8b7",
@@ -237,7 +237,7 @@
       "effortOverride": null
     },
     "jarvis-system": {
-      "taskCount": 42,
+      "taskCount": 41,
       "tasks": [
         {
           "id": "schedule-coherence",
@@ -282,7 +282,7 @@
         {
           "id": "doc-sync-auditor",
           "schedule": "20 23 * * *",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "weekly-code-review",
@@ -342,17 +342,12 @@
         {
           "id": "weekly-perf-agent",
           "schedule": "0 21 * * 0",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "geeknews-bench-crawl",
           "schedule": "30 10 * * *",
           "model": "claude-haiku-4-5-20251001"
-        },
-        {
-          "id": "self-healing-digest",
-          "schedule": "0 21 * * 0",
-          "model": "claude-sonnet-4-6"
         },
         {
           "id": "tasks-integrity-audit",
@@ -427,7 +422,7 @@
         {
           "id": "age-mem-discard",
           "schedule": "0 2 * * 4",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "owner-judgments-extract",
@@ -454,17 +449,17 @@
       "effortOverride": "max"
     },
     "jarvis-ceo": {
-      "taskCount": 24,
+      "taskCount": 21,
       "tasks": [
         {
           "id": "weekly-report",
           "schedule": "5 20 * * 0",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "weekly-kpi",
           "schedule": "30 8 * * 1",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "weekly-roi",
@@ -489,22 +484,22 @@
         {
           "id": "council-insight",
           "schedule": "5 23 * * *",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "academy-support",
           "schedule": "0 20 * * 0",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "record-daily",
           "schedule": "30 22 * * *",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "brand-weekly",
           "schedule": "0 8 * * 2",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "infra-daily",
@@ -527,11 +522,6 @@
           "model": "<default>"
         },
         {
-          "id": "ceo-daily-digest",
-          "schedule": "15 23 * * *",
-          "model": "claude-haiku-4-5-20251001"
-        },
-        {
           "id": "skill-eval",
           "schedule": "30 4 * * 0",
           "model": "<default>"
@@ -552,16 +542,6 @@
           "model": "claude-haiku-4-5-20251001"
         },
         {
-          "id": "finance-monitor",
-          "schedule": "0 8 * * 1-5",
-          "model": "claude-sonnet-4-6"
-        },
-        {
-          "id": "compound-review",
-          "schedule": "30 20 * * 0",
-          "model": "claude-sonnet-4-6"
-        },
-        {
           "id": "wiki-reference-report",
           "schedule": "0 20 * * 0",
           "model": "<default>"
@@ -569,7 +549,7 @@
         {
           "id": "weekly-dream-insight",
           "schedule": "0 4 * * 1",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "skill-synthesis-verify",
@@ -586,17 +566,17 @@
         {
           "id": "morning-standup",
           "schedule": "30 7 * * *",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "daily-summary",
           "schedule": "0 20 * * *",
-          "model": "claude-haiku-4-5-20251001"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "news-briefing",
           "schedule": "0 6 * * *",
-          "model": "claude-opus-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "calendar-alert",
@@ -649,13 +629,13 @@
         },
         {
           "id": "macro-briefing",
-          "schedule": "30 23 * * 0-4",
-          "model": "claude-sonnet-4-6"
+          "schedule": "30 23 * * 1-5",
+          "model": "claude-sonnet-5"
         },
         {
           "id": "tqqq-monitor",
           "schedule": "*/15 22-23 * * 1-5",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         }
       ],
       "modelOverride": "opusplan",
@@ -667,12 +647,12 @@
         {
           "id": "profile-weekly",
           "schedule": "0 18 * * 5",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "github-pr-handler",
           "schedule": "(adhoc)",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "youtube-bench",
@@ -680,8 +660,30 @@
           "model": "claude-haiku-4-5-20251001"
         }
       ],
-      "modelOverride": "opusplan",
-      "effortOverride": "high"
+      "modelOverride": "power",
+      "effortOverride": "max"
+    },
+    "jarvis-retro": {
+      "taskCount": 3,
+      "tasks": [
+        {
+          "id": "ceo-daily-digest",
+          "schedule": "15 23 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "self-healing-digest",
+          "schedule": "0 21 * * 0",
+          "model": "claude-sonnet-5"
+        },
+        {
+          "id": "compound-review",
+          "schedule": "30 20 * * 0",
+          "model": "claude-sonnet-5"
+        }
+      ],
+      "modelOverride": null,
+      "effortOverride": null
     },
     "jarvis-alerts": {
       "taskCount": 2,
@@ -689,12 +691,12 @@
         {
           "id": "discord-mention-handler",
           "schedule": "(adhoc)",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         },
         {
           "id": "cost-alert-handler",
           "schedule": "(adhoc)",
-          "model": "claude-sonnet-4-6"
+          "model": "claude-sonnet-5"
         }
       ],
       "modelOverride": null,
@@ -776,6 +778,18 @@
       ],
       "modelOverride": null,
       "effortOverride": null
+    },
+    "jarvis-preply-tutor": {
+      "taskCount": 1,
+      "tasks": [
+        {
+          "id": "preply-boram-followup-20260715",
+          "schedule": "0 16 15 7 *",
+          "model": "<default>"
+        }
+      ],
+      "modelOverride": "opusplan",
+      "effortOverride": "high"
     }
   }
 }

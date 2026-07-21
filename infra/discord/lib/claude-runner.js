@@ -1098,7 +1098,8 @@ export async function* createClaudeSession(prompt, {
     // [2026-06-22] 깊이 가드를 별도 섹션(depth-guard, score 9)으로 독립 push — budget 절단 시
     //   persona-rules(score 7)와 함께 통째로 잘리지 않게 분리. 감정 턴은 제외(감정 가드 주도).
     if (!_isEmotionalTurn) {
-      const depthGuardSection = buildDepthGuardSection({ botHome: BOT_HOME });
+      // [2026-07-20] channelId 전달 → 일상/가족/튜터 채널은 모바일 간결 가드, 분석 채널은 깊이 가드.
+      const depthGuardSection = buildDepthGuardSection({ botHome: BOT_HOME, channelId });
       if (depthGuardSection) systemParts.push('', depthGuardSection);
     }
 
@@ -1246,7 +1247,11 @@ export async function* createClaudeSession(prompt, {
   // 사용자가 "방금 크론이 보낸 거 뭐야?" 등 채널 컨텍스트를 참조할 때 재질문 방지
   if (channelName) {
     // [2026-06-07] 코딩테스트 모드는 채널 피드(직전 다른 문제들) 주입 금지 — 문제 간 오염 차단.
-    const feedCtx = !_isEmotionalTurn && !_careerCoding && buildChannelFeedSection(channelName, 15);
+    // [2026-07-11] preply 교재 채널은 메시지가 긴 HTML(각 MAX_TEXT_LEN=2000자)이라 15개 = 5~7K 토큰
+    //   → 프롬프트 예산(code 9K) 초과로 skill-guard·chronic-patterns 등 행동 가드가 매 응답 드롭(원장 517건).
+    //   교재 작업엔 직전 몇 개만 필요하므로 preply만 5개로 축소(직전 교재 보존, 오래된 것만 제거). 다른 채널은 15 유지.
+    const _feedLimit = channelName === 'jarvis-preply-tutor' ? 5 : 15;
+    const feedCtx = !_isEmotionalTurn && !_careerCoding && buildChannelFeedSection(channelName, _feedLimit);
     if (feedCtx) systemParts.push('', feedCtx);
   }
 
@@ -1466,9 +1471,11 @@ export async function* createClaudeSession(prompt, {
   if (process.env.ADAPTIVE_MODEL_ENABLED === '1' && contextBudget !== 'small' && channelModelKey && !_hasImageAttachment) {
     try {
       const { resolveModelTier } = await import('./adaptive-model.js');
-      const resolved = resolveModelTier(channelModelKey, prompt);
-      if (resolved.downgraded) {
-        log('info', 'adaptive-model: downgraded', {
+      // [2026-07-11] 분석 채널(_isAnalysisChannel)의 deep 질문은 Opus 직접 격상(upgraded).
+      //   그 외는 기존 downgrade 로직 그대로. upgrade/downgrade 둘 다 channelModelKey 반영.
+      const resolved = resolveModelTier(channelModelKey, prompt, undefined, _isAnalysisChannel);
+      if (resolved.downgraded || resolved.upgraded) {
+        log('info', `adaptive-model: ${resolved.upgraded ? 'upgraded' : 'downgraded'}`, {
           from: channelModelKey, to: resolved.tier, reason: resolved.reason,
           channelName, promptLen: prompt.length,
         });
@@ -1552,6 +1559,15 @@ export async function* createClaudeSession(prompt, {
       'mcp__serena-board__read_memory', 'mcp__serena-board__write_memory', 'mcp__serena-board__find_file',
       'mcp__serena-board__replace_symbol_body', 'mcp__serena-board__insert_after_symbol',
       'mcp__serena-board__insert_before_symbol',
+      // playwright 브라우저 — 읽기 + 폼채우기 (2단계, 2026-07-21). evaluate/run_code_unsafe/
+      //   file_upload/mouse_*(좌표클릭)은 의도적으로 미등록 → 자동 봉쇄(제출 우회 통로). 제출·결제류
+      //   커밋 클릭과 Enter 제출은 아래 PreToolUse 훅이 차단(봇은 제출 안 함 — 최종 제출은 사람).
+      'mcp__playwright__browser_navigate', 'mcp__playwright__browser_navigate_back',
+      'mcp__playwright__browser_snapshot', 'mcp__playwright__browser_take_screenshot',
+      'mcp__playwright__browser_find', 'mcp__playwright__browser_wait_for',
+      'mcp__playwright__browser_click', 'mcp__playwright__browser_type',
+      'mcp__playwright__browser_fill_form', 'mcp__playwright__browser_select_option',
+      'mcp__playwright__browser_press_key', 'mcp__playwright__browser_hover',
     ],
     // Phase 0 Sensor (재설계 2026-04-17): canUseTool → PreToolUse 훅 전환.
     // 이유: SDK 'default' 모드에서 내부 'allow' 판정된 tool은 canUseTool 콜백을
@@ -1660,6 +1676,74 @@ export async function* createClaudeSession(prompt, {
             // 훅 자체 오류 시 fail-open (봇 먹통 방지 우선). 로그로 감지 가능하게 기록.
             log('error', 'PreToolUse hook threw (fail-open)', { error: err?.message });
           }
+
+          // 브라우저(playwright) 도구 가드 — 폼채우기(2단계) + 도메인 화이트리스트 + 커밋 차단 + 원장 (2026-07-21)
+          //   원칙: 읽기·폼채우기는 허용, 제출·결제·전송(커밋)과 JS실행류는 하드 차단.
+          //   "봇은 제출 안 함 — 최종 제출은 사람이 화면에서 직접"(주인님 결정 2026-07-21). 실패 시 fail-CLOSED(deny).
+          try {
+            if (typeof input.tool_name === 'string' && input.tool_name.startsWith('mcp__playwright__')) {
+              const toolShort = input.tool_name.slice('mcp__playwright__'.length);
+              // 허용: 읽기 + 폼채우기. evaluate/run_code_unsafe/file_upload/mouse_*(좌표클릭)은 미포함 → 차단(제출 우회 통로).
+              const BROWSER_ALLOWED = new Set([
+                'browser_navigate', 'browser_navigate_back', 'browser_snapshot',
+                'browser_take_screenshot', 'browser_find', 'browser_wait_for',
+                'browser_click', 'browser_type', 'browser_fill_form',
+                'browser_select_option', 'browser_press_key', 'browser_hover',
+              ]);
+              // 커밋(제출·결제·전송·삭제·로그인)류 라벨 — 클릭 대상 설명에 이 단어가 있으면 차단.
+              const COMMIT_RE = /\b(submit|send|pay|buy|order|purchase|checkout|confirm|delete|remove|sign\s?in|log\s?in|register|apply now)\b|제출|보내기|결제|구매|주문|결정|확인|완료|삭제|신청|등록|로그인|동의/i;
+              const bLedgerDir = join(HOME, 'jarvis/runtime', 'ledger');
+              const bLog = (row) => {
+                try {
+                  mkdirSync(bLedgerDir, { recursive: true });
+                  appendFileSync(join(bLedgerDir, 'browser-actions.jsonl'),
+                    JSON.stringify({ ts: new Date().toISOString(), source: 'discord-bot', ...row }) + '\n');
+                } catch { /* 원장 best-effort */ }
+              };
+              // (1) 허용 도구 외 하드 차단 — JS실행·파일업로드·좌표클릭 등 제출 우회 통로 봉쇄
+              if (!BROWSER_ALLOWED.has(toolShort)) {
+                bLog({ tool: toolShort, decision: 'deny', reason: 'tool-not-allowed' });
+                return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
+                  permissionDecisionReason: `${toolShort}는 허용되지 않는 브라우저 도구입니다(JS실행·파일업로드·좌표클릭류는 제출 우회 통로라 영구 차단).` } };
+              }
+              // (2) navigate 도메인 화이트리스트 — 진짜 보안 경계 (browser-allowlist.json SSoT, 매 호출 재로드)
+              if (toolShort === 'browser_navigate') {
+                let host = '';
+                try { host = new URL(String(input.tool_input?.url || '')).hostname.toLowerCase(); } catch { /* 파싱 실패 = deny */ }
+                let allow = [];
+                try { allow = (JSON.parse(readFileSync(join(HOME, 'jarvis/runtime/config/browser-allowlist.json'), 'utf-8')).allowedHosts) || []; } catch { /* 파일 없음/깨짐 = deny-all */ }
+                const ok = !!host && allow.some((h) => host === h || host.endsWith('.' + h));
+                bLog({ tool: toolShort, url: String(input.tool_input?.url || '').slice(0, 200), host, decision: ok ? 'allow' : 'deny' });
+                if (!ok) {
+                  return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
+                    permissionDecisionReason: `도메인 화이트리스트에 없는 사이트입니다: "${host || '(파싱불가)'}". 허용 도메인은 runtime/config/browser-allowlist.json에서 관리합니다.` } };
+                }
+              // (3) 커밋 차단 — 제출/결제/전송류 버튼 클릭은 봇이 하지 않음 (최종 제출은 사람)
+              } else if (toolShort === 'browser_click') {
+                const desc = String(input.tool_input?.element || '');
+                if (COMMIT_RE.test(desc)) {
+                  bLog({ tool: toolShort, element: desc.slice(0, 80), decision: 'deny', reason: 'commit-action' });
+                  return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
+                    permissionDecisionReason: `제출·결제·전송류 커밋 행동입니다("${desc.slice(0, 40)}"). 봇은 제출하지 않습니다 — 폼을 채운 채 멈추고 스크린샷으로 보고하세요. 최종 제출은 주인님이 화면에서 직접.` } };
+                }
+                bLog({ tool: toolShort, element: desc.slice(0, 80), decision: 'allow' });
+              // (4) Enter 제출 차단 — 폼 커밋 우회 방지
+              } else if (toolShort === 'browser_press_key') {
+                const k = String(input.tool_input?.key || '').toLowerCase();
+                if (k === 'enter' || k === 'return') {
+                  bLog({ tool: toolShort, key: k, decision: 'deny', reason: 'enter-submit' });
+                  return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny',
+                    permissionDecisionReason: 'Enter 제출은 차단됩니다(폼 커밋 우회 방지). 최종 제출은 주인님이 직접.' } };
+                }
+                bLog({ tool: toolShort, key: k, decision: 'allow' });
+              } else {
+                bLog({ tool: toolShort, element: String(input.tool_input?.element || input.tool_input?.text || '').slice(0, 60), decision: 'allow' });
+              }
+            }
+          } catch (err) {
+            log('error', 'PreToolUse browser-guard threw (fail-open)', { error: err?.message });
+          }
+
           return { continue: true };
         }],
         timeout: 5,

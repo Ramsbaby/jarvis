@@ -15,7 +15,7 @@ description: "Claude 계정 전환 및 관리. 회사/개인 계정 전환, 토�
 | `use personal` | 개인 계정으로 전환 |
 | `save company` | 현재 로그인을 company 프로필로 저장 |
 | `save personal` | 현재 로그인을 personal 프로필로 저장 |
-| `refresh` | 현재 계정 토큰 갱신 (refreshToken 사용) |
+| `refresh` | Keychain ↔ 파일 재동기화 (실제 토큰 갱신은 Claude CLI가 자동) |
 
 ## 계정 전환 흐름
 

@@ -207,6 +207,26 @@ export function transition(id, toStatus, { triggeredBy = 'system', extra = {} } 
     throw new Error(`유효하지 않은 전이: ${task.status} → ${toStatus} (${id})`);
   }
 
+  // === [보호 게이트] 완료 시 결과 필드 필수 검증 (cl-a823cc27fbf689ff 클러스터 방지) ===
+  // toStatus === 'done' 시: result 필드가 필수. extra.result 또는 task.meta.result 중 하나라도 있어야 통과.
+  // 역호환성: 기존 meta.result가 이미 있으면 사용 (구 완료 태스크 미영향)
+  if (toStatus === 'done') {
+    const providedResult = extra.result ?? null;
+    const existingResult = task.meta?.result ?? null;
+    const finalResult = providedResult !== null ? providedResult : existingResult;
+
+    // 빈 문자열, null, undefined 전부 거부 (타입 검증 없음 — 호출자가 직렬화 책임)
+    if (!finalResult || (typeof finalResult === 'string' && !finalResult.trim())) {
+      const err = new Error(
+        `[RESULT_REQUIRED] task '${id}' 완료 거부: 결과 필드가 필수입니다. ` +
+        `transition(..., 'done', {extra: {result: '결과내용'}}) 형식으로 호출하세요.`
+      );
+      err.code = 'RESULT_REQUIRED';
+      err.taskId = id;
+      throw err;
+    }
+  }
+
   const now     = Date.now();
   // extra에서 retries/priority는 별도 컬럼으로 관리 — meta에는 포함하지 않음
   const { retries: _r, priority: _p, ...metaExtra } = extra;
@@ -331,8 +351,11 @@ export function ensureCronTask(id, meta = {}) {
   }
 
   const task = deserialize(row);
-  // failed/done → queued 리셋 (cron은 매 실행 시 새로 시작해야 함)
-  if (task.status === 'failed' || task.status === 'done') {
+  // failed/done/skipped → queued 리셋 (cron은 매 실행 시 새로 시작해야 함)
+  // skipped 포함 이유: FSM 맵상 skipped→queued는 "CB 쿨다운 해제 후 재큐" 복구 경로.
+  //   미포함 시 CB 쿨다운으로 한번 skipped된 cron 태스크가 영구 stuck → 이후 running/done 전이 전부 무효
+  //   → 완료 워크플로(running→done) 실패로 결과 발송 차단. (2026-07-21 아내 일정 발송 중단 사고)
+  if (task.status === 'failed' || task.status === 'done' || task.status === 'skipped') {
     db.exec('BEGIN');
     try {
       db.prepare('UPDATE tasks SET status=?, retries=?, updated_at=? WHERE id=?')

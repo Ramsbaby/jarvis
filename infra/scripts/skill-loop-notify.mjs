@@ -40,7 +40,11 @@ function parseDraft(slug) {
 
 const notified = existsSync(NOTIFIED) ? JSON.parse(readFileSync(NOTIFIED, 'utf8')) : [];
 const pendingDir = join(DRAFTS, 'pending');
-const pending = existsSync(pendingDir) ? readdirSync(pendingDir).filter(d => !d.startsWith('.')) : [];
+// [2026-07-11 P0] pending에는 anger-detector가 넣는 anger-*.json 파일이 섞여 있음(디렉토리 아님)
+// → parseDraft가 <파일>/SKILL.md를 읽다 크래시. 계약: pending 항목 = 디렉토리 + SKILL.md 보유.
+const pending = existsSync(pendingDir)
+  ? readdirSync(pendingDir).filter(d => !d.startsWith('.') && existsSync(join(pendingDir, d, 'SKILL.md')))
+  : [];
 
 // 개별 카드 (미통보 + 미결재 분만)
 let sent = 0;

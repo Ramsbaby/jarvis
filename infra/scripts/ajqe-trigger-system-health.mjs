@@ -188,7 +188,7 @@ function checkRagIndexer() {
   const RAG_THRESHOLDS = {
     // 'rag-conversations.log': 2,  // 비활성화 2026-05-07 — claude-sessions 인덱싱 차단(LanceDB bloat). 크론 영구 disabled.
     'rag-compact.log': 26,
-    'rag-bug-detector.log': 8,
+    'rag-bug-detector.log': 26, // 2026-07-14: 8h→26h. 이 크론은 매일 03:10 1회만 실행(24h 주기)라 8h 기준은 정상 동작에도 매일 오탐 발생.
   };
   for (const [fname, threshold] of Object.entries(RAG_THRESHOLDS)) {
     const p = join(LOGS_DIR, fname);

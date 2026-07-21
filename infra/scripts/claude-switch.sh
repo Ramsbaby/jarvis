@@ -1,87 +1,134 @@
 #!/usr/bin/env bash
-# claude-switch.sh — Claude 계정 프로필 전환 + headless 토큰 갱신
+# claude-switch.sh — Claude 계정 프로필 전환 (Keychain + 파일 이중 관리)
 # /account 슬래시 커맨드에서 호출됨
 #
 # 사용법:
 #   claude-switch.sh status          현재 계정 + 프로필 목록
-#   claude-switch.sh use <name>      저장된 프로필로 전환 (만료 시 자동 갱신)
-#   claude-switch.sh save <name>     현재 계정을 프로필로 저장
-#   claude-switch.sh refresh         headless 토큰 갱신 (브라우저 불필요)
+#   claude-switch.sh use <name>      저장된 프로필로 전환 (Keychain + 파일 동시)
+#   claude-switch.sh save <name>     현재 활성 계정을 프로필로 저장 (Keychain 기준)
+#   claude-switch.sh refresh         Keychain ↔ 파일 재동기화 (실제 토큰 갱신은 Claude CLI 자동)
 #
-# Headless refresh: refreshToken → platform.claude.com/v1/oauth/token
-# client_id: 9d1c250a-e61b-44d9-88ed-5944d1962f5e (Claude Code OAuth app)
-
-CLAUDE_OAUTH_CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-CLAUDE_TOKEN_ENDPOINT="https://platform.claude.com/v1/oauth/token"
+# ⚠️ 토큰 갱신 정책 (2026-07-10 재작성):
+#   OAuth refresh 엔드포인트(platform.claude.com/v1/oauth/token, console.anthropic.com/... 등)를
+#   이 스크립트에서 절대 직접 호출하지 않는다.
+#   근거: refreshToken은 1회용 회전키. 외부에서 직접 호출하면 Claude CLI가 캐시한 키와 충돌 →
+#         토큰 패밀리(계정 전체) 폐기 → 강제 재로그인. (CLAUDE.md 0순위 BLOCKING 룰, 2026-05-31)
+#   대신: 만료된 accessToken은 그대로 두고 전환한다. refreshToken이 살아 있으면 Claude CLI가
+#         다음 호출에서 자체적으로 갱신하므로 재로그인이 필요 없다.
+#
+# Claude Code v2.1.50+ : 자격증명 주 저장소는 macOS Keychain
+#   Keychain service: "Claude Code-credentials", account: OS 사용자명
+#   파일(~/.claude/.credentials.json)은 레거시 fallback이자 미러본.
+#
+# 손대지 않는 것 (격리 유지):
+#   - ~/.claude-bot/.long-lived-token  (디스코드 봇 전용 격리 토큰)
+#   - ~/.openclaw/agents/*             (OpenClaw는 API 키 사용, OAuth 계정 전환과 무관)
 
 set -euo pipefail
 
 CREDENTIALS="$HOME/.claude/.credentials.json"
 PROFILES_DIR="$HOME/.claude/profiles"
 
-# ── 유틸 ──────────────────────────────────────────────────────────────────────
+KC_SERVICE="Claude Code-credentials"
+KC_ACCOUNT="$(whoami)"
 
-account_info() {
-    local cred_file="$1"
-    if [[ ! -f "$cred_file" ]]; then
-        echo "(없음)"
-        return
+# ── Keychain 유틸 ─────────────────────────────────────────────────────────────
+
+_read_keychain() {
+    security find-generic-password -s "$KC_SERVICE" -a "$KC_ACCOUNT" -w 2>/dev/null || echo ""
+}
+
+_write_keychain() {
+    local json_data="$1"
+    # update API가 없으므로 삭제 후 재생성
+    security delete-generic-password -s "$KC_SERVICE" -a "$KC_ACCOUNT" 2>/dev/null || true
+    security add-generic-password -s "$KC_SERVICE" -a "$KC_ACCOUNT" -w "$json_data"
+}
+
+# 활성 자격증명 JSON 획득 (Keychain 우선 → 파일 fallback)
+_get_live_json() {
+    local kc
+    kc="$(_read_keychain)"
+    if [[ -n "$kc" ]]; then
+        printf '%s' "$kc"; return 0
     fi
+    if [[ -f "$CREDENTIALS" ]]; then
+        cat "$CREDENTIALS"; return 0
+    fi
+    return 1
+}
+
+# JSON(stdin) → 요약 한 줄 (토큰 원문 미노출)
+_fmt_creds() {
     python3 -c "
-import json, datetime, sys
+import json, sys, datetime
 try:
-    d = json.load(open('$cred_file'))
-    for k, v in d.items():
-        if isinstance(v, dict) and 'accessToken' in v:
-            exp = v.get('expiresAt', 0)
-            if exp:
-                exp_dt = datetime.datetime.fromtimestamp(exp/1000)
-                remaining = exp_dt - datetime.datetime.now()
-                hrs = int(remaining.total_seconds() // 3600)
-                mins = int((remaining.total_seconds() % 3600) // 60)
-                exp_str = exp_dt.strftime('%m/%d %H:%M') + f' (잔여 {hrs}h {mins}m)' if remaining.total_seconds() > 0 else exp_dt.strftime('%m/%d %H:%M') + ' ⚠️ 만료'
-            else:
-                exp_str = '?'
-            tier = v.get('rateLimitTier', '?')
-            sub = v.get('subscriptionType', '?')
-            print(f'{sub} / {tier} / 만료: {exp_str}')
-            sys.exit(0)
-    print('(인증 정보 없음)')
-except Exception as e:
-    print(f'(파싱 오류: {e})')
-" 2>/dev/null || echo "(파싱 실패)"
+    d = json.loads(sys.stdin.read() or '{}')
+except Exception:
+    print('(파싱 실패)'); sys.exit(0)
+for k, v in d.items():
+    if isinstance(v, dict) and 'accessToken' in v:
+        exp = v.get('expiresAt', 0)
+        if exp:
+            ed = datetime.datetime.fromtimestamp(exp/1000)
+            rem = (ed - datetime.datetime.now()).total_seconds()
+            es = ed.strftime('%m/%d %H:%M') + (f' (잔여 {int(rem//3600)}h {int((rem%3600)//60)}m)' if rem > 0 else ' ⚠️ 만료')
+        else:
+            es = '?'
+        email = v.get('emailAddress') or '(이메일 미기록)'
+        print(f\"{v.get('subscriptionType','?')} / {email} / 만료: {es}\")
+        sys.exit(0)
+print('(인증 정보 없음)')
+"
+}
+
+# JSON(stdin) → accessToken sha256 앞 12자 (식별용, 원문 미노출)
+_hash_creds() {
+    python3 -c "
+import json, sys, hashlib
+try:
+    d = json.loads(sys.stdin.read() or '{}')
+except Exception:
+    print(''); sys.exit(0)
+for k, v in d.items():
+    if isinstance(v, dict) and 'accessToken' in v:
+        print(hashlib.sha256(v['accessToken'].encode()).hexdigest()[:12]); sys.exit(0)
+print('')
+"
 }
 
 # ── status ────────────────────────────────────────────────────────────────────
 
 cmd_status() {
     echo "=== 현재 활성 계정 ==="
-    echo "  $(account_info "$CREDENTIALS")"
+    local src="none" live=""
+    live="$(_read_keychain)"
+    if [[ -n "$live" ]]; then
+        src="keychain"
+    elif [[ -f "$CREDENTIALS" ]]; then
+        src="file"; live="$(cat "$CREDENTIALS")"
+    fi
+    echo "  저장소: $src"
+    echo "  $(printf '%s' "$live" | _fmt_creds)"
+    local live_hash
+    live_hash="$(printf '%s' "$live" | _hash_creds)"
+
     echo ""
     echo "=== 저장된 프로필 ==="
-    if [[ ! -d "$PROFILES_DIR" ]] || [[ -z "$(ls -A "$PROFILES_DIR" 2>/dev/null)" ]]; then
+    if [[ ! -d "$PROFILES_DIR" ]] || [[ -z "$(ls -A "$PROFILES_DIR" 2>/dev/null | grep -v '^\.' || true)" ]]; then
         echo "  (없음) — 'save <이름>'으로 저장하세요"
         return
     fi
     for profile_dir in "$PROFILES_DIR"/*/; do
-        local name
-        name=$(basename "$profile_dir")
-        local cred="$profile_dir/credentials.json"
-        local info
-        info=$(account_info "$cred")
-        # 현재 활성 계정과 같은지 확인
-        local marker=""
-        if [[ -f "$CREDENTIALS" && -f "$cred" ]]; then
-            local cur_token profile_token
-            cur_token=$(python3 -c "import json; d=json.load(open('$CREDENTIALS')); [print(list(v.keys())[0] if isinstance(v,dict) else '') for v in d.values()]" 2>/dev/null | head -1 || echo "")
-            profile_token=$(python3 -c "import json; d=json.load(open('$cred')); [print(list(v.keys())[0] if isinstance(v,dict) else '') for v in d.values()]" 2>/dev/null | head -1 || echo "")
-            # accessToken 앞 20자로 비교
-            cur_at=$(python3 -c "import json; d=json.load(open('$CREDENTIALS')); [print(v.get('accessToken','')[:20]) for v in d.values() if isinstance(v,dict) and 'accessToken' in v]" 2>/dev/null | head -1 || echo "x")
-            profile_at=$(python3 -c "import json; d=json.load(open('$cred')); [print(v.get('accessToken','')[:20]) for v in d.values() if isinstance(v,dict) and 'accessToken' in v]" 2>/dev/null | head -1 || echo "y")
-            if [[ "$cur_at" == "$profile_at" ]]; then
-                marker=" ◀ 현재"
-            fi
-        fi
+        [[ -d "$profile_dir" ]] || continue
+        local name cred info phash marker
+        name="$(basename "$profile_dir")"
+        cred="$profile_dir/credentials.json"
+        [[ -f "$cred" ]] || continue
+        info="$(_fmt_creds < "$cred")"
+        phash="$(_hash_creds < "$cred")"
+        marker=""
+        if [[ -n "$live_hash" && "$phash" == "$live_hash" ]]; then marker=" ◀ 현재"; fi
         echo "  [$name]$marker  $info"
     done
     echo ""
@@ -96,20 +143,42 @@ cmd_save() {
         echo "오류: 프로필 이름을 지정하세요. 예: /account save personal"
         exit 1
     fi
-    if [[ ! -f "$CREDENTIALS" ]]; then
-        echo "오류: 현재 로그인된 계정이 없습니다. 먼저 claude login을 실행하세요."
+
+    local live
+    live="$(_get_live_json)" || { echo "오류: 활성 자격증명이 없습니다. 먼저 /login 하세요."; exit 1; }
+
+    local h
+    h="$(printf '%s' "$live" | _hash_creds)"
+    if [[ -z "$h" ]]; then
+        echo "오류: 자격증명에서 accessToken을 찾지 못했습니다. /login 필요."
         exit 1
     fi
+
     local profile_dir="$PROFILES_DIR/$name"
     mkdir -p "$profile_dir"
-    cp "$CREDENTIALS" "$profile_dir/credentials.json"
-    echo "✅ 현재 계정을 [$name] 프로필로 저장했습니다."
-    echo "   $(account_info "$profile_dir/credentials.json")"
 
-    # [2026-05-31 제거] 봇 credentials 동기화 블록 삭제.
-    # 사고: 이 블록이 메인 토큰을 ~/.claude-bot에 복사 → 봇·메인 같은 refresh_token 패밀리 공유
-    #   → reuse race로 양쪽 폐기. 봇은 oauth-isolate-bot(별도 패밀리)+.long-lived-token으로
-    #   독립 격리되어야 하며, 메인 복사는 격리를 깨는 안티패턴이라 영구 제거.
+    # 기존 프로필 백업 (덮어쓰기 롤백용)
+    if [[ -f "$profile_dir/credentials.json" ]]; then
+        cp "$profile_dir/credentials.json" "$profile_dir/credentials.json.bak"
+    fi
+
+    printf '%s' "$live" > "$profile_dir/credentials.json"
+    chmod 600 "$profile_dir/credentials.json"
+
+    # Keychain을 기준으로 파일 미러 동기화 (drift 방지 — 활성 계정은 그대로)
+    printf '%s' "$live" > "$CREDENTIALS"
+    chmod 600 "$CREDENTIALS"
+
+    cat > "$profile_dir/meta.json" <<EOF
+{
+  "name": "$name",
+  "savedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "source": "keychain"
+}
+EOF
+
+    echo "✅ 현재 활성 계정을 [$name] 프로필로 저장했습니다. (Keychain 기준 + 파일 미러)"
+    echo "   $(printf '%s' "$live" | _fmt_creds)"
 }
 
 # ── use ───────────────────────────────────────────────────────────────────────
@@ -128,128 +197,97 @@ cmd_use() {
         exit 1
     fi
 
-    # 만료 여부 경고
-    local is_expired
-    is_expired=$(python3 -c "
+    # refreshToken 존재 여부 + accessToken 만료 여부 (엔드포인트 호출 없음)
+    local check has_refresh access_state
+    check="$(python3 -c "
 import json, datetime
 d = json.load(open('$profile_cred'))
+hr, st = 'no', 'unknown'
 for v in d.values():
     if isinstance(v, dict) and 'accessToken' in v:
+        hr = 'yes' if v.get('refreshToken') else 'no'
         exp = v.get('expiresAt', 0)
-        if exp and datetime.datetime.fromtimestamp(exp/1000) < datetime.datetime.now():
-            print('expired')
-        else:
-            print('ok')
-" 2>/dev/null || echo "unknown")
+        st = 'expired' if (exp and datetime.datetime.fromtimestamp(exp/1000) < datetime.datetime.now()) else 'ok'
+        break
+print(hr, st)
+" 2>/dev/null || echo "no unknown")"
+    has_refresh="$(echo "$check" | awk '{print $1}')"
+    access_state="$(echo "$check" | awk '{print $2}')"
 
-    if [[ "$is_expired" == "expired" ]]; then
-        echo "⚠️  [$name] 프로필 토큰 만료 — headless 갱신 시도 중..."
-        if do_headless_refresh "$profile_cred"; then
-            echo "   자동 갱신 성공 → 계속 전환합니다"
+    if [[ "$access_state" == "expired" ]]; then
+        if [[ "$has_refresh" == "yes" ]]; then
+            echo "ℹ️  [$name] accessToken은 만료됐지만 refreshToken이 있어, 전환 후 Claude CLI가 자동 갱신합니다. (재로그인 불필요)"
         else
-            echo "   자동 갱신 실패. claude login 후 /account save $name 실행 필요."
+            echo "⚠️  [$name] 프로필의 accessToken이 만료됐고 refreshToken도 없습니다."
+            echo "   → 먼저 해당 계정으로 /login 후  /account save $name  로 갱신하세요."
+            echo "   (refresh 엔드포인트 직접 호출은 토큰 폐기 위험이라 하지 않습니다.)"
             exit 1
         fi
     fi
 
-    # 기존 credentials 백업
-    if [[ -f "$CREDENTIALS" ]]; then
-        cp "$CREDENTIALS" "${CREDENTIALS}.bak"
+    # 현재 활성 자격증명 백업
+    local cur
+    cur="$(_get_live_json 2>/dev/null || echo "")"
+    if [[ -n "$cur" ]]; then
+        printf '%s' "$cur" > "${CREDENTIALS}.bak"
+        chmod 600 "${CREDENTIALS}.bak"
     fi
 
-    cp "$profile_cred" "$CREDENTIALS"
-    echo "✅ [$name] 계정으로 전환했습니다."
-    echo "   $(account_info "$CREDENTIALS")"
+    local new_creds
+    new_creds="$(cat "$profile_cred")"
+
+    # 1) 파일 쓰기 (레거시 fallback 미러)
+    printf '%s' "$new_creds" > "$CREDENTIALS"
+    chmod 600 "$CREDENTIALS"
+    # 2) Keychain 쓰기 (Claude Code v2.1.50+ 주 저장소 — 이게 실제 반영을 보장)
+    _write_keychain "$new_creds"
+
+    echo "✅ [$name] 계정으로 전환했습니다. (Keychain + 파일 동시 적용)"
+    echo "   $(printf '%s' "$new_creds" | _fmt_creds)"
     echo ""
-    echo "ℹ️  Jarvis 크론/봇은 다음 claude -p 호출부터 자동으로 새 계정을 사용합니다."
+    echo "ℹ️  Jarvis 크론/봇은 다음 claude -p 호출부터 새 계정을 사용합니다."
+    echo "ℹ️  대화형 세션은 새 세션부터 반영됩니다."
 }
 
-# ── headless token refresh ────────────────────────────────────────────────────
-# cred_file 내 refreshToken으로 새 accessToken 발급 후 파일 갱신
-# 성공: exit 0 + "갱신 완료" 출력
-# 실패: exit 1 + 오류 출력
-
-do_headless_refresh() {
-    local cred_file="${1:-$CREDENTIALS}"
-    [[ -f "$cred_file" ]] || { echo "❌ credentials 없음: $cred_file"; return 1; }
-
-    local result
-    result=$(python3 - "$cred_file" "$CLAUDE_OAUTH_CLIENT_ID" "$CLAUDE_TOKEN_ENDPOINT" << 'PYEOF'
-import json, sys, time, urllib.request
-
-cred_file, client_id, endpoint = sys.argv[1], sys.argv[2], sys.argv[3]
-creds = json.load(open(cred_file))
-
-# 계정 키 찾기
-acct_key = next((k for k, v in creds.items() if isinstance(v, dict) and 'refreshToken' in v), None)
-if not acct_key:
-    print("ERROR:no_refresh_token"); sys.exit(1)
-
-refresh_token = creds[acct_key]['refreshToken']
-
-payload = json.dumps({
-    "grant_type": "refresh_token",
-    "refresh_token": refresh_token,
-    "client_id": client_id,
-}).encode()
-
-req = urllib.request.Request(endpoint, data=payload, headers={
-    "Content-Type": "application/json",
-    "User-Agent": "claude-cli/2.1.37",
-})
-try:
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        data = json.loads(resp.read())
-except urllib.error.HTTPError as e:
-    print(f"ERROR:http_{e.code}:{e.read().decode()[:100]}"); sys.exit(1)
-except Exception as e:
-    print(f"ERROR:{e}"); sys.exit(1)
-
-if 'access_token' not in data:
-    print(f"ERROR:no_access_token:{data}"); sys.exit(1)
-
-# credentials 갱신
-creds[acct_key]['accessToken']  = data['access_token']
-creds[acct_key]['refreshToken'] = data.get('refresh_token', refresh_token)  # rotate if provided
-creds[acct_key]['expiresAt']    = int((time.time() + data['expires_in']) * 1000)
-
-with open(cred_file, 'w') as f:
-    json.dump(creds, f, indent=2)
-
-import datetime
-new_exp = datetime.datetime.fromtimestamp(creds[acct_key]['expiresAt'] / 1000).strftime('%H:%M')
-print(f"OK:{new_exp}")
-PYEOF
-    ) || true
-
-    if [[ "$result" == OK:* ]]; then
-        local new_exp="${result#OK:}"
-        echo "✅ 토큰 갱신 완료 — 새 만료: ${new_exp}"
-        return 0
-    else
-        echo "❌ 갱신 실패: ${result#ERROR:}"
-        return 1
-    fi
-}
+# ── refresh (재동기화 전용 — 외부 엔드포인트 호출 없음) ────────────────────────
 
 cmd_refresh() {
-    echo "=== Headless 토큰 갱신 ==="
-    echo "  갱신 전: $(account_info "$CREDENTIALS")"
-    if do_headless_refresh "$CREDENTIALS"; then
-        echo "  갱신 후: $(account_info "$CREDENTIALS")"
-        # 활성 프로필과 동기화
-        for profile_dir in "$PROFILES_DIR"/*/; do
-            local pcred="$profile_dir/credentials.json"
-            [[ -f "$pcred" ]] || continue
-            local prof_email cur_email
-            prof_email=$(python3 -c "import json; d=json.load(open('$pcred')); [print(v.get('emailAddress','')) for v in d.values() if isinstance(v,dict)]" 2>/dev/null | head -1 || echo "")
-            cur_email=$(python3  -c "import json; d=json.load(open('$CREDENTIALS')); [print(v.get('emailAddress','')) for v in d.values() if isinstance(v,dict)]" 2>/dev/null | head -1 || echo "")
-            if [[ -n "$prof_email" && "$prof_email" == "$cur_email" ]]; then
-                cp "$CREDENTIALS" "$pcred"
-                echo "  📋 프로필 [$(basename "$profile_dir")] 동기화 완료"
-            fi
-        done
+    echo "=== 자격증명 재동기화 (Keychain ↔ 파일) ==="
+    echo "  ℹ️  실제 토큰 갱신은 Claude CLI가 자동 수행합니다."
+    echo "     (외부 OAuth refresh 엔드포인트 직접 호출은 토큰 패밀리 폐기 위험이라 하지 않습니다.)"
+    echo ""
+
+    local live
+    live="$(_get_live_json)" || { echo "오류: 활성 자격증명 없음. /login 필요."; exit 1; }
+
+    if [[ -n "$(_read_keychain)" ]]; then
+        # Keychain이 주 저장소 → 파일로 미러
+        printf '%s' "$live" > "$CREDENTIALS"
+        chmod 600 "$CREDENTIALS"
+        echo "  ✓ Keychain → 파일 미러 완료"
+    else
+        # 파일만 있으면 Keychain으로 승격
+        _write_keychain "$live"
+        echo "  ✓ 파일 → Keychain 승격 완료"
     fi
+
+    # 활성 계정과 토큰이 동일한 프로필 저장본도 최신화 (best-effort)
+    local live_hash
+    live_hash="$(printf '%s' "$live" | _hash_creds)"
+    for profile_dir in "$PROFILES_DIR"/*/; do
+        [[ -d "$profile_dir" ]] || continue
+        local pcred="$profile_dir/credentials.json"
+        [[ -f "$pcred" ]] || continue
+        local phash
+        phash="$(_hash_creds < "$pcred")"
+        if [[ -n "$live_hash" && "$phash" == "$live_hash" ]]; then
+            printf '%s' "$live" > "$pcred"
+            chmod 600 "$pcred"
+            echo "  📋 프로필 [$(basename "$profile_dir")] 동기화 완료"
+        fi
+    done
+    echo ""
+    echo "  $(printf '%s' "$live" | _fmt_creds)"
 }
 
 # ── main ──────────────────────────────────────────────────────────────────────

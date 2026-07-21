@@ -64,6 +64,33 @@ done
 pending_count="$(find "${DRAFTS_DIR}/pending" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
 echo "✅ 배치 완료 — pending ${pending_count}건, 만료 처리 ${expired}건"
 
+# [2026-07-11 P3] 조용한 무산출 감시 — '선별>0인데 draft-created=0'이 3일+ 연속이면 경고.
+#   근거: 이번 30일 좀비(select UTC날짜 vs nightly KST날짜 불일치로 추출 조용히 스킵)는
+#   crash가 아니라 무산출이라 on_fail trap이 못 잡았다. 이 감시가 그 '눈'이 된다.
+DRY_STREAK="$(node -e '
+const fs=require("fs");
+const L=process.env.HOME+"/jarvis/runtime/ledger/skill-loop.jsonl";
+let lines=[]; try{lines=fs.readFileSync(L,"utf8").trim().split("\n");}catch(e){console.log(0);process.exit(0);}
+const byDay={};
+for(const l of lines){try{const o=JSON.parse(l);const d=(o.ts||"").slice(0,10);const e=o.event;
+  byDay[d]=byDay[d]||{sel:0,draft:0};
+  if(e==="selected")byDay[d].sel++; else if(e==="draft-created")byDay[d].draft++;
+}catch(_){}}
+const days=Object.keys(byDay).sort();
+let streak=0;
+for(let i=days.length-1;i>=0;i--){const v=byDay[days[i]];
+  if(v.sel>0 && v.draft===0) streak++;
+  else if(v.sel>0 && v.draft>0) break;
+}
+console.log(streak);
+' 2>/dev/null || echo 0)"
+if [ "${DRY_STREAK:-0}" -ge 3 ]; then
+  echo "⚠️ 조용한 무산출 ${DRY_STREAK}일 연속 — jarvis-system 경고 송출"
+  node "${HOME}/.jarvis/scripts/discord-visual.mjs" --type stats \
+    --data "{\"title\":\"⚠️ skill-loop 조용한 무산출 ${DRY_STREAK}일 연속\",\"data\":{\"증상\":\"선별은 되는데 초안 생성 0건\",\"의심\":\"추출 게이트·경로 이슈\",\"점검\":\"skill-loop-extract 로그 + selected/draft-created ledger\",\"시각\":\"$(date '+%F %T KST')\"},\"timestamp\":\"${TODAY}\"}" \
+    --channel jarvis-system >/dev/null 2>&1 || true
+fi
+
 # 본 가동 시: 신규 초안 Discord 결재 카드 송출 (DRYRUN=1이면 생략)
 if [ "${DRYRUN}" != "1" ]; then
   node "${SCRIPTS_DIR}/skill-loop-notify.mjs" || echo "⚠️ 카드 송출 실패 (배치 결과는 유효)"

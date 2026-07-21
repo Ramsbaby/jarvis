@@ -207,7 +207,18 @@ MSG=$(echo "$SUMMARY" | sed '/^---/d')
 
 log "$MSG"
 
-if [[ "$HAS_ISSUE" == "yes" ]]; then
+# 24h throttle — 동일 문제 알림 하루 1회 (2026-07-19 인프라 지혈: 94건 반복 도배 방지)
+# ledger 기록(관측)은 위에서 매번 유지하고, Discord 발송만 제한한다.
+THROTTLE_STATE="${HOME}/jarvis/runtime/state/tasks-integrity-audit-last-alert.txt"
+THROTTLE_OK=yes
+if [[ -f "$THROTTLE_STATE" ]]; then
+    LAST_ALERT=$(cat "$THROTTLE_STATE" 2>/dev/null || echo 0)
+    [[ "$LAST_ALERT" =~ ^[0-9]+$ ]] || LAST_ALERT=0
+    (( $(date +%s) - LAST_ALERT < 86400 )) && THROTTLE_OK=no
+fi
+
+if [[ "$HAS_ISSUE" == "yes" && "$THROTTLE_OK" == "yes" ]]; then
+    date +%s > "$THROTTLE_STATE"
     WEBHOOK=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' "$CONFIG_FILE" 2>/dev/null || true)
     if [[ -n "${WEBHOOK:-}" ]]; then
         PAYLOAD=$(jq -n --arg m "$MSG" '{content: $m, allowed_mentions: {parse: []}}')

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌸 Michelle's Korean Class — v2</title>
+<style>
+:root {
+  --primary: #E8457A;
+  --accent: #7C5CBF;
+  --accent2: #F59E0B;
+  --teal: #14B8A6;
+  --bg: #FFF5F8;
+  --card: #FFFFFF;
+  --border: #F0D0DC;
+  --text: #2D1B2E;
+  --muted: #8B6A7A;
+  --green: #10B981;
+  --red: #EF4444;
+  --skz: #FF4500;
+  --atz: #1A1A4E;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+/* 노란 발광 hover — 보람님 영구 요청: 어휘·표현·문법·문화·퀴즈 칸에 마우스 대면 노란 테두리 발광 */
+.word-card:hover,.gram-example:hover,.expr-box:hover,.dialogue-box:hover,.compare-box:hover,.culture-box:hover,.roleplay-box:hover,.quiz-opt:hover:not(:disabled){
+  border-color:#FBBF24!important;
+  box-shadow:0 0 0 3px rgba(251,191,36,.5),0 6px 20px rgba(251,191,36,.35)!important;
+  transition:all .2s;
+}
+body{font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif;background:var(--bg);color:var(--text);font-size:16px;line-height:1.7}
+
+.cover{background:linear-gradient(135deg,#7C3AED 0%,#C026D3 45%,#E8457A 100%);padding:48px 28px;text-align:center;color:#fff}
+.cover h1{font-size:30px;font-weight:900;margin-bottom:6px}
+.cover p{font-size:15px;color:rgba(255,255,255,.82);margin-bottom:4px}
+.cover-badges{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:14px}
+.badge{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);border-radius:20px;padding:4px 13px;font-size:12px}
+
+.unit-tabs{display:flex;overflow-x:auto;background:#fff;border-bottom:2px solid var(--border);padding:0 12px;position:sticky;top:0;z-index:50}
+.unit-tab{padding:13px 16px;cursor:pointer;font-size:13px;font-weight:700;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap;transition:all .2s}
+.unit-tab:hover{color:var(--primary)}
+.unit-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+
+.unit-content{display:none;max-width:880px;margin:0 auto;padding:28px 18px}
+.unit-content.active{display:block}
+
+.section{margin-bottom:32px}
+.section-title{font-size:17px;font-weight:800;color:var(--accent);margin-bottom:14px;padding-bottom:7px;border-bottom:2px solid var(--border)}
+.section-sub{font-size:13px;color:var(--muted);margin-bottom:14px;font-style:normal}
+
+/* Timing badge */
+.time-badge{display:inline-block;background:linear-gradient(90deg,var(--primary),var(--accent));color:#fff;border-radius:12px;padding:3px 12px;font-size:12px;font-weight:700;margin-bottom:14px}
+
+/* Word Cards */
+.word-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:12px}
+.word-card{background:var(--card);border:1.5px solid var(--border);border-radius:14px;padding:14px 10px;text-align:center;cursor:pointer;transition:all .3s;box-shadow:0 2px 8px rgba(232,69,122,.07)}
+.word-card:hover{transform:translateY(-3px);box-shadow:0 6px 18px rgba(232,69,122,.17)}
+.word-card.flipped{background:linear-gradient(135deg,var(--accent),var(--primary));color:#fff;border-color:transparent}
+.word-kr{font-size:20px;font-weight:800;margin-bottom:3px}
+.word-rom{font-size:11px;color:var(--muted);margin-bottom:5px}
+.word-card.flipped .word-rom{color:rgba(255,255,255,.7)}
+.word-en{font-size:13px;font-weight:600}
+
+/* Grammar Box */
+.gram-box{background:linear-gradient(135deg,#F3EEFF,#FFF0F5);border-left:4px solid var(--accent);border-radius:0 14px 14px 0;padding:16px 20px;margin-bottom:14px}
+.gram-box h3{font-size:17px;font-weight:800;color:var(--accent);margin-bottom:8px}
+.gram-box p{font-size:14px;margin-bottom:6px;color:var(--text)}
+.pattern{background:#3D0A4F;color:#FFD6E8;border-radius:10px;padding:10px 18px;font-size:15px;font-weight:700;text-align:center;margin:10px 0;letter-spacing:.5px}
+.gram-example{background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:11px 15px;margin:7px 0}
+.gem-kr{font-size:16px;font-weight:700}
+.gem-en{font-size:13px;color:var(--muted);font-style:normal}
+.gram-tip{background:#FFF8E7;border:1.5px solid #F0D88A;border-radius:10px;padding:11px 15px;margin-top:8px;font-size:13px}
+.gram-tip strong{color:#92400E}
+
+/* Expression */
+.expr-box{background:linear-gradient(135deg,#FFF0F5,#F3EEFF);border-left:4px solid var(--primary);border-radius:0 12px 12px 0;padding:14px 18px;margin-bottom:12px}
+.expr-kr{font-size:18px;font-weight:700}
+.expr-rom{font-size:12px;color:var(--muted);margin:2px 0}
+.expr-en{font-size:14px;color:var(--accent);font-style:normal}
+
+/* Dialogue */
+.dialogue-box{background:var(--card);border:1.5px solid var(--border);border-radius:16px;padding:18px;margin-bottom:14px}
+.dlg-title{font-size:13px;font-weight:700;color:var(--primary);margin-bottom:12px}
+.d-line{display:flex;gap:10px;margin-bottom:9px;align-items:flex-start}
+.d-who{font-size:11px;font-weight:800;color:var(--accent);min-width:58px;padding-top:3px}
+.d-kr{font-size:15px;font-weight:600}
+.d-en{font-size:13px;color:var(--muted);font-style:normal}
+
+/* Member Cards */
+.member-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
+.member-card{border:1.5px solid var(--border);border-radius:14px;padding:14px;text-align:center}
+.member-card.skz{background:linear-gradient(135deg,#FF450011,#FF450022);border-color:#FF450044}
+.member-card.atz{background:linear-gradient(135deg,#1A1A4E11,#7C5CBF22);border-color:#7C5CBF44}
+.member-card.star{border-color:var(--primary);background:linear-gradient(135deg,#FFF0F5,#F3EEFF);box-shadow:0 4px 16px rgba(232,69,122,.2)}
+.m-kr{font-size:20px;font-weight:800;color:var(--primary)}
+.m-rom{font-size:12px;color:var(--muted);margin:2px 0}
+.m-en{font-size:13px;color:var(--accent);font-weight:600}
+.m-role{font-size:11px;color:var(--muted)}
+
+/* Culture */
+.culture-box{background:#FFF8E7;border:1.5px solid #F0D88A;border-radius:14px;padding:16px 18px;margin-bottom:12px}
+.culture-title{font-size:15px;font-weight:700;color:#B45309;margin-bottom:9px}
+.culture-box p{font-size:14px;color:var(--text);margin-bottom:5px}
+.culture-en{font-size:13px;color:#92400E;font-style:normal;margin-top:6px}
+.compare-box{background:linear-gradient(135deg,#EFF6FF,#F0FDF4);border:1.5px solid #93C5FD;border-radius:14px;padding:16px 18px;margin-bottom:12px}
+.compare-title{font-size:15px;font-weight:700;color:#1D4ED8;margin-bottom:10px}
+.compare-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;font-size:14px}
+.flag-kr{font-size:12px;font-weight:800;color:#DC2626;min-width:64px;padding-top:2px}
+.flag-us{font-size:12px;font-weight:800;color:#2563EB;min-width:64px;padding-top:2px}
+.compare-text{flex:1;color:var(--text);line-height:1.5}
+.compare-note{font-size:13px;color:#1D4ED8;font-style:normal;margin-top:8px;padding:8px 12px;background:rgba(147,197,253,.2);border-radius:8px}
+
+/* Roleplay */
+.roleplay-box{background:linear-gradient(135deg,#F0FDF4,#ECFDF5);border:1.5px solid #A7F3D0;border-radius:14px;padding:16px 18px;margin-bottom:12px}
+.roleplay-title{font-size:14px;font-weight:700;color:#065F46;margin-bottom:10px}
+.rp-prompt{font-size:14px;color:var(--text);margin-bottom:6px}
+.rp-hint{font-size:13px;color:#059669;font-style:normal}
+
+/* Quiz */
+.quiz-section{background:var(--card);border-radius:16px;padding:18px;border:1.5px solid var(--border)}
+.quiz-q{margin-bottom:18px}
+.q-text{font-size:14px;font-weight:700;margin-bottom:9px}
+.quiz-options{display:flex;flex-wrap:wrap;gap:8px}
+.quiz-opt{background:#F8F0F3;border:1.5px solid var(--border);border-radius:10px;padding:7px 14px;cursor:pointer;font-size:13px;transition:all .2s}
+.quiz-opt:hover:not(:disabled){border-color:var(--primary);background:#FFF0F5}
+.quiz-opt.correct{background:#D1FAE5;border-color:#10B981;color:#065F46;font-weight:700}
+.quiz-opt.wrong{background:#FEE2E2;border-color:#EF4444;color:#7F1D1D}
+.ans-btn{background:linear-gradient(90deg,var(--primary),var(--accent));color:#fff;border:none;border-radius:10px;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:700;margin-top:5px}
+.ans-reveal{display:none;background:#D1FAE5;border-radius:10px;padding:9px 13px;margin-top:7px;font-size:14px;font-weight:600;color:#065F46}
+.ans-reveal.show{display:block}
+
+/* SKZ section */
+.skz-banner{background:linear-gradient(135deg,#9D4EDD,#FF4500);color:#fff;border-radius:16px;padding:16px 20px;margin-bottom:16px;text-align:center}
+.skz-banner h3{font-size:18px;font-weight:900;margin-bottom:4px}
+.skz-banner p{font-size:13px;opacity:.85}
+
+/* Drag hint */
+.flip-hint{text-align:center;font-size:12px;color:var(--muted);margin-bottom:12px;font-style:normal}
+
+
+/* 이미지 배너 */
+.unit-banner{width:100%;height:180px;object-fit:cover;border-radius:16px;margin-bottom:18px;display:block}
+.unit-banner-wrap{position:relative;margin-bottom:20px;border-radius:16px;overflow:hidden}
+.unit-banner-wrap img{width:100%;height:180px;object-fit:cover;display:block}
+.unit-banner-overlay{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.65));padding:14px 18px;color:#fff}
+.unit-banner-overlay h2{font-size:18px;font-weight:900}
+.unit-banner-overlay p{font-size:13px;opacity:.85}
+
+/* 문화 이미지 */
+.culture-img{width:100%;height:160px;object-fit:cover;border-radius:10px;margin-bottom:10px;display:block}
+.culture-img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:16px}
+.culture-img-card{border-radius:14px;overflow:hidden;border:1.5px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.culture-img-card img{width:100%;height:130px;object-fit:cover;display:block}
+.culture-img-card-body{padding:10px 12px;background:#fff}
+.culture-img-card-title{font-size:13px;font-weight:700;color:var(--accent)}
+.culture-img-card-desc{font-size:12px;color:var(--muted)}
+
+/* 음식 이미지 그리드 */
+.food-img-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.food-img-item{text-align:center}
+.food-img-item img{width:100%;height:100px;object-fit:cover;border-radius:10px;margin-bottom:5px}
+.food-img-item p{font-size:12px;color:var(--muted);font-weight:600}
+
+@media print{.unit-banner-wrap{break-inside:avoid}.culture-img-card{break-inside:avoid}.food-img-grid{break-inside:avoid}}
+@media print{.unit-tabs{display:none}.unit-content{display:block!important;page-break-after:always}}
+</style>
+</head>

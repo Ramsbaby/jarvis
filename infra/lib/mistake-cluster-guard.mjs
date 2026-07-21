@@ -29,6 +29,82 @@ const METRICS_FILE = join(STATE_DIR, 'cluster-recurrence-metrics.jsonl');
  * 나중에 외부 파일로 옮길 수 있음
  */
 const CLUSTER_DEFINITIONS = {
+  'cl-081997ea83d6da01': {
+    name: 'Idempotency Violation - Duplicate Side Effects on Re-execution',
+    seedPattern: '검증 목적의 재실행이 중복 버그 유발 — 멱등성 부재',
+    memberPatterns: [
+      '검증 목적의 재실행이 중복 버그 유발',
+      '자체 검증 기능(중복 방지 가드) 추가했다고 선언 후 실제로는 작동 안 됨',
+      '검증 로직 동작 미확인 후 재실행 의도 → 부작용 생성',
+      '자가 판단 오류 → 추정 기반 재실행 → 중복 부작용 유발',
+      '단일 사이클 검증만 실행 — 전체 패턴 교차검증 누락',
+    ],
+    guards: [
+      // Guard 1: send/create/insert 함수에 이미 완료 여부 체크 강제
+      {
+        id: 'idempotency-key-validation',
+        type: 'pre-execution-hook',
+        action: 'check_idempotency_key',
+        params: { timeout_secs: 10 },
+        description: '모든 부작용 함수(send, create, insert) 실행 전 이미 완료 상태 확인',
+      },
+      // Guard 2: 실행 로그 대조를 통한 중복 실행 방지
+      {
+        id: 'execution-log-dedup',
+        type: 'execution-tracker',
+        action: 'check_execution_log',
+        params: {
+          log_file: '~/.jarvis/runtime/state/execution-log.jsonl',
+          hash_by_input: true,
+        },
+        description: '입력값 기반 해시로 동일 입력 재실행 감지 및 skip 처리',
+      },
+      // Guard 3: 상태 DB에 unique key 체크
+      {
+        id: 'unique-key-db-check',
+        type: 'state-db-validator',
+        action: 'validate_unique_constraint',
+        params: {
+          db_path: '~/.jarvis/runtime/state/execution-state.db',
+          fields: ['operation_type', 'target_id', 'input_hash'],
+        },
+        description: 'SQLite 상태 DB에 unique constraint를 통한 중복 실행 방지',
+      },
+      // Guard 4: 재실행 시뮬레이션 검증 (동일 입력 2회 실행 → 2번째는 skip)
+      {
+        id: 'reexecution-simulation-test',
+        type: 'test-runner',
+        action: 'run_idempotency_test',
+        params: {
+          timeout_secs: 30,
+          repeat_count: 2,
+        },
+        description: '동일한 입력으로 함수를 2회 연속 실행하여 멱등성 검증',
+      },
+      // Guard 5: 기존 테스트 무결성 검증
+      {
+        id: 'legacy-test-compatibility',
+        type: 'regression-test',
+        action: 'run_existing_tests',
+        params: { timeout_secs: 60 },
+        description: '멱등성 가드 추가 전 통과하던 모든 기존 테스트 재검증',
+      },
+      // Guard 6: 멱등성 가드 작동 상태 메트릭 추적
+      {
+        id: 'idempotency-metrics-collector',
+        type: 'metric-collector',
+        action: 'collect_idempotency_metrics',
+        params: {
+          metrics_file: '~/.jarvis/runtime/state/idempotency-metrics.jsonl',
+          window_hours: 24,
+        },
+        description: '재실행 방지 여부, 중복 감지 횟수, skip 비율 등을 메트릭으로 추적',
+      },
+    ],
+    escalationPath: 'idempotency-design-review',
+    ttl_days: 30,
+    priority: 'high',
+  },
   'cl-1b6f71eed569a8b7': {
     name: 'Auditor Trust Without Cross-Validation',
     seedPattern: '감사관 오류 미검증 — 단방향 신뢰로 재검증 없음',
@@ -198,6 +274,141 @@ const CLUSTER_DEFINITIONS = {
     escalationPath: 'health-advice-quality-review',
     ttl_days: 60,
     priority: 'critical',
+  },
+  'cl-5f04f13d1c3d759d': {
+    name: 'Rule Recognition Without Execution + False State Reporting',
+    seedPattern: '기존 규칙 인식했으나 실행 누락 + 상태 허위 보고',
+    memberPatterns: [
+      '기존 규칙 인식했으나 실행 누락 + 상태 허위 보고',
+      '지시 범위를 부분만 적용 (동기화 누락)',
+      '한영병기 규칙 적용 누락 — 문법 표 영어 해석 미제시',
+      '기존 SSoT 규칙 무시',
+      '도구 실행 상태 모호 보고',
+    ],
+    guards: [
+      // Guard 1: 한영병기·HTML 업로드 규칙 자동 검증
+      {
+        id: 'post-edit-lint-validation',
+        type: 'pre-submission-hook',
+        action: 'invoke_post_edit_lint',
+        params: {
+          script_path: '~/.jarvis/lib/post-edit-lint.sh',
+          strict_mode: true,
+          timeout_secs: 30,
+        },
+        description: '편집 후 한영병기·HTML 업로드·동기화 규칙의 실제 적용 여부를 자동 검증',
+      },
+      // Guard 2: 규칙 실행 추적 및 로깅
+      {
+        id: 'rule-execution-audit',
+        type: 'execution-tracker',
+        action: 'invoke_rule_audit',
+        params: {
+          script_path: '~/.jarvis/lib/rule-execution-audit.mjs',
+          rules: ['bilingual-grammar-tables', 'html-upload-path', 'synchronization-complete'],
+          timeout_secs: 20,
+        },
+        description: '선언된 규칙(한영병기, HTML 업로드, 동기화)의 실행 여부를 기록하는 감시 로거',
+      },
+      // Guard 3: 상태 보고 전 검증 가드
+      {
+        id: 'verify-before-report',
+        type: 'pre-report-gate',
+        action: 'invoke_verify_before_report',
+        params: {
+          script_path: '~/.jarvis/lib/verify-before-report.sh',
+          check_rule_execution: true,
+          check_violations: true,
+          timeout_secs: 45,
+        },
+        description: '상태 보고 전 실제 파일·출력 검증 및 규칙 위반 사건 확인으로 거짓 상태 보고 방지',
+      },
+      // Guard 4: 재발 추적 (7일 내)
+      {
+        id: 'cluster-recurrence-tracker',
+        type: 'metric-collector',
+        action: 'track_recurrence_events',
+        params: { window_days: 7 },
+        description: '규칙 위반 재발 사건 기록 및 7일 내 재발 횟수 추적',
+      },
+      // Guard 5: 부분 적용 차단
+      {
+        id: 'partial-execution-blocker',
+        type: 'completion-gate',
+        action: 'block_partial_execution',
+        params: { allow_partial: false, min_rule_pass_rate: 0.66 },
+        description: '규칙 적용률 < 66% 시 상태 보고 차단',
+      },
+    ],
+    escalationPath: 'rule-execution-review',
+    ttl_days: 30,
+    priority: 'high',
+  },
+  'cl-0cece7e70f08a98f': {
+    name: 'Verbal Recurrence Prevention Without Structural Validation',
+    seedPattern: '재발 방지 선언만 하고 구조적 검증 루틴 미구현',
+    memberPatterns: [
+      '재발 방지 선언만 하고 구조적 검증 루틴 미구현',
+      '재발 방지 선언만 하고 구체적 절차 미이행',
+      '재발 방지를 말로만 선언하고 검증 루틴 구조화 미실행',
+      '말로만 재발 방지 약속 후 구체적 절차 없이 같은 실수 반복 위험',
+      '이전 세션 문제는 재검증 불가능함을 사전 공지 없이 검증 완료인 척 보고',
+    ],
+    guards: [
+      {
+        id: 'structural-guard-file-exists',
+        type: 'pre-declaration-hook',
+        action: 'verify_guard_script_exists',
+        params: {
+          script_path: '~/.jarvis/infra/lib/cluster-guard-cl-0cece7e70f08a98f.sh',
+          timeout_secs: 10,
+        },
+        description: '재발 방지 선언 전 대응 가드 스크립트 파일 실존 여부 확인',
+      },
+      {
+        id: 'checklist-auto-run',
+        type: 'checklist-executor',
+        action: 'run_checklist_and_record',
+        params: {
+          script_path: '~/.jarvis/infra/lib/cluster-guard-cl-0cece7e70f08a98f.sh',
+          arg: 'run',
+          require_pass_count: 1,
+          timeout_secs: 30,
+        },
+        description: '선언 후 자동으로 체크리스트 실행하고 PASS/FAIL 판정 기록',
+      },
+      {
+        id: 'declaration-verbal-detector',
+        type: 'text-analyzer',
+        action: 'detect_verbal_only_declaration',
+        params: {
+          script_path: '~/.jarvis/infra/lib/cluster-guard-cl-0cece7e70f08a98f.sh',
+          arg: 'check-declaration',
+          block_on_verbal: true,
+        },
+        description: '재발 방지 선언 텍스트에서 구조적 검증 없는 말뿐인 선언 패턴 감지 및 차단',
+      },
+      {
+        id: 'result-file-evidence-check',
+        type: 'evidence-validator',
+        action: 'validate_result_file_exists',
+        params: {
+          result_dir: '~/.jarvis/runtime/reports/cluster-guard-cl-0cece7e70f08a98f',
+          require_pass_fail_string: true,
+        },
+        description: '결과 파일에 PASS/FAIL 판정 문자열이 실제로 기록되었는지 확인',
+      },
+      {
+        id: 'cluster-recurrence-tracker',
+        type: 'metric-collector',
+        action: 'track_recurrence_events',
+        params: { window_days: 7 },
+        description: '말뿐인 재발 방지 선언 재발 사건 기록 및 7일 내 재발 횟수 추적',
+      },
+    ],
+    escalationPath: 'structural-validation-review',
+    ttl_days: 30,
+    priority: 'high',
   },
 };
 

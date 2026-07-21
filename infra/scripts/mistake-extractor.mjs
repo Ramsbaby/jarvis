@@ -646,7 +646,7 @@ async function main() {
         duration_ms: Math.round(Date.now() - t0),
         result_bytes: resultBytes,
         source: SINGLE_FILE ? 'stop-hook' : 'batch-daily',
-        max_budget_usd: 0.10,
+        max_budget_usd: BUDGET_DAILY_USD,
       };
       if (errMsg) entry.error = errMsg.slice(0, 120);
       appendFileSync(tokenLedgerFile, JSON.stringify(entry) + '\n');

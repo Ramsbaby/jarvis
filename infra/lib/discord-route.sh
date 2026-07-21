@@ -15,6 +15,34 @@
 # 채널 신설 마이그 시 이 함수 본문만 수정 — 모든 cron이 자동 분산.
 
 DISCORD_VISUAL="$HOME/.jarvis/scripts/discord-visual.mjs"
+_CHANNEL_MAP_GUARD="${HOME}/jarvis/infra/guards/validate-channel-map.sh"
+_EGRESS_AUDIT_LOG="${HOME}/jarvis/runtime/logs/egress-audit.log"
+
+# 감사 로그 기록 — 채널/bytes/caller를 append (실패해도 발송 차단 안 함)
+_egress_audit() {
+    local channel="$1" bytes="$2" caller="${3:-unknown}"
+    local ts
+    ts=$(date '+%Y-%m-%dT%H:%M:%S%z')
+    mkdir -p "$(dirname "$_EGRESS_AUDIT_LOG")" 2>/dev/null || true
+    printf '%s channel=%s bytes=%s caller=%s\n' "$ts" "$channel" "$bytes" "$caller" \
+        >> "$_EGRESS_AUDIT_LOG" 2>/dev/null || true
+}
+
+# ── 채널 맵 가드 (cl-975bafeb5bb2be2b) ──────────────────────────────────────
+# 전송 전 channel-map.json ↔ monitoring.json 설정 일치 여부를 검증한다.
+# 불일치 시 전송을 차단하고 stderr에 경고를 출력한다.
+# 가드 스크립트 자체가 없거나 실행 불가인 경우에는 통과시킨다(degraded 허용).
+_channel_map_guard_check() {
+    if [[ ! -x "$_CHANNEL_MAP_GUARD" ]]; then
+        return 0  # 가드 파일 없으면 통과 (degraded mode)
+    fi
+    if ! "$_CHANNEL_MAP_GUARD" --quiet 2>/dev/null; then
+        echo "[discord-route] [GUARD BLOCK] channel-map 검증 실패 — 채널/웹훅 오설정 감지. 전송 차단." >&2
+        echo "[discord-route] 가드 상세: $("$_CHANNEL_MAP_GUARD" 2>&1 || true)" >&2
+        return 1
+    fi
+    return 0
+}
 
 # severity → channel 매핑 (단일 함수, 양쪽 wrapper에서 재사용)
 _discord_route_channel() {
@@ -57,6 +85,8 @@ _discord_route_dedup_ok() {
 discord_route_payload() {
     local severity="$1" payload="$2"
     [ -f "$DISCORD_VISUAL" ] || { echo "[discord-route] visual unavailable"; return 1; }
+    # 채널 맵 가드 검증 (cl-975bafeb5bb2be2b)
+    _channel_map_guard_check || return 1
     local channel ptitle
     channel=$(_discord_route_channel "$severity")
     ptitle=$(printf '%s' "$payload" | jq -r '.title // empty' 2>/dev/null || true)
@@ -64,12 +94,42 @@ discord_route_payload() {
         echo "[discord-route] 중복 차단 (쿨다운 내 동일 알림): ${ptitle:-payload}"
         return 0
     fi
+    _egress_audit "$channel" "${#payload}" "${BASH_SOURCE[1]:-unknown}:${BASH_LINENO[0]:-0}"
     node "$DISCORD_VISUAL" --type stats --data "$payload" --channel "$channel" 2>&1 || true
+}
+
+# raw 채널 직접 발송 — 채널명으로 webhook 조회 후 text content 전송, 감사 로그 기록
+# monitoring.json 직접 접근을 크론 스크립트에서 분리해 egress를 이 함수로 중앙화한다.
+# 사용: discord_route_raw <channel_name> <content>
+discord_route_raw() {
+    local channel_name="$1" content="$2"
+    local monitoring="${HOME}/.jarvis/config/monitoring.json"
+    [ -f "$monitoring" ] || monitoring="${HOME}/jarvis/runtime/config/monitoring.json"
+
+    _channel_map_guard_check || return 1
+
+    local webhook_url
+    webhook_url=$(jq -r --arg ch "$channel_name" '.webhooks[$ch] // empty' "$monitoring" 2>/dev/null || true)
+    if [[ -z "${webhook_url:-}" ]]; then
+        echo "[discord-route] [raw] webhook not found for channel: $channel_name" >&2
+        return 1
+    fi
+
+    local caller="${BASH_SOURCE[1]:-unknown}:${BASH_LINENO[0]:-0}"
+    _egress_audit "$channel_name" "${#content}" "$caller"
+
+    local payload
+    payload=$(jq -n --arg m "$content" '{content: $m, allowed_mentions: {parse: []}}')
+    curl -sS -X POST "$webhook_url" \
+        -H "Content-Type: application/json" \
+        -d "$payload" > /dev/null 2>&1 || true
 }
 
 discord_route() {
     local severity="$1" title="$2" data_kv="$3"
     [ -f "$DISCORD_VISUAL" ] || { echo "[discord-route] visual unavailable"; return 1; }
+    # 채널 맵 가드 검증 (cl-975bafeb5bb2be2b)
+    _channel_map_guard_check || return 1
 
     local channel
     channel=$(_discord_route_channel "$severity")

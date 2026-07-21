@@ -56,6 +56,28 @@ async function main() {
       }
     }
 
+    // 1b) [2026-07-10 보강] 옵션 버튼 라벨에 체크마크(✓✔✅) 사전 노출 — 렌더 아이 빈틈(2026-07-08 사고 벡터).
+    //     정답 옵션 버튼에 ✓가 클릭 전부터 보이면 정답이 노출된다. 이 벡터는 answer 계열 선택자·"정답"
+    //     텍스트에 안 걸려 기존 (1) 검사가 놓쳤다. 상호작용 옵션 버튼의 렌더 텍스트를 직접 검사한다.
+    if (!isAnswerSheet) {
+      const markedBtns = await page.evaluate(() => {
+        const sels = 'button[onclick*="checkDrill"],button[onclick*="checkQuiz"],.drill-btn,.quiz-opt,.quiz-btn,.opt-btn';
+        const marks = ['✓', '✔', '✅', '✔️'];
+        const out = [];
+        document.querySelectorAll(sels).forEach((el) => {
+          const s = window.getComputedStyle(el);
+          const visible = el.offsetParent !== null && s.display !== 'none'
+            && s.visibility !== 'hidden' && parseFloat(s.opacity || '1') > 0.1;
+          const txt = (el.textContent || '').trim();
+          if (visible && marks.some((m) => txt.includes(m))) out.push(txt.replace(/\s+/g, ' ').slice(0, 45));
+        });
+        return out;
+      });
+      if (markedBtns.length) {
+        issues.push({ level: 'FAIL', msg: `옵션 버튼에 정답 표시(✓) 사전 노출 ${markedBtns.length}곳: "${markedBtns[0]}" (클릭 전부터 정답이 보임 — 2026-07-08 사고 벡터)` });
+      }
+    }
+
     // 2) 요약본/숙제 = A4 1장 밀도 (넘침·여백 둘 다 불만).
     if (isHW) {
       await page.emulateMedia({ media: 'print' });

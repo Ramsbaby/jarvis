@@ -435,6 +435,9 @@ export class StreamingMessage {
     this._resumedCount = 0;         // 이어붙인 횟수 (메시지 분할)
     // ----- P3-1: 마커 조기 전송 (CHART_DATA_EARLY_SEND=1 opt-in) -----
     this._markerEarlySent = new Set(); // 조기 전송 완료된 마커 이름 (예: 'CHART_DATA')
+    // [MARKER-ISOLATION 2026-07-13] 긴 응답 분할 시 격리된 마커 원문(TABLE_DATA 등). finalize에서 처리 후 리셋.
+    this._deferredMarkerTail = '';
+    this._inMarkerTail = false;   // 마커 구간 진입 후 후속 텍스트를 모두 tail로 보내는 래치
     // ----- P3-3: A/B 실험 — throttle-v1 variant ('adaptive'|'fixed-700') -----
     this._userId = null;              // handlers.js가 setUserId()로 주입
     this._throttleVariant = null;     // pickVariant 결과 캐싱 (null = 미결정 → 기본 adaptive)
@@ -803,6 +806,23 @@ export class StreamingMessage {
 
     // P3-1: 마커 조기 전송 (opt-in) — 마커가 완성되자마자 이미지 전송 착수
     await this._tryEarlyMarkerSend();
+
+    // [MARKER-ISOLATION 2026-07-13] 긴 응답이 여러 메시지로 분할될 때 TABLE_DATA/CHART_DATA 등
+    // 마커가 중간 chunk에 실려 finalize의 _extractAndSendMarkers(마지막 메시지만 조회)가 놓쳐
+    // raw JSON이 사용자에게 노출되던 버그 차단. 마커 시작(^MARKER:{)부터 buffer 끝까지를 본문
+    // 스트리밍에서 격리 → finalize에서 _deferredMarkerTail로 처리. (마커는 응답 최하단 단독 배치 규칙)
+    if (this._inMarkerTail) {
+      // 이미 마커 구간 — 후속 텍스트(마커 JSON의 나머지 조각 포함)를 전부 tail로.
+      this._deferredMarkerTail += this.buffer;
+      this.buffer = '';
+    } else {
+      const _mIdx = this.buffer.search(/^(?:TABLE_DATA|CHART_DATA|EMBED_DATA|CV2_DATA):\s*[{[]/m);
+      if (_mIdx !== -1) {
+        this._inMarkerTail = true;   // 래치 ON — 마커가 여러 flush에 걸쳐 쪼개져도 나머지 조각까지 격리
+        this._deferredMarkerTail += this.buffer.slice(_mIdx);
+        this.buffer = this.buffer.slice(0, _mIdx);
+      }
+    }
 
     // [2026-04-26 RC-1 구조 수정] 책임 경계 — buffer는 호출자(_flushInner)만 슬라이스.
     //  계약: _sendOrEdit(content, isFinal)는 단일 chunk(<= STREAM_MAX_CHARS)를 받아
@@ -1392,6 +1412,8 @@ export class StreamingMessage {
     this._recordExperimentOutcome();
     // GC 힌트: 대형 버퍼 참조 해제 (응답이 길수록 효과적)
     this.buffer = '';
+    this._deferredMarkerTail = ''; // [MARKER-ISOLATION] 다음 응답 위해 격리 버퍼 리셋
+    this._inMarkerTail = false;
     this._statusLines = [];
   }
 
@@ -1681,7 +1703,9 @@ export class StreamingMessage {
   /** Post-finalize: extract EMBED_DATA:/CHART_DATA:/CV2_DATA:/TABLE_DATA: markers and send as Discord rich embeds or Components V2. */
   async _extractAndSendMarkers() {
     if (!this.currentMessage) return;
-    let content = this.currentMessage.content || '';
+    // [MARKER-ISOLATION 2026-07-13] 스트리밍 중 본문에서 격리해둔 마커 원문을 합쳐 추출 대상에 포함.
+    // (긴 응답에서 마커가 중간 chunk로 실려 마지막 메시지에 없는 경우를 복구)
+    let content = (this.currentMessage.content || '') + (this._deferredMarkerTail ? '\n' + this._deferredMarkerTail : '');
 
     let embedJson = null;
     let chartJson = null;
@@ -1886,7 +1910,9 @@ export class StreamingMessage {
       // TABLE_DATA → Discord mobile-friendly 텍스트 (Chrome PNG 제거 — 2026-04-15)
       // Chrome 렌더링 PNG 대신 bullet list 형식으로 전송
       if (tableJson) {
-        const { title, columns = [], dataSource = [] } = tableJson;
+        let { title, columns = [], dataSource = [] } = tableJson;
+        // string[] columns(["A","B"]) -> object[] normalize; supports both prompt formats
+        columns = columns.map(c => (typeof c === 'string' ? { title: c, dataIndex: c } : c));
         if (columns.length > 0 && dataSource.length > 0) {
           try {
             const lines = [];

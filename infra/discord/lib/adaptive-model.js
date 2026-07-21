@@ -86,7 +86,7 @@ export function classifyPrompt(text) {
  * @param {string} [taskType] 태스크 타입 식별자 (예: 'rag-debug', 'complex-code')
  * @returns {{ tier: string, downgraded: boolean, reason: string }}
  */
-export function resolveModelTier(channelTier, prompt, taskType) {
+export function resolveModelTier(channelTier, prompt, taskType, analysisChannel = false) {
   // Opus 4.7 전용 라우팅: rag-debug / complex-code 태스크에 한정 적용
   if (taskType && OPUS47_TASK_TYPES.has(taskType)) {
     return { tier: 'opus47', downgraded: false, reason: `opus47-tasktype:${taskType}` };
@@ -97,6 +97,14 @@ export function resolveModelTier(channelTier, prompt, taskType) {
   }
   const kind = classifyPrompt(prompt);
   if (kind === 'deep') {
+    // [2026-07-11] 분석 채널(ceo/career/market)의 deep 질문은 진짜 Opus 직접으로 격상.
+    //   근거: opusplan은 Plan 모드에서만 Opus를 쓰는데 봇은 Plan 모드 미발동(bypassPermissions)
+    //   → deep-keep으로 baseTier='opusplan'을 유지해도 SDK 실행은 Sonnet뿐(Opus 사고 미발동, 실측 확인).
+    //   분석 채널은 산출물이 분석 텍스트 자체(생각=결과물)라 2단계 재작성이 아니라 Opus 직접이 맞다.
+    //   비분석 채널은 기존 유지(opusplan=실행 Sonnet) — 비용 통제.
+    if (analysisChannel && (baseTier === 'opusplan' || baseTier === 'power')) {
+      return { tier: 'power', upgraded: true, downgraded: false, reason: 'deep-analysis-opus-direct' };
+    }
     return { tier: baseTier, downgraded: false, reason: 'deep-keep' };
   }
   if (kind === 'trivial') {

@@ -43,6 +43,12 @@ const SENSITIVE_PATTERNS = [
   /\.keystore\b/i,                                // Java keystore
   /\.gpg$|secring\.\w+/i,                         // GPG keyrings
   /\bmacos[_-]?keychain\b/i,
+  // 브라우저 보안 설정 파일 — 봇(모델)의 자가 수정 차단 (2026-07-21).
+  //   browser-allowlist.json은 PreToolUse 훅이 매 호출 hot-reload하므로, 봇이 이 파일을
+  //   Edit/Write/Bash로 고치면 같은 턴 안에서 도메인 화이트리스트를 즉시 우회 가능.
+  //   E2E(2026-07-21)에서 실제로 봇이 wikipedia.org를 스스로 추가해 우회함을 실측 → 차단.
+  /\bbrowser-allowlist\.json\b/i,                 // 브라우저 도메인 화이트리스트 SSoT
+  /\bdiscord-mcp\.json\b/i,                        // 봇 MCP 서버 설정 (playwright 플래그 포함)
 ];
 
 /**

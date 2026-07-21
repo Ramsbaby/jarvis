@@ -26,6 +26,7 @@ const { Client, GatewayIntentBits } = require('discord.js');
 const HOME = homedir();
 const ENV_FILE = `${HOME}/jarvis/runtime/.env`;
 const LEDGER = `${HOME}/jarvis/runtime/state/preply-complaint-ledger.jsonl`;
+const UPLOAD_LEDGER = `${HOME}/jarvis/runtime/state/preply-upload-ledger.jsonl`; // 2026-07-13: 업로드 실패 상관분석용
 const THRESHOLD = 3; // 미커버 불만이 이 횟수 이상이면 "검사 추가 필요" 승격
 
 const argv = process.argv.slice(2);
@@ -65,10 +66,10 @@ function loadSeen() {
 }
 
 async function sendNotify(text) {
-  // jarvis-system webhook으로 운영 알림 (interview-ssot-audit과 동일 패턴). 실패는 비차단.
+  // jarvis 채널 webhook으로 알림 (2026-07-13 주인님 지시로 jarvis-system → jarvis 변경). 실패는 비차단.
   try {
     const cfg = JSON.parse(readFileSync(`${HOME}/jarvis/runtime/config/monitoring.json`, 'utf8'));
-    const url = cfg.webhooks?.['jarvis-system'];
+    const url = cfg.webhooks?.['jarvis'];
     if (!url) return;
     await fetch(url, {
       method: 'POST',
@@ -112,6 +113,18 @@ client.once('clientReady', async () => {
       }
     }
 
+    // 업로드 실패 상관분석 (2026-07-13): 같은 창(window)의 실제 업로드 실패를 원장에서 읽어
+    // 보람님 '파일전송' 불만과 대조 → "미커버(원인 모름)" 대신 실제 원인을 대령한다.
+    const uploadFails = [];
+    if (existsSync(UPLOAD_LEDGER)) {
+      for (const l of readFileSync(UPLOAD_LEDGER, 'utf8').split('\n')) {
+        if (!l.trim()) continue;
+        let r; try { r = JSON.parse(l); } catch { continue; }
+        if (new Date(r.ts).getTime() < cutoff) continue;
+        if (r.result && r.result !== 'ok') uploadFails.push(r);
+      }
+    }
+
     // 리포트 — 카테고리별 빈도 + 커버 여부
     const covMap = Object.fromEntries(CATS.map((c) => [c.key, c.covered]));
     const rows = Object.entries(catCount).sort((a, b) => b[1] - a[1]);
@@ -135,6 +148,22 @@ client.once('clientReady', async () => {
     } else {
       console.log('✅ 미커버 반복 불만 없음 — 현재 검사가 반복 불만을 다 잡고 있음.');
     }
+
+    // 파일전송 불만 ↔ 실제 업로드 실패 상관분석 (자동 원인 대령)
+    const fileComplaints = catCount['파일전송'] || 0;
+    if (fileComplaints > 0 || uploadFails.length > 0) {
+      const recent = uploadFails.slice(-3).map((r) => {
+        const fname = (r.files?.[0]?.path || '').split('/').pop() || '?';
+        return `${fname}:${r.result}${r.error ? `(${String(r.error).slice(0, 40)})` : ''}`;
+      }).join(' / ');
+      const corr = uploadFails.length
+        ? `📎 파일전송 상관분석: 보람님 불만 ${fileComplaints}건 ↔ 실제 업로드 실패 ${uploadFails.length}건 확인됨 (원인 규명) — 최근: ${recent}`
+        : `📎 파일전송 상관분석: 보람님 불만 ${fileComplaints}건 있으나 업로드 원장엔 실패 0건 → 업로드는 성공, 생성/내용 문제 가능성 (verify/생성게이트 점검 방향)`;
+      console.log(corr);
+      // 실제 업로드 실패가 잡혔거나, 불만이 임계 이상이면 Discord 알림
+      if (notify && (uploadFails.length > 0 || fileComplaints >= THRESHOLD)) await sendNotify(corr);
+    }
+
     clearTimeout(timeout);
     await client.destroy();
     process.exit(0);

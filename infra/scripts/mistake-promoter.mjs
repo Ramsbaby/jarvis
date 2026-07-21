@@ -51,6 +51,9 @@ const TASK_STORE_MJS = join(INFRA, 'lib', 'task-store.mjs');
 // ─── 정책 상수 ───
 const MAX_LLM_CALLS = parseInt(process.env.PROMOTER_MAX_LLM_CALLS || '3', 10); // ⑥ 비용 상한
 const MAX_APPLY = parseInt(process.env.PROMOTER_MAX_APPLY || '1', 10);          // 실행당 룰 적용 상한
+// 룰→훅 2차 승격 임계 (2026-07-11 신설): tier_a 룰 적용 후에도 7일 재발이 이 값 이상이면
+// "텍스트 룰만으로 교정 실패" 실증으로 보고 결정적 가드(훅/코드) 승격 후보로 플래그
+const ESCALATE_SIZE = parseInt(process.env.PROMOTER_ESCALATE_SIZE || '15', 10);
 const MAX_ACTIVE_BLOCKS = 30;            // autolearn 활성 블록 상한 — 초과분은 아카이브 이동
 const REPORT_FRESH_HOURS = 26;           // 리포트 신선도 경고 임계 (03:30 생성 + 여유)
 const MODEL_JUDGE = 'claude-sonnet-4-6';            // ② 판정용
@@ -158,6 +161,24 @@ function ledgerAppend(entry) {
   appendFileSync(LEDGER_FILE, JSON.stringify({ ts: nowKST(), ...entry }) + '\n', 'utf-8');
 }
 
+// 클러스터별 누적 상태 집합 — 룰→훅 2차 승격 판정용
+// (loadProcessedIds 와 별도 함수: 기존 후보 필터 로직을 건드리지 않기 위함)
+function loadLedgerStatuses() {
+  const map = new Map();
+  if (!existsSync(LEDGER_FILE)) return map;
+  for (const line of readFileSync(LEDGER_FILE, 'utf-8').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const d = JSON.parse(line);
+      if (d.type === 'cluster' && d.cluster_id && d.status) {
+        if (!map.has(d.cluster_id)) map.set(d.cluster_id, new Set());
+        map.get(d.cluster_id).add(d.status);
+      }
+    } catch { /* 손상 라인 무시 */ }
+  }
+  return map;
+}
+
 // ─── jarvis-autolearn.md 블록 관리 ───
 const RULES_HEADER = `# jarvis-autolearn — 오답 클러스터 자동 승격 행동 룰
 
@@ -204,6 +225,14 @@ function applyRuleBlock(cid, title, ruleBlock, cluster) {
   ].join('\n');
   content = rotateBlocks(content + block);
   if (DRY_RUN) { log(`[DRY] 룰 블록 적용 생략: ${cid}`); return 'applied'; }
+  // ── First Domino (2026-07-19 오염 지혈) ──
+  // 검증자 없는 자기참조 룰 승격이 프롬프트를 오염시킨다(같은 룰 17중복이 매일 자동 재등재 = memory poisoning).
+  // autolearn.md 자동 append만 report-only로 강등한다. 판정·ledger·dev-queue·통보는 유지.
+  // 되살리려면 PROMOTER_WRITE_RULES=1. (진짜 승격은 이후 provenance+블라인드 반박관+홀드아웃 게이트로 재설계)
+  if (process.env.PROMOTER_WRITE_RULES !== '1') {
+    log(`[report-only] autolearn 자동 등재 스킵: ${cid} — 판정·ledger는 유지 (오염 지혈)`);
+    return 'report_only';
+  }
   writeFileSync(RULES_FILE, content, 'utf-8');
   return 'applied';
 }
@@ -308,7 +337,31 @@ function main() {
   const candidates = clusters.filter((c) => !processed.has(c.id));
   log(`클러스터 ${clusters.length}개 중 미처리 후보 ${candidates.length}개 (ledger 멱등 필터)`);
 
-  const counters = { applied: 0, held: 0, dev_queue: 0, retro: 0, skip: 0, deferred: 0 };
+  const counters = { applied: 0, held: 0, dev_queue: 0, retro: 0, skip: 0, deferred: 0, escalated: 0 };
+
+  // ─── 룰→훅 2차 승격 (2026-07-11 신설 · LLM 0콜 — 순수 데이터 검사) ───
+  // 배경: tier_a 룰 적용 클러스터는 ledger 멱등성으로 영구 재처리 금지 → 룰이 안 먹혀서
+  // 재발이 지속돼도(예: cl-73cdbbe 재발 91건) 아무도 격상하지 않는 구조 구멍.
+  // 여기서 "룰 적용됨 + 여전히 top_clusters 재발 ≥ 임계" 를 감지해 결정적 가드(훅/코드)
+  // 승격 후보로 플래그하고 retro 채널로 결재를 요청한다. 실행당 최대 3건 (통보 폭주 방지).
+  const statuses = loadLedgerStatuses();
+  const escalations = clusters.filter((c) => {
+    const st = statuses.get(c.id);
+    return st && st.has('applied') && !st.has('escalated_hook_candidate') && c.size >= ESCALATE_SIZE;
+  }).slice(0, 3);
+  for (const c of escalations) {
+    ledgerAppend({
+      type: 'cluster', cluster_id: c.id, seed: c.seed, size: c.size,
+      status: 'escalated_hook_candidate',
+      reason: `tier_a 룰 적용 후에도 최근 7일 재발 ${c.size}건 (임계 ${ESCALATE_SIZE}건 이상) — 텍스트 룰 무효 실증, 결정적 가드(훅/코드) 필요`,
+    });
+    notify('retro', `룰→훅 승격 후보 ${todayKST()} ${c.id}`, {
+      클러스터: c.id, 시드: c.seed, 재발: `${c.size}건`,
+      판정: '텍스트 룰 적용 후에도 재발 지속 — 결정적 가드 필요 (결재 대기)',
+    });
+    counters.escalated += 1;
+    log(`룰→훅 승격 후보 플래그: ${c.id} (size=${c.size}, seed="${c.seed}")`);
+  }
 
   if (candidates.length === 0) {
     log('처리할 신규 클러스터 없음 — metrics 만 기록 후 종료');

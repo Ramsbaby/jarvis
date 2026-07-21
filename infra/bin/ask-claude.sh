@@ -129,12 +129,121 @@ START_TIME=$(date +%s)
 source "${BOT_HOME}/lib/context-loader.sh"
 load_context
 
+# --- Load Execution Verdict Wrapper (Cluster cl-e30aee511af89e13: prevent stderr-based missjudgment) ---
+source "${BOT_HOME}/lib/execution-verdict-wrapper.sh" 2>/dev/null || true
+
+# --- Load Pre-Execution Guard (Cluster cl-e30aee511af89e13: prevent unnecessary re-execution) ---
+source "${BOT_HOME}/lib/pre-execution-guard.sh" 2>/dev/null || true
+
 # --- Requirement check guard (Cluster cl-28e5202af0584c23): Extract and track requirements ---
 # Pre-execution: Extract requirements from prompt
 if [[ -f "${BOT_HOME}/lib/requirement-check-guard.sh" ]]; then
     source "${BOT_HOME}/lib/requirement-check-guard.sh" 2>/dev/null || true
     if command -v check_requirements_pre >/dev/null 2>&1; then
         check_requirements_pre "$TASK_ID" "$PROMPT" 2>/dev/null || true
+    fi
+fi
+
+# --- Duplicate Request Guard (Cluster cl-3d5ba801bdad1df9): 중복 요청 방지 ---
+# 반복 패턴: 2분 내 동일 요청 반복 실행으로 불필요한 비용 + 중복 결과 생성
+# 방어: 동일 요청 감지 시 조기 종료, '이미 처리 중' 메시지 반환
+# 특징:
+#   - 요청 해싱: TASK_ID + PROMPT(처음 256자)의 SHA256
+#   - 2분 내 중복 감지 시 차단
+#   - 중복 감지 사건 로깅 및 통계 업데이트 (자동)
+_DUPLICATE_GUARD="${BOT_HOME}/lib/duplicate-request-guard.mjs"
+if command -v node >/dev/null 2>&1 && [[ -f "$_DUPLICATE_GUARD" ]]; then
+    _DUP_RESULT=$(node "$_DUPLICATE_GUARD" check "$TASK_ID" "$PROMPT" 2>&1)
+    _DUP_EXIT=$?
+    if [[ $_DUP_EXIT -eq 1 ]]; then
+        # 중복 요청 감지: 조기 종료
+        _DUP_MSG=$(echo "$_DUP_RESULT" | jq -r '.message // "이미 처리 중인 요청입니다"' 2>/dev/null || echo "이미 처리 중인 요청입니다")
+        _DUP_REQ_ID=$(echo "$_DUP_RESULT" | jq -r '.request_id // "unknown"' 2>/dev/null || echo 'unknown')
+        _DUP_COUNT=$(echo "$_DUP_RESULT" | jq -r '.recent_count // 0' 2>/dev/null || echo '0')
+        _DUP_HASH=$(echo "$_DUP_RESULT" | jq -r '.request_hash // "unknown"' 2>/dev/null || echo 'unknown')
+
+        # JSONL 로깅 (with extra metadata)
+        log_jsonl "blocked" "duplicate_request_guard: $_DUP_MSG" "0" "request_id=\"$_DUP_REQ_ID\",duplicate_count:$_DUP_COUNT,request_hash=\"$_DUP_HASH\""
+
+        # stderr에 상세 정보 (모니터링 및 디버깅용)
+        printf '[%s] DUPLICATE_REQUEST_GUARD BLOCKED task=%s request_id=%s duplicate_count=%s\n' \
+            "$(date '+%F %H:%M:%S')" "$TASK_ID" "$_DUP_REQ_ID" "$_DUP_COUNT" >&2
+
+        # 사용자에게 메시지 출력 (Discord 라우팅용)
+        echo "$_DUP_MSG"
+
+        # outcome 기록 (실패로 처리)
+        record_outcome "$TASK_ID" "false" "0" "0" 2>/dev/null || true
+
+        exit 98  # 중복 감지 exit code
+    elif [[ $_DUP_EXIT -ne 0 ]]; then
+        # 가드 자체 오류 — 실행 계속 (경고만 기록)
+        _DUP_ERR=$(echo "$_DUP_RESULT" | head -1)
+        log_jsonl "warn" "duplicate_request_guard: error (exit $_DUP_EXIT) — $_DUP_ERR — proceeding" "0"
+    fi
+    unset _DUP_RESULT _DUP_EXIT _DUP_MSG _DUP_REQ_ID _DUP_COUNT _DUP_HASH _DUP_ERR
+fi
+unset _DUPLICATE_GUARD
+
+# --- Idempotency Guard (Cluster cl-3e0048f79eb206f9): 동일 명령 중복 처리 방지 ---
+# 반복 실수: 동일 명령 중복 제출 시 각각 독립적으로 실행 → 상태 혼란 + 중복 결과
+# 방어: SQLite에 명령 해시(task_id+prompt+allowed_tools)와 실행 상태 저장
+#       중복 감지 시 이전 결과 반환 또는 재실행 경고
+if [[ -f "${BOT_HOME}/lib/idempotency-guard.sh" ]]; then
+    source "${BOT_HOME}/lib/idempotency-guard.sh" 2>/dev/null || true
+
+    # 명령 해시 계산 및 상태 확인
+    _IDEM_STATUS=$(check_command_status "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" 2>/dev/null || echo "NOT_FOUND")
+    _IDEM_STATE="${_IDEM_STATUS%%|*}"  # |이전까지만 추출 (NOT_FOUND 또는 DUPLICATE_*)
+
+    if [[ "$_IDEM_STATE" == "DUPLICATE_IN_PROGRESS" ]]; then
+        # 진행 중인 명령 감지: 경고만 하고 계속 진행 (백그라운드 상태 미추적 방지)
+        _IDEM_HASH="${_IDEM_STATUS#*|}"
+        log_jsonl "warn" "idempotency_guard: DUPLICATE_IN_PROGRESS hash=$_IDEM_HASH — proceeding with caution" "0"
+        printf '[%s] IDEMPOTENCY_GUARD WARNING: command already in progress (hash=%s). Be cautious of state confusion.\n' \
+            "$(date '+%F %H:%M:%S')" "$_IDEM_HASH" >&2
+    elif [[ "$_IDEM_STATE" == "DUPLICATE_COMPLETED" ]]; then
+        # 완료된 명령 감지: 이전 결과 경로 추출 후 반환
+        # Format: DUPLICATE_COMPLETED|hash|path|summary
+        _IDEM_HASH=$(echo "$_IDEM_STATUS" | cut -d'|' -f2)
+        _IDEM_RESULT_PATH=$(echo "$_IDEM_STATUS" | cut -d'|' -f3)
+        _IDEM_RESULT_SUMMARY=$(echo "$_IDEM_STATUS" | cut -d'|' -f4-)
+
+        if [[ -f "$_IDEM_RESULT_PATH" ]]; then
+            # 이전 결과 파일이 존재: 내용 로드 및 반환
+            PREV_RESULT=$(cat "$_IDEM_RESULT_PATH")
+            log_jsonl "skip" "idempotency_guard: DUPLICATE_COMPLETED — returning previous result" "0" "path=\"$_IDEM_RESULT_PATH\""
+            printf '[%s] IDEMPOTENCY_GUARD: Returning cached result from %s\n' "$(date '+%F %H:%M:%S')" "$_IDEM_RESULT_PATH" >&2
+            echo "$PREV_RESULT"
+            record_outcome "$TASK_ID" "true" "0" "0" 2>/dev/null || true
+            exit 0
+        else
+            # 이전 결과 파일 누락: 경고하고 재실행
+            log_jsonl "warn" "idempotency_guard: DUPLICATE_COMPLETED but result file missing — re-executing" "0" "path=\"$_IDEM_RESULT_PATH\""
+            printf '[%s] IDEMPOTENCY_GUARD WARNING: Previous result not found — re-executing command\n' \
+                "$(date '+%F %H:%M:%S')" >&2
+        fi
+    elif [[ "$_IDEM_STATE" == "DUPLICATE_FAILED" ]]; then
+        # 실패한 명령 감지: 경고하고 재실행 (재시도 가치 있을 수 있음)
+        _IDEM_HASH="${_IDEM_STATUS#*|}"
+        log_jsonl "info" "idempotency_guard: DUPLICATE_FAILED hash=$_IDEM_HASH — re-executing" "0"
+        printf '[%s] IDEMPOTENCY_GUARD: Previous execution failed — re-executing command\n' \
+            "$(date '+%F %H:%M:%S')" >&2
+    fi
+
+    # 이번 실행 시작 상태 기록
+    _IDEM_HASH=$(record_command_start "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" 2>/dev/null)
+
+    unset _IDEM_STATUS _IDEM_STATE _IDEM_HASH _IDEM_RESULT_INFO _IDEM_RESULT_PATH _IDEM_RESULT_SUMMARY PREV_RESULT
+fi
+
+# --- Repository Path Guard (Cluster cl-5199fed7fdccfc50): Detect and validate repository paths ---
+# 반복 패턴: 파일 읽은 후에도 저장소 판단 역전 / 저장소 구분 역순 오류
+# 방어: 작업 시작 시 모든 관련 저장소를 자동 감지하고, 최신 커밋 타임스탐프 기준으로 정렬 표시
+if [[ -f "${BOT_HOME}/lib/repo-path-guard.sh" ]]; then
+    source "${BOT_HOME}/lib/repo-path-guard.sh" 2>/dev/null || true
+    if command -v repo_guard_auto_detect >/dev/null 2>&1; then
+        repo_guard_auto_detect "$TASK_ID" 2>/dev/null || true
     fi
 fi
 
@@ -272,7 +381,10 @@ if command -v circuit_update >/dev/null 2>&1; then
 fi
 
 RAW_OUTPUT=""
-if [[ -s "$CLAUDE_OUTPUT_TMP" ]]; then RAW_OUTPUT=$(cat "$CLAUDE_OUTPUT_TMP"); fi
+if [[ -s "$CLAUDE_OUTPUT_TMP" ]]; then
+    # claude -p --output-format json은 JSONL 형식을 반환할 수 있음 — 마지막 라인이 최종 result
+    RAW_OUTPUT=$(tail -1 "$CLAUDE_OUTPUT_TMP")
+fi
 
 if [[ $CLAUDE_EXIT -ne 0 ]]; then
     END_TIME=$(date +%s)
@@ -286,6 +398,18 @@ if [[ $CLAUDE_EXIT -ne 0 ]]; then
     else
         log_jsonl "error" "claude exited with code ${CLAUDE_EXIT}" "$DURATION"
     fi
+    # Mark task failure (Cluster cl-e30aee511af89e13: track execution status)
+    if command -v mark_task_failure >/dev/null 2>&1; then
+        mark_task_failure "$TASK_ID" "$CLAUDE_EXIT" 2>/dev/null || true
+    fi
+
+    # Idempotency guard: Record command failure (Cluster cl-3e0048f79eb206f9)
+    if [[ -n "${_IDEM_HASH:-}" ]] && command -v record_command_end >/dev/null 2>&1; then
+        _ERROR_SUMMARY="claude exit code: $CLAUDE_EXIT"
+        record_command_end "$TASK_ID" "$_IDEM_HASH" "failed" "" "$_ERROR_SUMMARY" 2>/dev/null || true
+        unset _IDEM_HASH _ERROR_SUMMARY
+    fi
+
     record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
     exit "$CLAUDE_EXIT"
 fi
@@ -294,9 +418,18 @@ END_TIME=$(date +%s)
 DURATION=$(( END_TIME - START_TIME ))
 
 # --- Validate JSON and extract result ---
-if ! echo "$RAW_OUTPUT" | jq -e '.' >/dev/null 2>&1; then
-    log_jsonl "error" "Invalid JSON output from claude" "$DURATION"
-    echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-raw.txt"
+if [[ -z "$RAW_OUTPUT" ]] || ! echo "$RAW_OUTPUT" | jq -e '.' >/dev/null 2>&1; then
+    log_jsonl "error" "Invalid JSON output from claude (exit=$CLAUDE_EXIT)" "$DURATION"
+    if [[ -s "$CLAUDE_OUTPUT_TMP" ]]; then
+        cp "$CLAUDE_OUTPUT_TMP" "${RESULT_FILE%.md}-raw.txt"
+    fi
+
+    # Idempotency guard: Record command failure (Cluster cl-3e0048f79eb206f9)
+    if [[ -n "${_IDEM_HASH:-}" ]] && command -v record_command_end >/dev/null 2>&1; then
+        record_command_end "$TASK_ID" "$_IDEM_HASH" "failed" "" "Invalid JSON output from claude" 2>/dev/null || true
+        unset _IDEM_HASH
+    fi
+
     record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
     exit 1
 fi
@@ -307,6 +440,13 @@ IS_ERROR=$(echo "$RAW_OUTPUT" | jq -r '.is_error // false')
 if [[ "$SUBTYPE" == error_* ]] || [[ "$IS_ERROR" == "true" ]]; then
     log_jsonl "error" "claude error: ${SUBTYPE} is_error=${IS_ERROR}" "$DURATION"
     echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-error.json"
+
+    # Idempotency guard: Record command failure (Cluster cl-3e0048f79eb206f9)
+    if [[ -n "${_IDEM_HASH:-}" ]] && command -v record_command_end >/dev/null 2>&1; then
+        record_command_end "$TASK_ID" "$_IDEM_HASH" "failed" "" "claude error: ${SUBTYPE}" 2>/dev/null || true
+        unset _IDEM_HASH
+    fi
+
     record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
 
     # Sprint Contract #1: Rate limit 에러 명확히 감지 및 전파
@@ -335,6 +475,13 @@ RESULT=$(echo "$RAW_OUTPUT" | jq -r '.result // empty')
 if [[ -z "$RESULT" ]]; then
     log_jsonl "error" "Empty result from claude" "$DURATION"
     echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-raw.txt"
+
+    # Idempotency guard: Record command failure (Cluster cl-3e0048f79eb206f9)
+    if [[ -n "${_IDEM_HASH:-}" ]] && command -v record_command_end >/dev/null 2>&1; then
+        record_command_end "$TASK_ID" "$_IDEM_HASH" "failed" "" "Empty result from claude" 2>/dev/null || true
+        unset _IDEM_HASH
+    fi
+
     record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
     exit 1
 fi
@@ -351,6 +498,13 @@ if [[ -f "$EVALUATOR_LIB" ]]; then
     if [[ "$EVALUATOR_VERDICT" == "fail" ]]; then
         log_jsonl "error" "evaluator_fail: ${EVALUATOR_REASON}" "$DURATION"
         echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-evaluator-fail.json"
+
+        # Idempotency guard: Record command failure (Cluster cl-3e0048f79eb206f9)
+        if [[ -n "${_IDEM_HASH:-}" ]] && command -v record_command_end >/dev/null 2>&1; then
+            record_command_end "$TASK_ID" "$_IDEM_HASH" "failed" "" "evaluator_fail: ${EVALUATOR_REASON}" 2>/dev/null || true
+            unset _IDEM_HASH
+        fi
+
         record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
         # stdout으로 에러 메시지 (retry-wrapper가 분류에 사용)
         echo "EVALUATOR_FAIL: ${EVALUATOR_REASON}"
@@ -456,7 +610,60 @@ except (FileNotFoundError, json.JSONDecodeError):
 " 2>/dev/null || true
 
 log_jsonl "success" "Completed in ${DURATION}s" "$DURATION" "$COST_EXTRA"
+# Mark task success (Cluster cl-e30aee511af89e13: track execution status)
+if command -v mark_task_success >/dev/null 2>&1; then
+    mark_task_success "$TASK_ID" 0 2>/dev/null || true
+fi
+
+# Idempotency guard: Record command completion (Cluster cl-3e0048f79eb206f9)
+if [[ -n "${_IDEM_HASH:-}" ]] && command -v record_command_end >/dev/null 2>&1; then
+    _RESULT_SUMMARY=$(printf '%s' "$RESULT" | head -c 200)  # 처음 200자만 요약
+    record_command_end "$TASK_ID" "$_IDEM_HASH" "completed" "$RESULT_FILE" "$_RESULT_SUMMARY" 2>/dev/null || true
+    unset _IDEM_HASH _RESULT_SUMMARY
+fi
+
 record_outcome "$TASK_ID" "true" "$(( DURATION * 1000 ))" "${COST_USD:-0}" || true
+
+# --- Task Completion Workflow (Cluster cl-a823cc27fbf689ff) ---
+# 태스크 완료 시 검증→업로드→레지스트리 갱신 3단계 워크플로우 (결과 필드 필수 검증)
+_WORKFLOW_SCRIPT="${BOT_HOME}/scripts/task-completion-workflow.sh"
+if [[ -f "$_WORKFLOW_SCRIPT" && -f "$RESULT_FILE" ]]; then
+    _WORKFLOW_RESULT=$(cat "$RESULT_FILE" 2>/dev/null || echo "")
+    if [[ -z "$_WORKFLOW_RESULT" ]] || [[ -z "$(echo "$_WORKFLOW_RESULT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')" ]]; then
+        # 결과 파일이 비어있음: queued 재시도
+        log_jsonl "error" "Result file is empty — queuing for retry (RESULT_REQUIRED)" "$DURATION"
+        node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+            transition "$TASK_ID" queued "ask-claude/empty-result" '{}' >/dev/null 2>&1 || true
+        exit 1
+    fi
+
+    if _WORKFLOW_OUTPUT=$("$_WORKFLOW_SCRIPT" "$TASK_ID" "$_WORKFLOW_RESULT" "ask-claude" 2>&1); then
+        log_jsonl "info" "Task completion workflow succeeded (3-stage: validate→upload→registry)" "$DURATION"
+    else
+        _WORKFLOW_EXIT=$?
+        if [[ $_WORKFLOW_EXIT -eq 100 ]]; then
+            log_jsonl "error" "Completion workflow validation failed (RESULT_REQUIRED, exit 100) — queuing for retry" "$DURATION"
+            node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+                transition "$TASK_ID" queued "ask-claude/workflow-validation-failed" '{"lastError":"workflow_result_validation_failed"}' >/dev/null 2>&1 || true
+            exit 1
+        elif [[ $_WORKFLOW_EXIT -eq 101 ]]; then
+            log_jsonl "error" "Completion workflow upload failed (exit 101) — queuing for retry" "$DURATION"
+            node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+                transition "$TASK_ID" queued "ask-claude/workflow-upload-failed" '{"lastError":"workflow_upload_failed"}' >/dev/null 2>&1 || true
+            exit 1
+        elif [[ $_WORKFLOW_EXIT -eq 102 ]]; then
+            log_jsonl "error" "Completion workflow registry update failed (exit 102) — marking as failed (max retries exhausted)" "$DURATION"
+            node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+                transition "$TASK_ID" failed "ask-claude/workflow-registry-failed" '{"lastError":"workflow_registry_update_failed"}' >/dev/null 2>&1 || true
+            exit 1
+        else
+            log_jsonl "error" "Completion workflow failed with unexpected exit code $_WORKFLOW_EXIT" "$DURATION"
+            node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+                transition "$TASK_ID" failed "ask-claude/workflow-unexpected-error" '{"lastError":"workflow_unexpected_error"}' >/dev/null 2>&1 || true
+            exit 1
+        fi
+    fi
+fi
 
 # --- Guard: File state cache & contradiction detection (Cluster cl-6f0c8cc1df90e995) ---
 # 파일 상태 혼동 및 일관성 부재 방어: 파일 조작 전 상태를 1회만 조회하여 응답 전체에 고정
@@ -557,6 +764,12 @@ if [[ -f "${BOT_HOME}/lib/file-validator.sh" ]] && command -v jq >/dev/null 2>&1
     # Cluster guard integration (cl-dcd8ff3443b1f052)
     if [[ -f "${BOT_HOME}/lib/cluster-guard-cl-dcd8ff3443b1f052.sh" ]]; then
         bash "${BOT_HOME}/lib/cluster-guard-cl-dcd8ff3443b1f052.sh" "$RAW_OUTPUT" "$TASK_ID" 2>/dev/null || true
+    fi
+
+    # Cluster guard integration (cl-45670404fa7eb40c): 완료 선언 검증
+    # 검증 실패: PDF 페이지 수 미검증, 파일 응답 본문 미검증, 중복 파일 미감지
+    if [[ -f "${BOT_HOME}/lib/cluster-guard-cl-45670404fa7eb40c.sh" ]]; then
+        bash "${BOT_HOME}/lib/cluster-guard-cl-45670404fa7eb40c.sh" "$RAW_OUTPUT" "$TASK_ID" 2>/dev/null || true
     fi
 fi
 

@@ -6,7 +6,8 @@ set -euo pipefail
 # Reads task config from tasks.json, executes via retry-wrapper, routes output.
 
 # === Cron environment setup ===
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
+export BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+export PATH="${BOT_HOME}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"  # macOS default; Linux: /home/$(id -un)
 
 # Claude Max 구독 모드 전용 — API 키 불필요 (2026-03-17)
@@ -94,8 +95,17 @@ log() {
 }
 
 # --- Continue Sites: 다단계 에러 복구 라이브러리 로드 ---
+_CS_LOAD_OK=false
 if [[ -f "${BOT_HOME}/lib/continue-sites.sh" ]]; then
-    source "${BOT_HOME}/lib/continue-sites.sh"
+    if source "${BOT_HOME}/lib/continue-sites.sh" 2>/dev/null; then
+        _CS_LOAD_OK=true
+    else
+        echo "[WARNING] continue-sites.sh 로드 실패 — recovery mode 비활성화" >&2
+    fi
+fi
+CONTINUE_SITES="${CONTINUE_SITES:-true}"
+if [[ "$_CS_LOAD_OK" != "true" ]]; then
+    CONTINUE_SITES="false"
 fi
 
 # --- Completion trap: 비정상 종료 시에도 반드시 로그 기록 ---

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# stream-to-board.sh - Forward stream-json output from claude -p to Board
+# Usage: stream-to-board.sh TASK_ID OUTPUT_FILE < stream-json-input
+#
+# Reads stream-json format from stdin, parses events, forwards to Board,
+# and writes final result JSON to OUTPUT_FILE.
+
+set -euo pipefail
+
+TASK_ID="${1:?Usage: stream-to-board.sh TASK_ID OUTPUT_FILE}"
+OUTPUT_FILE="${2:?Usage: stream-to-board.sh TASK_ID OUTPUT_FILE}"
+
+# Buffer to accumulate content
+BUFFER=""
+CURRENT_EVENT_TYPE=""
+
+# Process each line of stream-json input
+while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+
+    # Try to parse as JSON event
+    if event=$(echo "$line" | jq -e . 2>/dev/null || true); then
+        [[ -z "$event" ]] && continue
+
+        # Extract event type
+        CURRENT_EVENT_TYPE=$(echo "$event" | jq -r '.type // ""' 2>/dev/null || true)
+
+        case "$CURRENT_EVENT_TYPE" in
+            content_block_delta)
+                # Accumulate content
+                delta=$(echo "$event" | jq -r '.content_block_delta.delta.text // ""' 2>/dev/null || true)
+                BUFFER+="$delta"
+                ;;
+            message_stop)
+                # Final message received
+                ;;
+        esac
+    fi
+done
+
+# Write final result to output file
+if [[ -n "$BUFFER" ]]; then
+    jq -n --arg result "$BUFFER" '{result: $result}' > "$OUTPUT_FILE"
+else
+    # Empty result fallback
+    jq -n '{result: ""}' > "$OUTPUT_FILE"
+fi
+
+exit 0

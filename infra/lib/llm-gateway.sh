@@ -26,6 +26,25 @@ LLM_GATEWAY_BOT_HOME="${BOT_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pw
 
 _TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
 
+# --- run_with_retry: Wrapper for LLM calls with retry logic ---
+run_with_retry() {
+    local func_name="$1"
+    shift
+    local max_retries=3
+    local attempt=0
+
+    while (( attempt < max_retries )); do
+        (( attempt++ ))
+        if "$func_name" "$@"; then
+            return 0
+        fi
+        if (( attempt < max_retries )); then
+            sleep 2
+        fi
+    done
+    return 1
+}
+
 # Source structured logging
 if [[ -f "${LLM_GATEWAY_BOT_HOME}/lib/log-utils.sh" ]]; then
     source "${LLM_GATEWAY_BOT_HOME}/lib/log-utils.sh"
@@ -86,6 +105,26 @@ _llm_py() {
     rm -f "$_stderr"
     [[ $rc -eq 0 ]] && echo "$result"
     return $rc
+}
+
+# Helper: 무성(無聲) 실패 유성화 — Discord critical + ledger (2026-07-19 vault_guard, 전략 축4-①)
+# 배경: 주력 claude -p가 예산초과(error_max_budget_usd)나 exit 1로 조용히 실패한 뒤
+#       로컬 Ollama 3B로 강등되어도 7일간 아무 경보 없이 묻혔다(무성 강등).
+#       기존 인증오류(401) 알림 로직은 그대로 두고, 예산초과·폴백강등 두 신호를 추가로 유성화한다.
+# alert-send.sh 자체 쿨다운(기본 300s)이 동일 메시지 폭주를 막는다. 실패해도 호출부 결과에 영향 없음.
+# kind: budget_exceeded | degraded_to_ollama
+_llm_alert_silent_failure() {
+    local kind="$1" detail="$2"
+    local _ledger="${HOME}/jarvis/runtime/ledger/llm-degradation.jsonl"
+    mkdir -p "$(dirname "$_ledger")" 2>/dev/null || true
+    jq -cn --arg ts "$(date -u +%FT%TZ)" --arg kind "$kind" \
+        --arg task "${TASK_ID:-unknown}" --arg model "${model:-auto}" --arg detail "$detail" \
+        '{ts:$ts, kind:$kind, task:$task, model:$model, detail:$detail}' \
+        >> "$_ledger" 2>/dev/null || true
+    bash "${HOME}/jarvis/infra/scripts/alert-send.sh" critical \
+        "⚠️ LLM 무성 실패 유성화: ${kind}" \
+        "task=${TASK_ID:-unknown} model=${model:-auto} — ${detail}" \
+        >/dev/null 2>&1 || true
 }
 
 # --- Provider: claude -p ---
@@ -255,6 +294,18 @@ except:
         fi
     fi
     rm -f "$stderr_tmp"
+    # 예산 초과(error_max_budget_usd) 유성화 (2026-07-19 vault_guard) — 인증오류 grep과 별개.
+    # 예산초과는 exit 0 + is_error=true JSON으로도 반환되어 정상 답변으로 위장될 수 있으므로
+    # exit code와 무관하게 output subtype을 검사한다. 판정만 하고 반환값은 바꾸지 않는다(관측 전용).
+    if command -v jq >/dev/null 2>&1 && [[ -s "$output" ]]; then
+        local _subtype
+        _subtype=$(jq -r '.subtype // ""' "$output" 2>/dev/null || echo "")
+        if [[ "$_subtype" == "error_max_budget_usd" ]]; then
+            log_error "예산 초과 감지 (error_max_budget_usd) — critical alert + ledger 유성화"
+            _llm_alert_silent_failure "budget_exceeded" \
+                "claude -p 예산 캡 초과(error_max_budget_usd) — 응답이 예산오류로 반환됨(정상 답변 아님)"
+        fi
+    fi
     return "$exit_code"
 }
 
@@ -687,6 +738,16 @@ llm_call() {
     fi
     log_warn "claude -p failed (exit $claude_exit)"
 
+    # 실패 진단 상세 로깅 (2026-07-18 — exit 1/124 근본 추적용. 로컬 재현은 전부 정상이라
+    # 프로덕션 밤 크론의 동시부하·실패조건을 로그로 포착한다. 순수 관측, 로직 영향 없음.)
+    {
+        _fd_concurrent=$(pgrep -f 'claude -p' 2>/dev/null | wc -l | tr -d ' ')
+        _fd_out_bytes=$(wc -c < "$output" 2>/dev/null | tr -d ' ' || echo 0)
+        _fd_out_head=$(head -c 200 "$output" 2>/dev/null | tr '\n' ' ')
+        log_warn "[FAIL-DIAG] task=${TASK_ID:-?} exit=${claude_exit} model=${model:-auto} prompt_bytes=${#prompt} timeout=${timeout:-?} concurrent_claude=${_fd_concurrent} output_bytes=${_fd_out_bytes} out_head='${_fd_out_head}'"
+        unset _fd_concurrent _fd_out_bytes _fd_out_head
+    } 2>/dev/null || true
+
     # If task needs tools, no fallback is possible
     if [[ "$needs_tools" == "true" ]]; then
         log_error "Task requires tools ($allowed_tools) — no fallback available"
@@ -694,6 +755,29 @@ llm_call() {
     fi
 
     log_info "Trying fallback providers (text-only mode)..."
+
+    # ─── 유료 외부 폴백 전면 차단 게이트 (2026-07-18 — Claude 구독 단일화·중복 결제 방지) ───
+    # Claude(구독) 실패를 Gemini/DeepSeek/OpenAI 유료 API로 덮지 않는다. 무료 로컬(Ollama)로 직행.
+    # 배경: mistake-promoter 등 크론의 claude -p 실패가 17일+ OpenAI 폴백으로 조용히 과금돼 옴.
+    # 되돌리려면 LLM_GATEWAY_DISABLE_PAID_FALLBACK=0 설정 (기본값 1 = 차단).
+    if [[ "${LLM_GATEWAY_DISABLE_PAID_FALLBACK:-1}" == "1" ]]; then
+        log_warn "유료 외부 폴백 비활성화 — Gemini/DeepSeek/OpenAI 건너뛰고 로컬 Ollama로 직행"
+        if _llm_ollama "$prompt" "$system" "$timeout" "$model" "$output"; then
+            log_info "Ollama succeeded (paid fallback disabled)"
+            # 무성 강등 유성화 (2026-07-19 vault_guard) — 주력 claude 실패 → 로컬 3B 강등을 경보화.
+            _llm_alert_silent_failure "degraded_to_ollama" \
+                "claude -p 실패(exit ${claude_exit}) → 로컬 Ollama 3B 강등(유료 폴백 차단). 답변 품질 저하 가능"
+            lf_trace_generation --task-id "${TASK_ID:-llm-gateway}" \
+                --name "${TASK_ID:-llm-call}" --model "$model" \
+                --provider "ollama" --output "$output"
+            return 0
+        fi
+        log_error "유료 폴백 차단 + Claude/Ollama 모두 실패 — 응답 없음 (근본: claude -p 실패 원인 추적 필요)"
+        lf_trace_generation_error --task-id "${TASK_ID:-llm-gateway}" \
+            --name "${TASK_ID:-llm-call}" --model "$model" \
+            --provider "all-failed-paid-disabled" --error "Paid fallback disabled; Claude+Ollama failed"
+        return 1
+    fi
 
     # 2. Gemini 3.5 Flash API (비핵심 태스크 primary fallback — $1.50/$9.00 per 1M tokens)
     # task-routing-config.json에 의해 라우팅된 태스크 또는 명시적 Gemini 지정 모델
@@ -740,6 +824,9 @@ llm_call() {
     log_info "Trying Ollama (local)..."
     if _llm_ollama "$prompt" "$system" "$timeout" "$model" "$output"; then
         log_info "Ollama succeeded (fallback)"
+        # 무성 강등 유성화 (2026-07-19 vault_guard) — 유료 폴백 경로에서도 최종 로컬 3B 강등 경보화.
+        _llm_alert_silent_failure "degraded_to_ollama" \
+            "claude -p 실패(exit ${claude_exit}) → 외부 폴백 소진 후 로컬 Ollama 3B 강등. 답변 품질 저하 가능"
         lf_trace_generation --task-id "${TASK_ID:-llm-gateway}" \
             --name "${TASK_ID:-llm-call}" --model "$model" \
             --provider "ollama" --output "$output"

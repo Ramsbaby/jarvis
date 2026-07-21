@@ -24,6 +24,7 @@ PDF_SCRIPT="${JARVIS}/infra/scripts/preply-html2pdf.mjs"
 UPLOAD_SCRIPT="${JARVIS}/infra/scripts/preply-upload.mjs"
 
 err() { echo "❌ $*" >&2; exit 1; }
+warn() { echo "⚠️ $*" >&2; }
 [ -f "$REGISTRY" ] || err "레지스트리 없음: $REGISTRY"
 
 # 레지스트리에서 한 학생의 필드 읽기 (python3)
@@ -633,6 +634,23 @@ cmd_send() {
   [ "$#" -ge 2 ] || err "사용법: preply-student.sh send [--force] \"<메시지>\" <파일1> [파일2 ...]"
   [ -f "$UPLOAD_SCRIPT" ] || err "업로더 없음: $UPLOAD_SCRIPT"
 
+  # ── [2026-07-13] 생성 중단 감지 — --force로도 우회 불가한 최소 무결성 게이트 ──
+  # 교재 생성(claude Write)이 API 오류/중단으로 끊기면 HTML이 닫는 태그 없이 잘린다(질리안 Unit2 미완성·
+  # 캐서린 퀴즈 유실 패턴). </html> 종료 여부는 템플릿과 무관한 객관 신호라 오탐 0.
+  # style 오탐 회피용 --force와 달리, '생성이 잘렸다'는 신호는 어떤 경우에도 전송하면 안 되므로 force 이전에 검사.
+  local _cg_arg _cg_h
+  for _cg_arg in "$@"; do
+    case "$_cg_arg" in
+      *.html)
+        _cg_h="${_cg_arg/#\~/$HOME}"
+        [ -f "$_cg_h" ] || continue
+        if ! tail -c 600 "$_cg_h" | grep -qi "</html>"; then
+          err "🚫 생성 중단 감지: $(basename "$_cg_h") 가 </html>로 끝나지 않습니다 — 교재 생성이 중간에 끊긴 것으로 보입니다(불완전 파일). 재생성 후 전송하세요. ⚠️ 이 검사는 --force로도 우회할 수 없습니다."
+        fi
+        ;;
+    esac
+  done
+
   # [2026-07-05 가드] HTML 대체 업로드 차단: HTML은 대응 PDF와 함께만 업로드 가능
   # Iron Law 6 준수: PDF 생성이 성공했는지 확인하고, 없으면 HTML 업로드 거절
   local _pdf_manifest="${BOT_HOME}/.pdf-manifest"
@@ -702,6 +720,24 @@ cmd_send() {
             *요약본*|*숙제*|*정답지*)
               warn "⚠️ '$(basename "$_h")'를 HTML로 전송 — 요약본·숙제·정답지는 PDF로 보내는 게 원칙입니다(보람님 반복 요청). PDF를 함께/대신 올리세요." ;;
           esac
+          # [2026-07-11 cl-ab0cc1b121a99f4d] QA 검사: 필수 요소(단어 탭, 한영병기, 정답 노출) 확인
+          local _qa_script="${JARVIS}/scripts/qa-materials.sh"
+          if [ -f "$_qa_script" ]; then
+            echo "🔍 QA 검사 (필수 요소: 단어 탭, 한영병기, 정답 노출)..."
+            if bash "$_qa_script" "$_h" 2>/dev/null; then
+              echo "📋 QA 검사 통과 ✅"
+            else
+              echo "" >&2
+              err "QA 검사 FAIL — 필수 요소 미충족. 위 항목을 수정 후 전송하세요.
+
+   필수 요소:
+   - 단어 탭: word-card 요소 3개 이상
+   - 한영병기: word-en 요소 80% 이상 적용
+   - 정답 노출: 정답/답안지 파일 아님
+
+   강제 전송: send --force ..."
+            fi
+          fi
           if ! cmd_verify "$_h"; then
             echo "" >&2
             err "검증 실패 — 전송 차단. 위 FAIL 항목 수정 후 다시 보내세요. (강제 전송: send --force ...)"
@@ -721,7 +757,7 @@ cmd_send() {
           local _render="${JARVIS}/infra/scripts/preply-render-check.mjs" _rout _rc
           if [ -f "$_render" ]; then
             echo "👁️  렌더 아이 검사 (보람님이 볼 실제 화면)..."
-            _rout=$(cd "$DISCORD_DIR" && node "$_render" "$_h" 2>/dev/null); _rc=$?
+            set +e; _rout=$(cd "$DISCORD_DIR" && node "$_render" "$_h" 2>/dev/null); _rc=$?; set -e
             if [ "$_rc" -eq 2 ]; then
               echo "$_rout" | python3 -c "import json,sys; d=json.load(sys.stdin); [print('  ❌ FAIL:',i['msg']) for i in d['issues'] if i['level']=='FAIL']" 2>/dev/null >&2 || true
               err "렌더 아이 FAIL — 화면에 정답이 보이거나 레이아웃 문제. 수정 후 전송하세요. (강제: send --force ...)"
@@ -737,7 +773,7 @@ cmd_send() {
           local _vision="${JARVIS}/infra/scripts/preply-vision-check.mjs" _vout _vrc
           if [ -f "$_vision" ]; then
             echo "👁️‍🗨️  보람 눈 검토 (비전)..."
-            _vout=$(cd "$DISCORD_DIR" && node "$_vision" "$_h" 2>/dev/null); _vrc=$?
+            set +e; _vout=$(cd "$DISCORD_DIR" && node "$_vision" "$_h" 2>/dev/null); _vrc=$?; set -e
             if [ "$_vrc" -eq 2 ]; then
               echo "$_vout" | python3 -c "import json,sys; d=json.load(sys.stdin); [print('  ❌ FAIL:',i['msg']) for i in d['issues'] if i.get('level')=='FAIL']" 2>/dev/null >&2 || true
               err "보람 눈(비전) 검토 FAIL — 위 문제 수정 후 전송하세요. (강제: send --force ...)"

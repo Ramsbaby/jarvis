@@ -1,0 +1,5 @@
+# Broken self-referential symlink captured 20260721-084654 KST
+## ls -la:
+lrwxr-xr-x@ 1 ramsbaby  staff  49  7월 19 23:43 infra/bin/retry-wrapper.sh -> /Users/ramsbaby/jarvis/infra/bin/retry-wrapper.sh
+## readlink:
+/Users/ramsbaby/jarvis/infra/bin/retry-wrapper.sh

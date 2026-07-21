@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-DOCTOR_MD="${HOME}/.claude/commands/doctor.md"
+DOCTOR_MD="${HOME}/.claude/commands/jarvis-doctor.md"
 MCP_JSON="${HOME}/.mcp.json"
 TASKS_JSON="${HOME}/jarvis/runtime/config/tasks.json"
 LA_DIR="${HOME}/Library/LaunchAgents"

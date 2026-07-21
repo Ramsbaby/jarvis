@@ -126,15 +126,26 @@ else
     fail "node_modules 없음 — npm install 필요: cd $BOT_HOME/discord && npm install"
 fi
 
-# ── 결과 판단 ─────────────────────────────────────────────────────
+# ── 결과 판단 + exit code 검사 가드 ─────────────────────────────────────────
 echo ""
 echo "=== 결과: ${PASS}/$((PASS+FAIL)) 통과 ==="
 
+# [가드 1] FAIL 카운트 확인 — 실패 항목 있으면 즉시 중단
 if [[ "$FAIL" -gt 0 ]]; then
     echo ""
-    echo "❌ Smoke Test 실패 — 재시작 중단"
+    echo "❌ Smoke Test 실패 — 재시작 차단"
     echo "실패 항목:"
     echo -e "$RESULTS" | grep "❌"
+    echo ""
+    echo "원인: 위 항목 해결 후 재배포하세요"
+    # exit code 명시적 지정 (set -e가 다음 단계 진행 방지)
+    exit 1
+fi
+
+# [가드 2] 내부 검사: PASS + FAIL 합이 0이면 검사 로직 오류
+_TOTAL=$((PASS + FAIL))
+if [[ $_TOTAL -eq 0 ]]; then
+    echo "❌ 내부 오류: 검사 항목 0개 (검사 로직 실패)"
     exit 1
 fi
 
@@ -148,13 +159,19 @@ fi
 
 echo ""
 echo "▶ 봇 재시작..."
+# [가드 3] 재시작 명령 실행 및 exit code 검사
+_RESTART_RC=0
 if $IS_MACOS; then
-    launchctl stop "$SERVICE" 2>/dev/null || true
+    launchctl stop "$SERVICE" 2>/dev/null || _RESTART_RC=$?
     sleep 2
-    launchctl start "$SERVICE" 2>/dev/null || launchctl kickstart -k "gui/$(id -u)/$SERVICE" 2>/dev/null
+    launchctl start "$SERVICE" 2>/dev/null || launchctl kickstart -k "gui/$(id -u)/$SERVICE" 2>/dev/null || _RESTART_RC=$?
 else
     echo "[compat] 봇 재시작: pm2 restart discord-bot"
-    pm2 restart discord-bot 2>/dev/null || true
+    pm2 restart discord-bot 2>/dev/null || _RESTART_RC=$?
+fi
+
+if [[ $_RESTART_RC -ne 0 && $_RESTART_RC -ne 1 ]]; then
+    echo "⚠ 봇 재시작 경고 (exit code: $_RESTART_RC) — 계속 진행"
 fi
 
 # ── 생존 확인 (15초 대기 + launchctl 상태 + stderr 로그 검사) ─────
@@ -180,6 +197,7 @@ if [[ -f "$ERR_LOG" ]]; then
     fi
 fi
 
+# [가드 4] 생존 확인 — 종료되지 않으면 배포 완료
 if [[ "$LC_PID" =~ ^[0-9]+$ ]] && [[ "$RESTART_LOOP_COUNT" -eq 0 ]]; then
     # discord-bot.log(jsonl)과 out.log 양쪽 모두 검사
     _recent_err=$(tail -20 "$BOT_HOME/logs/discord-bot.jsonl" 2>/dev/null \
@@ -187,18 +205,25 @@ if [[ "$LC_PID" =~ ^[0-9]+$ ]] && [[ "$RESTART_LOOP_COUNT" -eq 0 ]]; then
         | tail -1 || true)
     if [[ -n "$_recent_err" ]]; then
         echo "⚠️  봇 실행 중이나 에러 감지 (PID=$LC_PID): $_recent_err"
+        echo ""
+        echo "경고: 봇이 실행 중이나 에러가 있습니다. 30초 후 상태를 재확인하세요."
     else
-        echo "✅ 봇 정상 실행 확인 (PID=$LC_PID)"
+        echo "✅ 봇 정상 실행 확인 (PID=$LC_PID) — 배포 완료"
     fi
 else
+    # [가드 5] 봇 비정상 — 명시적 실패 처리
     _crash_err=$(tail -30 "$BOT_HOME/logs/discord-bot.err.log" 2>/dev/null \
         | grep -iE "SyntaxError|Cannot find|<<<<<<<|Error:|TypeError|FATAL" \
         | tail -2 || echo "로그 없음")
-    echo "❌ 봇 비정상 (launchctl PID=${LC_PID:-'-'}, status=${LC_STATUS:-'-'}, err출현=${RESTART_LOOP_COUNT}건)"
+    echo "❌ 봇 비정상 — 배포 실패 (launchctl PID=${LC_PID:-'-'}, status=${LC_STATUS:-'-'}, err출현=${RESTART_LOOP_COUNT}건)"
     echo "   최근 에러: $_crash_err"
     echo ""
-    echo "   ▶ 롤백 힌트: git reset --hard HEAD~1 후 재배포"
-    exit 1
+    echo "   ▶ 대응 방법:"
+    echo "     1. 로그 확인: tail -50 $BOT_HOME/logs/discord-bot.err.log"
+    echo "     2. 롤백: git -C $BOT_HOME reset --hard HEAD~1"
+    echo "     3. 재배포: bash $0"
+    # 명시적 exit code 설정 — set -e가 다음 단계 방지
+    exit 1 || exit $?
 fi
 
 echo ""

@@ -34,6 +34,7 @@ const FORCE = process.argv.includes('--force');
 const DEFAULT_POLICY = {
   dailyLimit: 2,
   perDomainCooldownDays: 3,
+  staleAfterDays: 2, // 시의성 질문 TTL: 생성 후 N일 지난 미전송 항목은 발송 제외 + 큐에서 정리 (2026-07-13)
   domainPriority: ['owner', 'career', 'knowledge'],
   domainChannel: {
     owner: 'jarvis',
@@ -228,9 +229,13 @@ function selectQuestions(queue, sent, policy) {
   const cooldownDays = policy.perDomainCooldownDays ?? 3;
   const priority = policy.domainPriority || [];
 
+  // 시의성 TTL: 점심·"어제 면접" 같은 안부는 며칠 지나면 무의미. staleAfterDays 지난 항목은 발송 대상에서 제외.
+  // (구버전 버그: 오래된 pending이 FIFO로 배출돼 2달 묵은 "어제(5/16) 면접" 질문이 7/13에 나감 — 2026-07-13 수정)
+  const staleAfterDays = policy.staleAfterDays ?? 2;
   const available = queue
     .filter(q => q.status === 'pending')
     .filter(q => !sentIds.has(q.id))
+    .filter(q => FORCE || daysSince(q.createdAt) <= staleAfterDays)
     .filter(q => {
       if (FORCE) return true;
       const last = lastByDomain[q.domain];
@@ -242,7 +247,8 @@ function selectQuestions(queue, sent, policy) {
       const pra = pa === -1 ? 99 : pa;
       const prb = pb === -1 ? 99 : pb;
       if (pra !== prb) return pra - prb;
-      return (a.createdAt || '').localeCompare(b.createdAt || '');
+      // 최신 우선 (구버전 오름차순 → 내림차순): 가장 신선한 질문이 먼저 나가도록
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
 
   // 도메인 분산: 같은 도메인이 연속으로 N개 안 나오게 한 번씩 라운드로빈
@@ -274,11 +280,21 @@ async function main() {
   const policy = { ...DEFAULT_POLICY, ...loadJSON(POLICY_PATH, {}) };
   policy.domainChannel = { ...DEFAULT_POLICY.domainChannel, ...(policy.domainChannel || {}) };
 
-  const queue = loadJSONL(QUEUE_PATH);
+  let queue = loadJSONL(QUEUE_PATH);
   const sent = loadJSONL(SENT_PATH);
 
+  // 큐 자가정리(재발방지): TTL 지난 미전송(pending) 항목은 발송도 안 되고 쌓이기만 하므로 파일에서 영구 제거.
+  // in-memory queue 자체를 정리본으로 교체 → 이후 selectQuestions·rewriteQueue가 되살리지 않음.
+  const pruneAfterDays = (loadJSON(POLICY_PATH, {}).staleAfterDays) ?? DEFAULT_POLICY.staleAfterDays ?? 2;
+  const beforePrune = queue.length;
+  queue = queue.filter(q => q.status !== 'pending' || daysSince(q.createdAt) <= pruneAfterDays);
+  if (!DRY_RUN && queue.length !== beforePrune) {
+    const lines = queue.map(q => JSON.stringify(q)).join('\n');
+    writeFileSync(QUEUE_PATH, lines + (lines ? '\n' : ''));
+  }
+
   console.log(`# AJQE Dispatch (${new Date().toISOString()})`);
-  console.log(`큐: ${queue.length}건 / 발송 이력: ${sent.length}건`);
+  console.log(`큐: ${queue.length}건 (만료정리 ${beforePrune - queue.length}건) / 발송 이력: ${sent.length}건`);
   console.log(`정책: dailyLimit=${policy.dailyLimit}, cooldown=${policy.perDomainCooldownDays}일, quiet=${policy.quietHours || '없음'}`);
 
   if (!FORCE && isQuietHour(policy.quietHours)) {

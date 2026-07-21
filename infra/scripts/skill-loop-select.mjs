@@ -154,7 +154,10 @@ if (NO_LLM) {
     if (s.score >= THRESHOLD) selected.push({ ...c, ...s });
   }
   selected = selected.sort((a, b) => b.score - a.score).slice(0, CAP);
-  const outFile = join(DRAFTS_DIR, `selected-${new Date().toISOString().slice(0, 10)}.jsonl`);
+  // [2026-07-11 P0] toISOString은 UTC 날짜 — 03:50 KST 실행 시 전날 파일명이 되어
+  // nightly.sh(date +%F, 로컬)·extract.mjs(--date)와 매일 어긋남 → 추출 전면 스킵 30일.
+  // toLocaleDateString('en-CA')는 시스템 로컬(KST) YYYY-MM-DD — date +%F와 동일 의미.
+  const outFile = join(DRAFTS_DIR, `selected-${new Date().toLocaleDateString('en-CA')}.jsonl`);
   writeFileSync(outFile, selected.map(s => JSON.stringify(s)).join('\n') + (selected.length ? '\n' : ''));
   console.log(`[2단 선별] 임계치 ${THRESHOLD}+ → ${selected.length}건 (상한 ${CAP}) → ${outFile}`);
   for (const s of selected) ledger('selected', { path: s.path, score: s.score, slug: s.slug, topic: s.topic });

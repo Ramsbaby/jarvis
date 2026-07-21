@@ -63,17 +63,20 @@ fi
 if [[ -d "$EVENTS_DIR" ]]; then
     while IFS= read -r -d '' file; do
         rm -f "$file"
-        ((EVENTS_CLEANED++))
+        EVENTS_CLEANED=$((EVENTS_CLEANED + 1))  # ((x++)) set -e footgun 제거 (2026-07-11)
     done < <(find "$EVENTS_DIR" -type f -name "*.json" -mtime +$STALE_DAYS -print0 2>/dev/null)
 fi
 
 # === 4. Clean up old sentinel files in ~/jarvis/runtime/state/active-tasks/ ===
+# 2026-07-11 수정: (a) -mindepth 1 누락으로 루트 디렉토리 자신이 매치 → rm -f "is a directory"
+# 오류 → set -e로 매일 02:00 중단 (11일 연속). 내부 항목만 대상. 파일/디렉토리 모두 정리.
+# (b) ((x++))는 x=0일 때 종료코드 1 → set -e 중단 footgun → 안전한 대입식으로 교체.
 if [[ -d "$ACTIVE_TASKS_DIR" ]]; then
     CUTOFF_MINUTES=$((SENTINEL_HOURS * 60))
-    while IFS= read -r -d '' file; do
-        rm -f "$file"
-        ((SENTINELS_CLEANED++))
-    done < <(find "$ACTIVE_TASKS_DIR" -type d -mmin +$CUTOFF_MINUTES -print0 2>/dev/null)
+    while IFS= read -r -d '' entry; do
+        rm -rf "$entry"
+        SENTINELS_CLEANED=$((SENTINELS_CLEANED + 1))
+    done < <(find "$ACTIVE_TASKS_DIR" -mindepth 1 -mmin +$CUTOFF_MINUTES -print0 2>/dev/null)
 fi
 
 # === 5. Generate summary output ===

@@ -205,6 +205,17 @@ export function addFactToWiki(_userId, fact, opts = null) {
   //   단일 SSoT 함수라 모든 호출 경로(session-summarizer/wiki-ingester/claude-runner)를 한 곳에서 보호.
   fact = maskPII(String(fact || ''));
 
+  // 🛡️ 조각·마크업 오염 가드 (2026-07-11 신설 — 7일 이력 감사에서 JSON 파편·HTML 주석이
+  // 사실로 박제된 사례 다수 적발: career L9518 `채우기","중급...`, L9637 `--&gt; 요약 완료`)
+  // ① 중복 태깅 정규화 — 호출부가 이미 `[YYYY-MM-DD] [source:X]` 접두를 붙여 보낸 경우 제거
+  //    (family L306 `[source:discord] [2026-07-03] [source:claude-code-cli] ...` 이중 태그 재발 방지)
+  fact = fact.replace(/^(\s*\[\d{4}-\d{2}-\d{2}\]\s*(\[source:[^\]]+\]\s*)?)+/, '').trim();
+  // ② 원시 조각 판정 — JSON 키·값 시그니처, HTML 주석/엔티티, 선두 구두점 = 완결 문장 아님 → 적재 거부
+  const FRAGMENT_PATTERNS = [/^["}\],:>]/, /":"/, /<!--|-->/, /&lt;!--|--&gt;/, /^\s*[{[][\s\S]*[}\]]\s*$/];
+  if (fact.length < 5 || FRAGMENT_PATTERNS.some((re) => re.test(fact))) {
+    return null; // 오염 조각 — 저장 안 함 (호출부는 도메인 문자열 대신 null 수신)
+  }
+
   let domainOverride = null;
   let source = 'discord';
   if (typeof opts === 'string') {

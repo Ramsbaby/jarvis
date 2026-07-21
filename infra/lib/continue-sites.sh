@@ -156,6 +156,21 @@ run_with_recovery() {
     shift
     local args=("$@")
 
+    # PATH 강화 (cron 환경에서 경로 누락 방지 — bot-cron.sh 상속 보증)
+    export PATH="${BOT_HOME:-${HOME}/.jarvis}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH:-/usr/bin:/bin}"
+
+    # DEBUG: 받은 인자 로깅
+    {
+      echo "[DEBUG run_with_recovery] task_id=$task_id"
+      echo "[DEBUG run_with_recovery] cmd=$cmd"
+      echo "[DEBUG run_with_recovery] args count=${#args[@]}"
+      echo "[DEBUG run_with_recovery] args[0]=${args[0]:-EMPTY}"
+      echo "[DEBUG run_with_recovery] args[1] length=${#args[1]:-}"
+      echo "[DEBUG run_with_recovery] args[2]=${args[2]:-EMPTY}"
+      echo "[DEBUG run_with_recovery] Total remaining args: $#"
+      echo "[DEBUG run_with_recovery] PATH=$PATH"
+    } >> "/tmp/run-with-recovery-debug-$$.log" 2>&1
+
     # args 배열에서 MODEL 위치 파악 (retry-wrapper.sh 인자 순서 기준: index 6 = MODEL)
     # args[0]=TASK_ID, [1]=PROMPT, [2]=TOOLS, [3]=TIMEOUT, [4]=BUDGET, [5]=RETENTION, [6]=MODEL, [7]=MAX_RETRIES
     local original_model="${args[6]:-}"
@@ -165,6 +180,12 @@ run_with_recovery() {
     local stderr_tmp="/tmp/cs-recovery-${task_id}-$$.err"
     local exit_code=0
     local rate_limit_detected=false
+
+    # 임시 파일 생성 가능 여부 확인
+    if ! touch "$result_tmp" "$stderr_tmp" 2>/dev/null; then
+        echo "[ERROR run_with_recovery] 임시 파일 생성 실패: $result_tmp / $stderr_tmp" >&2
+        return 127
+    fi
 
     # ========================================
     # Stage 1: 원래 설정으로 실행
@@ -184,7 +205,7 @@ run_with_recovery() {
     if [[ $exit_code -eq 0 ]]; then
         _cs_log "$task_id" 1 "original_settings → SUCCESS"
         _cs_record_stat "$task_id" 1 "success"
-        cat "$result_tmp"
+        cat "$result_tmp" 2>/dev/null || true
         rm -f "$result_tmp" "$stderr_tmp"
         return 0
     fi
@@ -247,12 +268,12 @@ run_with_recovery() {
         _cs_log "$task_id" "1a" "oauth_refresh_retry → RUNNING"
 
         exit_code=0
-        "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+        bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
 
         if [[ $exit_code -eq 0 ]]; then
             _cs_log "$task_id" "1a" "oauth_refresh_retry → SUCCESS"
             _cs_record_stat "$task_id" 1 "recovered"
-            cat "$result_tmp"
+            cat "$result_tmp" 2>/dev/null || true
             rm -f "$result_tmp" "$stderr_tmp"
             return 0
         fi
@@ -308,12 +329,12 @@ run_with_recovery() {
         _cs_log "$task_id" 2 "context_minimal (after rate_limit_wait) → RUNNING"
 
         exit_code=0
-        "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+        bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
 
         if [[ $exit_code -eq 0 ]]; then
             _cs_log "$task_id" 2 "context_minimal → SUCCESS (after rate_limit_wait)"
             _cs_record_stat "$task_id" 2 "recovered"
-            cat "$result_tmp"
+            cat "$result_tmp" 2>/dev/null || true
             rm -f "$result_tmp" "$stderr_tmp"
             export JARVIS_CONTEXT_MODE="$original_context_mode"
             return 0
@@ -339,7 +360,7 @@ run_with_recovery() {
         _cs_log "$task_id" 2 "context_minimal → RUNNING"
 
         exit_code=0
-        "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+        bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
 
         if [[ $exit_code -eq 0 ]]; then
             _cs_log "$task_id" 2 "context_minimal → SUCCESS"
@@ -373,7 +394,7 @@ run_with_recovery() {
         _cs_log "$task_id" 3 "model_downgrade(${original_model:-default}→${downgraded_model}) → RUNNING"
 
         exit_code=0
-        "$cmd" "${stage3_args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+        bash "$cmd" "${stage3_args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
 
         if [[ $exit_code -eq 0 ]]; then
             _cs_log "$task_id" 3 "model_downgrade → SUCCESS"
@@ -405,7 +426,7 @@ run_with_recovery() {
     _cs_log "$task_id" 4 "prompt_simplified(context=none,model=${downgraded_model}) → RUNNING"
 
     exit_code=0
-    "$cmd" "${stage4_args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+    bash "$cmd" "${stage4_args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
 
     if [[ $exit_code -eq 0 ]]; then
         _cs_log "$task_id" 4 "prompt_simplified → SUCCESS"

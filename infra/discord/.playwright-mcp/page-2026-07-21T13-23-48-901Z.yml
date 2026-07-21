@@ -1,0 +1,53 @@
+- generic [ref=e2]:
+  - paragraph [ref=e3]:
+    - generic [ref=e4]:
+      - text: "Customer name:"
+      - textbox "Customer name:" [ref=e5]
+  - paragraph [ref=e6]:
+    - generic [ref=e7]:
+      - text: "Telephone:"
+      - textbox "Telephone:" [ref=e8]
+  - paragraph [ref=e9]:
+    - generic [ref=e10]:
+      - text: "E-mail address:"
+      - textbox "E-mail address:" [ref=e11]
+  - group "Pizza Size" [ref=e12]:
+    - paragraph [ref=e14]:
+      - generic [ref=e15]:
+        - radio "Small" [ref=e16]
+        - text: Small
+    - paragraph [ref=e17]:
+      - generic [ref=e18]:
+        - radio "Medium" [ref=e19]
+        - text: Medium
+    - paragraph [ref=e20]:
+      - generic [ref=e21]:
+        - radio "Large" [ref=e22]
+        - text: Large
+  - group "Pizza Toppings" [ref=e23]:
+    - paragraph [ref=e25]:
+      - generic [ref=e26]:
+        - checkbox "Bacon" [ref=e27]
+        - text: Bacon
+    - paragraph [ref=e28]:
+      - generic [ref=e29]:
+        - checkbox "Extra Cheese" [ref=e30]
+        - text: Extra Cheese
+    - paragraph [ref=e31]:
+      - generic [ref=e32]:
+        - checkbox "Onion" [ref=e33]
+        - text: Onion
+    - paragraph [ref=e34]:
+      - generic [ref=e35]:
+        - checkbox "Mushroom" [ref=e36]
+        - text: Mushroom
+  - paragraph [ref=e37]:
+    - generic [ref=e38]:
+      - text: "Preferred delivery time:"
+      - textbox "Preferred delivery time:" [ref=e39]
+  - paragraph [ref=e40]:
+    - generic [ref=e41]:
+      - text: "Delivery instructions:"
+      - textbox "Delivery instructions:" [ref=e42]
+  - paragraph [ref=e43]:
+    - button "Submit order" [ref=e44]

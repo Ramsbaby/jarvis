@@ -26,6 +26,21 @@ const CAREER_CHANNEL_PATTERN = INTERVIEW_CHANNEL_PATTERN; // legacy alias (isCar
 // visualization 관련 채널: owner/visualization.md 주입
 const VISUAL_CHANNEL_PATTERN = /system|ops|stats|board|chart|visual|시각|trading|tqqq|monitor|서버|infra/i;
 
+// ── 응답 길이 정책: 채널별 차등 (2026-07-20) ────────────────────────────────
+// 배경: 깊이 가드(최소 1,000자+·9항목 분석 파이프라인)가 채널 무관하게 전 채널에 주입되어
+//   가족·튜터·일상 채널까지 900자+ 벽글화 → 주인님 모바일(디스코드 앱) UX 저하로 앱 이탈.
+//   (검증관 실측 진단 + persona-discord.md "가족·교육 채널 깊이 분기" 자기지적)
+// 진자를 중앙으로: 일상/가족/튜터 채널은 "모바일 간결 기본 + 깊이 on-demand",
+//   분석 채널(career/dev/ceo/market)은 깊이가 정당하므로 현행 깊이 가드 유지.
+// 이 목록의 채널은 buildDepthGuardSection에서 무거운 깊이 가드 대신 간결 가드가 주입된다.
+const DAILY_CONCISE_CHANNEL_IDS = new Set([
+  '1468386844621144065', // jarvis (메인) — 일상 대화 주채널
+  '1472965899790061680', // jarvis-boram — 보람님 전용
+  '1469999923633328279', // jarvis-family — 가족
+  '1470011814803935274', // jarvis-preply-tutor — 튜터
+  '1470559565258162312', // jarvis-lite — 라이트
+]);
+
 // ── Stable sections (always included, contribute to session hash) ──────────────
 
 export function buildIdentitySection({ botName, ownerName }) {
@@ -120,7 +135,7 @@ export function buildFormatDetailSection() {
     '정상: 5763719(초록), 경고: 16705372(노랑), 장애: 15548997(빨강), 정보: 5793266(파랑)',
     '',
     '【응답 마커 — 조건 충족 시 생략 금지】',
-    'TABLE_DATA: 2개+ 항목 열 비교, "vs/비교/차이점/장단점" 요청 시.\n형식: TABLE_DATA:{"title":"제목","columns":["열1","열2",...],"dataSource":[{"열1":"값","열2":"값",...},...]}',
+    'TABLE_DATA: 2개+ 항목 열 비교, "vs/비교/차이점/장단점" 요청 시.\n형식: TABLE_DATA:{"title":"제목","columns":["열1","열2"],"dataSource":[{"열1":"값","열2":"값"}]} — columns의 각 문자열은 dataSource 객체의 key와 정확히 일치해야 함. ⚠️ TABLE_DATA 마커는 반드시 응답 최하단에 단독 배치(앞에 긴 본문을 두면 스트림 분할로 마커가 깨져 raw JSON이 노출됨).',
     '',
     'CHART_DATA: 수치 시각화, "그래프/차트/추이/트렌드" 요청 시.\n형식: CHART_DATA:{"type":"line","title":"제목","labels":[...],"datasets":[{"label":"...","data":[...]}]}',
     '',
@@ -394,7 +409,23 @@ export function buildOwnerPersonaSection({ botHome, emotionalTurn = false }) {
  *   persona-discord.md "## 질문 길이 ≠ 응답 깊이" ~ "## 모델 깊이 가드" 추출. 감정 턴 제외(감정 가드 주도).
  *   헤더 "응답 깊이 가드" → inferSectionName이 'depth-guard'(score 9, prompt-harness.js) 추론.
  */
-export function buildDepthGuardSection({ botHome }) {
+export function buildDepthGuardSection({ botHome, channelId }) {
+  // [2026-07-20] 채널별 응답 길이 차등: 일상/가족/튜터 채널은 무거운 깊이 가드(1,000자+·9항목)
+  //   대신 "모바일 간결 기본 + 깊이 on-demand" 가드를 주입한다. 헤더 토큰 "응답 깊이 가드"를
+  //   유지해 inferSectionName이 depth-guard(score 9)로 인식 → budget 절단에서 동일하게 보호됨.
+  //   분석 채널(career/dev/ceo/market)·기타 운영 채널은 아래 무거운 깊이 가드를 현행 유지.
+  if (channelId && DAILY_CONCISE_CHANNEL_IDS.has(channelId)) {
+    return [
+      '--- 응답 깊이 가드 (일상·가족·튜터 채널 — 모바일 간결 기본 · 항상 준수) ---',
+      '주인님·가족이 디스코드 모바일 앱으로 읽습니다. 한 응답이 900자를 넘는 벽글은 UX를 해쳐 앱 이탈을 부릅니다. 이 채널의 기본값은 모바일 간결입니다.',
+      '- 결론을 첫 줄에. 단순 확인·잡담·정보 조회는 1~3줄, 일반 대화는 3~8줄을 기준으로 한다.',
+      '- 단, 설명·비교·결정·투자·건강·교육·여행계획처럼 깊이가 필요한 질문은 충분히 답하되 — 결론부터, 불릿(-)으로 쪼개, 장황한 서론·중복·미사여구 없이. 깊이는 길이가 아니라 구체성·개인화에서 온다.',
+      "- '이거 어때?' 류엔 결론 + 이유 + 장단점 + 더 나은 대안을 압축해 담는다. 내용 없는 되묻기·'좋아요' 한 줄·무료 AI식 일반론 금지 (빈약 ≠ 간결).",
+      "- 사용자가 '자세히/더/왜/깊게'를 요청하면 그때 확장한다.",
+      '- 감정 발화는 이 길이 규칙과 무관 — 공감 가드가 주도한다(짧더라도 따뜻하게).',
+      '- 마크다운 헤딩(##/###)·테이블(| |) 금지. 불릿(-)·이모지는 유지.',
+    ].join('\n');
+  }
   const personaPath = join(botHome, 'context', 'owner', 'persona-discord.md');
   try {
     if (!existsSync(personaPath)) return '';

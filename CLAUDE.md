@@ -23,13 +23,6 @@ Regenerate `TASKS-INDEX.md` + `tasks-index.json` after any `~/jarvis/runtime/con
 node ~/jarvis/infra/scripts/gen-tasks-index.mjs
 ```
 
-## Project Structure
-
-- `infra/` — Discord bot, automation scripts, MCP nexus, agents
-- `rag/` — RAG knowledge base (LanceDB + Ollama hybrid search)
-- `scripts/` — Setup wizards (setup_rag.py, setup_infra.py)
-- `docs/img/` — README screenshots
-
 ## Development Rules
 
 - No hardcoded user paths — use environment variables (`BOT_HOME`, `JARVIS_RAG_HOME`)

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-07-06T00:10:05.587Z",
-  "totalLaunchAgents": 71,
-  "activeCount": 71,
+  "generatedAt": "2026-07-13T00:10:05.370Z",
+  "totalLaunchAgents": 70,
+  "activeCount": 70,
   "inactiveCount": 0,
   "source": "~/Library/LaunchAgents/ai.jarvis.*.plist + launchctl list",
   "agents": [
@@ -52,7 +52,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node ~/jarvis-board/.next/standalone/jarvis-board/server.js",
       "active": true,
-      "pid": "676",
+      "pid": "607",
       "lastExitCode": "0"
     },
     {
@@ -102,7 +102,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/cloudflared tunnel",
       "active": true,
-      "pid": "672",
+      "pid": "603",
       "lastExitCode": "0"
     },
     {
@@ -132,7 +132,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/bot-preflight.sh",
       "active": true,
-      "pid": "71695",
+      "pid": "90458",
       "lastExitCode": "0"
     },
     {
@@ -142,7 +142,7 @@
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/infra/scripts/docs-freshness-audit.sh",
       "active": true,
-      "pid": "38432",
+      "pid": "37120",
       "lastExitCode": "0"
     },
     {
@@ -182,7 +182,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/event-watcher.sh",
       "active": true,
-      "pid": "684",
+      "pid": "615",
       "lastExitCode": "0"
     },
     {
@@ -222,7 +222,7 @@
       "runAtLoad": true,
       "program": "~/actions-runner/run.sh",
       "active": true,
-      "pid": "691",
+      "pid": "622",
       "lastExitCode": "0"
     },
     {
@@ -252,7 +252,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node ~/jarvis/infra/scripts/interview-verifier-server.mjs",
       "active": true,
-      "pid": "692",
+      "pid": "623",
       "lastExitCode": "0"
     },
     {
@@ -262,7 +262,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/infra/scripts/launchagents-watcher.sh",
       "active": true,
-      "pid": "688",
+      "pid": "619",
       "lastExitCode": "0"
     },
     {
@@ -313,7 +313,7 @@
       "program": "/bin/bash ~/jarvis/infra/scripts/model-version-audit.sh",
       "active": true,
       "pid": "-",
-      "lastExitCode": "1"
+      "lastExitCode": "0"
     },
     {
       "label": "ai.jarvis.oauth-nightcheck-oneshot",
@@ -332,7 +332,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node ~/jarvis/runtime/discord/lib/orchestrator.mjs",
       "active": true,
-      "pid": "673",
+      "pid": "604",
       "lastExitCode": "0"
     },
     {
@@ -352,7 +352,7 @@
       "runAtLoad": false,
       "program": "/opt/homebrew/bin/node ~/jarvis/infra/scripts/plist-env-audit.mjs",
       "active": true,
-      "pid": "38433",
+      "pid": "37121",
       "lastExitCode": "0"
     },
     {
@@ -402,7 +402,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node --max-old-space-size=150",
       "active": true,
-      "pid": "22491",
+      "pid": "99509",
       "lastExitCode": "0"
     },
     {
@@ -526,16 +526,6 @@
       "lastExitCode": "0"
     },
     {
-      "label": "ai.jarvis.session-summarizer",
-      "file": "ai.jarvis.session-summarizer.plist",
-      "schedule": "매일 03:00 KST",
-      "runAtLoad": false,
-      "program": "/opt/homebrew/bin/node ~/jarvis/runtime/discord/lib/session-summarizer.mjs",
-      "active": true,
-      "pid": "-",
-      "lastExitCode": "0"
-    },
-    {
       "label": "ai.jarvis.silent-error-spike",
       "file": "ai.jarvis.silent-error-spike.plist",
       "schedule": "3600s 주기",
@@ -623,7 +613,7 @@
       "program": "/bin/bash ~/jarvis/infra/scripts/symlink-topology-audit.sh",
       "active": true,
       "pid": "-",
-      "lastExitCode": "1"
+      "lastExitCode": "0"
     },
     {
       "label": "ai.jarvis.sync-system-metrics",
@@ -652,7 +642,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/watchdog.sh",
       "active": true,
-      "pid": "659",
+      "pid": "590",
       "lastExitCode": "0"
     },
     {

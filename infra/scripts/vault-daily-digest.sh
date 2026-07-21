@@ -105,7 +105,12 @@ if [[ -x "$BOT_HOME/bin/ask-claude.sh" ]]; then
 
     # ask-claude.sh 파라미터: TASK_ID PROMPT ALLOWED_TOOLS TIMEOUT MAX_BUDGET RESULT_RETENTION MODEL
     # 올바른 순서: task_id, prompt, allowed_tools(Read), timeout(60s), max_budget(0.50), retention(1day), model()
-    timeout 80s "$BOT_HOME/bin/ask-claude.sh" "vault-digest" "$PROMPT" "Read" "60" "0.50" "1" 2>>"$STDERR_LOG" || true
+    # 2026-07-19 vault-fix: 7번째 인자로 모델을 Haiku로 고정.
+    #   근본원인: 모델 미지정 → 기본 Opus 라우팅 → 129KB 프롬프트(600+ 변경파일)의 캐시 생성비가
+    #   0.50 예산 초과 → claude가 error_max_budget_usd 반환 → 7일간 무음 실패(폴백 저품질 덤프).
+    #   실측 근거: FAIL-DIAG task=vault-digest subtype=error_max_budget_usd model=opus prompt_bytes~129K.
+    #   Haiku 실측: 동일 규모 프롬프트 cost=$0.226(<0.50) · 14s · 정상 한국어 요약 생성.
+    timeout 80s "$BOT_HOME/bin/ask-claude.sh" "vault-digest" "$PROMPT" "Read" "60" "0.50" "1" "claude-haiku-4-5-20251001" 2>>"$STDERR_LOG" || true
 
     # 정리
     rm -f "$PROMPT_FILE" 2>/dev/null || true
@@ -115,7 +120,10 @@ if [[ -x "$BOT_HOME/bin/ask-claude.sh" ]]; then
     if [[ -d "$RESULT_DIR" ]]; then
         LATEST_RESULT=$(find "$RESULT_DIR" -name "*.md" -type f 2>/dev/null | sort -r | head -1)
         if [[ -n "$LATEST_RESULT" && -s "$LATEST_RESULT" ]]; then
-            SUMMARY=$(cat "$LATEST_RESULT" 2>/dev/null || true)
+            # 2026-07-19 vault-fix: 결과 파일은 '# Task/## Prompt/<129KB 프롬프트>/## Result/<요약>' 구조.
+            #   기존엔 cat으로 전체를 읽어 digest에 프롬프트 원문(129KB)까지 박혀 요약이 묻혔음.
+            #   '## Result' 섹션 이후만 추출해 실제 요약만 남긴다. 추출 실패 시 안전하게 빈 값 → 파일목록 폴백.
+            SUMMARY=$(sed -n '/^## Result$/,$p' "$LATEST_RESULT" 2>/dev/null | sed '1d' || true)
         fi
     fi
 fi

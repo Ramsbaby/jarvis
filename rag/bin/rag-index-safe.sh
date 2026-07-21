@@ -58,7 +58,10 @@ if [ "${RAG_INDEX_FORCE:-0}" = "1" ]; then
 elif [ "${_mem_pressure:-1}" -ge 2 ]; then
   echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] SKIP: OS 메모리 압박 레벨 ${_mem_pressure} (경고/위험) — 인덱싱 연기, 다음 트리거에서 재시도" >> "$LOG"
   exit 0
-elif [ "${_swap_free:-99999}" -lt 400 ]; then
+elif [ "${_swap_used:-0}" -gt 0 ] && [ "${_swap_free:-99999}" -lt 400 ]; then
+  # [2026-07-10 수정] swap total=0(스왑 미사용·최건강 상태)이면 free=0으로 읽혀 영구 SKIP되는 버그.
+  #   실사고: 2026-07-09 13:30부터 20시간 연속 SKIP(25회) — 신규 기억 인덱싱 전면 정지.
+  #   조건 보강: 스왑을 실제로 사용 중(used>0)일 때만 free<400MB backstop 발동.
   echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] SKIP: 스왑 여유 ${_swap_free}MB (<400MB, 소진 임박) — 인덱싱 연기, 다음 트리거에서 재시도" >> "$LOG"
   exit 0
 fi

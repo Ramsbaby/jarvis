@@ -42,10 +42,10 @@ try {
 const PRINT_CSS = `
   nav, .unit-tabs, .tabs, .unit-selector { display: none !important; }
   .tab-content { display: block !important; }
-  .vcard, .quiz-item, .grammar-box, .key-point, .culture-box, .dialog-box,
+  .vcard, .quiz-item, .key-point, .culture-box, .dialog-box,
   .ws-block, .rp-card, .word-card, .warn-box, .exercise-box, .extra-examples,
   .grammar-detail, .obj-box, .d-line, .sec, .word-grid > *, .phrase-card,
-  .practice-card, .match-card {
+  .practice-card, .match-card, .concept-box, .mistake-box, .because-row {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
@@ -136,7 +136,7 @@ async function main() {
   // 시스템 Chrome 사용 — playwright 번들 headless-shell 미설치 환경에서도 동작.
   let browser;
   try {
-    browser = await chromium.launch({ channel: 'chrome' });
+    browser = await chromium.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   } catch (e) {
     console.error('❌ Chrome 실행 실패. macOS에 Google Chrome 설치가 필요합니다.');
     console.error('   ' + e.message.split('\n')[0]);

@@ -170,3 +170,11 @@ if $SEND_DISCORD; then
         if [[ "$HTTP" != "204" ]]; then echo "⚠️ Discord 전송 실패: HTTP $HTTP" >&2; fi
     fi
 fi
+
+# ── 개선 계기판 측정일 파수꾼 (measure-day watchman) ─────────────────────────
+# 이 주간 크론(월 08:00 KST)에 편승. 오늘이 improvement-scorecard measure_calendar의
+# 측정일(D+7=2026-07-27·D+14=2026-08-03 — 둘 다 월요일이라 이 크론이 그 날 반드시 돔)이면
+# 해당 지표를 measure하고 jarvis-retro 로 알림. 측정일 아니면 스크립트가 조용히 exit 0.
+# 실패해도 KPI 마감 본체가 깨지지 않도록 || true 로 격리. (새 크론·데몬 0)
+_SCORECARD_NODE="$(command -v node || echo /opt/homebrew/bin/node)"
+"$_SCORECARD_NODE" "$HOME/jarvis/infra/scripts/improvement-scorecard-measure.mjs" --check-due || true
