@@ -20,9 +20,11 @@ log() { echo "[$(ts)] [mistake-pattern-analyzer] $*" | tee -a "$LOG_FILE"; }
 
 log "=== Mistake Pattern Analysis start ==="
 
-TOTAL=$(grep -c "^## 2026-" "$WIKI_LM" 2>/dev/null || echo 0)
+# [2026-07-22] 본체+아카이브 glob 집계(아카이빙 후 카운트·키워드 분포 왜곡 방지). SIZE_KB는 활성본 기준 유지.
+source "$HOME/jarvis/infra/lib/learned-mistakes-glob.sh"
+TOTAL=$(lm_grep "^## 2026-" | wc -l | tr -d ' \n')
 SIZE_KB=$(($(wc -c < "$WIKI_LM") / 1024))
-HEADERS=$(grep "^## 2026-" "$WIKI_LM" 2>/dev/null | sed 's/^## 2026-[0-9-]* — //')
+HEADERS=$(lm_grep "^## 2026-" | sed 's/^## 2026-[0-9-]* — //')
 
 # 키워드|설명 (parallel arrays — bash assoc array 한글 키 호환성 회피)
 KW_KEYS=("단정" "미확인" "편향" "검증 누락" "SSoT 미탐색" "미실측" "코드 미열람" "근본 원인 미" "조기 완료" "응답 압박")

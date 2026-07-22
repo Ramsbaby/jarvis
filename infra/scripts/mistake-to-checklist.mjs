@@ -12,6 +12,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { readAllMistakes } from '../lib/learned-mistakes.mjs'; // [2026-07-22] 본체+아카이브 통합 조회
 
 const BOT_HOME = process.env.BOT_HOME || `${process.env.HOME}/jarvis/runtime`;
 const MISTAKES = `${BOT_HOME}/wiki/meta/learned-mistakes.md`;
@@ -29,7 +30,7 @@ if (!fs.existsSync(MISTAKES)) {
   process.exit(0);
 }
 
-const content = fs.readFileSync(MISTAKES, 'utf8');
+const content = readAllMistakes(); // [2026-07-22] 본체+아카이브 전체 파싱(아카이빙된 옛 대응 누락 방지)
 
 // split 기반 파싱 (matchAll 유니코드 regex 이슈 우회)
 // 결과: [prefix, date1, rest1, date2, rest2, ...]

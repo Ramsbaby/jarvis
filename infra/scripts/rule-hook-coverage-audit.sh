@@ -27,8 +27,9 @@ JARVIS_BIN="${HOME}/jarvis/infra/scripts"
 log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*" | tee -a "${LOG}"; }
 log "=== rule-hook-coverage-audit 시작 ==="
 
-# 1) 총 룰 카운트
-TOTAL=$(grep -c "^## " "${RULES_MD}" 2>/dev/null || true)
+# 1) 총 룰 카운트 — [2026-07-22] 본체+아카이브 glob 집계(아카이빙 후 카운트 왜곡 방지)
+source "$HOME/jarvis/infra/lib/learned-mistakes-glob.sh"
+TOTAL=$(lm_grep "^## " | wc -l | tr -d ' \n')
 TOTAL=${TOTAL:-0}
 log "총 룰 entry: ${TOTAL}건"
 

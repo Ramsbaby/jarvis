@@ -15,8 +15,9 @@ _log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
 [ -f "$MISTAKES" ] || { _log "learned-mistakes 없음"; exit 0; }
 
-# 현재 ## 헤더 (실수 항목) 카운트
-CURRENT=$(grep "^## 2026-" "$MISTAKES" 2>/dev/null | wc -l | tr -d ' \n')
+# 현재 ## 헤더 (실수 항목) 카운트 — [2026-07-22] 본체+아카이브 glob 집계(카운트 급락 시 영구침묵 방지)
+source "$JARVIS_HOME/infra/lib/learned-mistakes-glob.sh"
+CURRENT=$(lm_grep "^## 2026-" | wc -l | tr -d ' \n')
 
 # 첫 실행: baseline만 등록 (모든 기존 항목 skip)
 if [ ! -f "$STATE_FILE" ]; then

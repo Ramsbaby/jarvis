@@ -18,6 +18,7 @@
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { readAllMistakes } from '../lib/learned-mistakes.mjs'; // [2026-07-22] 본체+아카이브 통합 조회
 import { homedir } from 'node:os';
 
 const HOME = homedir();
@@ -34,7 +35,7 @@ function nowKST() {
 // ① 주간 오답노트 신규 등재 수 (최근 28일, 7일 버킷)
 function weeklyMistakes() {
   if (!existsSync(MISTAKES)) return null;
-  const dates = [...readFileSync(MISTAKES, 'utf-8').matchAll(/^## (\d{4}-\d{2}-\d{2}) — /gm)]
+  const dates = [...readAllMistakes().matchAll(/^## (\d{4}-\d{2}-\d{2}) — /gm)] // [2026-07-22] 본체+아카이브 합산
     .map((m) => m[1]);
   const today = new Date(nowKST().slice(0, 10));
   const buckets = [0, 0, 0, 0]; // [이번 주(0~6일 전), 1주 전, 2주 전, 3주 전]

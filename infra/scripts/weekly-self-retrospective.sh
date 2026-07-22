@@ -70,7 +70,9 @@ if [ "$META_AUDIT_AGE_DAYS" -gt 8 ]; then
 fi
 
 # ── 5. 학습된 오답노트 신규 추가 ────────────────────────────────────
-NEW_MISTAKES_7D=$(grep -c "^## 2026-" "$JARVIS_HOME/runtime/wiki/meta/learned-mistakes.md" 2>/dev/null || echo 0)
+# [2026-07-22] 본체+아카이브 glob 집계(아카이빙 후 카운트 급락 방지). ※변수명은 7D이나 실제 전체 2026 항목 카운트(기존 라벨 유지).
+source "$HOME/jarvis/infra/lib/learned-mistakes-glob.sh"
+NEW_MISTAKES_7D=$(lm_grep "^## 2026-" | wc -l | tr -d ' \n')
 
 # ── 6. 자비스 자체 평가 (단순 룰) ───────────────────────────────────
 HEALTH="🟢 양호"
