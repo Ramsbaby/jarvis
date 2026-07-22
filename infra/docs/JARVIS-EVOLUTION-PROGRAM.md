@@ -183,7 +183,8 @@ lib/state-dedup.mjs  (신규 ~50줄 · JS 호출자용)
 | **세션 재질문** | **md5(질문대상 엔티티 + 결과상태)** | 예: `md5("면접태스크-결과|탈락")`. 엔티티=특정 결정+해결상태. "탈락인데 또 물어봐" 원천 차단 |
 
 ### 오늘 잔여 결함 동시 처리 (R1·R3) — ✅ 2026-07-22 구현·자체검증 완료
-- **R1 근본수정 [구현됨]**: check2를 표시라인 파싱 대신 **`gog tasks list --json`의 불변 `.id`** 기반으로 재작성. md5 폴백 완전 제거(+고아 `hashlib` import 정리). no-ID 시 fail-closed(발송 스킵+로그). **키가 `.id`라 UPDATED/제목 변경에도 불변 → R1 반례조건(재저장 시 재스팸) 구조적 차단.** 라이브 재현: 결과마커 태스크→SKIP·완료 태스크→SKIP(안정키 dedup)·would_send=0.
+- **R1 근본수정 [구현됨]**: check2를 표시라인 파싱 대신 **`gog tasks list --json`의 불변 `.id`** 기반으로 재작성. md5 폴백 완전 제거(+고아 `hashlib` import 정리). no-ID 시 fail-closed(발송 스킵+로그+**Discord 스키마변동 경보**). **키가 `.id`라 UPDATED/제목 변경에도 불변 → R1 반례조건(재저장 시 재스팸) 구조적 차단.** 라이브 재현: 결과마커 태스크→SKIP·완료 태스크→SKIP(안정키 dedup)·would_send=0.
+- **RR3·RR4 해소 [구현됨, commit 5a7cad7]**: 독립검증관 후속 권고 — gog가 `.id` 필드명을 바꾸면 완료 태스크 전량이 no-ID로 빠지므로, **fail-closed 지점이 곧 스키마 변동 발현점**. 여기에 반응형 경보(실행당 1회)를 붙여 RR4(무음 관측)·RR3(스키마 감시)를 **별도 크론 없이** 동시 해소.
 - **R3 고아키 청소 [구현됨]**: state의 레거시 고아키 **11개**(날짜키 10 + md5 `d58f67908590`) 제거, 유효 안정키 `task_complete_U3ZVaFY2cmVZUlZMczdybQ`(완료면접 태스크) 보존. (신규 코드는 안정 ID만 생성 → 고아 발생원 제거됨)
 - **롤백**: `runtime/backup/*.bak-keystone-20260722-155316` (proactive-engine.sh·state json). 원장: `policy-fix-disable.jsonl`.
 - ⚠️ **게이트④(독립검증)**: 이 변경은 자체검증만 완료 — 독립 검증관 CONFIRMED 대기 중. capability-merge-gate가 CONFIRMED 없으면 머지 차단(정상).
