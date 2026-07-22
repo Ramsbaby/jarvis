@@ -194,7 +194,7 @@ run_with_recovery() {
     _cs_log "$task_id" 1 "original_settings → RUNNING"
 
     exit_code=0
-    "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+    bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
 
     # Rate limit 감지 (early exit 전)
     if _detect_rate_limit "$result_tmp" || _detect_rate_limit "$stderr_tmp"; then
