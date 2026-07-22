@@ -34,6 +34,10 @@ const checks = s0.length;
 const violations = s0.reduce((a, e) => a + (e.violations || 0), 0);
 const vioRate = checks ? violations / checks : 0;
 const trustScore = Math.round(100 * (1 - Math.min(1, vioRate * 10)));
+// [감사 B3, 2026-07-22] 거짓완료(완료선언 검증 게이트: evidence_gate·audit_gate)는 trustScore 공식이
+//   쓰는 violations 필드에 안 잡힌다(그 레코드엔 violations 필드가 없음) → 지금까지 미채점.
+//   기존 공식은 이력 연속성 위해 불변으로 두고, 별도 '관측 지표'로 표면화만 한다(채점 아님).
+const falseCompletions = s0.filter(e => e.status === 'evidence_gate' || e.status === 'audit_gate').length;
 
 // ── 축 2: 복리 학습 (promoter 구현율 − 재발 페널티) ──────────
 const pm = readJsonl(join(LEDGER, 'promoter-ledger.jsonl')).filter(e => e.type === 'run_metrics' && inWindow(e.ts));
@@ -74,7 +78,7 @@ const trend = delta === null ? '첫 측정' : delta >= 0 ? `▲ +${delta}` : `�
 const entry = {
   ts: new Date(now).toISOString(),
   overall, trustScore, learnScore, timeScore,
-  raw: { checks, violations, candidates: cand, acted, recurrences, zombies, interventions },
+  raw: { checks, violations, falseCompletions, candidates: cand, acted, recurrences, zombies, interventions },
 };
 appendFileSync(SELF_LEDGER, JSON.stringify(entry) + '\n');
 
@@ -87,11 +91,12 @@ console.log(`🎯 북극성 정렬 감사 (최근 7일, KST ${new Date(now).toLo
 console.log(`   ⏱️  시간 해방  ${timeScore}점 (좀비 ${zombies}건 · 수동 개입 ${interventions}건)`);
 console.log(`   📚 복리 학습  ${learnScore}점 (구현행동 ${acted}/${cand} · 재발 ${recurrences}건)`);
 console.log(`   🤝 신뢰 자율  ${trustScore}점 (§0 위반 ${violations}/${checks})`);
+console.log(`   🚨 거짓완료  ${falseCompletions}건 (완료선언 검증 게이트 위반, 최근 7일 · 관측 지표 — 채점 미반영)`);
 console.log(`   🧭 종합 ${overall}점 ${trend}${dryrun ? ' [DRYRUN — Discord 미전송]' : ''}`);
 
 if (!dryrun) {
   try {
-    execFileSync('node', [join(HOME, '.jarvis/scripts/discord-visual.mjs'),
+    execFileSync(process.execPath, [join(HOME, '.jarvis/scripts/discord-visual.mjs'),
       '--type', 'stats',
       '--data', JSON.stringify({
         title: `🧭 북극성 정렬 ${overall}점 (${trend})`,

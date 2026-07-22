@@ -275,26 +275,46 @@ except Exception as e:
 plog("체크 2: gog tasks 완료 항목 스캔")
 TASK_KEYWORDS = ['면접', '시험', '인터뷰', '과제', 'SAA', 'SAP', '합격', '탈락', '결과', '전형', '코딩테스트']
 try:
-    cmd = ["gog", "tasks", "list", GOOGLE_TASKS_LIST_ID]
+    cmd = ["gog", "tasks", "list", GOOGLE_TASKS_LIST_ID, "--json"]
     if google_account:
         cmd += ["--account", google_account]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
     if result.returncode == 0:
         reset_check_error('check2_gog')  # 성공 → 연속 실패 초기화
-        lines = result.stdout.split('\n')
-        for line in lines:
-            if any(kw in line for kw in TASK_KEYWORDS):
-                line_lower = line.lower()
-                # 완료 표시: [x], ✅, completed
-                if '[x]' in line_lower or '✅' in line or 'completed' in line_lower:
-                    dedup_key = f"task_complete_{today_str}"
-                    if dedup_key not in state.get('sent_dates', {}):
-                        task_title = line.strip().lstrip('[xX] ').lstrip('✅ ').strip()
-                        msg = f"📋 **{task_title[:60]}** 완료 처리하셨네요. 어떻게 됐나요?"
-                        to_send.append(('task_complete', dedup_key, msg))
-                        plog(f"체크 2 TRIGGERED: {task_title[:60]}")
-                        break  # 하루 1건만
+        # 감사 R1 근본수정(2026-07-22): 구(舊) 방식은 표시라인 첫 토큰 파싱 + md5(title) 폴백이라
+        #   gog 출력 포맷·UPDATED 타임스탬프 변동에 dedup 키가 흔들려 결과무표기 완료면접이
+        #   8일 재스팸됐다. --json 구조화 응답의 불변 .id를 키로 써서 안정화하고 휘발성 폴백을 제거한다.
+        try:
+            tasks = json.loads(result.stdout).get('tasks', [])
+        except (json.JSONDecodeError, ValueError) as e:
+            plog(f"체크 2 SKIP: gog --json 파싱 실패 ({e})")
+            tasks = []
+        for task in tasks:
+            if task.get('status') != 'completed':
+                continue
+            task_title = (task.get('title') or '').strip()
+            if not any(kw in task_title for kw in TASK_KEYWORDS):
+                continue
+            # (A) 이미 결과가 기록된 태스크(탈락/합격/취소 등)는 질문 불필요 — 2026-07-22
+            #     예: "○○ 완료면접 — 결과: 탈락 확정"은 제목에 결과가 있으므로 되묻지 않음.
+            RESULT_MARKERS = ['탈락', '불합격', '합격', '최종합격', '결과 확정', '결과:', '취소', '사퇴', '포기', '철회']
+            if any(mk in task_title for mk in RESULT_MARKERS):
+                plog(f"체크 2 SKIP (결과 이미 기록됨): {task_title[:60]}")
+                continue
+            # (B) per-task dedup: 안정 식별자 = gog task ID(불변, --json .id). 폴백 없음.
+            stable_id = (task.get('id') or '').strip()
+            if not stable_id:
+                # fail-closed[RR1]: 안정 ID 없으면 발송 대신 스킵 + 관측 기록.
+                #   무작정 침묵은 정당한 알림 누락 위험이라, 발생을 로그로 노출해 관측 가능하게 둔다.
+                plog(f"체크 2 SKIP (안정 ID 미검출 — fail-closed): {task_title[:60]}")
+                continue
+            dedup_key = f"task_complete_{stable_id}"
+            if dedup_key not in state.get('sent_dates', {}):
+                msg = f"📋 **{task_title[:60]}** 완료 처리하셨네요. 어떻게 됐나요?"
+                to_send.append(('task_complete', dedup_key, msg))
+                plog(f"체크 2 TRIGGERED: {task_title[:60]}")
+                break  # 한 번에 신규 완료 태스크 1건만
     else:
         stderr_text = result.stderr or ''
         if '403' in stderr_text or 'insufficient' in stderr_text.lower() or 'permission' in stderr_text.lower():
