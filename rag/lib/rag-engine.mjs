@@ -1562,9 +1562,11 @@ export class RAGEngine {
     try {
       // LanceDB 0.26.x: db.query() SQL 미지원 → table.query() 사용
       // deleted=true 레코드 제외하고 소스 카운트 (컬럼 지원 시에만)
-      const sample = await this._withDeletedFilter(this.table.query())
-        .select(['source']).limit(10000).toArray();
-      totalSources = new Set(sample.map((r) => r.source)).size;
+      // [2026-07-22] limit 10000은 첫 1만 청크만 표본 → distinct source 904로 과소보고(실제 ~5,320, 17%만 노출).
+      //   source 컬럼만 select(벡터 제외)라 메모리 안전 — getAllSources()와 동일 패턴으로 전량 스캔해 정확화.
+      const allSourceRows = await this._withDeletedFilter(this.table.query())
+        .select(['source']).limit(1_000_000).toArray();
+      totalSources = new Set(allSourceRows.map((r) => r.source).filter(Boolean)).size;
     } catch {
       // _deletions 파일 손상 등 query 실패 시 totalSources만 0으로 처리 (totalChunks 유지)
       totalSources = 0;

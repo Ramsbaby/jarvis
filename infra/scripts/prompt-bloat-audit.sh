@@ -11,6 +11,10 @@
 
 set -uo pipefail
 
+# [2026-07-22] launchd 기본 PATH엔 /opt/homebrew/bin 부재 → node·jq 미탐으로 WARN 알림이 5주간 Discord 미도달.
+# 스케줄 LA는 정책상 crontab 이관 대상(별도 작업)이나, 최소 수술로 스크립트 내 PATH 보정(plist 미변경).
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
+
 BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
 SNAPSHOT="${BOT_HOME}/state/system-prompt-snapshot.md"
 DROPS="${BOT_HOME}/state/prompt-budget-drops.jsonl"

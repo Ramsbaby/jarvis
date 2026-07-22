@@ -75,7 +75,7 @@ function parsePlist(file) {
 }
 
 const plists = fs.readdirSync(LA_DIR)
-  .filter(f => f.startsWith('ai.jarvis.') && f.endsWith('.plist'))
+  .filter(f => (f.startsWith('ai.jarvis.') || f.startsWith('com.jarvis.')) && f.endsWith('.plist'))
   .map(f => parsePlist(path.join(LA_DIR, f)))
   .sort((a, b) => a.label.localeCompare(b.label));
 

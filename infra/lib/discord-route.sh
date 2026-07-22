@@ -159,5 +159,10 @@ discord_route() {
         --arg ts "$(date '+%Y-%m-%d %H:%M KST')" \
         '{title:$t, data:$d, timestamp:$ts}')
 
+    # [2026-07-22] 발송 원장: 순정 discord_route()가 egress 미기록이던 결함(Eureka 2026-07-15) 수리.
+    #   일일 발송량 측정 근거 확보 — 기존 egress-audit.log 재사용(DRY, 신규 원장 미생성).
+    local caller="${BASH_SOURCE[1]:-unknown}:${BASH_LINENO[0]:-0}"
+    _egress_audit "$channel" "${#payload}" "$caller"
+
     node "$DISCORD_VISUAL" --type stats --data "$payload" --channel "$channel" 2>&1 || true
 }
