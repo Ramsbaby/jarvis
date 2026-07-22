@@ -16,10 +16,10 @@
  *   --dry-run  : 삭제 없이 현황만
  *   --compact  : soft-delete 후 물리 compact (비가역, 검증 후 사용)
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, openSync, closeSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { LANCEDB_PATH, RAG_HOME } from '../lib/paths.mjs';
+import { LANCEDB_PATH, RAG_HOME, RAG_WRITE_LOCK } from '../lib/paths.mjs';
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
@@ -31,6 +31,29 @@ const JARVIS_LINK = join(homedir(), '.jarvis') + '/';
 const RUNTIME_REAL = join(homedir(), 'jarvis', 'runtime') + '/';
 const norm = (s) => (typeof s === 'string' ? s.replace(JARVIS_LINK, RUNTIME_REAL) : '');
 
+// [2026-07-22] write.lock 획득 — 인덱서(rag-index)·compact와 동시쓰기 충돌 방지.
+//   배경: rag-system.md(RAG DB 2회 파기 이력) + 2026-07-22 dedup이 락 우회로 16:30 크론과 충돌한 사고.
+//   soft-delete뿐이라 파기는 없었으나(LanceDB MVCC), 재발 방지로 인덱서와 동일 락 메커니즘 채택.
+const _pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+async function acquireWriteLock(timeoutMs = 60_000, pollMs = 500) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      const fd = openSync(RAG_WRITE_LOCK, 'wx'); // 배타적 생성
+      writeFileSync(fd, String(process.pid)); closeSync(fd);
+      return true;
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      let holder = 0;
+      try { holder = parseInt(readFileSync(RAG_WRITE_LOCK, 'utf-8').trim(), 10); } catch { /* race ok */ }
+      if (holder && !_pidAlive(holder)) { try { unlinkSync(RAG_WRITE_LOCK); } catch {} continue; } // stale 제거
+      if (Date.now() > deadline) return false; // 살아있는 다른 writer — 타임아웃
+      await new Promise((r) => setTimeout(r, pollMs));
+    }
+  }
+}
+const releaseWriteLock = () => { try { unlinkSync(RAG_WRITE_LOCK); } catch {} };
+
 async function main() {
   log(`RAG_HOME=${RAG_HOME}`);
   log(`LANCEDB_PATH=${LANCEDB_PATH}`);
@@ -38,6 +61,13 @@ async function main() {
   const db = await ldb.connect(LANCEDB_PATH);
   const t = await db.openTable('documents').catch(() => null);
   if (!t) { log('ERROR: documents 테이블 없음'); process.exit(1); }
+
+  // [2026-07-22] 쓰기 전 write.lock 획득(dry-run 제외) — 인덱서와 직렬화. 실패 시 skip(충돌 방지).
+  if (!DRY_RUN) {
+    const locked = await acquireWriteLock();
+    if (!locked) { log('write.lock 획득 실패 — 다른 프로세스가 쓰기 중(인덱서/compact). 이번 실행 skip.'); return; }
+    process.on('exit', releaseWriteLock); // 정상·조기return·오류 어느 경로든 자동 해제
+  }
 
   const total = await t.countRows();
   // 안전 가드: 경로 오인으로 빈 테이블을 건드리는 사고 방지
