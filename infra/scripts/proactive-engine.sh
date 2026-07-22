@@ -290,6 +290,7 @@ try:
         except (json.JSONDecodeError, ValueError) as e:
             plog(f"체크 2 SKIP: gog --json 파싱 실패 ({e})")
             tasks = []
+        no_id_flagged = False  # [RR3·RR4] 이번 실행에서 no-id 스키마 이상 경보 1회만
         for task in tasks:
             if task.get('status') != 'completed':
                 continue
@@ -305,9 +306,16 @@ try:
             # (B) per-task dedup: 안정 식별자 = gog task ID(불변, --json .id). 폴백 없음.
             stable_id = (task.get('id') or '').strip()
             if not stable_id:
-                # fail-closed[RR1]: 안정 ID 없으면 발송 대신 스킵 + 관측 기록.
-                #   무작정 침묵은 정당한 알림 누락 위험이라, 발생을 로그로 노출해 관측 가능하게 둔다.
+                # fail-closed[RR1]: 안정 ID 없으면 발송 대신 스킵.
+                # [RR3·RR4] gog --json에 .id가 없다는 건 스키마 변동 의심 신호다(정상 gog는 항상 .id 반환).
+                #   fail-closed로 완료면접 알림이 조용히 누락될 수 있어, 이번 실행 1회 Discord 경보로 노출한다.
+                #   (별도 감시 크론 대신 이 지점 반응형 감지로 처리 — 스키마 변동은 여기서 전량 발현되므로)
                 plog(f"체크 2 SKIP (안정 ID 미검출 — fail-closed): {task_title[:60]}")
+                if not no_id_flagged:
+                    notify_check_error('check2_gog',
+                                       'gog --json 응답에 task.id 없음 — 스키마 변동 의심(fail-closed로 완료 알림 스킵)',
+                                       force_once=True)
+                    no_id_flagged = True
                 continue
             dedup_key = f"task_complete_{stable_id}"
             if dedup_key not in state.get('sent_dates', {}):
