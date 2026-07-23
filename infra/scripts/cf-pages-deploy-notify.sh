@@ -54,7 +54,14 @@ DEPLOY_RESP=$(auth "https://api.cloudflare.com/client/v4/accounts/$ACCT/pages/pr
 [ -z "$DEPLOY_RESP" ] && { echo "deployment API 호출 실패 — skip"; exit 0; }
 DEPLOY_CODE=$(echo "$DEPLOY_RESP" | tail -1)
 DEPLOY_JSON=$(echo "$DEPLOY_RESP" | sed '$d')
-[ "$DEPLOY_CODE" != "200" ] && { echo "배포 조회 실패 (HTTP $DEPLOY_CODE) — skip"; exit 0; }
+if [ "$DEPLOY_CODE" != "200" ]; then
+  if [ "$DEPLOY_CODE" = "522" ] || [ "$DEPLOY_CODE" = "503" ] || [ "$DEPLOY_CODE" = "429" ]; then
+    echo "API 일시적 오류 (HTTP $DEPLOY_CODE, 다음 재시도 예상) — skip"
+  else
+    echo "배포 조회 실패 (HTTP $DEPLOY_CODE) — skip"
+  fi
+  exit 0
+fi
 validate_json "$DEPLOY_JSON" || { echo "deployment 응답 JSON 파싱 오류 — skip"; exit 0; }
 DEPLOY=$(echo "$DEPLOY_JSON" | jq '.result[0]' 2>/dev/null)
 [ -z "$DEPLOY" ] || [ "$DEPLOY" = "null" ] && { echo "배포 조회 실패 — skip"; exit 0; }
