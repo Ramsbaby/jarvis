@@ -1,0 +1,99 @@
+{
+  "_comment_example": "샘플 설정 — 실제 채널명은 로컬 channel-map.json 에 두십시오. ",
+  "_comment": "채널 ID · 웹훅 환경변수 매핑 단일 설정 파일 (SSoT)",
+  "_cluster": "cl-975bafeb5bb2be2b",
+  "_created": "2026-07-08",
+  "_purpose": "discord-route.sh severity→channel 라우팅과 monitoring.json webhooks 키가 일치하는지 검증하기 위한 명시적 맵",
+  "severity_to_channel": {
+    "critical": "jarvis-system",
+    "info": "jarvis-info",
+    "retro": "jarvis-retro"
+  },
+  "channels": {
+    "jarvis": {
+      "webhook_key": "jarvis",
+      "role": "main",
+      "owner_only": false,
+      "description": "메인 채널 — 일반 알림"
+    },
+    "jarvis-system": {
+      "webhook_key": "jarvis-system",
+      "role": "system-alert",
+      "owner_only": true,
+      "description": "critical severity 전용 — 즉시 대응 필요"
+    },
+    "jarvis-info": {
+      "webhook_key": "jarvis-info",
+      "role": "info-notify",
+      "owner_only": true,
+      "description": "info severity 전용 — 단순 알림 (2026-06-11 신설)"
+    },
+    "jarvis-retro": {
+      "webhook_key": "jarvis-retro",
+      "role": "retro-log",
+      "owner_only": true,
+      "description": "retro severity 전용 — 자가 회고 기록"
+    },
+    "jarvis-domain-a": {
+      "webhook_key": "jarvis-domain-a",
+      "role": "career",
+      "owner_only": false,
+      "description": "커리어 관련 알림"
+    },
+    "jarvis-market": {
+      "webhook_key": "jarvis-market",
+      "role": "market",
+      "owner_only": false,
+      "description": "마켓 관련 알림"
+    },
+    "jarvis-ceo": {
+      "webhook_key": "jarvis-ceo",
+      "role": "ceo-direct",
+      "owner_only": true,
+      "description": "CEO 직통 채널 — L4 알림"
+    },
+    "jarvis-lite": {
+      "webhook_key": "jarvis-lite",
+      "role": "lite",
+      "owner_only": false,
+      "description": "Lite 봇 채널"
+    },
+    "jarvis-interview": {
+      "webhook_key": "jarvis-interview",
+      "role": "interview",
+      "owner_only": false,
+      "description": "인터뷰 채널"
+    },
+    "jarvis-personal-a": {
+      "webhook_key": "jarvis-personal-a",
+      "role": "user-chat",
+      "owner_only": false,
+      "user_channel": true,
+      "description": "보람님 사용자 채널 — 시스템·관리자 알림 절대 금지"
+    },
+    "workgroup-board": {
+      "webhook_key": "workgroup-board",
+      "role": "workgroup",
+      "owner_only": false,
+      "description": "워크그룹 보드 채널"
+    },
+    "jarvis-personal-c": {
+      "webhook_key": null,
+      "channel_id": "1470011814803935274",
+      "role": "tutor",
+      "owner_only": false,
+      "description": "Preply 교재 업로드 채널 — 웹훅 없이 채널 ID 직접 사용"
+    }
+  },
+  "guard_rules": {
+    "block_user_channels_for_system": true,
+    "user_channels": [
+      "jarvis-personal-a"
+    ],
+    "required_severity_routing": {
+      "critical": "jarvis-system",
+      "info": "jarvis-info",
+      "retro": "jarvis-retro"
+    }
+  }
+}

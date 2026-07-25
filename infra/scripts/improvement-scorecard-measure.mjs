@@ -39,9 +39,16 @@ const SRC = {
   ragStats:      join(HOME, 'jarvis/rag/bin/rag-stats.mjs'),
 };
 
-// ── 채널 분류 (task 명세 그대로) ──────────────────────────────────────
-const DAILY_CH    = new Set(['jarvis-boram','jarvis-family','jarvis-preply-tutor','jarvis-lite','jarvis']);
-const ANALYSIS_CH = new Set(['jarvis-career','jarvis-dev','jarvis-ceo','jarvis-market']);
+// ── 채널 분류 ────────────────────────────────────────────────────────
+// 개인 식별 채널명(커리어·가족)은 공개 저장소에 하드코딩하지 않고 env 로 주입한다.
+//   CAREER_DOMAIN_CHANNEL : 커리어 도메인 채널명 (예: 배포처에서 지정)
+//   PERSONAL_CHANNELS     : 개인/가족 채널명 쉼표 구분 목록
+// 미설정 시 해당 채널은 분류에서 빠질 뿐, 나머지 측정은 정상 동작한다.
+const CAREER_CH   = process.env.CAREER_DOMAIN_CHANNEL || '';
+const PERSONAL_CH = (process.env.PERSONAL_CHANNELS || '').split(',').map(s => s.trim()).filter(Boolean);
+
+const DAILY_CH    = new Set([...PERSONAL_CH, 'jarvis-preply-tutor', 'jarvis-lite', 'jarvis']);
+const ANALYSIS_CH = new Set([CAREER_CH, 'jarvis-dev', 'jarvis-ceo', 'jarvis-market'].filter(Boolean));
 const MAJOR_CH    = new Set(['jarvis','jarvis-ceo','jarvis-system']);
 const RETRO_KW    = ['회고','retro','오답','세션 종료','learned','미스테이크','retrospect'];
 const COMPLETION_KW = ['완료','검증','선언','존재','업로드','성공'];  // 완료선언류 재발
