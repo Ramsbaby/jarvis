@@ -345,7 +345,10 @@ async function main() {
         },
         timestamp: new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' }),
       };
-      spawn('node', [discordScript, '--type', 'stats', '--data', JSON.stringify(dataObj), '--channel', 'jarvis-system'], { detached: true, stdio: 'ignore' }).unref();
+      // 2026-07-25: 'node' 이름으로 spawn 하면 PATH 에 의존한다. LaunchAgent 는
+      //   PATH 를 물려주지 않아(이 plist 는 EnvironmentVariables 자체가 없음)
+      //   수동 실행은 되는데 자동 실행만 실패했다. 실행 중인 노드의 절대 경로를 쓴다.
+      spawn(process.execPath, [discordScript, '--type', 'stats', '--data', JSON.stringify(dataObj), '--channel', 'jarvis-system'], { detached: true, stdio: 'ignore' }).unref();
     }
   } catch (e) {
     _log(`Discord 알림 실패: ${e.message}`);

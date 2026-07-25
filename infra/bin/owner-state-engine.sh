@@ -38,7 +38,9 @@ if [ "$STATE_HASH" = "$PREV_HASH" ] && [ "${OSE_FORCE:-}" != "1" ]; then
   exit 0
 fi
 echo "$STATE_HASH" > "$DIR/.state-hash"
-log "상태 변화 감지 ($PREV_HASH→$STATE_HASH) — 통찰 진행"
+# 2026-07-25: 화살표(→)가 변수명에 이어붙어 "PREV_HASH→" 라는 없는 변수로 해석됐고,
+#   set -u 때문에 매번 이 줄에서 즉시 종료됐다. 중괄호로 변수 경계를 명시한다.
+log "상태 변화 감지 (${PREV_HASH}→${STATE_HASH}) — 통찰 진행"
 
 # ── 2층 비싼 머리: LLM 통찰 ──
 bash "$OS_LIB/insight-llm.sh" >> "$LOG" 2>&1 || { log "insight 실패"; exit 1; }

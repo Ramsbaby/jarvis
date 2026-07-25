@@ -30,7 +30,12 @@ const RULES = [
     envKey: 'INTERVIEW_CHANNEL',
     expectedSources: [
       { file: join(HOME, 'jarvis/infra/discord/lib/interview-fast-path.js'), pattern: /CHANNEL_NAME\s*=\s*['"]([^'"]+)['"]/ },
-      { file: join(HOME, 'jarvis/infra/discord/lib/handlers.js'), pattern: /chName\s*===\s*['"]([a-z-]+)['"]/ },
+      // 2026-07-25 제거: handlers.js 는 이 채널명을 코드에 박지 않고
+      //   process.env.INTERVIEW_CHANNEL 로 읽는다(handlers.js 의 해당 상수 선언 참조).
+      //   따라서 '코드에 박힌 값'과 비교하는 이 규칙은 성립하지 않았고,
+      //   패턴 /chName === '...'/ 이 파일 안의 무관한 다른 채널 비교문을 먼저 집어
+      //   매일 거짓 위반 1건을 보고하며 이 감사를 상시 실패로 만들고 있었다.
+      //   plist 값이 곧 단일 진실이므로 비교 대상이 없다.
     ],
   },
   {

@@ -48,7 +48,14 @@ function auditTask(t) {
   const re = new RegExp(EXEC_RE.source, EXEC_RE.flags);
   let m;
   while ((m = re.exec(prompt)) !== null) refs.add(m[1]);
-  if (t.script) refs.add(t.script);
+  // 2026-07-25: script 필드는 "경로 --옵션 값" 형태의 실행 명령이다.
+  //   이전에는 문자열 전체를 파일 경로로 취급해, 인자가 붙은 정상 태스크를
+  //   '경로 없음'으로 매일 보고했다(pdf-pipeline-audit 오탐 → 감사 상시 실패).
+  //   실행 파일은 첫 토큰이므로 거기까지만 검사한다.
+  if (t.script) {
+    const first = String(t.script).trim().split(/\s+/)[0];
+    if (first) refs.add(first);
+  }
 
   const missing = [];
   for (const ref of refs) {
