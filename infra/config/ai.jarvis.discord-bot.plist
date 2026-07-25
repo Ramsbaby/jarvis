@@ -5,7 +5,7 @@
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>BOT_HOME</key>
-		<string>/Users/ramsbaby/.jarvis</string>
+		<string>/Users/ramsbaby/jarvis/runtime</string>
 		<key>HOME</key>
 		<string>/Users/ramsbaby</string>
 		<key>INTERVIEW_CHANNEL</key>
