@@ -142,6 +142,35 @@ def parse_schedule(cron):
 
 created = 0
 skipped = 0
+broken = []   # 설치돼 있으나 실행 경로가 실재하지 않는 plist (2026-07-25 추가)
+
+
+def _broken_program(plist_path):
+    """설치된 plist 의 ProgramArguments 가 없는 파일을 가리키면 그 경로를 돌려준다.
+
+    배경(2026-07-25): 이 동기화기는 'plist 파일이 있으면 무조건 통과'였다.
+    그래서 안의 실행 경로가 깨져도 영원히 고쳐지지 않았고, 실제로 plist 18개가
+    존재하지 않는 경로를 가리킨 채 방치돼 모닝브리핑·뉴스·각종 감사가 조용히 죽어 있었다.
+    파일 유무만이 아니라 '가리키는 대상'까지 확인하는 것이 이 함수의 목적이다.
+    (발견만 하고 자동 재생성은 하지 않는다 — 손으로 조정한 plist 를 덮어쓸 수 있어서)
+    """
+    try:
+        out = subprocess.run(['plutil', '-convert', 'json', '-o', '-', plist_path],
+                             capture_output=True, timeout=10)
+        if out.returncode != 0:
+            return '(plist 파싱 불가 — 파일 손상 의심)'
+        args = json.loads(out.stdout).get('ProgramArguments') or []
+    except Exception:
+        return None
+    for a in args:
+        if not isinstance(a, str) or not a.startswith('/'):
+            continue
+        if a in ('/bin/bash', '/bin/sh', '/bin/zsh', '/usr/bin/env'):
+            continue
+        if not os.path.exists(a):
+            return a
+    return None
+
 
 for t in tasks:
     if not isinstance(t, dict):
@@ -161,8 +190,12 @@ for t in tasks:
     label = f'com.jarvis.{task_id}'
     plist_path = os.path.join(LAUNCH_AGENTS, f'{label}.plist')
     
-    # 이미 존재하면 skip
+    # 이미 존재하면 skip — 단, 가리키는 실행 파일이 실재하는지는 확인한다
     if os.path.exists(plist_path):
+        bad = _broken_program(plist_path)
+        if bad:
+            print(f'BROKEN (실행 경로 없음): {label} -> {bad}')
+            broken.append((label, bad))
         skipped += 1
         continue
     
@@ -277,7 +310,15 @@ for t in tasks:
         print(f'CREATED (load 실패): {label} — {ret.stderr.decode().strip()}')
         created += 1
 
-print(f'완료: 신규={created} 스킵={skipped}')
+print(f'완료: 신규={created} 스킵={skipped} 깨진경로={len(broken)}')
+if broken:
+    print('')
+    print(f'🚨 실행 경로가 없는 plist {len(broken)}건 — 이 자동화들은 지금 조용히 실패하고 있습니다:')
+    for lbl, bad in broken[:20]:
+        print(f'   - {lbl} -> {bad}')
+    if len(broken) > 20:
+        print(f'   ... 외 {len(broken) - 20}건')
+    print('   조치: plist 의 ProgramArguments 경로를 정본으로 교정 후 bootout+bootstrap 재적재')
 PYEOF
 
 log "=== cron-sync 종료 ==="

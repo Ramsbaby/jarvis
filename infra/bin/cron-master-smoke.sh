@@ -15,8 +15,12 @@ set -euo pipefail
 VERBOSE=0
 if [[ "${1:-}" == "--verbose" ]]; then VERBOSE=1; fi
 
-CRON_MASTER="${HOME}/.jarvis/bin/cron-master.sh" # ALLOW-DOTJARVIS (심링크 ~/jarvis/runtime)
-STATE_DIR="${HOME}/jarvis/runtime/state" # ALLOW-DOTJARVIS
+# 2026-07-25 정정: 이전 값은 홈 밑 점(.)으로 시작하는 옛 폴더의 bin/ 을 가리켰고,
+#   "심링크라 괜찮다"는 주석으로 경로 가드를 면제받고 있었다. 실측 결과 그 폴더는
+#   심링크가 아닌 독립 폴더이며 bin/ 자체가 존재하지 않아, 이 스크립트는 대상 파일을
+#   찾지 못하는 상태였다. 정본 경로로 교정하고 잘못된 면제 주석을 제거한다.
+CRON_MASTER="${HOME}/jarvis/infra/bin/cron-master.sh"
+STATE_DIR="${HOME}/jarvis/runtime/state"
 DIGEST_FILE="${STATE_DIR}/cron-master-last-digest.txt"
 LEDGER_FILE="${STATE_DIR}/cron-master-ledger.jsonl"
 
