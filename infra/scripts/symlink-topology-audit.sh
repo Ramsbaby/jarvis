@@ -17,8 +17,16 @@
 # 2026-04-16 2차 장애 이후 auto-recovery + 스로틀 추가.
 set -euo pipefail
 
+# 주의: DOT_JARVIS 라는 이름과 달리 값은 런타임 폴더(~/jarvis/runtime)다.
+#   이 감사가 원래 지키는 대상은 runtime/{infra,bin,lib,scripts} 심링크이며 그 동작은 정상이다.
+#   (2026-07-25 확인 — 이름 때문에 "~/.jarvis 를 검사한다"고 오해하기 쉬우니 여기 명시)
 DOT_JARVIS="${HOME}/jarvis/runtime"
 SSOT="${HOME}/jarvis/infra"
+# 2026-07-25 추가: 옛 경로(~/.jarvis) 호환 심링크는 그동안 어떤 감사도 보지 않는
+#   사각지대였다. 그 사이 bin·scripts·config·discord 링크가 사라져, 이 경로를
+#   BOT_HOME 으로 주입받는 LaunchAgent 102개 중 다수가 조용히 실패했다
+#   (모닝브리핑·뉴스·커리어·봇 기동 등). 여기에 포함해 함께 지킨다.
+COMPAT_HOME="${HOME}/.jarvis"   # ALLOW-DOTJARVIS (옛 경로 호환 계층 — 의도적 참조)
 LEDGER_DIR="${DOT_JARVIS}/state"
 LEDGER="${LEDGER_DIR}/symlink-audit.jsonl"
 THROTTLE_DIR="${LEDGER_DIR}/audit-throttle"
@@ -34,12 +42,22 @@ EXPECTED_LINK_PATHS=(
   "${DOT_JARVIS}/bin"
   "${DOT_JARVIS}/lib"
   "${DOT_JARVIS}/scripts"
+  "${COMPAT_HOME}/bin"
+  "${COMPAT_HOME}/lib"
+  "${COMPAT_HOME}/scripts"
+  "${COMPAT_HOME}/config"
+  "${COMPAT_HOME}/discord"
 )
 EXPECTED_LINK_TARGETS=(
   "${SSOT}"
   "${SSOT}/bin"
   "${SSOT}/lib"
   "${SSOT}/scripts"
+  "${SSOT}/bin"
+  "${SSOT}/lib"
+  "${SSOT}/scripts"
+  "${HOME}/jarvis/runtime/config"
+  "${HOME}/jarvis/runtime/discord"
 )
 
 # Ledger emitter
@@ -131,6 +149,10 @@ done
 while IFS= read -r link; do
   case "$link" in
     *.bak*|*backup*) continue ;;
+    # 2026-07-25: 브라우저 프로필 내부는 크롬이 관리하는 영역이라 자비스 토폴로지가 아니다.
+    #   크롬 종료 시 임시 소켓 링크의 대상이 사라져 '복구 불가 위반'으로 영구 집계됐고,
+    #   그 탓에 이 감사가 상시 실패(exit 1) 상태라 경보로서 신뢰를 잃고 있었다.
+    *browser-profile*) continue ;;
   esac
   target="$(readlink "$link" 2>/dev/null || true)"
   if [[ -z "$target" ]]; then continue; fi
@@ -139,7 +161,9 @@ while IFS= read -r link; do
   if [[ "$target" == "${SSOT}"* ]]; then continue; fi
   if [[ "$target" == "${HOME}/jarvis"* ]]; then continue; fi
   if [[ "$target" == "${HOME}/jarvis-board"* ]]; then continue; fi
-  if [[ "$target" == "${HOME}/.jarvis"* ]]; then continue; fi  # ~/.jarvis는 jarvis/runtime 심링크 — 허용
+  # 2026-07-25 주석 정정: ~/.jarvis 는 심링크가 아니라 독립 실제 폴더이며,
+  #   그 아래 bin/lib/scripts/config/discord 만 정본을 가리키는 호환 링크다(위 EXPECTED 목록에서 관리).
+  if [[ "$target" == "${HOME}/.jarvis"* ]]; then continue; fi  # ALLOW-DOTJARVIS (호환 계층 — 허용)
   emit "warn" "off-ssot-target" "$link" "target=${target}"
   alert_throttled "off-ssot-target" "$link" "⚠️ SSoT 외부 심링크" "target=${target}"
   violations=$((violations + 1))
