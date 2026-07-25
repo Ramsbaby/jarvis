@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Cross-platform compat
 export JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"  # BOT_HOME 환경변수 오염 방지 (QW-14, 2026-04-13)
-source "${JARVIS_HOME}/infra/lib/compat.sh" || {
+source "${JARVIS_HOME}/lib/compat.sh" || {
   echo "ERROR: Failed to source compat.sh from $JARVIS_HOME" >&2
   exit 1
 }

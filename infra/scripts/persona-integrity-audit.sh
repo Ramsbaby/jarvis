@@ -22,7 +22,7 @@ set -euo pipefail
 
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/infra}"
 JARVIS_HOME="${HOME}/.jarvis"  # ALLOW-DOTJARVIS — 로그 디렉토리 잔존 (audit 출력 전용)
-AUDIT_LOG="${JARVIS_HOME}/runtime/logs/persona-audit.log"
+AUDIT_LOG="${JARVIS_HOME}/logs/persona-audit.log"
 VERBOSE="${1:-}"
 
 mkdir -p "$(dirname "$AUDIT_LOG")"
@@ -71,7 +71,7 @@ else
 fi
 
 # ────── 3. jarvis-say.log에서 최근 반말 감지 빈도 ──────
-SAY_LOG="${JARVIS_HOME}/runtime/logs/jarvis-say.log"
+SAY_LOG="${JARVIS_HOME}/logs/jarvis-say.log"
 if [[ -f "$SAY_LOG" ]]; then
     # 최근 7일 BANMAL-DETECTED 카운트 (macOS BSD/GNU 양쪽 호환 구현)
     SEVEN_DAYS_AGO="$(TZ=Asia/Seoul date -v-7d '+%Y-%m-%d' 2>/dev/null || TZ=Asia/Seoul date -d '7 days ago' '+%Y-%m-%d' 2>/dev/null)"
