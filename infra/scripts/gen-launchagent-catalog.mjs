@@ -32,7 +32,12 @@ let lcOutput = '';
 try { lcOutput = execSync('launchctl list', { encoding: 'utf-8' }); } catch {}
 const activeMap = {};
 for (const line of lcOutput.split('\n')) {
-  const m = line.match(/^([\d-]+)\s+(\d+)\s+(ai\.jarvis\.\S+)/);
+  // 2026-07-25 정정 2건:
+  //   ① 접두사: ai.jarvis 만 잡아 com.jarvis 101개를 전부 놓쳤다.
+  //      그 결과 카탈로그가 com.jarvis 100개를 '비활성'으로 보고해 실측과 정반대였다.
+  //   ② 종료코드: (\d+) 라 음수를 못 잡았다. launchctl 은 신호로 종료된 잡을
+  //      -15(SIGTERM) 처럼 음수로 표시하므로 그런 항목이 통째로 누락됐다.
+  const m = line.match(/^([\d-]+)\s+(-?\d+)\s+((?:ai|com)\.jarvis\.\S+)/);
   if (m) activeMap[m[3]] = { pid: m[1], lastExitCode: m[2] };
 }
 

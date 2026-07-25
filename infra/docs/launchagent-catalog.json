@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-07-13T00:10:05.370Z",
-  "totalLaunchAgents": 70,
-  "activeCount": 70,
-  "inactiveCount": 0,
+  "generatedAt": "2026-07-25T13:26:45.012Z",
+  "totalLaunchAgents": 170,
+  "activeCount": 169,
+  "inactiveCount": 1,
   "source": "~/Library/LaunchAgents/ai.jarvis.*.plist + launchctl list",
   "agents": [
     {
@@ -132,7 +132,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/bot-preflight.sh",
       "active": true,
-      "pid": "90458",
+      "pid": "35147",
       "lastExitCode": "0"
     },
     {
@@ -142,7 +142,7 @@
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/infra/scripts/docs-freshness-audit.sh",
       "active": true,
-      "pid": "37120",
+      "pid": "-",
       "lastExitCode": "0"
     },
     {
@@ -182,7 +182,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/event-watcher.sh",
       "active": true,
-      "pid": "615",
+      "pid": "31575",
       "lastExitCode": "0"
     },
     {
@@ -352,7 +352,7 @@
       "runAtLoad": false,
       "program": "/opt/homebrew/bin/node ~/jarvis/infra/scripts/plist-env-audit.mjs",
       "active": true,
-      "pid": "37121",
+      "pid": "-",
       "lastExitCode": "0"
     },
     {
@@ -402,7 +402,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node --max-old-space-size=150",
       "active": true,
-      "pid": "99509",
+      "pid": "77787",
       "lastExitCode": "0"
     },
     {
@@ -701,6 +701,1006 @@
       "schedule": "매일 00:00 KST",
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/infra/bin/worktree-sync.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.academy-support",
+      "file": "com.jarvis.academy-support.plist",
+      "schedule": "매주 일요일 20:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.age-mem-discard",
+      "file": "com.jarvis.age-mem-discard.plist",
+      "schedule": "매주 목요일 02:00 KST",
+      "runAtLoad": false,
+      "program": "/usr/bin/env node",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.agent-batch-commit",
+      "file": "com.jarvis.agent-batch-commit.plist",
+      "schedule": "매일 08:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/agent-batch-commit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.agent-sdk-billing-watch",
+      "file": "com.jarvis.agent-sdk-billing-watch.plist",
+      "schedule": "매주 월요일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.analysis-channel-cost-daily",
+      "file": "com.jarvis.analysis-channel-cost-daily.plist",
+      "schedule": "매일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/analysis-channel-cost-daily.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.backup-retention-daily",
+      "file": "com.jarvis.backup-retention-daily.plist",
+      "schedule": "매일 04:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/backup-retention.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.bidirectional-audit",
+      "file": "com.jarvis.bidirectional-audit.plist",
+      "schedule": "매주 일요일 07:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.board-meeting-am",
+      "file": "com.jarvis.board-meeting-am.plist",
+      "schedule": "매일 06:05 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/parallel-board-meeting.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.board-meeting-pm",
+      "file": "com.jarvis.board-meeting-pm.plist",
+      "schedule": "매일 21:55 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/parallel-board-meeting.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.bot-quality-check",
+      "file": "com.jarvis.bot-quality-check.plist",
+      "schedule": "매일 02:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/bot-quality-analyzer.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.bot-self-critique",
+      "file": "com.jarvis.bot-self-critique.plist",
+      "schedule": "매일 02:45 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.calendar-alert",
+      "file": "com.jarvis.calendar-alert.plist",
+      "schedule": "(없음)",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.career-daily",
+      "file": "com.jarvis.career-daily.plist",
+      "schedule": "매일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.ceo-daily-digest",
+      "file": "com.jarvis.ceo-daily-digest.plist",
+      "schedule": "매일 23:15 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.claude-md-audit",
+      "file": "com.jarvis.claude-md-audit.plist",
+      "schedule": "매주 월요일 05:45 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.code-auditor",
+      "file": "com.jarvis.code-auditor.plist",
+      "schedule": "매일 04:45 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.compound-review",
+      "file": "com.jarvis.compound-review.plist",
+      "schedule": "매주 일요일 20:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.cost-cap-audit",
+      "file": "com.jarvis.cost-cap-audit.plist",
+      "schedule": "매일 05:55 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.cost-monitor",
+      "file": "com.jarvis.cost-monitor.plist",
+      "schedule": "매주 일요일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.council-insight",
+      "file": "com.jarvis.council-insight.plist",
+      "schedule": "매일 23:05 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.cron-auditor",
+      "file": "com.jarvis.cron-auditor.plist",
+      "schedule": "매일 05:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.cron-master",
+      "file": "com.jarvis.cron-master.plist",
+      "schedule": "(없음)",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.cron-master-smoke",
+      "file": "com.jarvis.cron-master-smoke.plist",
+      "schedule": "매일 23:46 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.cron-sync-hourly",
+      "file": "com.jarvis.cron-sync-hourly.plist",
+      "schedule": "매일",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/cron-sync.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.daily-summary",
+      "file": "com.jarvis.daily-summary.plist",
+      "schedule": "매일 20:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.daily-usage-check",
+      "file": "com.jarvis.daily-usage-check.plist",
+      "schedule": "매일 05:55 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.dev-runner",
+      "file": "com.jarvis.dev-runner.plist",
+      "schedule": "매일 22:55 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.dev-task-runner",
+      "file": "com.jarvis.dev-task-runner.plist",
+      "schedule": "300s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/bin/jarvis-coder.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.disk-alert",
+      "file": "com.jarvis.disk-alert.plist",
+      "schedule": "매일",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/disk-alert.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.doc-supervisor",
+      "file": "com.jarvis.doc-supervisor.plist",
+      "schedule": "매일 05:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.doc-sync-auditor",
+      "file": "com.jarvis.doc-sync-auditor.plist",
+      "schedule": "매일 23:20 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.entity-graph",
+      "file": "com.jarvis.entity-graph.plist",
+      "schedule": "매일 03:45 KST",
+      "runAtLoad": false,
+      "program": "/usr/bin/env node",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.followup-sync",
+      "file": "com.jarvis.followup-sync.plist",
+      "schedule": "매일 08:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/followup-sync.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.gen-indexes",
+      "file": "com.jarvis.gen-indexes.plist",
+      "schedule": "매일 06:17 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/gen-indexes.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.gen-system-overview",
+      "file": "com.jarvis.gen-system-overview.plist",
+      "schedule": "매일 04:05 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/gen-system-overview.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.inbox-alert",
+      "file": "com.jarvis.inbox-alert.plist",
+      "schedule": "매일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/inbox-alert.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.infra-daily",
+      "file": "com.jarvis.infra-daily.plist",
+      "schedule": "매일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.interview-harness-audit",
+      "file": "com.jarvis.interview-harness-audit.plist",
+      "schedule": "매주 월요일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.interview-ssot-audit",
+      "file": "com.jarvis.interview-ssot-audit.plist",
+      "schedule": "매주 월요일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.kakao-token-refresh",
+      "file": "com.jarvis.kakao-token-refresh.plist",
+      "schedule": "매일 00:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/openclaw/scripts/kakao-token-refresh.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.launchagents-audit",
+      "file": "com.jarvis.launchagents-audit.plist",
+      "schedule": "매일",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/launchagents-audit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.legacy-plist-audit",
+      "file": "com.jarvis.legacy-plist-audit.plist",
+      "schedule": "매주 일요일 04:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/legacy-plist-audit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.macro-briefing",
+      "file": "com.jarvis.macro-briefing.plist",
+      "schedule": "매일 23:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.market-alert",
+      "file": "com.jarvis.market-alert.plist",
+      "schedule": "매일",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.memory-cleanup",
+      "file": "com.jarvis.memory-cleanup.plist",
+      "schedule": "매일 02:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/memory-cleanup.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.memory-sync",
+      "file": "com.jarvis.memory-sync.plist",
+      "schedule": "매주 월요일 04:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/memory-sync.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.mistake-circuit-healthcheck",
+      "file": "com.jarvis.mistake-circuit-healthcheck.plist",
+      "schedule": "매일",
+      "runAtLoad": false,
+      "program": "/usr/bin/env node",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.mistake-extractor",
+      "file": "com.jarvis.mistake-extractor.plist",
+      "schedule": "매일 03:15 KST",
+      "runAtLoad": false,
+      "program": "/usr/bin/env node",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.mistake-pattern-analyzer",
+      "file": "com.jarvis.mistake-pattern-analyzer.plist",
+      "schedule": "매일 03:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.morning-standup",
+      "file": "com.jarvis.morning-standup.plist",
+      "schedule": "매일 07:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/zsh -i",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.news-briefing",
+      "file": "com.jarvis.news-briefing.plist",
+      "schedule": "매일 06:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.oss-maintenance",
+      "file": "com.jarvis.oss-maintenance.plist",
+      "schedule": "매일 09:15 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/oss-maintenance.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.oss-promo",
+      "file": "com.jarvis.oss-promo.plist",
+      "schedule": "매주 금요일 17:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/oss-promo.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.oss-recon",
+      "file": "com.jarvis.oss-recon.plist",
+      "schedule": "매주 월요일 10:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/oss-recon.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.owner-judgments-extract",
+      "file": "com.jarvis.owner-judgments-extract.plist",
+      "schedule": "매주 일요일 02:30 KST",
+      "runAtLoad": false,
+      "program": "/usr/bin/env node",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.owner-state-engine",
+      "file": "com.jarvis.owner-state-engine.plist",
+      "schedule": "매일 21:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/owner-state-engine.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.pdf-pipeline-audit",
+      "file": "com.jarvis.pdf-pipeline-audit.plist",
+      "schedule": "매일 03:15 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/guards/pdf-pipeline-ci-check.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.personal-schedule-daily",
+      "file": "com.jarvis.personal-schedule-daily.plist",
+      "schedule": "매일 07:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.plist-bypass-autofix",
+      "file": "com.jarvis.plist-bypass-autofix.plist",
+      "schedule": "매일 06:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/plist-bypass-autofix.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.preply-boram-followup-20260715",
+      "file": "com.jarvis.preply-boram-followup-20260715.plist",
+      "schedule": "매월 15일 16:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.proactive-engine",
+      "file": "com.jarvis.proactive-engine.plist",
+      "schedule": "매일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/proactive-engine.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.profile-extractor",
+      "file": "com.jarvis.profile-extractor.plist",
+      "schedule": "매일 00:30 KST",
+      "runAtLoad": false,
+      "program": "/usr/bin/env node",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.promoter-auto-close",
+      "file": "com.jarvis.promoter-auto-close.plist",
+      "schedule": "매일 04:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.qa-consistency-audit",
+      "file": "com.jarvis.qa-consistency-audit.plist",
+      "schedule": "매주 월요일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.rag-health",
+      "file": "com.jarvis.rag-health.plist",
+      "schedule": "매일 03:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.rag-index-consume",
+      "file": "com.jarvis.rag-index-consume.plist",
+      "schedule": "매일",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/rag-index-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.rag-lancedb-compact",
+      "file": "com.jarvis.rag-lancedb-compact.plist",
+      "schedule": "매주 일요일 04:15 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/rag-lancedb-compact.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.rag-stale-scan",
+      "file": "com.jarvis.rag-stale-scan.plist",
+      "schedule": "매주 일요일 03:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/rag-stale-scan.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.rate-limit-check",
+      "file": "com.jarvis.rate-limit-check.plist",
+      "schedule": "1800s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/rate-limit-check.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.recon-weekly",
+      "file": "com.jarvis.recon-weekly.plist",
+      "schedule": "매주 월요일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.record-daily",
+      "file": "com.jarvis.record-daily.plist",
+      "schedule": "매일 22:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.runtime-rag-backup",
+      "file": "com.jarvis.runtime-rag-backup.plist",
+      "schedule": "매주 일요일 05:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/runtime-rag-backup.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.schedule-coherence",
+      "file": "com.jarvis.schedule-coherence.plist",
+      "schedule": "매주 월요일 04:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.security-scan",
+      "file": "com.jarvis.security-scan.plist",
+      "schedule": "매일 02:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.self-healing-digest",
+      "file": "com.jarvis.self-healing-digest.plist",
+      "schedule": "매주 일요일 21:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.session-report",
+      "file": "com.jarvis.session-report.plist",
+      "schedule": "매주 일요일 23:50 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/session-report.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.session-summaries-rotate",
+      "file": "com.jarvis.session-summaries-rotate.plist",
+      "schedule": "매일 03:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/session-summaries-rotate.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.session-sync",
+      "file": "com.jarvis.session-sync.plist",
+      "schedule": "900s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/session-sync.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.skill-eval",
+      "file": "com.jarvis.skill-eval.plist",
+      "schedule": "매주 일요일 04:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.skill-loop-nightly",
+      "file": "com.jarvis.skill-loop-nightly.plist",
+      "schedule": "매일 03:50 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/skill-loop-nightly.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.skill-synthesis-verify",
+      "file": "com.jarvis.skill-synthesis-verify.plist",
+      "schedule": "매일 23:50 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.stale-task-watcher",
+      "file": "com.jarvis.stale-task-watcher.plist",
+      "schedule": "1800s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/stale-task-watcher.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.system-doctor",
+      "file": "com.jarvis.system-doctor.plist",
+      "schedule": "매일 06:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/system-doctor.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.system-health",
+      "file": "com.jarvis.system-health.plist",
+      "schedule": "3600s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.tasks-integrity-audit",
+      "file": "com.jarvis.tasks-integrity-audit.plist",
+      "schedule": "매일 10:07 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.tasks-prompt-path-audit",
+      "file": "com.jarvis.tasks-prompt-path-audit.plist",
+      "schedule": "매일 03:23 KST",
+      "runAtLoad": false,
+      "program": "/opt/homebrew/bin/node ~/jarvis/infra/scripts/tasks-prompt-path-audit.mjs",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.token-ledger-audit",
+      "file": "com.jarvis.token-ledger-audit.plist",
+      "schedule": "매주 일요일 08:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/token-ledger-audit.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.token-sync",
+      "file": "com.jarvis.token-sync.plist",
+      "schedule": "매일 01:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/token-sync.sh",
+      "active": false,
+      "pid": null,
+      "lastExitCode": null
+    },
+    {
+      "label": "com.jarvis.tqqq-monitor",
+      "file": "com.jarvis.tqqq-monitor.plist",
+      "schedule": "매주 월요일 22:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.tune-task-params",
+      "file": "com.jarvis.tune-task-params.plist",
+      "schedule": "매주 일요일 08:35 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/tune-task-params.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.update-usage-cache",
+      "file": "com.jarvis.update-usage-cache.plist",
+      "schedule": "1800s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/update-usage-cache.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.user-memory-monitor",
+      "file": "com.jarvis.user-memory-monitor.plist",
+      "schedule": "매일 08:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.vault-auto-link",
+      "file": "com.jarvis.vault-auto-link.plist",
+      "schedule": "매일 06:30 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/vault-auto-link.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.vault-sync",
+      "file": "com.jarvis.vault-sync.plist",
+      "schedule": "매일",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/vault-sync.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.weekly-code-review",
+      "file": "com.jarvis.weekly-code-review.plist",
+      "schedule": "매주 일요일 05:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/scripts/weekly-code-review.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.weekly-dream-insight",
+      "file": "com.jarvis.weekly-dream-insight.plist",
+      "schedule": "매주 월요일 04:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.weekly-report",
+      "file": "com.jarvis.weekly-report.plist",
+      "schedule": "매주 일요일 20:05 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.weekly-usage-stats",
+      "file": "com.jarvis.weekly-usage-stats.plist",
+      "schedule": "매주 월요일 09:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.wiki-contradiction-scan",
+      "file": "com.jarvis.wiki-contradiction-scan.plist",
+      "schedule": "매주 월요일 03:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.wiki-reference-report",
+      "file": "com.jarvis.wiki-reference-report.plist",
+      "schedule": "매주 일요일 20:00 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
       "active": true,
       "pid": "-",
       "lastExitCode": "0"

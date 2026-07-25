@@ -116,12 +116,22 @@ ${REVIEW_CONTEXT}"
 
 # --- LLM 실행 ---
 log "Calling claude -p for semantic review..."
+# 2026-07-25: 모델 ID 를 코드에 박지 않고 정책 SSoT 에서 읽는다.
+#   이전 값 claude-sonnet-4-20250514 는 은퇴한 날짜 지정 스냅샷이라 호출이 매번 실패했고,
+#   주간 리포트가 몇 주째 "## ERROR" 한 줄만 생성되고 있었다(2026-07-19 기록으로 확인).
+#   하드코딩이 원인이었으므로 같은 방식으로 되돌리지 않고 SSoT 참조로 바꾼다.
+_POLICY_FILE="${JARVIS_HOME:-$HOME/jarvis}/runtime/context/model-policy.json"
+_REVIEW_MODEL=$(jq -r '.currentLatest.sonnet // empty' "$_POLICY_FILE" 2>/dev/null)
+if [[ -z "$_REVIEW_MODEL" ]]; then
+    _REVIEW_MODEL="claude-sonnet-5"   # SSoT 를 못 읽을 때 대비
+fi
+log "review model: ${_REVIEW_MODEL}"
 REVIEW_RESULT=""
 _review_cmd=()
 if [[ -n "${_TIMEOUT_CMD:-}" ]]; then _review_cmd+=("${_TIMEOUT_CMD}" 180); fi
 _review_cmd+=(claude -p "$PROMPT")
 if REVIEW_RESULT=$("${_review_cmd[@]}" \
-    --model claude-sonnet-4-20250514 \
+    --model "$_REVIEW_MODEL" \
     --max-turns 1 \
     2>/dev/null); then
     log "Review completed successfully"
