@@ -18,6 +18,22 @@ source "${HOME}/.jarvis/lib/idempotency-middleware.sh" 2>/dev/null || {
     exit 1
 }
 
+# cl-faf6f4c1f94bd512: 백그라운드 작업 exit code 자동 기록 (bg_task_record_exit 활성화)
+_CL_FAF6_GUARD="${HOME}/jarvis/infra/lib/cluster-guard-cl-faf6f4c1f94bd512.sh"
+if [[ -f "$_CL_FAF6_GUARD" ]]; then
+    # shellcheck disable=SC1090
+    source "$_CL_FAF6_GUARD" 2>/dev/null || true
+fi
+unset _CL_FAF6_GUARD
+
+# cl-53499c7975efb1b0: 문서 내부 불일치 검증 가드 (숫자 교차검증)
+_CL_5349_GUARD="${HOME}/jarvis/infra/lib/cluster-guard-cl-53499c7975efb1b0.sh"
+if [[ -f "$_CL_5349_GUARD" ]]; then
+    # shellcheck disable=SC1090
+    source "$_CL_5349_GUARD" 2>/dev/null || true
+fi
+unset _CL_5349_GUARD
+
 # 메인 함수: 멱등성 체크를 포함한 ask-claude 호출
 ask_claude_safe() {
     local task_id="$1"
@@ -75,6 +91,11 @@ ask_claude_safe() {
         mark_command_completed "$task_id" "$prompt" "Success"
     else
         mark_command_failed "$task_id" "$prompt" "Failed with exit code $exit_code"
+    fi
+
+    # Step 3-G: cl-faf6f4c1f94bd512 — exit code 기록 (bg_task_verify가 나중에 읽음)
+    if command -v bg_task_record_exit >/dev/null 2>&1; then
+        bg_task_record_exit "$task_id" "$exit_code" 2>/dev/null || true
     fi
 
     return $exit_code
