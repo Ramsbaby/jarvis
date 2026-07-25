@@ -96,7 +96,7 @@ console.log(`   🧭 종합 ${overall}점 ${trend}${dryrun ? ' [DRYRUN — Disco
 
 if (!dryrun) {
   try {
-    execFileSync(process.execPath, [join(HOME, '.jarvis/scripts/discord-visual.mjs'),
+    execFileSync(process.execPath, [join(HOME, 'jarvis/infra/scripts/discord-visual.mjs'),
       '--type', 'stats',
       '--data', JSON.stringify({
         title: `🧭 북극성 정렬 ${overall}점 (${trend})`,

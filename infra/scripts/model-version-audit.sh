@@ -12,7 +12,7 @@ JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
 SSOT_REGISTRY="${JARVIS_HOME}/runtime/context/ssot-registry.json"
 TASKS_FILE="${JARVIS_HOME}/runtime/config/tasks.json"
 LOG_FILE="${JARVIS_HOME}/runtime/logs/model-version-audit.log"
-DISCORD_VISUAL="${HOME}/.jarvis/scripts/discord-visual.mjs"
+DISCORD_VISUAL="${HOME}/jarvis/infra/scripts/discord-visual.mjs"
 
 # SSoT Registry에서 model-policy 경로 단일 참조 (권고 ③ 통합 — 2026-05-08)
 POLICY_FILE_RAW=$(jq -r '.operationalPolicy[]? | select(.name=="model-policy") | .path' "$SSOT_REGISTRY" 2>/dev/null || echo "")

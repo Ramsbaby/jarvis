@@ -25,7 +25,7 @@ fi
 # 실패 관측: tasks.json discordChannel도 script 태스크엔 비실효 → 직접 알림 (B2 수리)
 on_fail() {
   printf '{"ts":"%s","event":"batch-failed","line":"%s"}\n' "$(date -u +%FT%TZ)" "${1:-?}" >> "$LEDGER" 2>/dev/null || true
-  node "${HOME}/.jarvis/scripts/discord-visual.mjs" --type stats \
+  node "${HOME}/jarvis/infra/scripts/discord-visual.mjs" --type stats \
     --data "{\"title\":\"⚠️ skill-loop 야간 배치 실패\",\"data\":{\"시각\":\"$(date '+%F %T KST')\",\"실패 라인\":\"${1:-?}\",\"로그\":\"results/skill-loop-nightly\"},\"timestamp\":\"${TODAY}\"}" \
     --channel jarvis-system >/dev/null 2>&1 || true
 }
@@ -86,7 +86,7 @@ console.log(streak);
 ' 2>/dev/null || echo 0)"
 if [ "${DRY_STREAK:-0}" -ge 3 ]; then
   echo "⚠️ 조용한 무산출 ${DRY_STREAK}일 연속 — jarvis-system 경고 송출"
-  node "${HOME}/.jarvis/scripts/discord-visual.mjs" --type stats \
+  node "${HOME}/jarvis/infra/scripts/discord-visual.mjs" --type stats \
     --data "{\"title\":\"⚠️ skill-loop 조용한 무산출 ${DRY_STREAK}일 연속\",\"data\":{\"증상\":\"선별은 되는데 초안 생성 0건\",\"의심\":\"추출 게이트·경로 이슈\",\"점검\":\"skill-loop-extract 로그 + selected/draft-created ledger\",\"시각\":\"$(date '+%F %T KST')\"},\"timestamp\":\"${TODAY}\"}" \
     --channel jarvis-system >/dev/null 2>&1 || true
 fi

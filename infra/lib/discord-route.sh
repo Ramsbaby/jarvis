@@ -14,7 +14,11 @@
 #
 # 채널 신설 마이그 시 이 함수 본문만 수정 — 모든 cron이 자동 분산.
 
-DISCORD_VISUAL="$HOME/.jarvis/scripts/discord-visual.mjs"
+# 2026-07-25 정정: 이전 값은 홈 밑 점(.)으로 시작하는 옛 폴더의 scripts/ 를 가리켰는데
+#   그 디렉터리가 존재하지 않았다. 그 결과 아래 파일 존재 게이트에서 막혀
+#   discord_route() 와 discord_route_payload() 알림이 발송 전에 반환됐다.
+#   바로 아래 두 변수와 동일한 표기로 통일한다.
+DISCORD_VISUAL="${HOME}/jarvis/infra/scripts/discord-visual.mjs"
 _CHANNEL_MAP_GUARD="${HOME}/jarvis/infra/guards/validate-channel-map.sh"
 _EGRESS_AUDIT_LOG="${HOME}/jarvis/runtime/logs/egress-audit.log"
 
@@ -84,7 +88,7 @@ _discord_route_dedup_ok() {
 # 사용: discord_route_payload info "$PAYLOAD"
 discord_route_payload() {
     local severity="$1" payload="$2"
-    [ -f "$DISCORD_VISUAL" ] || { echo "[discord-route] visual unavailable"; return 1; }
+    [ -f "$DISCORD_VISUAL" ] || { echo "[discord-route] visual unavailable: $DISCORD_VISUAL" >&2; return 1; }
     # 채널 맵 가드 검증 (cl-975bafeb5bb2be2b)
     _channel_map_guard_check || return 1
     local channel ptitle
@@ -127,7 +131,7 @@ discord_route_raw() {
 
 discord_route() {
     local severity="$1" title="$2" data_kv="$3"
-    [ -f "$DISCORD_VISUAL" ] || { echo "[discord-route] visual unavailable"; return 1; }
+    [ -f "$DISCORD_VISUAL" ] || { echo "[discord-route] visual unavailable: $DISCORD_VISUAL" >&2; return 1; }
     # 채널 맵 가드 검증 (cl-975bafeb5bb2be2b)
     _channel_map_guard_check || return 1
 

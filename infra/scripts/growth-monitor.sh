@@ -64,7 +64,7 @@ if [ -n "$WARN" ]; then
     fi
     # 통합 경고 카드 (디스크 여유 있을 때만 — node는 임시파일 필요)
     if (( disk_free_gb >= 3 )); then
-      cd "$HOME" && node "${HOME}/.jarvis/scripts/discord-visual.mjs" --type stats \
+      cd "$HOME" && node "${HOME}/jarvis/infra/scripts/discord-visual.mjs" --type stats \
         --data "{\"title\":\"⚠️ 자비스 비대 경고\",\"data\":{\"경고\":\"${WARN}\",\"디스크여유\":\"${disk_free_gb}GB\",\"RAG\":\"${rag_mb}MB/${rag_frag}조각\",\"백업\":\"${backup_mb}MB\"},\"timestamp\":\"$(date '+%Y-%m-%d %H:%M KST')\"}" \
         --channel jarvis-system >/dev/null 2>&1 || true
     fi

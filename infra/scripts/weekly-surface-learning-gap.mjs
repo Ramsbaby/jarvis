@@ -104,7 +104,7 @@ console.log(report);
 
 if (NOTIFY && alerts.length > 0) {
   // Discord 알림 (jarvis-system 채널)
-  const notifyScript = join(homedir(), '.jarvis/scripts/discord-visual.mjs');
+  const notifyScript = join(homedir(), 'jarvis/infra/scripts/discord-visual.mjs');
   if (existsSync(notifyScript)) {
     try {
       const data = JSON.stringify({

@@ -90,7 +90,7 @@ if (NOTIFY) {
   if (toAlert.length === 0) {
     console.log(`\n(쿨다운 중 — 알림 ${spikes.length}건 모두 ${COOLDOWN_HOURS}h 내 발송됨, skip)`);
   } else {
-    const notifyScript = join(homedir(), '.jarvis/scripts/discord-visual.mjs');
+    const notifyScript = join(homedir(), 'jarvis/infra/scripts/discord-visual.mjs');
     if (existsSync(notifyScript)) {
       const data = JSON.stringify({
         title: '🚨 Silent Error 스파이크',

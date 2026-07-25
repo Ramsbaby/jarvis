@@ -127,7 +127,7 @@ for (const v of violations) {
 }
 
 if (NOTIFY) {
-  const notifyScript = join(HOME, '.jarvis/scripts/discord-visual.mjs');
+  const notifyScript = join(HOME, 'jarvis/infra/scripts/discord-visual.mjs');
   if (existsSync(notifyScript)) {
     const data = JSON.stringify({
       title: '🚨 plist 환경변수 불일치 감지',
