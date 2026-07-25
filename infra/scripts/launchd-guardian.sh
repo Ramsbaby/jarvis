@@ -99,24 +99,45 @@ for service in "${KEEPALIVE_SERVICES[@]}"; do
             echo "$fail_count" > "$FAIL_FILE"
 
             if [[ "$fail_count" -ge 3 && "$service" == "ai.jarvis.discord-bot" ]]; then
-                log "RECOVERY: $service failed ${fail_count}x — running npm install to repair"
-                # launchd 환경은 PATH 미상속 → node/npm 절대경로 + PATH export 필수
-                # (bash SC2168: 'local' 키워드는 함수 외부에서 쓰면 set -e와 충돌 → 일반 변수로)
-                NODE_BIN="${NODE_BIN:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
-                NPM_BIN="${NPM_BIN:-$(command -v npm 2>/dev/null || echo /opt/homebrew/bin/npm)}"
-                if [[ -x "$NODE_BIN" && -x "$NPM_BIN" ]]; then
-                    # npm 내부에서 `env node` 호출 → PATH에 node 디렉토리 필요
-                    export PATH="$(dirname "$NODE_BIN"):${PATH:-/usr/bin:/bin}"
-                    "$NPM_BIN" install --prefix "$BOT_HOME/discord" --silent 2>>"$LOG_FILE" || true
+                # 2026-07-25: npm install 재시도 상한 도입.
+                #   이전에는 실행 직후 무조건 카운터를 0으로 되돌려, 기동 실패 원인이
+                #   그대로 남아 있으면 9분마다 무한 반복했다(당일 480회 관측).
+                NPM_STAMP="/tmp/jarvis-guardian-npm-last"
+                npm_last=$(cat "$NPM_STAMP" 2>/dev/null || echo 0)
+                now_ts=$(date +%s)
+                if (( now_ts - npm_last > 21600 )); then
+                    log "RECOVERY: $service failed ${fail_count}x — running npm install to repair"
+                    # launchd 환경은 PATH 미상속 → node/npm 절대경로 + PATH export 필수
+                    # (bash SC2168: 'local' 키워드는 함수 외부에서 쓰면 set -e와 충돌 → 일반 변수로)
+                    NODE_BIN="${NODE_BIN:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
+                    NPM_BIN="${NPM_BIN:-$(command -v npm 2>/dev/null || echo /opt/homebrew/bin/npm)}"
+                    if [[ -x "$NODE_BIN" && -x "$NPM_BIN" ]]; then
+                        # npm 내부에서 `env node` 호출 → PATH에 node 디렉토리 필요
+                        export PATH="$(dirname "$NODE_BIN"):${PATH:-/usr/bin:/bin}"
+                        "$NPM_BIN" install --prefix "$BOT_HOME/discord" --silent 2>>"$LOG_FILE" || true
+                    else
+                        log "ERROR: node($NODE_BIN) 또는 npm($NPM_BIN) 바이너리 없음 — npm install 불가"
+                    fi
+                    echo "$now_ts" > "$NPM_STAMP"
+                    log "RECOVERY: npm install done, kickstarting"
                 else
-                    log "ERROR: node($NODE_BIN) 또는 npm($NPM_BIN) 바이너리 없음 — npm install 불가"
+                    log "RECOVERY: $service failed ${fail_count}x — npm install 생략(최근 6시간 내 시도함), kickstart만 진행"
                 fi
-                echo "0" > "$FAIL_FILE"
-                log "RECOVERY: npm install done, kickstarting"
             fi
 
             # kickstart 시도
             launchctl kickstart -k "gui/${UID_NUM}/${service}" 2>/dev/null || true
+
+            # 2026-07-25: 기동 성공을 실제로 확인한 뒤에만 실패 카운터를 초기화한다.
+            #   이전에는 kickstart 전에 무조건 0으로 되돌려 '시도했으니 성공'으로 취급했고,
+            #   그래서 같은 실패가 영원히 반복돼도 카운터가 3을 넘지 못했다.
+            sleep 3
+            if launchctl print "gui/${UID_NUM}/${service}" 2>/dev/null | grep -qE '^[[:space:]]*pid = [0-9]+'; then
+                echo "0" > "$FAIL_FILE"
+                log "RECOVERY: $service 기동 확인 — 실패 카운터 초기화"
+            else
+                log "RECOVERY: $service 아직 미기동 — 실패 카운터 유지(${fail_count})"
+            fi
 
             # 3회 이상 kickstart 실패 시 강제 재등록 (bootout + bootstrap). 보조 방어막.
             # 2026-04-17 1시간 장애의 진짜 root cause는 위 `awk $3 == s` fix (status_line 오판 버그)였음.
