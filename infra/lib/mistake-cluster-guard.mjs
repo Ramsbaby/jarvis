@@ -54,7 +54,7 @@ const CLUSTER_DEFINITIONS = {
         type: 'execution-tracker',
         action: 'check_execution_log',
         params: {
-          log_file: '~/.jarvis/runtime/state/execution-log.jsonl',
+          log_file: '~/jarvis/runtime/state/execution-log.jsonl',
           hash_by_input: true,
         },
         description: '입력값 기반 해시로 동일 입력 재실행 감지 및 skip 처리',
@@ -65,7 +65,7 @@ const CLUSTER_DEFINITIONS = {
         type: 'state-db-validator',
         action: 'validate_unique_constraint',
         params: {
-          db_path: '~/.jarvis/runtime/state/execution-state.db',
+          db_path: '~/jarvis/runtime/state/execution-state.db',
           fields: ['operation_type', 'target_id', 'input_hash'],
         },
         description: 'SQLite 상태 DB에 unique constraint를 통한 중복 실행 방지',
@@ -95,7 +95,7 @@ const CLUSTER_DEFINITIONS = {
         type: 'metric-collector',
         action: 'collect_idempotency_metrics',
         params: {
-          metrics_file: '~/.jarvis/runtime/state/idempotency-metrics.jsonl',
+          metrics_file: '~/jarvis/runtime/state/idempotency-metrics.jsonl',
           window_hours: 24,
         },
         description: '재실행 방지 여부, 중복 감지 횟수, skip 비율 등을 메트릭으로 추적',
@@ -393,7 +393,7 @@ const CLUSTER_DEFINITIONS = {
         type: 'evidence-validator',
         action: 'validate_result_file_exists',
         params: {
-          result_dir: '~/.jarvis/runtime/reports/cluster-guard-cl-0cece7e70f08a98f',
+          result_dir: '~/jarvis/runtime/reports/cluster-guard-cl-0cece7e70f08a98f',
           require_pass_fail_string: true,
         },
         description: '결과 파일에 PASS/FAIL 판정 문자열이 실제로 기록되었는지 확인',

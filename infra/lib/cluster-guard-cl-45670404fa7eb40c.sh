@@ -17,7 +17,7 @@ set -uo pipefail
 
 readonly CLUSTER_ID="cl-45670404fa7eb40c"
 readonly GUARD_SCRIPT="${HOME}/.jarvis/infra/guards/completion-validation-guard.sh"
-readonly LOG_FILE="${HOME}/.jarvis/runtime/logs/cluster-guard-cl-45670404fa7eb40c.jsonl"
+readonly LOG_FILE="${HOME}/jarvis/runtime/logs/cluster-guard-cl-45670404fa7eb40c.jsonl"
 
 # ── 초기화 ────────────────────────────────────────────────────────────────────
 _ensure_log_dir() {

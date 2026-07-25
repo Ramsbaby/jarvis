@@ -5,9 +5,15 @@
 # Provides OS-agnostic wrappers for macOS-specific commands.
 # On Linux/Docker: uses PM2 equivalents instead of launchctl.
 
-# A2 마이그레이션(2026-04-17) 이후 런타임 경로는 ~/jarvis/runtime 단일 기준.
-# 구버전 경로(~/.jarvis, ~/.local/share/jarvis)는 호환성 심링크로만 유지됨.
-export JARVIS_HOME="${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}"
+# JARVIS_HOME 은 "저장소 루트"(~/jarvis)다. 런타임 폴더가 아니다.
+#   근거(2026-07-25 실측): 코드 176곳이 "$JARVIS_HOME/runtime/..." · "$JARVIS_HOME/infra/..." 로
+#   루트를 가정하고, LaunchAgent 20개 모두 JARVIS_HOME=~/jarvis 를 주입한다.
+# 정정 이력: 이전 값은 "${BOT_HOME:-${HOME}/jarvis/runtime}" 이었다. 그 경우
+#   "$JARVIS_HOME/runtime/..." 이 ~/jarvis/runtime/runtime/... 으로 풀려 그림자 폴더에 데이터가 샜다.
+#   BOT_HOME 은 한 단계 아래(런타임)를 가리키므로 JARVIS_HOME 의 대체값이 될 수 없다.
+export JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis}"
+# 런타임 경로가 필요하면 이 변수를 쓴다 (루트/런타임 혼동 방지).
+export JARVIS_RUNTIME="${JARVIS_RUNTIME:-${JARVIS_HOME}/runtime}"
 export IS_MACOS=false
 export IS_LINUX=false
 export IS_DOCKER=false

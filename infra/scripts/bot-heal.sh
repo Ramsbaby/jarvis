@@ -6,7 +6,7 @@
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${HOME}/jarvis}/infra/lib/compat.sh" 2>/dev/null || true
 
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 ERROR_REASON="${1:-알 수 없는 시작 실패}"

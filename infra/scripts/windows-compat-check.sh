@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis}"
 
 # ============================================================================
 # 색상 정의

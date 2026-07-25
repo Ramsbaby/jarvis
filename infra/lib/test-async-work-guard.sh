@@ -2,7 +2,7 @@
 # test-async-work-guard.sh — 비동기 작업 상태 검증 가드 테스트
 #
 # 역할: async-work-guard.sh의 모든 기능을 테스트
-# 실행: bash /Users/ramsbaby/.jarvis/infra/lib/test-async-work-guard.sh
+# 실행: bash ~/jarvis/infra/lib/test-async-work-guard.sh
 #
 # 테스트 케이스:
 #   1. 비동기 작업 상태 폴링 (성공)
@@ -12,7 +12,7 @@
 set -o pipefail
 
 # 절대 경로 설정
-JARVIS_LIB="/Users/ramsbaby/.jarvis/infra/lib"
+JARVIS_LIB="${HOME}/jarvis/infra/lib"
 TEST_DIR="/tmp/async-work-guard-test-$$"
 TEST_CLUSTER_ID="cl-test-async-work-guard"
 LOG_FILE="$TEST_DIR/test.log"
@@ -51,10 +51,10 @@ setup_test_env() {
     log_info "Jarvis lib path: $JARVIS_LIB"
 
     # 테스트용 인프라 디렉토리 생성 (실제 ~/.jarvis 사용)
-    mkdir -p ~/.jarvis/runtime/state/async-tasks
-    mkdir -p ~/.jarvis/runtime/logs/async
-    mkdir -p ~/.jarvis/runtime/state/verified-reports
-    mkdir -p ~/.jarvis/runtime/logs/verified-reports
+    mkdir -p ~/jarvis/runtime/state/async-tasks
+    mkdir -p ~/jarvis/runtime/logs/async
+    mkdir -p ~/jarvis/runtime/state/verified-reports
+    mkdir -p ~/jarvis/runtime/logs/verified-reports
 }
 
 # 테스트 정리
@@ -93,7 +93,7 @@ test_report_template() {
     # 테스트 2-1: 성공 보고
     report_task_completed "$TEST_CLUSTER_ID" "$task_id" "upload" "파일 업로드 완료" "test-framework"
 
-    if [ -f "${HOME}/.jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report" ]; then
+    if [ -f "${HOME}/jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report" ]; then
         log_pass "TEST 2-1: Completed report written"
     else
         log_fail "TEST 2-1: Report file not found"
@@ -104,7 +104,7 @@ test_report_template() {
     task_id="test-report-002"
     report_task_unverified "$TEST_CLUSTER_ID" "$task_id" "deploy" "배포 상태 미확인"
 
-    if [ -f "${HOME}/.jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report" ]; then
+    if [ -f "${HOME}/jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report" ]; then
         log_pass "TEST 2-2: Unverified report written"
     else
         log_fail "TEST 2-2: Unverified report not found"
@@ -115,7 +115,7 @@ test_report_template() {
     task_id="test-report-003"
     report_task_timeout "$TEST_CLUSTER_ID" "$task_id" "deploy" 30
 
-    if [ -f "${HOME}/.jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report" ]; then
+    if [ -f "${HOME}/jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report" ]; then
         log_pass "TEST 2-3: Timeout report written"
     else
         log_fail "TEST 2-3: Timeout report not found"
@@ -127,7 +127,7 @@ test_report_template() {
     report_task_partial "$TEST_CLUSTER_ID" "$task_id" "batch-deploy" \
         "배포 작업 부분 완료" "3/5 서비스 배포됨" "2/5 서비스 미배포"
 
-    if [ -f "${HOME}/.jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report" ]; then
+    if [ -f "${HOME}/jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report" ]; then
         log_pass "TEST 2-4: Partial report written"
     else
         log_fail "TEST 2-4: Partial report not found"
@@ -234,7 +234,7 @@ test_state_file_structure() {
     local task_id="test-state-001"
     report_task_completed "$TEST_CLUSTER_ID" "$task_id" "upload" "테스트 완료"
 
-    local report_file="${HOME}/.jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report"
+    local report_file="${HOME}/jarvis/runtime/state/verified-reports/${TEST_CLUSTER_ID}_${task_id}.report"
 
     if [ -f "$report_file" ]; then
         # JSON 유효성 확인

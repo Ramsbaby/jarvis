@@ -22,11 +22,11 @@ GUARD_SCRIPT="${BOT_HOME}/lib/duplicate-request-guard.mjs"
 JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis}"
 
 # 새 가드 함수 로드 (cl-e30aee511af89e13 방어)
-source "${JARVIS_HOME}/lib/exit-code-first-wrapper.sh" 2>/dev/null || {
+source "${JARVIS_HOME}/infra/lib/exit-code-first-wrapper.sh" 2>/dev/null || {
     echo "[ERROR] exit-code-first-wrapper.sh not found" >&2
     exit 2
 }
-source "${JARVIS_HOME}/lib/status-guard.sh" 2>/dev/null || {
+source "${JARVIS_HOME}/infra/lib/status-guard.sh" 2>/dev/null || {
     echo "[ERROR] status-guard.sh not found" >&2
     exit 2
 }

@@ -11,7 +11,7 @@
 #   DRY_RUN: true면 실제 수정하지 않고 리포트만 생성
 
 export JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"
-source "${JARVIS_HOME}/lib/compat.sh" || {
+source "${JARVIS_HOME}/infra/lib/compat.sh" || {
   echo "ERROR: Failed to source compat.sh from $JARVIS_HOME" >&2
   exit 1
 }

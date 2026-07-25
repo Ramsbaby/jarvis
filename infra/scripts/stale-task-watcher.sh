@@ -17,7 +17,7 @@ export HOME="${HOME:-/Users/$(id -un)}"
 JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"
 BOT_HOME="${BOT_HOME:-$JARVIS_HOME}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
-LOG="${JARVIS_HOME}/logs/stale-task-watcher.log"
+LOG="${JARVIS_HOME}/runtime/logs/stale-task-watcher.log"
 MONITORING_CONFIG="${JARVIS_HOME}/config/monitoring.json"
 TASKS_CONFIG="${JARVIS_HOME}/config/tasks.json"
 # 전역 기본값: tasks.json에 timeout 없는 태스크에 적용 (단위: 분)

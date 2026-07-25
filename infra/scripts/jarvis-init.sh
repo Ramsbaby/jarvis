@@ -67,8 +67,8 @@ ok "scripts/ bin/ 실행 권한 완료"
 
 # ── 5. tasks.db 초기화 ───────────────────────────────────────────────────────
 step "tasks.db 초기화"
-DB_PATH="${JARVIS_HOME}/state/tasks.db"
-if ${NODE_SQLITE} "${JARVIS_HOME}/lib/task-store.mjs" count-queued > /dev/null 2>&1; then
+DB_PATH="${JARVIS_HOME}/runtime/state/tasks.db"
+if ${NODE_SQLITE} "${JARVIS_HOME}/infra/lib/task-store.mjs" count-queued > /dev/null 2>&1; then
     ok "tasks.db 정상 ($DB_PATH)"
 else
     warn "tasks.db 초기화 실패 — lib/task-store.mjs 수동 확인 필요"

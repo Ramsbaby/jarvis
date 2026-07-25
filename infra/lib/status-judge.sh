@@ -19,8 +19,8 @@
 set -o pipefail
 
 # 상수 정의
-_JUDGE_STATE_DIR="${JUDGE_STATE_DIR:=${HOME}/.jarvis/runtime/state/status-judge}"
-_JUDGE_LOG_DIR="${JUDGE_LOG_DIR:=${HOME}/.jarvis/runtime/logs}"
+_JUDGE_STATE_DIR="${JUDGE_STATE_DIR:=${HOME}/jarvis/runtime/state/status-judge}"
+_JUDGE_LOG_DIR="${JUDGE_LOG_DIR:=${HOME}/jarvis/runtime/logs}"
 _JUDGE_DEDUP_TTL="${JUDGE_DEDUP_TTL:-0}"  # 0 = 무한, 초단위
 
 # 내부: 상태 디렉토리 초기화

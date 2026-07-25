@@ -11,7 +11,7 @@
 
 set -euo pipefail
 # Cross-platform compat
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
+source "${JARVIS_HOME:-${HOME}/jarvis}/infra/lib/compat.sh" 2>/dev/null || true
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 REASON="${1:-manual restart}"
 LOG="${BOT_HOME}/logs/bot-self-restart.log"

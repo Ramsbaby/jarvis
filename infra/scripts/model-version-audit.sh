@@ -43,9 +43,11 @@ LATEST_HAIKU=$(jq -r '.currentLatest.haiku' "$POLICY_FILE")
 
 _log "audit start — latest: opus=$LATEST_OPUS sonnet=$LATEST_SONNET haiku=$LATEST_HAIKU"
 
-# === 그림자 경로 오타 가드 (2026-06-22 — ~/.jarvis/runtime/ → runtime/runtime/ 누설 재발 방지) ===
-# 배경: ~/.jarvis 가 ~/jarvis/runtime 심링크라, 설정에 ~/.jarvis/runtime/ 적으면 그림자 폴더에 데이터가 샘.
-#       ceo-digest 경영 리포트 ~50개가 그림자에만 쌓인 사고 후 주간 감사에 통합. 모델 검사와 독립 실행.
+# === 그림자 경로 가드 (2026-06-22 도입 / 2026-07-25 원인 정정) ===
+# 배경: 데이터가 정본이 아닌 그림자 폴더에 쌓여 RAG·감사에서 누락된 사고(ceo-digest 리포트 ~50개).
+#       당시 원인을 "~/.jarvis 가 심링크라서"로 적었으나, 실측 결과 ~/.jarvis 는 독립 실제 폴더였다.
+#       진짜 원인은 compat.sh 가 JARVIS_HOME 을 런타임 폴더로 정의해 "runtime" 이 중복된 것.
+#       상세 판정 로직은 shadow-path-guard.sh 참조. 모델 검사와 독립 실행.
 if SHADOW_REPORT=$(bash "${JARVIS_HOME}/infra/scripts/shadow-path-guard.sh" 2>&1); then
   _log "shadow-path PASS: 그림자 경로 오타 0건"
 else
@@ -54,7 +56,7 @@ else
   if [[ -f "$DISCORD_VISUAL" ]] && command -v discord_route_payload >/dev/null 2>&1; then
     SP=$(jq -nc --arg ts "$(date +'%Y-%m-%d %H:%M KST')" \
       --arg r "$(printf '%s\n' "$SHADOW_REPORT" | grep '⚠️' | head -3 | tr '\n' '|' | sed 's/|$//')" \
-      '{title:"🚨 그림자 경로 오타 감지", data:{"위반":($r|if .=="" then "(상세 로그 참조)" else . end), "조치":"~/.jarvis/runtime/ → ~/jarvis/runtime/ 교정"}, timestamp:$ts}')
+      '{title:"🚨 그림자 경로 감지", data:{"위반":($r|if .=="" then "(상세 로그 참조)" else . end), "조치":"shadow-path-guard.sh 출력의 A형/B형 안내 참조"}, timestamp:$ts}')
     discord_route_payload info "$SP" 2>&1 | tee -a "$LOG_FILE" || true
   fi
 fi

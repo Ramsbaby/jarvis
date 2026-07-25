@@ -9,8 +9,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
 JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"
-LOG="$JARVIS_HOME/logs/oss-manager.log"
-CRON_LOG="$JARVIS_HOME/logs/cron.log"
+LOG="$JARVIS_HOME/runtime/logs/oss-manager.log"
+CRON_LOG="$JARVIS_HOME/runtime/logs/cron.log"
 NODE="${NODE:-$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)}"
 
 # .env source (GITHUB_TOKEN 등 시크릿 주입 — 2026-05-07 추가)

@@ -84,13 +84,13 @@ test_db_initialization() {
     echo "  1. DB 파일 생성 확인"
 
     # 기존 DB 제거 (테스트용)
-    rm -f ~/.jarvis/runtime/state/command-state-cl-3e0048f79eb206f9.db
+    rm -f ~/jarvis/runtime/state/command-state-cl-3e0048f79eb206f9.db
 
     # 초기화 함수 호출
     _init_sqlite_db
 
     # DB 파일 존재 여부 확인
-    if [[ -f ~/.jarvis/runtime/state/command-state-cl-3e0048f79eb206f9.db ]]; then
+    if [[ -f ~/jarvis/runtime/state/command-state-cl-3e0048f79eb206f9.db ]]; then
         echo "  ✓ DB 파일 생성됨"
     else
         echo -e "  ${RED}✗ DB 파일 생성 실패${NC}"
@@ -99,7 +99,7 @@ test_db_initialization() {
 
     echo "  2. 테이블 스키마 확인"
     local schema
-    schema=$(sqlite3 ~/.jarvis/runtime/state/command-state-cl-3e0048f79eb206f9.db ".tables" 2>/dev/null || echo "")
+    schema=$(sqlite3 ~/jarvis/runtime/state/command-state-cl-3e0048f79eb206f9.db ".tables" 2>/dev/null || echo "")
 
     if [[ "$schema" == *"task_state"* ]]; then
         echo "  ✓ task_state 테이블 생성됨"
@@ -302,8 +302,8 @@ main() {
 
     # 정리: 기존 DB 제거
     echo -e "${YELLOW}[Setup]${NC} 테스트용 DB 초기화"
-    rm -f ~/.jarvis/runtime/state/command-state-cl-3e0048f79eb206f9.db
-    mkdir -p ~/.jarvis/runtime/state/cluster-guards
+    rm -f ~/jarvis/runtime/state/command-state-cl-3e0048f79eb206f9.db
+    mkdir -p ~/jarvis/runtime/state/cluster-guards
 
     # 테스트 실행
     run_test "DB 초기화" test_db_initialization
