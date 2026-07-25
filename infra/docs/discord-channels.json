@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-07-20T00:10:05.558Z",
+  "generatedAt": "2026-07-25T04:42:11.748Z",
   "totalChannels": 16,
-  "totalTasks": 135,
+  "totalTasks": 136,
   "source": "runtime/config/tasks.json + infra/config/models.json",
   "channels": {
     "<no-channel>": {
@@ -469,12 +469,12 @@
         {
           "id": "connections-weekly-insight",
           "schedule": "45 9 * * 1",
-          "model": "claude-opus-4-8"
+          "model": "claude-opus-5"
         },
         {
           "id": "monthly-review",
           "schedule": "0 9 1 * *",
-          "model": "claude-opus-4-8"
+          "model": "claude-opus-5"
         },
         {
           "id": "cost-monitor",
@@ -592,6 +592,33 @@
       "modelOverride": "opusplan",
       "effortOverride": "high"
     },
+    "jarvis-retro": {
+      "taskCount": 4,
+      "tasks": [
+        {
+          "id": "ceo-daily-digest",
+          "schedule": "15 23 * * *",
+          "model": "claude-haiku-4-5-20251001"
+        },
+        {
+          "id": "self-healing-digest",
+          "schedule": "0 21 * * 0",
+          "model": "claude-sonnet-5"
+        },
+        {
+          "id": "compound-review",
+          "schedule": "30 20 * * 0",
+          "model": "claude-sonnet-5"
+        },
+        {
+          "id": "pdf-pipeline-audit",
+          "schedule": "15 3 * * *",
+          "model": "<default>"
+        }
+      ],
+      "modelOverride": null,
+      "effortOverride": null
+    },
     "jarvis-blog": {
       "taskCount": 4,
       "tasks": [
@@ -662,28 +689,6 @@
       ],
       "modelOverride": "power",
       "effortOverride": "max"
-    },
-    "jarvis-retro": {
-      "taskCount": 3,
-      "tasks": [
-        {
-          "id": "ceo-daily-digest",
-          "schedule": "15 23 * * *",
-          "model": "claude-haiku-4-5-20251001"
-        },
-        {
-          "id": "self-healing-digest",
-          "schedule": "0 21 * * 0",
-          "model": "claude-sonnet-5"
-        },
-        {
-          "id": "compound-review",
-          "schedule": "30 20 * * 0",
-          "model": "claude-sonnet-5"
-        }
-      ],
-      "modelOverride": null,
-      "effortOverride": null
     },
     "jarvis-alerts": {
       "taskCount": 2,

@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-07-20T00:10:05.478Z",
-  "totalTasks": 135,
+  "generatedAt": "2026-07-25T04:42:11.675Z",
+  "totalTasks": 136,
   "source": "runtime/config/tasks.json",
   "modelDistribution": {
     "claude-sonnet-5": 22,
     "claude-haiku-4-5-20251001": 40,
-    "<default>": 71,
-    "claude-opus-4-8": 2
+    "<default>": 72,
+    "claude-opus-5": 2
   },
   "channelDistribution": {
     "jarvis": 5,
@@ -17,7 +17,7 @@
     "jarvis-career": 1,
     "jarvis-dev": 3,
     "jarvis-alerts": 2,
-    "jarvis-retro": 3,
+    "jarvis-retro": 4,
     "jarvis-boram": 1,
     "jarvis-blog": 4,
     "jarvis-lite": 1,
@@ -246,6 +246,16 @@
         "channel": "<none>",
         "timeout": 600,
         "maxBudget": "0.30",
+        "allowedTools": "Bash"
+      },
+      {
+        "id": "pdf-pipeline-audit",
+        "name": "PDF 파이프라인 CI 감사 (cluster cl-8a2b1b50fcd5ba63)",
+        "schedule": "15 3 * * *",
+        "model": "<default>",
+        "channel": "jarvis-retro",
+        "timeout": 240,
+        "maxBudget": "0.00",
         "allowedTools": "Bash"
       },
       {
@@ -1055,7 +1065,7 @@
         "id": "connections-weekly-insight",
         "name": "Connections 주간 인사이트",
         "schedule": "45 9 * * 1",
-        "model": "claude-opus-4-8",
+        "model": "claude-opus-5",
         "channel": "jarvis-ceo",
         "timeout": 240,
         "maxBudget": "0.80",
@@ -1097,7 +1107,7 @@
         "id": "monthly-review",
         "name": "월간 회고",
         "schedule": "0 9 1 * *",
-        "model": "claude-opus-4-8",
+        "model": "claude-opus-5",
         "channel": "jarvis-ceo",
         "timeout": 300,
         "maxBudget": "1.00",

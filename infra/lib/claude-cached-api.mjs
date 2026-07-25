@@ -67,11 +67,17 @@ function parseArgs(argv) {
 const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 
 // --- 가격표 (per 1M tokens, USD) ---
+// 2026-07-25 요율 전면 교정: 기존 표는 Claude 3 시대 요율(Haiku 3 $0.25/$1.25, Opus 3 $15/$75)이
+//   모델 ID만 4.5/4.8로 바뀐 채 남아 비용이 최대 3배 과대 계상되고 있었음. 공식 요율로 재작성.
+//   규칙: cache_write = input × 1.25, cache_read = input × 0.1
 const PRICING = {
-  'claude-haiku-4-5-20251001': { input: 0.25, cache_write: 0.30, cache_read: 0.025, output: 1.25 },
-  'claude-sonnet-4-6':         { input: 3.00, cache_write: 3.75, cache_read: 0.30,  output: 15.0 },
-  'claude-opus-4-8':           { input: 15.0, cache_write: 18.75, cache_read: 1.50, output: 75.0 },
-  'default':                   { input: 3.00, cache_write: 3.75, cache_read: 0.30,  output: 15.0 },
+  'claude-haiku-4-5-20251001': { input: 1.00, cache_write: 1.25, cache_read: 0.10, output: 5.00 },
+  'claude-sonnet-4-6':         { input: 3.00, cache_write: 3.75, cache_read: 0.30, output: 15.0 },
+  'claude-sonnet-5':           { input: 3.00, cache_write: 3.75, cache_read: 0.30, output: 15.0 },
+  'claude-opus-5':             { input: 5.00, cache_write: 6.25, cache_read: 0.50, output: 25.0 },
+  'claude-opus-4-8':           { input: 5.00, cache_write: 6.25, cache_read: 0.50, output: 25.0 },
+  'claude-opus-4-7':           { input: 5.00, cache_write: 6.25, cache_read: 0.50, output: 25.0 },
+  'default':                   { input: 3.00, cache_write: 3.75, cache_read: 0.30, output: 15.0 },
 };
 
 function calcCost(model, usage) {

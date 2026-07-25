@@ -41,7 +41,7 @@ const CLAUDE_BIN          = process.env.CLAUDE_BINARY || join(homedir(), '.local
 const LOGS_DIR            = join(BOT_HOME, 'logs');
 
 const MODELS = JSON.parse(readFileSync(MODELS_FILE, 'utf-8'));
-const OPUS_MODEL = MODELS.large || 'claude-opus-4-8';
+const OPUS_MODEL = MODELS.large || 'claude-opus-5';
 
 // OAuth 격리 (2026-06-11 사고 재발 방지): 배치 SDK 호출은 격리 장수명 토큰을 사용.
 // 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 — llm-gateway.sh와 동일 패턴.
