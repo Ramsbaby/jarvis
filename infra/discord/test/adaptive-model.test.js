@@ -40,18 +40,21 @@ const cases = [
   ['fast',     NORMAL,  'fast',     false, 'fast+normal  → keep'],
   ['fast',     DEEP,    'fast',     false, 'fast+deep    → keep'],
 
-  ['sonnet',   TRIVIAL, 'fast',     true,  'sonnet+trivial → fast'],
+  // 2026-07-27: trivial→fast 강등 폐지(주인님 지시). trivial 을 normal 과 동일 취급.
+  //   근거: "고쳐줘"·"상태 알려줘"·"크론 몇 개야?" 같은 짧은 명령이 잡담으로 오분류돼
+  //   Haiku 로 내려가고 있었다(실측). 이제 채널 티어 규칙만 적용된다.
+  ['sonnet',   TRIVIAL, 'sonnet',   false, 'sonnet+trivial → keep (강등 폐지)'],
   ['sonnet',   NORMAL,  'sonnet',   false, 'sonnet+normal → keep'],
   ['sonnet',   DEEP,    'sonnet',   false, 'sonnet+deep → keep'],
 
-  // power: trivial→fast, normal→sonnet(비용최적화), deep→power(채널 티어 유지)
-  ['power',    TRIVIAL, 'fast',   true,  'power+trivial → fast (비용 절감)'],
+  // power: trivial/normal→sonnet(비용최적화 유지), deep→power(채널 티어 유지)
+  ['power',    TRIVIAL, 'sonnet', true,  'power+trivial → sonnet (normal 과 동일 취급)'],
   ['power',    NORMAL,  'sonnet', true,  'power+normal → sonnet (비용 최적화, 2026-05-25)'],
   ['power',    DEEP,    'power',  false, 'power+deep → keep (채널 티어 유지)'],
 
-  // opusplan: trivial→fast, normal→sonnet(비용최적화), deep→opusplan(채널 티어 유지)
-  ['opusplan', TRIVIAL, 'fast',   true,  'opusplan+trivial → fast'],
-  ['opusplan', NORMAL,  'sonnet', true,  'opusplan+normal → sonnet (비용 최적화, 2026-05-25)'],
+  // opusplan: 전 구간 유지 (2026-07-27 주인님 지시 — opusplan 을 기본 동작으로)
+  ['opusplan', TRIVIAL, 'opusplan', false, 'opusplan+trivial → keep (강등 폐지)'],
+  ['opusplan', NORMAL,  'opusplan', false, 'opusplan+normal → keep (기본 동작화)'],
   ['opusplan', DEEP,    'opusplan', false, 'opusplan+deep → keep (채널 티어 유지)'],
 ];
 

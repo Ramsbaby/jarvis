@@ -32,6 +32,12 @@ set -euo pipefail
 LOCK_NAME="${1:?Usage: cron-safe-wrapper.sh <lock-name> <timeout-sec> <cmd> [args...]}"
 MAX_TIMEOUT="${2:?Usage: cron-safe-wrapper.sh <lock-name> <timeout-sec> <cmd> [args...]}"
 shift 2
+
+# Validate MAX_TIMEOUT is a positive integer
+if ! [[ "$MAX_TIMEOUT" =~ ^[0-9]+$ ]] || (( MAX_TIMEOUT <= 0 )); then
+    echo "ERROR: timeout-sec must be a positive integer, got '$MAX_TIMEOUT'" >&2
+    exit 1
+fi
 # 나머지 $@ = 실행할 커맨드 전체 (bash/node/python 구분 없이 수용)
 
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
@@ -50,10 +56,28 @@ fi
 # mkdir 는 POSIX 보장 atomic — echo > file 방식(TOCTOU 레이스)과 달리 커널이 보장
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     _pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || echo 0)
+    # Validate _pid is numeric
+    if ! [[ "$_pid" =~ ^[0-9]+$ ]]; then
+        _pid=0
+    fi
 
-    # stat: Linux uses -c '%Y', macOS uses -f %m
-    _lock_mtime=$(stat -c '%Y' "$LOCK_DIR" 2>/dev/null || stat -f %m "$LOCK_DIR" 2>/dev/null || echo 0)
-    _age=$(( $(date +%s) - _lock_mtime ))
+    # stat: Get lock directory modification time (Linux: -c '%Y', macOS: -f %m)
+    _lock_mtime=0
+    if command -v stat >/dev/null 2>&1; then
+        _lock_mtime=$(stat -c '%Y' "$LOCK_DIR" 2>/dev/null || stat -f %m "$LOCK_DIR" 2>/dev/null || echo 0)
+    fi
+    # Ensure _lock_mtime is numeric
+    if ! [[ "$_lock_mtime" =~ ^[0-9]+$ ]]; then
+        _lock_mtime=0
+    fi
+
+    # Get current timestamp with validation
+    _current_time=$(date +%s 2>/dev/null || echo 0)
+    if ! [[ "$_current_time" =~ ^[0-9]+$ ]]; then
+        _current_time=0
+    fi
+
+    _age=$(( _current_time - _lock_mtime ))
 
     # Check if process is still running
     _pid_running=0
@@ -65,6 +89,12 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     if (( _pid_running == 1 && _age < MAX_TIMEOUT + 60 )); then
         _log "SKIP 이미 실행 중 (PID ${_pid}, ${_age}s 경과)"
         exit 0
+    fi
+
+    # Ensure _age is numeric before arithmetic
+    if ! [[ "$_age" =~ ^[0-9]+$ ]]; then
+        _log "WARN 락 타임스탐프 판독 오류 (age='$_age') — 강제 정리 진행"
+        _age=0
     fi
 
     # 스테일 락 정리 후 재획득 (최대 3회 재시도)
@@ -95,13 +125,20 @@ TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null 
 
 # Capture stderr for failure diagnosis
 STDERR_FILE="${LOCK_DIR}/stderr.log"
-mkdir -p "$(dirname "$STDERR_FILE")"
+# Verify lock directory exists before using it
+if [[ ! -d "$LOCK_DIR" ]]; then
+    _log "ERROR: lock directory not found at $LOCK_DIR"
+    exit 1
+fi
+# Clear any stale stderr file
+rm -f "$STDERR_FILE" 2>/dev/null || true
 
 if [[ -n "$TIMEOUT_CMD" ]]; then
     # --kill-after: timeout 후 SIGTERM, 30초 뒤 SIGKILL
     # 5초는 CPU-bound 작업(ONNX 임베딩)에서 이벤트 루프가 SIGTERM 처리하기에 부족
     nice -n 10 "$TIMEOUT_CMD" --kill-after=30 "$MAX_TIMEOUT" "$@" 2>"$STDERR_FILE" || EXIT_CODE=$?
 else
+    _log "WARN timeout command not found (gtimeout/timeout) — running without timeout"
     nice -n 10 "$@" 2>"$STDERR_FILE" || EXIT_CODE=$?
 fi
 
@@ -112,7 +149,10 @@ if [[ $EXIT_CODE -eq 124 ]]; then
     _log "TIMEOUT ${_ELAPSED}s (limit: ${MAX_TIMEOUT}s) exit=124"
 elif [[ $EXIT_CODE -eq 99 ]]; then
     # Exit code 99: ask-claude.sh graceful skip (circuit breaker open) or internal failure
-    STDERR_CONTENT=$(cat "$STDERR_FILE" 2>/dev/null | head -c 2000 || echo "")
+    STDERR_CONTENT=""
+    if [[ -f "$STDERR_FILE" ]] && [[ -s "$STDERR_FILE" ]]; then
+        STDERR_CONTENT=$(head -c 2000 "$STDERR_FILE" 2>/dev/null || echo "")
+    fi
     FAILURE_TYPE="INTERNAL_ERROR"
 
     # Circuit breaker detection: case-insensitive 'circuit' keyword
@@ -130,7 +170,10 @@ elif [[ $EXIT_CODE -eq 99 ]]; then
     [[ -n "$STDERR_CONTENT" ]] && _log "  stderr: ${STDERR_CONTENT:0:150}"
 elif [[ $EXIT_CODE -ne 0 ]]; then
     # Analyze stderr for failure pattern (generic failures)
-    STDERR_CONTENT=$(cat "$STDERR_FILE" 2>/dev/null | head -c 2000 || echo "")
+    STDERR_CONTENT=""
+    if [[ -f "$STDERR_FILE" ]] && [[ -s "$STDERR_FILE" ]]; then
+        STDERR_CONTENT=$(head -c 2000 "$STDERR_FILE" 2>/dev/null || echo "")
+    fi
     FAILURE_TYPE="UNKNOWN"
 
     if [[ "$STDERR_CONTENT" =~ AUTH ]]; then

@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 WIKI_LM="${BOT_HOME}/wiki/meta/learned-mistakes.md"
 LOG_FILE="${BOT_HOME}/logs/mistake-pattern-analyzer.log"
 RESULT="${BOT_HOME}/state/mistake-pattern-analysis.json"

@@ -157,7 +157,7 @@ run_with_recovery() {
     local args=("$@")
 
     # PATH 강화 (cron 환경에서 경로 누락 방지 — bot-cron.sh 상속 보증)
-    export PATH="${BOT_HOME:-${HOME}/.jarvis}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH:-/usr/bin:/bin}"
+    export PATH="${BOT_HOME:-${HOME}/jarvis/runtime}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH:-/usr/bin:/bin}"
 
     # DEBUG: 받은 인자 로깅
     {

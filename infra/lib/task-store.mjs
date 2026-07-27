@@ -231,8 +231,6 @@ export function transition(id, toStatus, { triggeredBy = 'system', extra = {} } 
   // extra에서 retries/priority는 별도 컬럼으로 관리 — meta에는 포함하지 않음
   const { retries: _r, priority: _p, ...metaExtra } = extra;
   const newMeta = { ...task.meta, ...metaExtra };
-  if (toStatus === 'done')   newMeta.completedAt = new Date(now).toISOString();
-  if (toStatus === 'failed') newMeta.failedAt    = new Date(now).toISOString();
 
   // running → queued = 재시도 카운터 자동 증가 (extra.retries 무시)
   // 그 외 = extra.retries 명시 시 사용, 없으면 현재값 유지
@@ -241,16 +239,31 @@ export function transition(id, toStatus, { triggeredBy = 'system', extra = {} } 
       ? task.retries + 1
       : (extra.retries ?? task.retries);
 
+  // 재시도를 다 쓴 태스크는 queued 로 되돌리지 않고 failed 로 확정한다.
+  // (2026-07-27: 이 처리가 없어 retries 한계에 닿은 태스크가 queued 로 남았고,
+  //  getReadyTasks() 는 retries < maxRetries 만 고르므로 영원히 선택되지 않았다.
+  //  결과: 개발 큐가 6/23~7/19 누적 61건 좀비로 채워져 한 달 넘게 정지 — 겉으로는
+  //  "대기 63건" 으로 보여 정지 사실 자체가 감춰졌다.)
+  const maxRetries = task.meta?.maxRetries ?? 2;
+  const finalStatus =
+    (toStatus === 'queued' && task.status === 'running' && newRetries >= maxRetries)
+      ? 'failed'
+      : toStatus;
+  if (finalStatus !== toStatus) newMeta.retriesExhausted = `${newRetries}/${maxRetries}`;
+
+  if (finalStatus === 'done')   newMeta.completedAt = new Date(now).toISOString();
+  if (finalStatus === 'failed') newMeta.failedAt    = new Date(now).toISOString();
+
   // node:sqlite DatabaseSync은 .transaction() 헬퍼 없음 — BEGIN/COMMIT/ROLLBACK 직접 사용
   db.exec('BEGIN');
   try {
     db.prepare(
       'UPDATE tasks SET status=?, priority=?, retries=?, meta=?, updated_at=? WHERE id=?'
-    ).run(toStatus, extra.priority ?? task.priority, newRetries, JSON.stringify(newMeta), now, id);
+    ).run(finalStatus, extra.priority ?? task.priority, newRetries, JSON.stringify(newMeta), now, id);
 
     db.prepare(
       'INSERT INTO task_transitions (task_id, from_status, to_status, triggered_by, created_at) VALUES (?,?,?,?,?)'
-    ).run(id, task.status, toStatus, triggeredBy, now);
+    ).run(id, task.status, finalStatus, triggeredBy, now);
 
     db.exec('COMMIT');
   } catch (e) {
@@ -277,7 +290,7 @@ export function transition(id, toStatus, { triggeredBy = 'system', extra = {} } 
     } catch (_) { /* RAG 적재 실패는 전이 자체를 막지 않음 */ }
   }
 
-  return { ...task, status: toStatus, retries: newRetries, meta: newMeta };
+  return { ...task, status: finalStatus, retries: newRetries, meta: newMeta };
 }
 
 /** 태스크 추가 (중복 시 무시, prompt 품질 게이트 포함) */

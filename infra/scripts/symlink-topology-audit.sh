@@ -47,6 +47,30 @@ EXPECTED_LINK_PATHS=(
   "${COMPAT_HOME}/scripts"
   "${COMPAT_HOME}/config"
   "${COMPAT_HOME}/discord"
+  # 2026-07-27 그림자 폴더 통합분 — COMPAT_HOME(=~/.jarvis) 쪽만 등재한다.
+  #   DOT_JARVIS 는 이름과 달리 런타임 폴더(위 L20 주석)이므로 여기에 쓰면
+  #   "runtime/X → runtime/X" 자기참조 링크가 만들어져 실폴더가 통째로 치워진다(실제 발생).
+  #   이 링크가 실폴더로 되돌아가면 저장소가 다시 둘로 갈라져, 같은 조회 명령이
+  #   BOT_HOME 에 따라 다른 답을 낸다 — 브리핑 이중 발송·작업 DB 분열의 공통 뿌리였다.
+  #   rag 는 양쪽 LanceDB 가 모두 현역이라 의도적으로 제외(합치면 검색 품질 손실).
+  "${COMPAT_HOME}/prompts"
+  "${COMPAT_HOME}/adr"
+  "${COMPAT_HOME}/watchdog"
+  "${COMPAT_HOME}/tmp"
+  "${COMPAT_HOME}/archive"
+  "${COMPAT_HOME}/teams"
+  "${COMPAT_HOME}/backups"
+  "${COMPAT_HOME}/work"
+  "${COMPAT_HOME}/docs"
+  "${COMPAT_HOME}/data"
+  "${COMPAT_HOME}/wiki"
+  "${COMPAT_HOME}/ledger"
+  "${COMPAT_HOME}/results"
+  "${COMPAT_HOME}/context"
+  "${COMPAT_HOME}/runtime"
+  "${COMPAT_HOME}/logs"
+  "${COMPAT_HOME}/inbox"
+  "${COMPAT_HOME}/state"
 )
 EXPECTED_LINK_TARGETS=(
   "${SSOT}"
@@ -58,6 +82,24 @@ EXPECTED_LINK_TARGETS=(
   "${SSOT}/scripts"
   "${HOME}/jarvis/runtime/config"
   "${HOME}/jarvis/runtime/discord"
+  "${HOME}/jarvis/runtime/prompts"
+  "${HOME}/jarvis/runtime/adr"
+  "${HOME}/jarvis/runtime/watchdog"
+  "${HOME}/jarvis/runtime/tmp"
+  "${HOME}/jarvis/runtime/archive"
+  "${HOME}/jarvis/runtime/teams"
+  "${HOME}/jarvis/runtime/backups"
+  "${HOME}/jarvis/runtime/work"
+  "${HOME}/jarvis/runtime/docs"
+  "${HOME}/jarvis/runtime/data"
+  "${HOME}/jarvis/runtime/wiki"
+  "${HOME}/jarvis/runtime/ledger"
+  "${HOME}/jarvis/runtime/results"
+  "${HOME}/jarvis/runtime/context"
+  "${HOME}/jarvis/runtime/runtime"
+  "${HOME}/jarvis/runtime/logs"
+  "${HOME}/jarvis/runtime/inbox"
+  "${HOME}/jarvis/runtime/state"
 )
 
 # Ledger emitter

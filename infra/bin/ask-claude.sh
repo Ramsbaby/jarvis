@@ -10,7 +10,7 @@ printf '[%s] PID=%d TASK=%s\n' "$(date -u +%FT%TZ 2>/dev/null || echo unknown)" 
 unset _EARLY_LOG
 # --- PATH 강화 (cron 환경에서 경로 누락 방지) ---
 export PATH="${PATH:-/usr/bin:/bin}:/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin"
-source "${JARVIS_HOME:-${BOT_HOME:-${HOME}/jarvis/runtime}}/lib/compat.sh" 2>/dev/null || true
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
 set -euo pipefail
 
 # ask-claude.sh - Core wrapper around `claude -p` for AI task execution
@@ -128,6 +128,20 @@ START_TIME=$(date +%s)
 # --- Build system prompt with context (sourced module) ---
 source "${BOT_HOME}/lib/context-loader.sh"
 load_context
+
+# --- Rule Guard PRE-EXECUTION (Cluster cl-e04e4028dd5db00f): 확정 규칙 체크리스트 주입 ---
+# preply/tutor 태스크 시작 시 rule-registry에서 확정 규칙을 로드해 SYSTEM_PROMPT에 주입
+# 목적: 새 세트 작업 전 '예문 3개 고정·문법1장·숙제3종세트' 등 확정 규칙 망각 방지
+_CL_E04E_GUARD="${BOT_HOME}/lib/cluster-guard-cl-e04e4028dd5db00f.sh"
+if [[ -f "$_CL_E04E_GUARD" ]] && [[ "$TASK_ID" =~ preply|tutor|card.news|카드뉴스 ]]; then
+    _RULE_CHECKLIST=$(bash -c "source '${_CL_E04E_GUARD}' 2>/dev/null && guard_new_set_start" 2>/dev/null || true)
+    if [[ -n "$_RULE_CHECKLIST" ]]; then
+        SYSTEM_PROMPT="${SYSTEM_PROMPT}
+<!-- SECTION:rule-guard-cl-e04e4028:DYNAMIC -->
+${_RULE_CHECKLIST}
+<!-- /SECTION:rule-guard-cl-e04e4028 -->"
+    fi
+fi
 
 # --- Load Execution Verdict Wrapper (Cluster cl-e30aee511af89e13: prevent stderr-based missjudgment) ---
 source "${BOT_HOME}/lib/execution-verdict-wrapper.sh" 2>/dev/null || true
@@ -752,7 +766,10 @@ if [[ -f "${BOT_HOME}/lib/file-validator.sh" ]] && command -v jq >/dev/null 2>&1
 
         # 경로가 없으면 출력 텍스트에서 간단히 추출 시도
         if [[ -z "$SAVED_FILES" ]]; then
-            SAVED_FILES=$(echo "$RAW_OUTPUT" | grep -oE '/(tmp|home|Users|jarvis)[^ "]*\.(pdf|txt|md|json|html|csv)' 2>/dev/null || true)
+            # 안전 문자만 허용 (세미콜론·싱글쿼트·백틱 등 셸 메타문자 제거)
+            # [^ "]*가 메타문자를 허용하는 취약점 방어: grep 후 화이트리스트 재검증
+            SAVED_FILES=$(echo "$RAW_OUTPUT" | grep -oE '/(tmp|home|Users|jarvis)[^ "]*\.(pdf|txt|md|json|html|csv)' 2>/dev/null \
+                | grep -E '^[a-zA-Z0-9/_.\-]+$' || true)
         fi
 
         # 저장된 파일이 있으면 검증 수행
@@ -778,6 +795,24 @@ if [[ -f "${BOT_HOME}/lib/file-validator.sh" ]] && command -v jq >/dev/null 2>&1
     # 검증 실패: PDF 페이지 수 미검증, 파일 응답 본문 미검증, 중복 파일 미감지
     if [[ -f "${BOT_HOME}/lib/cluster-guard-cl-45670404fa7eb40c.sh" ]]; then
         bash "${BOT_HOME}/lib/cluster-guard-cl-45670404fa7eb40c.sh" "$RAW_OUTPUT" "$TASK_ID" 2>/dev/null || true
+    fi
+
+    # Cluster guard integration (cl-e04e4028dd5db00f): 확정 규칙 검증 (HTML 세트 저장 후)
+    # 규칙 편차 방지: 예문 개수, 문법 슬라이드 장 수, 동반 파일 자동 검증
+    _CL_E04E_GUARD="${BOT_HOME}/lib/cluster-guard-cl-e04e4028dd5db00f.sh"
+    if [[ -f "$_CL_E04E_GUARD" ]] && [[ -n "${SAVED_FILES:-}" ]]; then
+        while IFS= read -r _e04e_file; do
+            [[ -z "$_e04e_file" ]] && continue
+            # 안전 문자 재검증: bash -c 내 싱글쿼트 이스케이프 불가 → 메타문자 포함 경로 차단
+            if ! echo "$_e04e_file" | grep -qE '^[a-zA-Z0-9/_.\-]+$'; then
+                log_jsonl "warn" "Skipping unsafe path from LLM output (metachar detected): $_e04e_file" "0"
+                continue
+            fi
+            if echo "$_e04e_file" | grep -qE '\.(html|pdf)$'; then
+                # bash -c 문자열 보간 대신 subshell + 변수 전달로 인젝션 방어
+                (source "$_CL_E04E_GUARD" 2>/dev/null && guard_validate_set "$_e04e_file") 2>/dev/null || true
+            fi
+        done <<< "$SAVED_FILES"
     fi
 fi
 

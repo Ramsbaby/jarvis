@@ -130,7 +130,7 @@ _run_batch() {
         printf '{"cluster":"%s","total":%d,"pass":%d,"fail":%d,"missing":%d,"log":"%s","items":[' \
             "$CLUSTER_ID" "$total" "$ok" "$fail" "$miss" "$CI_LOG"
         local first=1
-        for r in "${results[@]}"; do
+        for r in "${results[@]+"${results[@]}"}"; do
             IFS=$'\t' read -r st _ path reason <<<"$r"
             [[ $first -eq 1 ]] && first=0 || printf ','
             printf '{"status":"%s","file":"%s","reason":"%s"}' \
@@ -139,7 +139,7 @@ _run_batch() {
         printf ']}\n'
     else
         echo "── CI PDF 파이프라인 체크 결과 (cluster=$CLUSTER_ID) ──"
-        for r in "${results[@]}"; do echo "  $r"; done
+        for r in "${results[@]+"${results[@]}"}"; do echo "  $r"; done
         echo "합계: total=$total pass=$ok fail=$fail missing=$miss"
         echo "저널: $CI_LOG"
     fi

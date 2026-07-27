@@ -107,14 +107,14 @@ export function resolveModelTier(channelTier, prompt, taskType, analysisChannel 
     }
     return { tier: baseTier, downgraded: false, reason: 'deep-keep' };
   }
-  if (kind === 'trivial') {
-    // fast가 baseTier보다 높으면 안 내림 (TIER_RANK 0 ≤ baseRank)
-    const baseRank = TIER_RANK[baseTier] ?? 1;
-    if (baseRank > 0) {
-      return { tier: 'fast', downgraded: true, reason: 'trivial-to-fast' };
-    }
-    return { tier: baseTier, downgraded: false, reason: 'already-fast' };
-  }
+  // 2026-07-27 주인님 지시로 trivial→fast 강등 제거.
+  //   사유: 주인님은 디스코드·자비스에서 잡담을 하지 않으신다. 그런데 실측해 보니
+  //   이 분기가 잡담이 아니라 '짧은 명령'을 Haiku 로 보내고 있었다 —
+  //   "고쳐줘"(3자) · "상태 알려줘" · "크론 몇 개야?" · "봇 언제 죽었어?" 전부 trivial 판정.
+  //   길이(<10자)와 '얼마/몇 개/언제/어디' 키워드가 곧바로 강등 조건이었기 때문이다.
+  //   이는 jarvis-core.md 의 "질문 길이 ≠ 응답 깊이 — 짧은 질문은 얕은 응답의 허가가 아님"
+  //   원칙과 정면으로 충돌한다. 따라서 trivial 은 normal 과 동일하게 취급한다.
+  //   (classifyPrompt 의 trivial 분류 자체는 남긴다 — 다른 용도·테스트에서 참조.)
   // normal — 비용-품질 임계값 기반 라우팅 (2026-05-25 재산정).
   //
   // 이전 로직: power/opusplan 채널에서 normal 입력 → 채널 티어 무조건 유지 (sonnet 다운 금지 가드).
@@ -131,6 +131,14 @@ export function resolveModelTier(channelTier, prompt, taskType, analysisChannel 
   //   Opus:   512 × $25/MTok ≈ $0.0000128/응답  → Sonnet 대비 66% 비용
   const baseRank = TIER_RANK[baseTier] ?? 1;
   if (baseRank > 1) {
+    // 2026-07-27 주인님 지시: opusplan(계획 Opus + 실행 Sonnet)을 기본 동작으로 둔다.
+    //   실측 배경: 이 강등 때문에 채널 티어가 opusplan 이어도 최근 응답이 전부
+    //   'normal-cost-optimized-to-sonnet' 으로 Sonnet 단독 처리되고 있었다(봇 로그 확인).
+    //   opusplan 은 실행을 Sonnet 이 맡아 Opus 직접(power)보다 저렴하므로 강등에서 뺀다.
+    //   power(Opus 직접)는 비용이 커서 normal 쿼리에선 기존대로 Sonnet 강등을 유지.
+    if (baseTier === 'opusplan') {
+      return { tier: 'opusplan', downgraded: false, reason: 'opusplan-default-keep' };
+    }
     return { tier: 'sonnet', downgraded: true, reason: 'normal-cost-optimized-to-sonnet' };
   }
   return { tier: baseTier, downgraded: false, reason: 'normal-keep' };
