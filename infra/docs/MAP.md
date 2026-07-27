@@ -11,7 +11,7 @@
 
 `~/jarvis` is the **infra-heavy half** of the Jarvis ecosystem. It contains:
 
-- ~90+ scheduled tasks (crons + event-triggered) — exact count in `tasks-index.json.totalTasks`
+- Scheduled tasks (crons + event-triggered) — 정확한 수는 `tasks-index.json.totalTasks` 참조 (수치를 여기 박아두지 말 것)
 - A 24/7 Discord bot
 - A RAG knowledge base (LanceDB + Ollama hybrid)
 - `ask-claude.sh` — the LLM gateway used by every cron

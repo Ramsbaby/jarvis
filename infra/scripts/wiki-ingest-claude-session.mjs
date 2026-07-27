@@ -173,6 +173,20 @@ function buildExtractionPrompt(sessionContent) {
   ].join('\n');
 }
 
+// OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰을 사용.
+// 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 — mistake-extractor.mjs L45와 동일 패턴.
+// 2026-07-27 등재: 이 파일에만 격리가 빠져 있어 메인 credentials로 호출하고 있었음.
+function isolatedClaudeEnv() {
+  const env = { ...process.env, ANTHROPIC_API_KEY: '' };
+  if (!env.CLAUDE_CODE_OAUTH_TOKEN) {
+    try {
+      const tok = readFileSync(join(HOME, '.claude-bot/.long-lived-token'), 'utf-8').trim();
+      if (tok) env.CLAUDE_CODE_OAUTH_TOKEN = tok;
+    } catch { /* 토큰 파일 없으면 메인 credentials 폴백 — 401 시 호출부에서 실패 처리 */ }
+  }
+  return env;
+}
+
 // ── Haiku 호출 ───────────────────────────────────────────────────────────────
 function callHaiku(prompt, timeoutMs = HAIKU_TIMEOUT) {
   return new Promise((resolve, reject) => {
@@ -182,7 +196,7 @@ function callHaiku(prompt, timeoutMs = HAIKU_TIMEOUT) {
       {
         timeout: timeoutMs,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
+        env: isolatedClaudeEnv(),
       },
     );
     let out = '';
@@ -234,8 +248,10 @@ function saveDailyCost(cost) {
 function checkCooldown(sessionFile) {
   try {
     mkdirSync(COOLDOWN_DIR, { recursive: true });
-    // sessionFile path 기반 hash (워크트리별로 다른 .md여도 같은 cwd면 같은 슬러그)
-    const slug = sessionFile.replace(/[^a-z0-9]/gi, '_').slice(-100);
+    // 2026-07-27 수정: 종전에는 sessionFile 전체 경로를 슬러그로 써서 세션 파일마다
+    // 쿨다운이 따로 잡혔다(누적 파일 1,396개가 증거). 주석의 의도는 "같은 cwd면 같은 슬러그"였으므로
+    // 파일명을 뺀 프로젝트 디렉토리 기준으로 잡는다.
+    const slug = dirname(sessionFile).replace(/[^a-z0-9]/gi, '_').slice(-100);
     const f = join(COOLDOWN_DIR, slug + '.ts');
     if (existsSync(f)) {
       const last = parseInt(readFileSync(f, 'utf-8').trim(), 10);

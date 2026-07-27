@@ -150,6 +150,82 @@ rag_size=$(du -sh "${BOT_HOME}/rag" 2>/dev/null | cut -f1 || echo "?")
 stderr_count=$(find "${BOT_HOME}/logs" -maxdepth 1 -name "claude-stderr-*.log" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 stale_stderr=$(find "${BOT_HOME}/logs" -maxdepth 1 -name "claude-stderr-*.log" -mtime +14 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 
+# F-2. 미관리 대용량 경로 — 역방향 retention (2026-07-27 등재)
+# 배경: 기존 정리 크론은 "알려진 경로"만 돈다(화이트리스트). 그래서 새로 생긴 경로는
+#       영원히 사각지대다. runtime/backups 3GB, runtime/rag 2.5GB가 그렇게 쌓였다.
+# 방식: 정리 스크립트들이 실제로 언급하는 경로를 자동 수집하고,
+#       거기 안 걸리는 100MB+ 디렉토리를 역으로 찾는다. 앞으로 생길 경로도 자동으로 잡힌다.
+managed_paths=$(grep -rhoE 'runtime/[a-z][a-z0-9_-]*' \
+    "${BOT_HOME}/scripts/"*cleanup* "${BOT_HOME}/scripts/"*retention* \
+    "${BOT_HOME}/scripts/"*rotate* "${BOT_HOME}/scripts/"*prune* 2>/dev/null \
+    | sort -u || true)
+unmanaged_paths=""
+while IFS= read -r d; do
+    [[ -n "$d" ]] || continue
+    sz_mb=$(du -sm "$d" 2>/dev/null | cut -f1 || echo 0)
+    (( ${sz_mb:-0} < 100 )) && continue
+    rel="runtime/$(basename "$d")"
+    if ! grep -qxF "$rel" <<< "$managed_paths"; then
+        unmanaged_paths="${unmanaged_paths}- \`${rel}\` — ${sz_mb}MB (**어떤 정리 규칙에도 안 걸림**)"$'\n'
+    fi
+    # 제외 목록을 두지 않는 이유: 하드코딩한 목록은 반드시 낡는다(2026-07-27 Serena 규칙 사례).
+    # 런타임 코드 디렉토리가 섞여 나올 수 있으니 사람이 보고 판단한다. 오탐은 해롭지 않다.
+    # sort -u 필수: find가 같은 경로를 중복 반환하는 사례를 실측했다(state 5회, 전체 57 vs 고유 53).
+done < <(find "$BOT_HOME" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -u)
+
+# G-0. 센서 생존 검사 (2026-07-27 등재)
+# 배경: cost_usd 필드명 오타로 3.5개월간 비용이 null이었는데 아무도 몰랐다.
+#       response-ledger 2개월간 2행, PreCompact 훅 2개월 침묵도 같은 부류다.
+#       공통 원인은 `?? null` / `|| 0` / `[ -z ] && exit 0` — 값이 안 와도 예외가 안 나서
+#       "정상"으로 읽힌다. 실패가 아니라 침묵이다.
+# 계약: 원장은 (a) 기대 주기 안에 갱신되고 (b) 핵심 숫자 필드가 전부 null/0이면 안 된다.
+sensor_health=""
+sensor_check() {
+    local label="$1" file="$2" max_stale_h="$3" field="${4:-}"
+    if [[ ! -f "$file" ]]; then
+        sensor_health="${sensor_health}- ❌ **${label}**: 파일 없음 (\`${file##*/}\`)"$'\n'
+        return
+    fi
+    local mtime now age_h
+    mtime=$(stat -f %m "$file" 2>/dev/null || stat -c %Y "$file" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    age_h=$(( (now - mtime) / 3600 ))
+    if (( age_h > max_stale_h )); then
+        sensor_health="${sensor_health}- ❌ **${label}**: ${age_h}시간째 기록 없음 (기대 ${max_stale_h}h 이내) — 생산자 중단 의심"$'\n'
+        return
+    fi
+    if [[ -n "$field" ]]; then
+        # 0이 아닌 실제 값만 센다. `"f":0` 이나 `"f":0.000` 은 죽은 센서로 취급.
+        # 생산자 필터(5번째 인자): 한 원장에 여러 생산자가 쓰면 해당 생산자 행만 본다.
+        # 2026-07-27 실측: response-ledger에는 discord-bot과 claude-code-cli 두 생산자가 쓰는데
+        # 후자는 cost 필드를 아예 안 넣는다. 구분 없이 세면 봇이 멀쩡해도 고장으로 오판한다.
+        local producer="${5:-}" sample
+        if [[ -n "$producer" ]]; then
+            sample=$(grep -F "\"source\":\"${producer}\"" "$file" 2>/dev/null | tail -50 || true)
+            if [[ -z "$sample" ]]; then
+                sensor_health="${sensor_health}- ⚠️ ${label}: 최근 기록에 \`${producer}\` 생산자 행이 없음 — 생산자 유휴 또는 중단"$'\n'
+                return
+            fi
+        else
+            sample=$(tail -50 "$file" 2>/dev/null || true)
+        fi
+        local live
+        live=$(printf '%s' "$sample" | grep -cE "\"${field}\":(0\.0*[1-9]|[1-9])" || true)
+        if (( live == 0 )); then
+            sensor_health="${sensor_health}- ❌ **${label}**: 최근 50행의 \`${field}\`가 전부 null/0 — **필드명 오타 의심**"$'\n'
+            return
+        fi
+        sensor_health="${sensor_health}- ✅ ${label}: 정상 (${age_h}h 전, ${field} 유효 ${live}/50)"$'\n'
+        return
+    fi
+    sensor_health="${sensor_health}- ✅ ${label}: 정상 (${age_h}h 전 기록)"$'\n'
+}
+
+sensor_check "token-ledger"            "$LEDGER"                                    48  "cost_usd"
+sensor_check "response-ledger (봇)"    "${BOT_HOME}/state/response-ledger.jsonl"    48  "cost_usd" "discord-bot"
+sensor_check "automation-budget"       "${BOT_HOME}/ledger/automation-budget.jsonl" 168
+sensor_check "bot-response-bus"        "${BOT_HOME}/ledger/bot-response-bus.jsonl"  48
+
 # G. 서킷브레이커
 cb_high_fails=""
 if [[ -d "${BOT_HOME}/state/circuit-breaker" ]]; then
@@ -232,6 +308,19 @@ ${cache_effectiveness:-_(cache gate 적용 태스크 없음)_}
 - **logs/**: ${logs_size} (stderr 파일 ${stderr_count}개, 14일+ 오래된 것 ${stale_stderr}개)
 - **state/**: ${state_size}
 - **rag/**: ${rag_size}
+
+### 🕳 미관리 대용량 경로 (역방향 retention)
+
+> 정리 스크립트가 언급하지 않는 100MB+ 디렉토리입니다. 방치하면 무한히 자랍니다.
+> 런타임 코드 디렉토리가 섞여 나올 수 있으니 **지우기 전에 내용을 확인**하십시오.
+
+${unmanaged_paths:-_(전부 어떤 정리 규칙엔가 걸려 있음)_}
+
+## 🩺 센서 생존 검사
+
+> 원장이 "조용히 죽어 있는" 상태를 잡습니다. ❌가 있으면 그 수치는 **믿으면 안 됩니다.**
+
+${sensor_health:-_(검사 대상 없음)_}
 
 ## 🚨 서킷브레이커 (연속실패 3회+)
 

@@ -193,6 +193,6 @@ Discord 24/7, 봇 품질 자가 점검, 자동 코딩 루프. 봇이 죽으면 �
 
 ## 없는 팀 (미매핑)
 
-현재 0. `gen-tasks-index.mjs` 가 모든 82개 태스크를 분류한다.
+현재 0. `gen-tasks-index.mjs` 가 전체 태스크를 분류한다 (정확한 수는 `tasks-index.json.totalTasks` 참조).
 
 새 태스크 추가 시 `id` 에 팀 키워드 (예: `infra-*`, `board-*`, `finance-*`) 를 포함시키거나, 키워드가 애매하면 `gen-tasks-index.mjs` 의 `TEAM_REGISTRY` 키워드 배열에 추가해 분류를 명시한다.

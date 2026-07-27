@@ -116,8 +116,10 @@ Managed by `launchd` on macOS. Guardian cron (*/3 min) auto-recovers unloaded ag
 | `ai.jarvis.discord-bot` | KeepAlive | Discord bot process |
 | `ai.jarvis.watchdog` | 180s interval | Bot health + stale process cleanup |
 | `ai.jarvis.board` | KeepAlive | Dashboard Next.js server (port 3100) |
-| `ai.jarvis.serena-mcp` | KeepAlive | Serena LSP 심볼 서버 SSE (port 24285) — 아래 "싱글톤 공유" 참조 |
-| `ai.jarvis.glances` | KeepAlive | System monitor (port 61208) |
+| `ai.openclaw.glances` | KeepAlive | System monitor (port 61208) |
+
+> 위 표는 대표 항목만입니다. **전체 목록은 여기 적지 않습니다** — `infra/docs/LAUNCHAGENT-CATALOG.md`(자동 생성)를 보십시오.
+> 2026-07-27 실측 시점에 이 표는 5개만 싣고 있었고 실제 `ai.jarvis.*` plist는 70개였습니다.
 
 Plist files: `~/Library/LaunchAgents/ai.jarvis.*.plist`
 
@@ -506,50 +508,6 @@ monthly-review, infra-daily, rag-health, security-scan, memory-cleanup.
 일부 짧은 정상 결과(예: "GitHub: 알림 없음")도 thin으로 잡히기 때문에,
 **warn은 로깅만 하고 결과는 저장한다**. 주간 감사(`token-ledger-audit`)가
 warn 패턴의 누적 추세를 잡아 선제 조정할 수 있다.
-
-### Serena MCP 싱글톤 공유 — 크론 태스크 선별 연결
-
-**구조**: LaunchAgent `ai.jarvis.serena-mcp`이 port 24285에서 SSE 서버로 상시 가동.
-Claude Code CLI 세션이 사용하는 것과 동일한 싱글톤을 **코드 탐색 크론 태스크**가 공유.
-
-**작동 방식**:
-- `config/serena-mcp.json` — Serena SSE endpoint (`http://127.0.0.1:24285/sse`) 지정
-- `config/empty-mcp.json` — MCP 없음 (비코드 태스크용, 기본값)
-- `bot-cron.sh`: tasks.json의 `mcpConfig` 필드를 읽어 `JARVIS_MCP_CONFIG` 환경변수로 export
-- `ask-claude.sh`: `--mcp-config "${JARVIS_MCP_CONFIG:-...empty-mcp.json}"` 사용
-
-**tasks.json 설정 예시**:
-```json
-{
-  "id": "doc-sync-auditor",
-  "mcpConfig": "serena",
-  "allowedTools": "Bash,Read,Write"
-}
-```
-
-`mcpConfig: "serena"` → `config/serena-mcp.json` → Claude가 `find_symbol`, `get_symbols_overview` 등 LSP 도구 사용 가능.
-`mcpConfig` 없음 또는 `"empty"` → 기존 동작 (MCP 없음).
-
-**현재 적용 태스크** (코드 탐색 LLM만):
-
-| 태스크 | 이유 |
-|---|---|
-| `doc-sync-auditor` | 코드-문서 정합성 검사 시 심볼 단위 탐색 |
-| `cron-auditor` | tasks.json + 코드 구조 분석 |
-| `security-scan` | 코드베이스 보안 스캔 |
-
-**토큰 수지 분석**:
-- MCP 연결 시 17개 도구 정의 추가 = ~5,100 토큰/task (프롬프트 오버헤드)
-- ⚠️ **현재 3개 태스크 프롬프트에 Serena 도구 호출 지시 없음** → 실질 절약 미실현
-- 효과 실현 조건: 프롬프트를 `find_symbol`/`get_symbols_overview` 활용으로 수정해야 함
-- 비코드 80개 전체 적용 시: 80 × 5.1K = -408K/일 **대손실** → 선별 적용만
-- **진짜 금맥은 Claude Code CLI 세션** (아래 "자비스맵" 참조): 대형 파일 Read→Serena로 세션당 ~40K 절약
-
-**Serena 서버가 down일 때**: `ask-claude.sh`의 `--mcp-config`에 unreachable URL이면
-Claude CLI가 MCP 연결 실패를 graceful 처리 → 내장 도구(Read/Bash)로 fallback.
-태스크는 정상 실행되되 토큰 절약 효과만 사라짐.
-
-**새 코드 태스크에 적용하려면**: tasks.json에 `"mcpConfig": "serena"` 한 줄 추가.
 
 ### 다음 단계 (Tier 2~5)
 
