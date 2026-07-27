@@ -283,6 +283,32 @@ _handle_verify_gate_fail() {
         git -C "$BOT_HOME" reset -q "$snapshot_hash" 2>/dev/null || true
         git -C "$BOT_HOME" checkout -q "$snapshot_hash" -- . 2>/dev/null || true
     fi
+    # 2026-07-27: 위 원복은 BOT_HOME 하위에만 닿는다는 사실이 실측으로 드러났다.
+    #   ① BOT_HOME=~/.jarvis 는 git 저장소가 아니라 두 명령이 통째로 실패하고 `|| true`에 삼켜진다.
+    #   ② BOT_HOME=~/jarvis/runtime 이면 `-- .` 범위가 runtime 이하뿐이라, 실제 수정 대상인
+    #      ~/jarvis/infra/** 는 원복되지 않는다(runtime/infra 는 심볼릭 링크이며 git 추적 경로가 아님).
+    #   그 결과 2026-07-27 오전 VERIFY_GATE 가 "검증 인프라 수정은 자동 승인 불가"로 정확히
+    #   불합격시켰는데도 ask-claude.sh·cron-safe-wrapper.sh 등 4개 파일의 변경이 그대로 남았고,
+    #   BOT_HOME 기본값을 정본에서 구경로로 되돌리는 역행이 저장소에 새겨졌다.
+    #   저장소 루트에서 일괄 원복하는 것은 더 위험하다 — 같은 시각 다른 CLI 세션이
+    #   claude-runner.js 를 편집 중이었고, 일괄 원복은 그 작업을 파괴한다.
+    #   따라서 지금은 원복하지 않고 "보이게" 만든다. 선별 원복은 작업 전 dirty 목록을
+    #   스냅샷에 함께 저장한 뒤 차집합만 되돌리는 방식으로 후속 도입한다.
+    local _vg_root _vg_dirty
+    _vg_root=$(git -C "$BOT_HOME" rev-parse --show-toplevel 2>/dev/null || true)
+    [[ -z "$_vg_root" ]] && _vg_root=$(git -C "${JARVIS_HOME:-$HOME/jarvis}" rev-parse --show-toplevel 2>/dev/null || true)
+    if [[ -n "$_vg_root" ]]; then
+        _vg_dirty=$(git -C "$_vg_root" status --porcelain 2>/dev/null | awk '{print $NF}' | head -20)
+        if [[ -n "$_vg_dirty" ]]; then
+            _coder_log "VERIFY_GATE: 미커밋 변경 잔존 — 자동 원복 안 함(타 세션 작업 보호). 파일: $(echo "$_vg_dirty" | tr '\n' ' ')"
+            _discord_alert "⚠️ **Verify Gate 불합격인데 변경이 남아 있습니다** — \`${task_id}\`
+자동 원복은 다른 세션 작업을 지울 수 있어 하지 않았습니다. 주인님 확인이 필요합니다.
+\`\`\`
+$(echo "$_vg_dirty" | head -12)
+\`\`\`
+확인: \`cd ${_vg_root} && git status\` / 되돌리기: \`git checkout -- <파일>\`"
+        fi
+    fi
     # Sprint Contract 잔존 차단 — criteria가 '검증됨'으로 남으면 다음 실행이
     # 게이트 없는 즉시완료 분기로 빠져 롤백된 작업물로 거짓 done 선언함
     if type sc_exists &>/dev/null && sc_exists "$task_id" 2>/dev/null; then
