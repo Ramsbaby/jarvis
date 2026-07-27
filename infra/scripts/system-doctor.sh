@@ -318,6 +318,12 @@ check_claude_isolation() {
       #    격리 토큰을 주입하면 검사 자체가 무의미해진다 (2026-07-27 등재)
       boot-auth-check.sh|token-health-check.sh|pre-cron-auth-check.sh) continue ;;
     esac
+    # 2026-07-27: 격리를 실제로 적용한 파일은 통과시킨다.
+    # 종전에는 예외 목록에 없으면 무조건 위반으로 셌기 때문에,
+    # isolatedClaudeEnv()/격리 토큰 주입을 넣어도 계속 위반으로 남았다.
+    if grep -qE 'isolatedClaudeEnv|CLAUDE_CODE_OAUTH_TOKEN|llm-gateway' "$f" 2>/dev/null; then
+      continue
+    fi
     viol=$((viol + 1))
     names="${names}$(basename "$f") "
   done < <(

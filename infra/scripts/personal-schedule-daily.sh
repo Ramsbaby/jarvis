@@ -10,6 +10,17 @@ LESSONS_JSON=$(bash ~/jarvis/runtime/private/scripts/preply-today.sh "$TODAY")
 # 2단계: 환율 조회
 EXCHANGE_RATE=$(bash ~/jarvis/runtime/private/scripts/get-exchange-rate.sh)
 
+# OAuth 격리 (2026-07-27 등재 — 2026-06-11 로그인 세션 폭파 사고 재발 방지)
+# 이 스크립트는 매일 07:30 LaunchAgent로 도는 배치다. 배치가 메인
+# ~/.claude/.credentials.json 을 쓰면 대화형 CLI와 refresh_token 회전이 겹쳐
+# 토큰 패밀리 전체가 폐기된다. mistake-extractor.mjs 의 isolatedClaudeEnv() 와 동일 패턴.
+_LLT="${HOME}/.claude-bot/.long-lived-token"
+if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" && -r "$_LLT" ]]; then
+  CLAUDE_CODE_OAUTH_TOKEN="$(tr -d '\n' < "$_LLT")"
+  export CLAUDE_CODE_OAUTH_TOKEN
+fi
+export ANTHROPIC_API_KEY=""
+
 # 3단계: Claude에 프롬프트 전달 (jq로 JSON 추출 및 포맷팅)
 claude -p - << 'EOF' "$LESSONS_JSON" "$EXCHANGE_RATE"
 다음 JSON 데이터를 보고 오늘(M/D 요일) Preply 수업 일정을 정리해서 보내줘.
