@@ -58,7 +58,9 @@ check_launchagents() {
     done
 
     # Glances LaunchAgent
-    if echo "$launchd_out" | grep -q "ai.jarvis.glances"; then
+    # 2026-07-27 정정: 실제 등록명은 ai.openclaw.glances 다. ai.jarvis.glances 를 찾고 있어
+    # 7일 내내 "not loaded" 오탐이 떴다(실측: ls ~/Library/LaunchAgents | grep glances).
+    if echo "$launchd_out" | grep -q "ai.openclaw.glances"; then
       add_result "launchd:glances" "OK" "loaded"
     else
       add_result "launchd:glances" "WARN" "not loaded"
@@ -312,12 +314,30 @@ check_claude_isolation() {
       watchdog.sh|health-check.sh|bot-self-restart.sh) continue ;;
       # ③ 대화형 TUI — 메인 credentials 사용이 정당 (배치 아님)
       chat.mjs) continue ;;
+      # ④ 인증 검사가 목적인 스크립트 — 메인 credentials 유효성을 확인하는 것이 임무이므로
+      #    격리 토큰을 주입하면 검사 자체가 무의미해진다 (2026-07-27 등재)
+      boot-auth-check.sh|token-health-check.sh|pre-cron-auth-check.sh) continue ;;
     esac
     viol=$((viol + 1))
     names="${names}$(basename "$f") "
-  done < <(grep -rlE 'spawnSync\(CLAUDE_BIN|\.local/bin/claude.{0,40}(-p|--print)|claude (-p|--print)' \
-            "$HOME/jarvis/infra/scripts" "$HOME/jarvis/infra/lib" 2>/dev/null \
-            | grep -vE '\.bak|\.LOCKED|node_modules|\.md$' || true)
+  done < <(
+    # 2026-07-27: 주석·안내문구까지 잡아 영구 오탐을 내던 것을 정정.
+    # 1차로 파일을 추리고, 주석(#, //)을 제거한 뒤에도 매치가 남는 파일만 위반으로 본다.
+    # 실측 — 이 보정 전에는 claude-switch.sh(안내 메시지), model-routing-integration.sh(주석),
+    # gen-system-overview.sh(문서 문자열)가 매번 위반으로 집계됐다.
+    grep -rlE 'spawnSync\(CLAUDE_BIN|\.local/bin/claude.{0,40}(-p|--print)|claude (-p|--print)' \
+      "$HOME/jarvis/infra/scripts" "$HOME/jarvis/infra/lib" 2>/dev/null \
+      | grep -vE '\.bak|\.LOCKED|node_modules|\.md$|\.disabled' \
+      | while read -r _cand; do
+          # 주석 제거 + 출력문(echo/printf/문서생성 헬퍼/마크다운 표) 제외 후에도 남으면 실제 호출.
+          # 실측 오탐 사례 — claude-switch.sh L248은 echo 안내문,
+          # gen-system-overview.sh L118·L190은 문서에 박는 설명 문자열이었다.
+          if sed -e 's/#.*//' -e 's|//.*||' "$_cand" 2>/dev/null \
+             | grep -vE '^[[:space:]]*(echo|printf|_r )|^\|' \
+             | grep -qE 'spawnSync\(CLAUDE_BIN|\.local/bin/claude.{0,40}(-p|--print)|claude (-p|--print)'; then
+            printf '%s\n' "$_cand"
+          fi
+        done || true)
   if [[ "$viol" -gt 0 ]]; then
     add_result "claude-격리" "WARN" "${viol}건 우회 호출: ${names:0:80}"
   else
