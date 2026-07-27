@@ -506,7 +506,22 @@ for line in open('${RESULTS_TMP}'):
         rows.append({'item': parts[0], 'status': parts[1], 'note': parts[2]})
 print(json.dumps({'items': rows, 'ok': ${ok}, 'warn': ${wf}, 'timestamp': '$(date '+%Y-%m-%d %H:%M')'}))
 " 2>/dev/null || echo "")
-  if [[ -n "$ITEMS_JSON" ]]; then
+  # 2026-07-27 소음 감축: 상태가 바뀔 때만 보낸다 (edge-triggered).
+  # 실측 배경 — 이 카드가 7일 490건(일 70건)으로 전체 알림의 44%를 차지했고,
+  # 로그상 매 실행이 "이상 5건"으로 동일했다. 즉 같은 내용을 하루 70번 반복 발송했다.
+  # 시그니처는 OK가 아닌 항목의 이름 목록. 이상 구성이 바뀌거나 정상으로 복귀할 때만 발송된다.
+  _AG="${BOT_HOME}/lib/alert-gate.sh"
+  # shellcheck source=/dev/null
+  [[ -f "$_AG" ]] && source "$_AG" 2>/dev/null || true
+  _sig=$(awk -F'\t' 'toupper($2) != "OK" {print $1}' "$RESULTS_TMP" 2>/dev/null | sort | tr '\n' ',')
+  _gate_ok=0
+  if declare -F alert_gate >/dev/null 2>&1; then
+    alert_gate "system-doctor" "${wf:-0}" "$_sig" || _gate_ok=1
+  fi
+
+  if [[ "$_gate_ok" == "1" ]]; then
+    log "Discord 발송 억제 — 상태 무변화 (이상 ${wf}건 동일, 누적 $(alert_gate_suppressed system-doctor)회 억제)"
+  elif [[ -n "$ITEMS_JSON" ]]; then
     node "$VISUAL_SCRIPT" --type system-doctor --data "$ITEMS_JSON" --channel jarvis-system \
       2>>"$LOG" || true
   else
