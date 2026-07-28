@@ -6,10 +6,9 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
-WIKI_LM="${BOT_HOME}/wiki/meta/learned-mistakes.md"
-LOG_FILE="${BOT_HOME}/logs/mistake-pattern-analyzer.log"
-RESULT="${BOT_HOME}/state/mistake-pattern-analysis.json"
+WIKI_LM="${HOME}/jarvis/runtime/wiki/meta/learned-mistakes.md"
+LOG_FILE="${HOME}/jarvis/runtime/logs/mistake-pattern-analyzer.log"
+RESULT="${HOME}/jarvis/runtime/state/mistake-pattern-analysis.json"
 
 mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$RESULT")"
 
