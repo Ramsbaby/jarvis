@@ -171,7 +171,12 @@ function m6_rag() {
   delete env.JARVIS_RAG_HOME; delete env.BOT_HOME;   // env 미설정 재현
   let js;
   try {
-    const raw = execFileSync('node', [SRC.ragStats, '--json'], { env, encoding:'utf8', timeout:60000 });
+    let nodeCmd = process.env.NODE_BIN;
+    if (!nodeCmd) {
+      try { nodeCmd = execFileSync('command', ['-v', 'node'], { shell: true, encoding:'utf8', timeout:5000 }).trim(); } catch {}
+    }
+    nodeCmd = nodeCmd || '/opt/homebrew/bin/node';
+    const raw = execFileSync(nodeCmd, [SRC.ragStats, '--json'], { env, encoding:'utf8', timeout:60000 });
     js = JSON.parse(raw);
   } catch (e) { out.note = '측정불가: rag-stats 실행/파싱 실패 — '+e.message; out.false_report_count = null; return out; }
   // 거짓보고 신호: (1) 유령DB = dbExists=false 또는 totalChunks=0, (2) 영구 리빌드중 = rebuilding=true, (3) error
@@ -475,8 +480,9 @@ if (argv.includes('--check-due')) {
     logLine(`   kv    = ${kv}`);
   } else {
     try {
+      const nodeCmd = process.env.NODE_BIN || (execFileSync('command', ['-v', 'node'], { shell: true, encoding:'utf8' }).trim()) || '/opt/homebrew/bin/node';
       execFileSync('bash', ['-c', 'source "$ROUTE_LIB" && discord_route retro "$SC_TITLE" "$SC_KV"'], {
-        env: { ...process.env, ROUTE_LIB, SC_TITLE: title, SC_KV: kv },
+        env: { ...process.env, ROUTE_LIB, SC_TITLE: title, SC_KV: kv, NODE_BIN: nodeCmd },
         stdio: 'inherit', timeout: 60000,
       });
       sent = true;

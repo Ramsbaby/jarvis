@@ -99,7 +99,15 @@ discord_route_payload() {
         return 0
     fi
     _egress_audit "$channel" "${#payload}" "${BASH_SOURCE[1]:-unknown}:${BASH_LINENO[0]:-0}"
-    node "$DISCORD_VISUAL" --type stats --data "$payload" --channel "$channel" 2>&1 || true
+    local _node="${NODE_BIN}"
+    if [[ -z "$_node" ]]; then
+        _node=$(command -v node 2>/dev/null) || _node="/opt/homebrew/bin/node"
+    fi
+    if [[ ! -x "$_node" ]]; then
+        echo "[discord-route] node not found at: $_node" >&2
+        return 1
+    fi
+    "$_node" "$DISCORD_VISUAL" --type stats --data "$payload" --channel "$channel" 2>&1 || true
 }
 
 # raw 채널 직접 발송 — 채널명으로 webhook 조회 후 text content 전송, 감사 로그 기록
@@ -168,5 +176,13 @@ discord_route() {
     local caller="${BASH_SOURCE[1]:-unknown}:${BASH_LINENO[0]:-0}"
     _egress_audit "$channel" "${#payload}" "$caller"
 
-    node "$DISCORD_VISUAL" --type stats --data "$payload" --channel "$channel" 2>&1 || true
+    local _node="${NODE_BIN}"
+    if [[ -z "$_node" ]]; then
+        _node=$(command -v node 2>/dev/null) || _node="/opt/homebrew/bin/node"
+    fi
+    if [[ ! -x "$_node" ]]; then
+        echo "[discord-route] node not found at: $_node" >&2
+        return 1
+    fi
+    "$_node" "$DISCORD_VISUAL" --type stats --data "$payload" --channel "$channel" 2>&1 || true
 }
