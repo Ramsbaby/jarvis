@@ -173,7 +173,7 @@ function m6_rag() {
   try {
     let nodeCmd = process.env.NODE_BIN;
     if (!nodeCmd) {
-      try { nodeCmd = execFileSync('command', ['-v', 'node'], { shell: true, encoding:'utf8', timeout:5000 }).trim(); } catch {}
+      try { nodeCmd = execFileSync('bash', ['-c', 'command -v node'], { encoding:'utf8', timeout:5000 }).trim(); } catch {}
     }
     nodeCmd = nodeCmd || '/opt/homebrew/bin/node';
     const raw = execFileSync(nodeCmd, [SRC.ragStats, '--json'], { env, encoding:'utf8', timeout:60000 });
@@ -480,7 +480,7 @@ if (argv.includes('--check-due')) {
     logLine(`   kv    = ${kv}`);
   } else {
     try {
-      const nodeCmd = process.env.NODE_BIN || (execFileSync('command', ['-v', 'node'], { shell: true, encoding:'utf8' }).trim()) || '/opt/homebrew/bin/node';
+      const nodeCmd = process.env.NODE_BIN || (execFileSync('bash', ['-c', 'command -v node'], { encoding:'utf8', timeout:5000 }).trim()) || '/opt/homebrew/bin/node';
       execFileSync('bash', ['-c', 'source "$ROUTE_LIB" && discord_route retro "$SC_TITLE" "$SC_KV"'], {
         env: { ...process.env, ROUTE_LIB, SC_TITLE: title, SC_KV: kv, NODE_BIN: nodeCmd },
         stdio: 'inherit', timeout: 60000,
