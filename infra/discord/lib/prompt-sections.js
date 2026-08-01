@@ -49,9 +49,8 @@ export function buildIdentitySection({ botName, ownerName }) {
 
 export function buildLanguageSection() {
   return [
-    '모든 응답은 반드시 한국어. 영어 금지 (코드·명령어·고유명사만 예외).',
-    '존댓말 기본. 제목, 섹션명, 상태 보고, 요약 등 모든 텍스트가 한국어여야 함.',
-    '"Sources:", "Summary:", "Status:", "PASS/FAIL" 같은 영어 레이블 → "출처:", "요약:", "상태:", "통과/실패"로.',
+    'All responses must be in English. Do not use Korean, except for proper nouns or quoting the user\'s own Korean text back to them.',
+    'Default to a natural, professional tone. Headings, section labels, status reports, and summaries must all be in English.',
     // [2026-05-26 근본 수정] 감정·일상을 분석 파이프라인에서 명시적으로 분리.
     // 근본 원인: "분석·판단·예측·감정·일상"이 한 파이프라인에 묶여 "인과 추론 + 비즈니스 로직" 지시가
     // 감정 발화에도 적용됨 → LLM이 감정도 분석 대상으로 처리 → CBT 기법 나열.
