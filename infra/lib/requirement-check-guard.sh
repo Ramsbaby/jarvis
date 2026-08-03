@@ -149,6 +149,7 @@ check_requirements_post() {
                 txt|text) expected_format="txt" ;;
                 html) expected_format="html" ;;
                 pdf) expected_format="pdf" ;;
+                json) expected_format="json" ;;
             esac
 
             case "$norm_ext" in
@@ -156,6 +157,7 @@ check_requirements_post() {
                 txt|text) norm_ext="txt" ;;
                 html) norm_ext="html" ;;
                 pdf) norm_ext="pdf" ;;
+                json) norm_ext="json" ;;
             esac
 
             if [[ "$norm_ext" != "$expected_format" ]]; then
