@@ -108,6 +108,13 @@ if [[ "$_CS_LOAD_OK" != "true" ]]; then
     CONTINUE_SITES="false"
 fi
 
+# --- Sprint Contract: 성공 기준 정의 라이브러리 로드 ---
+_coder_log() { log "SPRINT_CONTRACT: $1"; }
+if [[ -f "${BOT_HOME}/lib/sprint-contract.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "${BOT_HOME}/lib/sprint-contract.sh" 2>/dev/null || true
+fi
+
 # --- Completion trap: 비정상 종료 시에도 반드시 로그 기록 ---
 _TASK_DONE=false
 _SENTINEL_FILE=""
@@ -928,6 +935,96 @@ if [[ -x "${BOT_HOME}/lib/post-run-verify.sh" ]]; then
     fi
 else
     log "WARN: post-run-verify.sh not found — skipping verify hook"
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
+# --- Sprint Contract 자동 검증 (contract 태스크 전용) ─────────────────────────
+# contract 태스크(-contract 접미사)인 경우, verify-sprint-contract.sh로 성공 기준 검증
+_PHASE="contract-verify"
+if [[ "$TASK_ID" == *"-contract" ]]; then
+    # contract 태스크: 원본 태스크 ID 추출 (예: "debug-cron-cron-safe-wrapper.sh-contract" → "debug-cron-cron-safe-wrapper.sh")
+    ORIGINAL_TASK_ID="${TASK_ID%-contract}"
+
+    if [[ -x "${BOT_HOME}/scripts/verify-sprint-contract.sh" ]]; then
+        log "CONTRACT_VERIFY: 시작 (원본 태스크=${ORIGINAL_TASK_ID})"
+        local _verify_output=""
+        local _verify_exit=0
+        local _verify_stderr_file="${BOT_HOME}/logs/claude-stderr-${TASK_ID}.log"
+
+        # verify-sprint-contract.sh 실행: stdout/stderr를 분리 캡처하여 진단 정보 보존
+        _verify_output=$("${BOT_HOME}/scripts/verify-sprint-contract.sh" "$ORIGINAL_TASK_ID" 2>"$_verify_stderr_file") || _verify_exit=$?
+
+        if [[ $_verify_exit -eq 0 ]]; then
+            log "CONTRACT_VERIFY: ✓ 검증 통과 (원본 태스크=${ORIGINAL_TASK_ID})"
+            # 모든 criteria가 passed — contract 검증 성공
+            echo "$_verify_output"
+        elif [[ $_verify_exit -eq 2 ]]; then
+            # exit=2: contract 파일 없음 → 원본 태스크 결과에서 contract 추출 시도
+            log "CONTRACT_VERIFY: contract 파일 없음 → 원본 태스크 결과에서 추출 시도"
+
+            # 원본 태스크의 결과 파일 찾기
+            _RESULT_DIR="${BOT_HOME}/results/${ORIGINAL_TASK_ID}"
+            if [[ -d "$_RESULT_DIR" ]]; then
+                # 가장 최근 결과 파일 찾기
+                _LATEST_RESULT=$(find "$_RESULT_DIR" -maxdepth 1 -type f -name "*.md" | sort -V | tail -1)
+
+                if [[ -n "$_LATEST_RESULT" && -f "$_LATEST_RESULT" ]]; then
+                    log "CONTRACT_VERIFY: 원본 태스크 결과 파일 발견: $_LATEST_RESULT"
+
+                    # 결과에서 contract JSON 추출
+                    if _contract_json=$(sc_parse_contract_response "$(cat "$_LATEST_RESULT")" 2>/dev/null); then
+                        log "CONTRACT_VERIFY: contract JSON 추출 성공"
+
+                        # 저장
+                        _objective=$(echo "$_contract_json" | jq -r '.objective // "Task objective"' 2>/dev/null || echo "")
+                        _criteria=$(echo "$_contract_json" | jq '.successCriteria // []' 2>/dev/null || echo "[]")
+                        _max_iter=$(echo "$_contract_json" | jq '.maxIterations // 3' 2>/dev/null || echo "3")
+
+                        if sc_create "$ORIGINAL_TASK_ID" "$_objective" "$_criteria" "$_max_iter" 2>/dev/null; then
+                            log "CONTRACT_VERIFY: contract 저장 완료"
+
+                            # 다시 검증
+                            _verify_output=$("${BOT_HOME}/scripts/verify-sprint-contract.sh" "$ORIGINAL_TASK_ID" 2>"$_verify_stderr_file") || _verify_exit=$?
+                            if [[ $_verify_exit -eq 0 ]]; then
+                                log "CONTRACT_VERIFY: ✓ 재검증 통과"
+                                echo "$_verify_output"
+                            else
+                                log "CONTRACT_VERIFY: ✗ 재검증 실패 (exit=$_verify_exit)"
+                                echo "$_verify_output" >&2
+                                if [[ -s "$_verify_stderr_file" ]]; then
+                                    cat "$_verify_stderr_file" >&2
+                                fi
+                                exit 1
+                            fi
+                        else
+                            log "CONTRACT_VERIFY: contract 저장 실패"
+                            exit 1
+                        fi
+                    else
+                        log "CONTRACT_VERIFY: contract JSON 추출 실패"
+                        exit 1
+                    fi
+                else
+                    log "CONTRACT_VERIFY: 원본 태스크 결과 파일 없음 ($ORIGINAL_TASK_ID)"
+                    exit 1
+                fi
+            else
+                log "CONTRACT_VERIFY: 원본 태스크 결과 디렉토리 없음 ($_RESULT_DIR)"
+                exit 1
+            fi
+        else
+            # exit=1: 1개 이상의 criteria 실패
+            log "CONTRACT_VERIFY: ✗ 검증 실패 (원본 태스크=${ORIGINAL_TASK_ID}, 미통과 criteria 있음)"
+            # 검증 실패: stdout(criteria 결과)과 stderr 모두 기록
+            echo "$_verify_output" >&2
+            if [[ -s "$_verify_stderr_file" ]]; then
+                cat "$_verify_stderr_file" >&2
+            fi
+            exit 1
+        fi
+    else
+        log "WARN: verify-sprint-contract.sh not found — contract 검증 스킵"
+    fi
 fi
 # ─────────────────────────────────────────────────────────────────────────────
 
