@@ -103,7 +103,7 @@ _log "INFO" "[$TASK_ID] 업로드 완료: $RESULT_FILE"
 _log "INFO" "[$TASK_ID] Step 3/3: 레지스트리 갱신 (FSM 상태 전이)"
 
 # 3a. transition running → done (result 필드 포함)
-EXTRA_JSON=$(jq -nc \
+EXTRA_JSON=$(jq -n -c \
     --arg result "$RESULT_CONTENT" \
     --arg completionWorkflow "$0" \
     '{result: $result, completionWorkflowPath: $completionWorkflow}')
