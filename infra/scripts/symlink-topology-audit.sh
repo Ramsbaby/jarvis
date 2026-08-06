@@ -194,7 +194,11 @@ while IFS= read -r link; do
     # 2026-07-25: 브라우저 프로필 내부는 크롬이 관리하는 영역이라 자비스 토폴로지가 아니다.
     #   크롬 종료 시 임시 소켓 링크의 대상이 사라져 '복구 불가 위반'으로 영구 집계됐고,
     #   그 탓에 이 감사가 상시 실패(exit 1) 상태라 경보로서 신뢰를 잃고 있었다.
-    *browser-profile*) continue ;;
+    # 2026-08-06 정정: 위 패턴은 실제 경로(job-apply-chrome-profile)와 매칭되지 않아
+    #   차단에 실패했다. 10분 주기로 106일간 exit 1 을 냈고 아무도 보지 않게 됐다.
+    #   프로필 디렉터리 이름은 도구마다 다르므로 크롬이 만드는 런타임 아티팩트 이름으로도 거른다.
+    *browser-profile*|*chrome-profile*|*chromium-profile*) continue ;;
+    *Singleton*|*/CrashpadMetrics*) continue ;;
   esac
   target="$(readlink "$link" 2>/dev/null || true)"
   if [[ -z "$target" ]]; then continue; fi
@@ -216,6 +220,34 @@ while IFS= read -r stale; do
   emit "warn" "stale-backup" "$stale" "leftover backup dir — archive and remove"
   violations=$((violations + 1))
 done < <(find "$DOT_JARVIS" -maxdepth 2 -type d \( -name '*.bak-*' -o -name '*.ghost-*' -o -name '*.bak' \))
+
+# Check 5: Claude Code auto memory 무결성
+#   2026-08-06 신설. 계기 — MEMORY.md 인덱스가 참조하는 41개 링크 중 20개가 죽어 있었고
+#   그 안에 "🔴 최상위 행동 규칙"으로 지정된 항목까지 있었다. 링크가 죽어도 세션은
+#   조용히 시작되므로 아무도 몰랐다. 여기서 두 가지만 본다 — 깨진 심링크, 그리고
+#   MEMORY.md 가 가리키는 대상의 실재 여부. 역방향(미등재 파일)은 Claude 가 만드는 중일 수
+#   있어 검사하지 않는다(오탐을 만들면 Check 3 과 같은 실패를 반복한다).
+while IFS= read -r memdir; do
+  [[ -d "$memdir" ]] || continue
+
+  while IFS= read -r deadlink; do
+    emit "warn" "memory-broken-symlink" "$deadlink" "target=$(readlink "$deadlink" 2>/dev/null || echo '?')"
+    alert_throttled "memory-broken-symlink" "$deadlink" "⚠️ auto memory 깨진 링크" "$(basename "$deadlink")"
+    violations=$((violations + 1))
+  done < <(find -L "$memdir" -maxdepth 1 -type l 2>/dev/null)
+
+  index="${memdir}/MEMORY.md"
+  [[ -f "$index" ]] || continue
+  while IFS= read -r ref; do
+    [[ -n "$ref" ]] || continue
+    case "$ref" in http*|/*) continue ;; esac
+    if [[ ! -e "${memdir}/${ref}" ]]; then
+      emit "warn" "memory-dangling-index" "$index" "missing=${ref}"
+      alert_throttled "memory-dangling-index" "${index}:${ref}" "⚠️ MEMORY.md 가 없는 파일을 가리킴" "$ref"
+      violations=$((violations + 1))
+    fi
+  done < <(grep -oE '\]\([^)]+\.md\)' "$index" 2>/dev/null | sed 's/^](//; s/)$//' | sort -u)
+done < <(find "${HOME}/.claude/projects" -maxdepth 2 -type d -name memory 2>/dev/null)
 
 # 원장 rotation: 10MB 초과 시 gzip 압축 후 새 파일 시작
 if [[ -f "$LEDGER" ]]; then
