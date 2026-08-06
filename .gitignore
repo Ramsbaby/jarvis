@@ -193,3 +193,7 @@ infra/scripts/interview-ralph-start-focused.sh
 
 # 개인 채널명 포함 — 공개 저장소 제외 (channel-map.example.json 참조)
 infra/config/channel-map.json
+
+# 메모리 파이프라인 테스트 픽스처 — 검증 질문 자체가 PII
+#   (템플릿: scripts/fixtures/memory-pipeline.example.sh 참조)
+scripts/fixtures/*.local.sh
