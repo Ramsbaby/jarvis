@@ -247,7 +247,12 @@ while IFS= read -r memdir; do
       violations=$((violations + 1))
     fi
   done < <(grep -oE '\]\([^)]+\.md\)' "$index" 2>/dev/null | sed 's/^](//; s/)$//' | sort -u)
-done < <(find "${HOME}/.claude/projects" -maxdepth 2 -type d -name memory 2>/dev/null)
+done < <({
+  find "${HOME}/.claude/projects" -maxdepth 2 -type d -name memory 2>/dev/null
+  # 2026-08-06: autoMemoryDirectory 로 고정한 통합 경로. 크론·봇 세션이 매번 새 임시
+  #   디렉터리에서 돌아 메모리가 일회용으로 흩어지던 것을 한 곳으로 모았다(파일 31개 분산 확인).
+  [[ -d "${HOME}/jarvis/runtime/claude-automemory" ]] && echo "${HOME}/jarvis/runtime/claude-automemory"
+} | sort -u)
 
 # 원장 rotation: 10MB 초과 시 gzip 압축 후 새 파일 시작
 if [[ -f "$LEDGER" ]]; then
