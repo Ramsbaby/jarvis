@@ -1,0 +1,8 @@
+{
+  "_comment": "Claude Code auto memory 설정 계약. install.sh 가 ~/.claude/settings.json 에 병합한다(덮어쓰지 않는다). 전체 settings.json 은 개인 절대경로를 담고 있어 공개 저장소에 두지 않는다 — 여기에는 auto memory 계약만 둔다. symlink-topology-audit.sh Check 6 이 이 값과 실제 설정의 일치를 감시한다.",
+  "autoMemoryEnabled": true,
+  "autoMemoryDirectory": "~/jarvis/runtime/claude-automemory",
+  "env": {
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0"
+  }
+}

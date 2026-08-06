@@ -260,9 +260,24 @@ Stop hooks (async, after enforce)
   ├─ stop-doc-sync-audit.sh  — 문서 동기화 감사
   └─ stop-active-work.sh     — 진행 중 작업 상태 저장
 
-PostToolUse (Write|Edit) — memory SSoT 동기화
-  └─ post-memory-sync.sh     — Claude Code가 memory/ 에 새 파일 생성 시
-       └─ claude-memory/ 로 이동 + symlink 생성 (SSoT 유지)
+PostToolUse (Write|Edit) — auto memory → RAG 다리
+  └─ post-memory-sync.sh     — Claude Code가 auto memory 디렉터리에 새 파일 생성 시
+       └─ runtime/context/claude-memory/ 로 이동 + 원위치에 symlink (SSoT 유지)
+
+  이 훅이 유일한 다리다. rag-index.mjs 가 훑는 대상은
+  BOT_HOME/context/{owner,career,claude-memory} 뿐이고 auto memory 디렉터리는 그 바깥이라,
+  훅이 멈추면 기억은 쌓이기만 하고 어디에서도 검색되지 않는다.
+
+  감시 경로는 ~/.claude/settings.json 의 autoMemoryDirectory 에서 **동적으로** 읽는다
+  (+ 옛 ~/.claude/projects/*/memory 폴백). 하드코딩하지 않는다 —
+  2026-08-06 경로를 claude-automemory 로 옮겼을 때 훅만 옛 경로에 남아 조용히 죽었고,
+  그 사이 기억 26건이 임시 세션 디렉터리에 갇혀 RAG 에 한 번도 들어가지 못했다.
+
+  드리프트 집행: symlink-topology-audit.sh Check 6 (10분 주기)
+    · 설정 부재/계약 불일치 · 디렉터리 부재
+    · 훅이 그 경로를 감시하는가 — `post-memory-sync.sh --print-watched` 로 부작용 없이 확인
+    · SSoT 미이관 실파일이 10분 넘게 쌓였는가(훅 사망 조기 경보)
+  설정 계약 정본: dotfiles/claude/settings.memory.json (install.sh 가 병합)
 
 SessionStart (startup only)
   └─ session-context.sh

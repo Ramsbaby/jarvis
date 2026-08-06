@@ -254,6 +254,75 @@ done < <({
   [[ -d "${HOME}/jarvis/runtime/claude-automemory" ]] && echo "${HOME}/jarvis/runtime/claude-automemory"
 } | sort -u)
 
+# Check 6: auto memory → RAG 다리의 정합성
+#   2026-08-06 신설. 계기 — 같은 날 auto memory 경로를 claude-automemory 로 옮겼는데
+#   SSoT 로 옮겨주는 훅(post-memory-sync.sh)은 옛 경로에 하드코딩돼 있어 조용히 죽었다.
+#   그 사이 기억 26개가 임시 프로젝트 디렉터리에 갇혀 RAG 에 한 번도 들어가지 못했다.
+#   Check 5 가 "링크가 성한가"를 본다면 여기는 "기억이 흐르는가"를 본다.
+AUTOMEM_CONTRACT="${HOME}/jarvis/dotfiles/claude/settings.memory.json"
+CLAUDE_SETTINGS="${HOME}/.claude/settings.json"
+SYNC_HOOK="${HOME}/.claude/hooks/post-memory-sync.sh"
+
+read_json_str() {  # $1=파일 $2=키
+  python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1]) as fh:
+        v = json.load(fh).get(sys.argv[2])
+    print(v if isinstance(v, str) else "")
+except Exception:
+    print("")
+' "$1" "$2" 2>/dev/null || echo ""
+}
+
+expand_home() { printf '%s\n' "${1/#\~/$HOME}"; }
+
+if [[ -f "$CLAUDE_SETTINGS" && -f "$AUTOMEM_CONTRACT" ]]; then
+  want="$(read_json_str "$AUTOMEM_CONTRACT" autoMemoryDirectory)"
+  have="$(read_json_str "$CLAUDE_SETTINGS" autoMemoryDirectory)"
+
+  if [[ -z "$have" ]]; then
+    # 이 값이 없으면 Claude 는 세션마다 새 임시 디렉터리에 기억을 쌓았다 버린다.
+    emit "warn" "automem-setting-missing" "$CLAUDE_SETTINGS" "autoMemoryDirectory 미설정 (기대=${want})"
+    alert_throttled "automem-setting-missing" "$CLAUDE_SETTINGS" "⚠️ auto memory 경로 설정이 사라짐" "기대=${want}"
+    violations=$((violations + 1))
+  elif [[ "$have" != "$want" ]]; then
+    emit "warn" "automem-setting-drift" "$CLAUDE_SETTINGS" "설정=${have} 계약=${want}"
+    alert_throttled "automem-setting-drift" "$CLAUDE_SETTINGS" "⚠️ auto memory 경로가 계약과 다름" "${have} ≠ ${want}"
+    violations=$((violations + 1))
+  else
+    automem_dir="$(expand_home "$have")"
+    if [[ ! -d "$automem_dir" ]]; then
+      emit "warn" "automem-dir-missing" "$automem_dir" "설정된 auto memory 디렉터리가 실재하지 않음"
+      alert_throttled "automem-dir-missing" "$automem_dir" "⚠️ auto memory 디렉터리 없음" "$automem_dir"
+      violations=$((violations + 1))
+    else
+      # 핵심 — 훅이 실제로 이 경로를 감시하는가. 하드코딩 드리프트를 여기서 잡는다.
+      #   --print-watched 는 부작용 없이 감시 대상만 출력하는 훅의 자기진단 창구다.
+      if [[ -x "$SYNC_HOOK" ]]; then
+        if ! "$SYNC_HOOK" --print-watched 2>/dev/null | grep -qxF "$automem_dir"; then
+          emit "warn" "automem-hook-blind" "$SYNC_HOOK" "훅이 ${automem_dir} 를 감시하지 않음 — RAG 유입 중단"
+          alert_throttled "automem-hook-blind" "$SYNC_HOOK" "🔴 auto memory 가 RAG 로 못 들어감" "훅이 경로를 못 봄"
+          violations=$((violations + 1))
+        fi
+      else
+        emit "warn" "automem-hook-missing" "$SYNC_HOOK" "SSoT 동기화 훅이 없거나 실행 불가"
+        alert_throttled "automem-hook-missing" "$SYNC_HOOK" "🔴 auto memory 동기화 훅 부재" "$SYNC_HOOK"
+        violations=$((violations + 1))
+      fi
+
+      # 정체 감지 — 훅이 죽으면 실파일이 쌓인다. Claude 가 방금 쓴 것과 구분하려고
+      #   10분 유예를 둔다(오탐을 만들면 Check 3 과 같은 실패를 반복한다).
+      stuck=$(find "$automem_dir" -maxdepth 1 -type f -name '*.md' ! -name 'MEMORY.md' -mmin +10 2>/dev/null | wc -l | tr -d ' ')
+      if (( stuck > 0 )); then
+        emit "warn" "automem-files-stuck" "$automem_dir" "SSoT 미이관 실파일 ${stuck}개 (10분 초과)"
+        alert_throttled "automem-files-stuck" "$automem_dir" "⚠️ auto memory 파일이 SSoT 로 안 넘어감" "${stuck}개 정체"
+        violations=$((violations + 1))
+      fi
+    fi
+  fi
+fi
+
 # 원장 rotation: 10MB 초과 시 gzip 압축 후 새 파일 시작
 if [[ -f "$LEDGER" ]]; then
   size=$(stat -f "%z" "$LEDGER" 2>/dev/null || echo 0)

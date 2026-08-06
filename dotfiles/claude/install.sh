@@ -56,6 +56,47 @@ for f in "$SCRIPT_DIR/hooks/"*.sh; do
   print_ok "$name"
 done
 
+# 3b. settings.memory.json 병합 (auto memory 계약)
+#   전체 settings.json 은 개인 절대경로를 담아 저장소에 두지 않는다. auto memory 관련
+#   키만 여기서 병합한다. 이 계약이 사라지면 Claude 는 매 세션 임시 디렉터리에 기억을
+#   쌓았다 버리고, claude-memory SSoT 로 가는 다리(post-memory-sync.sh)도 헛돈다.
+echo ""
+echo "🧠 Auto memory 설정 병합 중..."
+if python3 - "$SCRIPT_DIR/settings.memory.json" "$CLAUDE_DIR/settings.json" <<'PY'
+import json, os, sys
+
+frag_path, dest_path = sys.argv[1], sys.argv[2]
+with open(frag_path) as fh:
+    frag = {k: v for k, v in json.load(fh).items() if not k.startswith("_")}
+
+dest = {}
+if os.path.exists(dest_path):
+    try:
+        with open(dest_path) as fh:
+            dest = json.load(fh)
+    except Exception:
+        print("  ⚠️  기존 settings.json 을 파싱할 수 없어 병합을 건너뜁니다", file=sys.stderr)
+        sys.exit(1)
+    # 덮어쓰기는 되돌릴 수 없다 — 손대기 전에 원본을 남긴다
+    with open(dest_path + ".bak-premerge", "w") as fh:
+        json.dump(dest, fh, ensure_ascii=False, indent=2)
+
+for key, value in frag.items():
+    if key == "env" and isinstance(dest.get("env"), dict):
+        dest["env"].update(value)      # env 는 깊은 병합 — 기존 변수를 지우지 않는다
+    else:
+        dest[key] = value
+
+os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+tmp = dest_path + ".tmp"
+with open(tmp, "w") as fh:
+    json.dump(dest, fh, ensure_ascii=False, indent=2)
+os.replace(tmp, dest_path)             # atomic — 중단돼도 반쪽 설정이 남지 않는다
+os.chmod(dest_path, 0o600)
+print("  ✅ autoMemoryDirectory = " + str(frag.get("autoMemoryDirectory")))
+PY
+then :; else print_info "settings.json 병합 실패 — 수동 확인 필요"; fi
+
 # 4. commands/ (스킬) 설치
 echo ""
 echo "⚡ Commands (스킬) 설치 중..."
