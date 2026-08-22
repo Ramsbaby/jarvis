@@ -30,7 +30,7 @@ log_entry() {
 log_entry "INFO" "START (PID=$$, args=$@)"
 
 # Command routing
-COMMAND="${1:-}"
+COMMAND="${1:-component}"
 MODE="${2:-auto}"
 
 case "${COMMAND}" in

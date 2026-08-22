@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-07-25T13:26:45.012Z",
-  "totalLaunchAgents": 170,
-  "activeCount": 169,
+  "generatedAt": "2026-08-20T06:36:53.448Z",
+  "totalLaunchAgents": 177,
+  "activeCount": 176,
   "inactiveCount": 1,
   "source": "~/Library/LaunchAgents/ai.jarvis.*.plist + launchctl list",
   "agents": [
@@ -36,6 +36,16 @@
       "lastExitCode": "0"
     },
     {
+      "label": "ai.jarvis.automation-browser-cleanup",
+      "file": "ai.jarvis.automation-browser-cleanup.plist",
+      "schedule": "3600s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/automation-browser-cleanup.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
       "label": "ai.jarvis.automation-budget",
       "file": "ai.jarvis.automation-budget.plist",
       "schedule": "매주 월요일 03:50 KST",
@@ -52,7 +62,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node ~/jarvis-board/.next/standalone/jarvis-board/server.js",
       "active": true,
-      "pid": "607",
+      "pid": "652",
       "lastExitCode": "0"
     },
     {
@@ -102,7 +112,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/cloudflared tunnel",
       "active": true,
-      "pid": "603",
+      "pid": "648",
       "lastExitCode": "0"
     },
     {
@@ -132,7 +142,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/bot-preflight.sh",
       "active": true,
-      "pid": "35147",
+      "pid": "77561",
       "lastExitCode": "0"
     },
     {
@@ -182,7 +192,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/event-watcher.sh",
       "active": true,
-      "pid": "31575",
+      "pid": "71910",
       "lastExitCode": "0"
     },
     {
@@ -222,7 +232,7 @@
       "runAtLoad": true,
       "program": "~/actions-runner/run.sh",
       "active": true,
-      "pid": "622",
+      "pid": "667",
       "lastExitCode": "0"
     },
     {
@@ -252,7 +262,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node ~/jarvis/infra/scripts/interview-verifier-server.mjs",
       "active": true,
-      "pid": "623",
+      "pid": "668",
       "lastExitCode": "0"
     },
     {
@@ -262,7 +272,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/infra/scripts/launchagents-watcher.sh",
       "active": true,
-      "pid": "619",
+      "pid": "664",
       "lastExitCode": "0"
     },
     {
@@ -291,6 +301,16 @@
       "schedule": "1800s 주기",
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/runtime/scripts/long-lived-token-healthcheck.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "ai.jarvis.mcp-path-validator",
+      "file": "ai.jarvis.mcp-path-validator.plist",
+      "schedule": "매주 월요일 04:10 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/lib/mcp-path-validator.sh",
       "active": true,
       "pid": "-",
       "lastExitCode": "0"
@@ -332,7 +352,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node ~/jarvis/runtime/discord/lib/orchestrator.mjs",
       "active": true,
-      "pid": "604",
+      "pid": "649",
       "lastExitCode": "0"
     },
     {
@@ -396,13 +416,23 @@
       "lastExitCode": "0"
     },
     {
+      "label": "ai.jarvis.rag-freshness-guard",
+      "file": "ai.jarvis.rag-freshness-guard.plist",
+      "schedule": "매일 08:45 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/rag-freshness-guard.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
       "label": "ai.jarvis.rag-watcher",
       "file": "ai.jarvis.rag-watcher.plist",
       "schedule": "(없음)",
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node --max-old-space-size=150",
       "active": true,
-      "pid": "77787",
+      "pid": "7004",
       "lastExitCode": "0"
     },
     {
@@ -603,7 +633,7 @@
       "program": "/opt/homebrew/bin/node ~/jarvis/infra/scripts/weekly-surface-learning-gap.mjs",
       "active": true,
       "pid": "-",
-      "lastExitCode": "0"
+      "lastExitCode": "1"
     },
     {
       "label": "ai.jarvis.symlink-audit",
@@ -636,14 +666,24 @@
       "lastExitCode": "0"
     },
     {
+      "label": "ai.jarvis.update-claude-md-meta",
+      "file": "ai.jarvis.update-claude-md-meta.plist",
+      "schedule": "매주 월요일 00:10 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/update-claude-md-meta.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
       "label": "ai.jarvis.watchdog",
       "file": "ai.jarvis.watchdog.plist",
       "schedule": "(없음)",
       "runAtLoad": true,
       "program": "/bin/bash ~/jarvis/runtime/scripts/watchdog.sh",
       "active": true,
-      "pid": "590",
-      "lastExitCode": "0"
+      "pid": "63896",
+      "lastExitCode": "78"
     },
     {
       "label": "ai.jarvis.weekly-response-critique",
@@ -653,7 +693,7 @@
       "program": "/opt/homebrew/bin/node ~/jarvis/infra/scripts/weekly-response-critique.mjs",
       "active": true,
       "pid": "-",
-      "lastExitCode": "1"
+      "lastExitCode": "0"
     },
     {
       "label": "ai.jarvis.weekly-self-retro",
@@ -916,6 +956,16 @@
       "lastExitCode": "0"
     },
     {
+      "label": "com.jarvis.cron-completion-hook",
+      "file": "com.jarvis.cron-completion-hook.plist",
+      "schedule": "900s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/orca/workspaces/jarvis/main/infra/lib/cron-completion-hook.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
       "label": "com.jarvis.cron-master",
       "file": "com.jarvis.cron-master.plist",
       "schedule": "(없음)",
@@ -928,7 +978,7 @@
     {
       "label": "com.jarvis.cron-master-smoke",
       "file": "com.jarvis.cron-master-smoke.plist",
-      "schedule": "매일 23:46 KST",
+      "schedule": "(없음)",
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/infra/bin/bot-cron.sh",
       "active": true,
@@ -1416,6 +1466,16 @@
       "lastExitCode": "0"
     },
     {
+      "label": "com.jarvis.runaway-process-guard",
+      "file": "com.jarvis.runaway-process-guard.plist",
+      "schedule": "1800s 주기",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/infra/scripts/runaway-process-guard.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
       "label": "com.jarvis.runtime-rag-backup",
       "file": "com.jarvis.runtime-rag-backup.plist",
       "schedule": "매주 일요일 05:00 KST",
@@ -1601,6 +1661,16 @@
       "schedule": "매주 일요일 08:35 KST",
       "runAtLoad": false,
       "program": "/bin/bash ~/jarvis/infra/scripts/tune-task-params.sh",
+      "active": true,
+      "pid": "-",
+      "lastExitCode": "0"
+    },
+    {
+      "label": "com.jarvis.update-claude-md-meta",
+      "file": "com.jarvis.update-claude-md-meta.plist",
+      "schedule": "매주 월요일 05:05 KST",
+      "runAtLoad": false,
+      "program": "/bin/bash ~/jarvis/runtime/bin/bot-cron.sh",
       "active": true,
       "pid": "-",
       "lastExitCode": "0"

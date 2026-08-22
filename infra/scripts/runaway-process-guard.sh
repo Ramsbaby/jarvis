@@ -21,7 +21,7 @@ STRIKES_NEEDED="${RUNAWAY_STRIKES:-2}"          # 연속 관측 횟수 (30분 �
 DRYRUN="${RUNAWAY_DRYRUN:-0}"
 
 mkdir -p "$(dirname "$STATE_FILE")" "$(dirname "$LOG")"
-log() { echo "[$(TZ=Asia/Seoul date '+%F %T')] $*" | tee -a "$LOG"; }
+log() { echo "[$(TZ=Asia/Seoul date '+%F %T')] $*" >> "$LOG"; }
 
 # 감시 대상: "프로세스명|정당사용판정함수"
 WATCH_NAMES=(avconferenced)
@@ -38,8 +38,12 @@ _legitimately_busy() {
 }
 
 _cpu_of() {
-    # ps 의 %CPU 는 생애 평균에 가까우므로 top 1회 샘플로 현재값을 읽는다.
-    top -l 1 -pid "$1" -stats cpu 2>/dev/null | tail -1 | tr -d ' %' | grep -E '^[0-9.]+$' || echo 0
+    # ps 의 %CPU 는 생애 평균에 가까우므로 top 으로 현재값을 읽는다.
+    # [2026-08-20 수정] top -l 1 은 macOS 에서 항상 0.0 을 반환한다 — 첫 샘플에는
+    #   CPU 델타를 계산할 이전 스냅샷이 없기 때문. 이 버그로 2026-07-27 생성 이후
+    #   이 가드는 한 번도 폭주를 잡지 못했다(로그 전체가 cpu=0.0%). -l 2 로 두 번
+    #   샘플링해 두 번째(실측) 값을 읽는다.
+    top -l 2 -pid "$1" -stats cpu 2>/dev/null | tail -1 | tr -d ' %' | grep -E '^[0-9.]+$' || echo 0
 }
 
 _read_strikes() {

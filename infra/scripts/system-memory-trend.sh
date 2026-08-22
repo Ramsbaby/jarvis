@@ -131,3 +131,31 @@ EOF
       "$WEBHOOK" >/dev/null 2>&1 || true
   fi
 fi
+
+# ============================================================
+# [2026-08-20 추가] 위험 임계 초과 시 critical 별도 송출
+#   배경: 08-11 ~ 08-20 까지 9일 연속 swap 71~86% 🔴 가 로그와 일일 리포트에
+#     찍혔으나, 정상 리포트와 같은 제목·같은 채널(jarvis-system)로 나가
+#     소음에 묻혔다. 주인님은 08-20 15시 화면 클릭이 멈추고 나서야 인지하셨다.
+#     (job-apply Chrome 13일 2.59GB 점유 → swap 89.5% → WindowServer 50.7%)
+#   조치: 일일 리포트는 그대로 두고, 진짜 위험 구간만 critical 로 분리 송출한다.
+#   임계: swap >= 85%  또는  unused < 300MB  (일일 리포트의 70%/1024MB 보다 높게)
+# ============================================================
+CRIT_SWAP="${MEMORY_TREND_CRIT_SWAP:-85}"
+CRIT_UNUSED="${MEMORY_TREND_CRIT_UNUSED_MB:-300}"
+CRIT_REASON=""
+(( SWAP_PCT >= CRIT_SWAP )) && CRIT_REASON="swap ${SWAP_PCT}% (임계 ${CRIT_SWAP}%)"
+if (( UNUSED_MB < CRIT_UNUSED )); then
+  [[ -n "$CRIT_REASON" ]] && CRIT_REASON="${CRIT_REASON} + "
+  CRIT_REASON="${CRIT_REASON}여유메모리 ${UNUSED_MB}MB (임계 ${CRIT_UNUSED}MB)"
+fi
+if [[ -n "$CRIT_REASON" ]]; then
+  TOP3=$(ps -axo rss,comm | sort -nrk1 | head -3 | awk '{printf "%s(%dMB) ", substr($2,length($2)-18), $1/1024}')
+  if source "${HOME}/jarvis/infra/lib/discord-route.sh" 2>/dev/null; then
+    discord_route critical "맥미니 메모리 위험" \
+      "사유=${CRIT_REASON},swap=${SWAP_USED}/${SWAP_TOTAL}MB,여유=${UNUSED_MB}MB,상위=${TOP3}" 2>/dev/null || true
+  fi
+  echo "[$NOW] 🚨 CRITICAL 송출 — ${CRIT_REASON}" >> "$LOG"
+fi
+
+exit 0
