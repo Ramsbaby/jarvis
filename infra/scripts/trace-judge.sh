@@ -64,7 +64,7 @@ SUGGESTION: <one-line improvement suggestion in Korean>"
     local judge_result judge_tmp
     judge_tmp=$(mktemp)
     # model 미지정 시 sonnet 사용 (비용 효율), --max-turns 1로 단일 턴
-    judge_result=$(claude -p "$judge_prompt" --max-turns 1 --model claude-sonnet-4-6 2>/dev/null) || {
+    judge_result=$(timeout 180 claude -p "$judge_prompt" --max-turns 1 --model claude-sonnet-5 2>/dev/null) || {
         # Pro 플랜 폴백: llm-gateway 직접 호출
         source "${BOT_HOME}/lib/llm-gateway.sh"
         JARVIS_MAX_OUTPUT_TOKENS=500 llm_call \

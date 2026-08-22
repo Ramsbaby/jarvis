@@ -74,9 +74,22 @@ for dep in $DEPRECATED; do
   fi
 done
 
-CODE_HITS=$(grep -rEln "claude-opus-4-[0-6][^0-9]|claude-sonnet-4-[0-5][^0-9]|claude-haiku-(3-5|4-0)" \
+# 탐지 정규식은 SSoT(model-policy.json 의 deprecated[])에서 생성한다.
+# 하드코딩하면 새 세대가 나올 때마다 규칙이 조용히 낡는다 — 실제로 예전 규칙의
+# "claude-sonnet-4-[0-5]" 가 claude-sonnet-4-6 을 범위 밖으로 흘려보내
+# 8주간(2026-06-27~08-17) 매주 "위반 0건" 오탐 PASS 를 냈다 (2026-08-22 정정).
+# 앞으로는 model-policy.json 에 ID 한 줄만 추가하면 코드 스캔이 따라온다.
+DEPRECATED_RE=$(printf '%s\n' "$DEPRECATED" | grep -v '^[[:space:]]*$' | paste -sd'|' -)
+if [[ -z "$DEPRECATED_RE" ]]; then
+  _log "ERROR: deprecated 목록이 비어 코드 스캔을 수행할 수 없다 — policy file 확인 필요"
+  exit 1
+fi
+
+# ([^0-9]|$) — "claude-opus-4-5" 가 가상의 "claude-opus-4-50" 을 오탐하지 않게 하되,
+# 줄 끝에 온 경우도 놓치지 않는다. *.bak 은 과거 스냅샷이므로 감사 대상에서 뺀다.
+CODE_HITS=$(grep -rEln "(${DEPRECATED_RE})([^0-9]|$)" \
   "${JARVIS_HOME}/infra/" "${JARVIS_HOME}/runtime/scripts/" 2>/dev/null \
-  | grep -v "node_modules\|\.git/\|model-policy.json\|model-version-audit\|CLAUDE.md\|learned-mistakes\|README\|/docs/\|/wiki/\|tasks-index.json\|tasks.schema.json" \
+  | grep -v "node_modules\|\.git/\|model-policy.json\|model-version-audit\|CLAUDE.md\|learned-mistakes\|README\|/docs/\|/wiki/\|/adr/\|tasks-index.json\|tasks.schema.json\|\.bak" \
   || true)
 
 if [[ -n "$CODE_HITS" ]]; then
