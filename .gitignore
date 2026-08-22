@@ -197,3 +197,8 @@ infra/config/channel-map.json
 # 메모리 파이프라인 테스트 픽스처 — 검증 질문 자체가 PII
 #   (템플릿: scripts/fixtures/memory-pipeline.example.sh 참조)
 scripts/fixtures/*.local.sh
+
+# 작업 스크래치 — 블로그 초안·A/B 테스트·윤문 원문 등이 쌓인다.
+# 이 저장소는 공개이고 스크래치에는 개인 식별 정보가 섞이므로 추적하지 않는다.
+# 완성된 산출물만 정본 위치로 옮긴다. (2026-08-22 등재)
+_workspace/
