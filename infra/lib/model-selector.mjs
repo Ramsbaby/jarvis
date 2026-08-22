@@ -6,7 +6,7 @@
  * Task ID → Model 라우팅 로직:
  * - LOW 난이도: deepseek-v4-flash ($0.14-0.28/M tokens)
  * - MEDIUM 난이도: qwen-3.6-plus ($0.325-1.95/M tokens)
- * - HIGH 난이도: claude-sonnet-4-6 (기존 유지)
+ * - HIGH 난이도: claude-sonnet-5 (기존 유지)
  */
 
 const PILOT_ROUTES = {

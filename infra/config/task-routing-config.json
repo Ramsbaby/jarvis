@@ -68,7 +68,7 @@
     ],
     "min_model_tier": "sonnet",
     "force_claude_models": [
-      "claude-sonnet-4-6",
+      "claude-sonnet-5",
       "claude-opus-5"
     ],
     "rationale": "핵심 의사결정/분석 태스크는 Claude 강제로 품질 보장"

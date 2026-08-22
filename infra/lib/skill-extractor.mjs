@@ -52,7 +52,7 @@ const CLAUDE_BIN  = process.env.CLAUDE_BINARY || join(homedir(), '.local/bin/cla
 const LEDGER      = join(BOT_HOME, 'state', 'skill-extractor-ledger.jsonl');
 
 const MODELS = existsSync(MODELS_FILE) ? JSON.parse(readFileSync(MODELS_FILE, 'utf-8')) : {};
-const SONNET_MODEL = MODELS.sonnet || 'claude-sonnet-4-6';
+const SONNET_MODEL = MODELS.sonnet || 'claude-sonnet-5';
 
 mkdirSync(SKILLS_DIR, { recursive: true });
 

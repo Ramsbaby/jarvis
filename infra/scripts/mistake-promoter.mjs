@@ -56,7 +56,7 @@ const MAX_APPLY = parseInt(process.env.PROMOTER_MAX_APPLY || '1', 10);          
 const ESCALATE_SIZE = parseInt(process.env.PROMOTER_ESCALATE_SIZE || '15', 10);
 const MAX_ACTIVE_BLOCKS = 30;            // autolearn 활성 블록 상한 — 초과분은 아카이브 이동
 const REPORT_FRESH_HOURS = 26;           // 리포트 신선도 경고 임계 (03:30 생성 + 여유)
-const MODEL_JUDGE = 'claude-sonnet-4-6';            // ② 판정용
+const MODEL_JUDGE = 'claude-sonnet-5';            // ② 판정용
 const MODEL_SIM = 'claude-haiku-4-5-20251001';      // ③ 시뮬용
 // 최종 상태 — 이 상태로 ledger 에 기록된 클러스터는 재처리 금지 (⑤ 멱등성)
 const FINAL_STATUSES = new Set(['applied', 'held_sim_no', 'proposed_dev_queue', 'proposed_retro', 'skip']);

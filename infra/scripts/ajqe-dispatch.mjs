@@ -46,7 +46,7 @@ const DEFAULT_POLICY = {
   prefixEmoji: '🤔',
   llmRefiner: {
     enabled: true,
-    model: 'claude-sonnet-4-6',  // 주인님 지정 (2026-05-07): 친절한 자연어 정제는 sonnet
+    model: 'claude-sonnet-5',  // 주인님 지정 (2026-05-07): 친절한 자연어 정제는 sonnet — 티어 유지, 세대만 갱신 (2026-08-22)
     contextRadius: 5,             // SSoT 라인 ±N줄 컨텍스트
     timeoutMs: 90000,             // sonnet은 haiku보다 느림 → 90초로 여유
     fallbackToTemplate: true,

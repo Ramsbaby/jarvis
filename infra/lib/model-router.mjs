@@ -17,18 +17,21 @@
 // ── 모델 가격표 (2025-05 기준, USD per 1M tokens) ─────────────────────────
 
 const MODEL_PRICES = {
+  // 가격 정본은 infra/config/models.json — 여기 값이 그와 어긋나면 비용 리포트가 통째로 틀린다.
+  // 2026-08-22 정정: opus 가 $15/$75 로 남아 있어 실제($5/$25) 대비 3배 과대 계상되고 있었다.
   'claude-opus': {
-    name: 'Claude Opus 4.8',
-    input: 15.00,
-    output: 75.00,
+    name: 'Claude Opus 5',
+    input: 5.00,
+    output: 25.00,
     contextWindow: 200_000,
     features: ['extended-reasoning', 'tools', 'vision', 'code-review'],
     tier: 'ultra-premium',
   },
   'claude-sonnet': {
-    name: 'Claude Sonnet 4',
-    input: 3.00,
-    output: 15.00,
+    name: 'Claude Sonnet 5',
+    // ⚠️ $2/$10 은 인트로 가격으로 2026-08-31 까지만 유효하다. 이후 $3/$15 로 복귀 — 그때 이 값을 올려야 한다.
+    input: 2.00,
+    output: 10.00,
     contextWindow: 200_000,
     features: ['reasoning', 'tools', 'vision', 'code-review'],
     tier: 'premium',
@@ -174,8 +177,14 @@ export function estimateCost(modelId, inputTokens = 0, outputTokens = 0) {
   const normalizeModelId = (id) => {
     const map = {
       'claude-haiku-4-5-20251001': 'claude-haiku',
-      'claude-sonnet-4-6': 'claude-sonnet',
+      'claude-sonnet-5': 'claude-sonnet',
       'claude-opus-5': 'claude-opus',
+      // 구형 ID 도 예외 없이 받는다. 단 MODEL_PRICES 가 티어 단위라 세대별 가격차는
+      // 반영되지 않는다 — sonnet-4-6 은 실제 $3/$15 였으나 여기선 sonnet 티어 현재가로 계산된다.
+      // 과거 로그를 소급 계산할 땐 이 오차를 감안할 것.
+      'claude-sonnet-4-6': 'claude-sonnet',   // ALLOW-DEPRECATED-MODEL
+      'claude-opus-4-7': 'claude-opus',       // ALLOW-DEPRECATED-MODEL
+      'claude-opus-4-8': 'claude-opus',       // ALLOW-DEPRECATED-MODEL
       'gemini-3.5-flash-latest': 'gemini-3-5-flash',
       'gemini-2.0-flash': 'gemini-2-flash',
       'deepseek-chat': 'deepseek-chat',

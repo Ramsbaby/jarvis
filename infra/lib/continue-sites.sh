@@ -86,7 +86,7 @@ PYEOF
 _cs_downgrade_model() {
     local current_model="$1"
     case "$current_model" in
-        *opus*)   echo "claude-sonnet-4-6" ;;
+        *opus*)   echo "claude-sonnet-5" ;;
         *sonnet*) echo "claude-haiku-4-5-20251001" ;;
         *haiku*)  echo "$current_model" ;;  # 더 이상 다운그레이드 불가
         "")       echo "claude-haiku-4-5-20251001" ;;  # 기본값 → haiku

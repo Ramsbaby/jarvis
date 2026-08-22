@@ -45,7 +45,17 @@ const COST_MODEL = {
     input: 0.80,
     output: 4.00,
   },
-  'claude-sonnet-4-6': {
+  // 미등재 모델은 196행에서 haiku 가격으로 폴백한다 — 예외가 안 나는 대신 조용히 틀린다.
+  // 2026-08-22: sonnet-5·opus-5 가 없어 각각 2.5배·6배 과소 계상되고 있었다.
+  'claude-sonnet-5': {
+    input: 2.00,   // ⚠️ 인트로 가격 — 2026-08-31 이후 $3/$15 로 복귀
+    output: 10.00,
+  },
+  'claude-opus-5': {
+    input: 5.00,
+    output: 25.00,
+  },
+  'claude-sonnet-4-6': {   // 구형 — 과거 로그 비용 계산용으로 유지  ALLOW-DEPRECATED-MODEL
     input: 3.00,
     output: 15.00,
   },

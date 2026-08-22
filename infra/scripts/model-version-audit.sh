@@ -87,9 +87,16 @@ fi
 
 # ([^0-9]|$) — "claude-opus-4-5" 가 가상의 "claude-opus-4-50" 을 오탐하지 않게 하되,
 # 줄 끝에 온 경우도 놓치지 않는다. *.bak 은 과거 스냅샷이므로 감사 대상에서 뺀다.
-CODE_HITS=$(grep -rEln "(${DEPRECATED_RE})([^0-9]|$)" \
+#
+# 줄 끝에 ALLOW-DEPRECATED-MODEL 마커가 있으면 의도적 잔존으로 보고 넘긴다
+# (구형 가격표·별칭 매핑·과거 비용 기록처럼 구형 ID 를 알아야만 동작하는 자리).
+# 마커 없이 오탐을 방치하면 감사가 매주 같은 소음을 내고 결국 아무도 안 본다 —
+# topology-guard 의 ALLOW-DOTJARVIS 와 같은 관례다.
+CODE_HITS=$(grep -rEn "(${DEPRECATED_RE})([^0-9]|$)" \
   "${JARVIS_HOME}/infra/" "${JARVIS_HOME}/runtime/scripts/" 2>/dev/null \
+  | grep -v "ALLOW-DEPRECATED-MODEL" \
   | grep -v "node_modules\|\.git/\|model-policy.json\|model-version-audit\|CLAUDE.md\|learned-mistakes\|README\|/docs/\|/wiki/\|/adr/\|tasks-index.json\|tasks.schema.json\|\.bak" \
+  | cut -d: -f1 | sort -u \
   || true)
 
 if [[ -n "$CODE_HITS" ]]; then

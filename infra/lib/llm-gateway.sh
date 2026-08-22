@@ -703,8 +703,8 @@ llm_call() {
         complexity=$(_detect_complexity "$prompt")
         case "$complexity" in
             budget) model="claude-haiku-4-5-20251001" ;;
-            small)  model="claude-sonnet-4-6" ;;
-            large)  model="claude-opus-4-7" ;;
+            small)  model="claude-sonnet-5" ;;
+            large)  model="claude-opus-5" ;;
         esac
         log_debug "auto-selected model=$model (complexity=$complexity)"
     fi

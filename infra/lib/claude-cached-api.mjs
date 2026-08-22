@@ -72,11 +72,13 @@ const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 //   규칙: cache_write = input × 1.25, cache_read = input × 0.1
 const PRICING = {
   'claude-haiku-4-5-20251001': { input: 1.00, cache_write: 1.25, cache_read: 0.10, output: 5.00 },
-  'claude-sonnet-4-6':         { input: 3.00, cache_write: 3.75, cache_read: 0.30, output: 15.0 },
-  'claude-sonnet-5':           { input: 3.00, cache_write: 3.75, cache_read: 0.30, output: 15.0 },
+  'claude-sonnet-4-6':         { input: 3.00, cache_write: 3.75, cache_read: 0.30, output: 15.0 },  // ALLOW-DEPRECATED-MODEL
+  // ⚠️ sonnet-5 의 $2/$10 은 인트로 가격으로 2026-08-31 까지만 유효하다. 이후 $3/$15 로 복귀 —
+  //    그때 이 줄을 되돌려야 한다. 가격 정본은 infra/config/models.json.
+  'claude-sonnet-5':           { input: 2.00, cache_write: 2.50, cache_read: 0.20, output: 10.0 },
   'claude-opus-5':             { input: 5.00, cache_write: 6.25, cache_read: 0.50, output: 25.0 },
-  'claude-opus-4-8':           { input: 5.00, cache_write: 6.25, cache_read: 0.50, output: 25.0 },
-  'claude-opus-4-7':           { input: 5.00, cache_write: 6.25, cache_read: 0.50, output: 25.0 },
+  'claude-opus-4-8':           { input: 5.00, cache_write: 6.25, cache_read: 0.50, output: 25.0 },  // ALLOW-DEPRECATED-MODEL
+  'claude-opus-4-7':           { input: 5.00, cache_write: 6.25, cache_read: 0.50, output: 25.0 },  // ALLOW-DEPRECATED-MODEL
   'default':                   { input: 3.00, cache_write: 3.75, cache_read: 0.30, output: 15.0 },
 };
 

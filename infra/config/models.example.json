@@ -5,7 +5,7 @@
   "_legacy": {
     "budget": "claude-haiku-4-5-20251001",
     "small": "claude-haiku-4-5-20251001",
-    "medium": "claude-sonnet-4-6",
+    "medium": "claude-sonnet-5",
     "large": "claude-opus-5"
   }
 }

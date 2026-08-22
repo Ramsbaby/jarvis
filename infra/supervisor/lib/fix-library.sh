@@ -225,7 +225,7 @@ fix_llm_solve() {
     # 실측 결과 Sonnet 1회 ~$0.40+ (long context + Read tool calls). 0.80은 2x 안전 cushion.
     # 일 5~10회 × $0.50 평균 = 일 ~$2.5~5, 월 ~$75~150. 주인님 비용 명시 승인.
     local max_budget=0.80
-    local model="claude-sonnet-4-6"
+    local model="claude-sonnet-5"
     local allowed
     if [ "$DRYRUN" = "1" ]; then
         allowed="Read"  # 진단만, 실행 X

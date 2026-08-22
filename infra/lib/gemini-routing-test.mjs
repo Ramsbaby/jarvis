@@ -76,7 +76,7 @@ const sampleTasks = [
     description: 'CEO 인계사항, 일정, 시스템 상태',
     needsReasoning: true,
     complexity: 'high',
-    sourceModel: 'claude-sonnet-4-6',
+    sourceModel: 'claude-sonnet-5',
   },
   {
     id: 'macro-briefing',
@@ -88,7 +88,7 @@ const sampleTasks = [
     description: '투자 포지션 결정용 시장 분석',
     needsReasoning: true,
     complexity: 'high',
-    sourceModel: 'claude-sonnet-4-6',
+    sourceModel: 'claude-sonnet-5',
   },
 ];
 
