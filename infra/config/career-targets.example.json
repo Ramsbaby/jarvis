@@ -1,0 +1,36 @@
+{
+  "_comment": "career-targets.json 의 구조 예시. 실제 파일은 git 추적 제외 대상이므로 이 예시를 복사해 채운다.",
+  "_howto": "cp career-targets.example.json career-targets.json 후 값을 채울 것. Greenhouse 토큰은 추가 전 반드시 curl -s https://boards-api.greenhouse.io/v1/boards/<token>/jobs | head 로 HTTP 200 + jobs 배열을 확인한다 (검증 없는 추가 금지).",
+
+  "greenhouseTokens": ["example-corp", "sample-inc"],
+
+  "wantedCompanyPrefixes": ["회사A", "회사B주식회사"],
+  "_wantedNote": "집계 사이트에서 회사명 접두 매칭으로 거르는 목록. 자체 API 어댑터가 있는 곳은 중복되므로 넣지 않는다.",
+
+  "adapters": [
+    {
+      "id": "adapterA",
+      "enabled": false,
+      "sourceId": "site-a",
+      "shape": "jobList",
+      "_shapeNote": "shape=jobList — 응답이 { jobList: [ { jobOfferTitle, realId, companyName, closeFlag, locationName, resumeSubmissionEndDatetime, employeeTypeName } ] } 형태인 API",
+      "defaultCompany": "회사명",
+      "listUrlTemplate": "https://example.com/public/api/job-list?page={page}",
+      "detailUrlPrefix": "https://example.com/jobs/",
+      "maxPages": 8
+    },
+    {
+      "id": "adapterB",
+      "enabled": false,
+      "sourceId": "site-b",
+      "shape": "sessionList",
+      "_shapeNote": "shape=sessionList — 먼저 sessionUrl 로 세션 쿠키를 받아야 목록 API 가 열리는 유형. 응답은 { list: [ { annoSubject, annoId, sysCompanyCdNm, subJobCdNm, classCdNm, annoKeyword, workAreaCd, endYmd, entTypeCdNm, jobDetailLink } ] }",
+      "defaultCompany": "회사명",
+      "sessionUrl": "https://example.com/rcrt/list.do",
+      "listUrlTemplate": "https://example.com/rcrt/loadJobList.do?firstIndex={index}",
+      "detailUrlPrefix": "https://example.com/rcrt/view.do?annoId=",
+      "pageSize": 10,
+      "maxIndex": 200
+    }
+  ]
+}
