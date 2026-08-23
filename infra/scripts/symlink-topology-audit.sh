@@ -108,6 +108,31 @@ recover_link() {
   local recovery_stash
   recovery_stash="${BACKUP_DIR}/$(date +%Y%m%d-%H%M%S)-$(basename "$link_path")"
 
+  # ── 자기참조 가드 (2026-08-23 신설 — 1차 방어선) ───────────────────────────
+  # expected_target 이 link_path 자신으로 풀리면 이 함수가 하는 모든 일이 파괴다:
+  #   심링크면 "X를 X로 교체", 실디렉토리면 "정본을 스태시로 옮기고 자기참조 링크로 덮어쓰기".
+  # 아래 ghost-dir 가드(L132)는 정본 '루트'만 봐서 그 하위(runtime/logs 등)를 못 막았고,
+  # 그 구멍으로 08-06(7개) · 08-07(15개) · 08-23(20개, 약 3.6GB) 세 번 파괴가 났다.
+  # 등재 목록을 고치는 건 증상 치료다 — 어떤 등재가 들어와도 여기서 먼저 끊는다.
+  # 양쪽 모두 물리 경로로 정규화한다 — 한쪽만 풀면 경로에 심링크가 끼는 순간
+  # 같은 곳인데 다르다고 판정해 가드가 조용히 새어나간다(회귀 테스트로 실제 확인).
+  local lp_dir lp_abs et_dir et_abs
+  lp_dir="$(cd -P "$(dirname "$link_path")" 2>/dev/null && pwd || true)"
+  et_dir="$(cd -P "$(dirname "$expected_target")" 2>/dev/null && pwd || true)"
+  et_abs="$expected_target"
+  if [[ -n "$et_dir" ]]; then
+    et_abs="${et_dir}/$(basename "$expected_target")"
+  fi
+  if [[ -n "$lp_dir" ]]; then
+    lp_abs="${lp_dir}/$(basename "$link_path")"
+    if [[ "$lp_abs" == "$et_abs" ]]; then
+      emit "error" "self-reference-guard-blocked" "$link_path" "expected_target 이 자기 자신 (${expected_target}) — 복구 거부"
+      alert_throttled "self-reference-guard-blocked" "$link_path" "🔴 자기참조 복구 차단" "expected_target=${expected_target} 이 link_path 와 동일 — 등재 오류다. 데이터는 건드리지 않았다."
+      return 1
+    fi
+  fi
+  # ──────────────────────────────────────────────────────────────────────────
+
   if [[ -L "$link_path" ]]; then
     local current_target
     current_target="$(readlink "$link_path" 2>/dev/null || echo '')"
