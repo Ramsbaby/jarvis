@@ -10,8 +10,42 @@ printf '[%s] PID=%d TASK=%s\n' "$(date -u +%FT%TZ 2>/dev/null || echo unknown)" 
 unset _EARLY_LOG
 # --- PATH 강화 (cron 환경에서 경로 누락 방지) ---
 export PATH="${PATH:-/usr/bin:/bin}:/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin"
-source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
+
+# --- Arguments (defensive: check arg count BEFORE set -u triggers) ---
+# ⚠️ 인자 파싱은 반드시 set -u 하기 이전에 온다. 특히 TASK_ID를 참조하는 모든 코드보다 먼저.
+# 2026-08-07: 이 체크를 set -u 이후로 놓으면 "TASK_ID: unbound variable" 에러 발생
+# 2026-08-10: weekly-dream-insight 재발생, 모든 recovery stage 실패
+if [[ $# -lt 2 ]]; then
+    echo "ERROR: Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET]" >&2
+    exit 2
+fi
+TASK_ID="${1}"
+PROMPT="${2}"
+ALLOWED_TOOLS="${3:-Read}"
+TIMEOUT="${4:-180}"
+MAX_BUDGET="${5:-}"
+RESULT_RETENTION="${6:-7}"
+MODEL="${7:-}"
+
+# Determine BOT_HOME early to handle compat.sh sourcing reliably in cron environments
+BOT_HOME_FALLBACK="${BOT_HOME:-${HOME}/jarvis/runtime}"
+_COMPAT_PATH="${BOT_HOME_FALLBACK}/lib/compat.sh"
+if [[ -f "$_COMPAT_PATH" ]]; then
+    source "$_COMPAT_PATH" 2>/dev/null || true
+else
+    # Fallback: try to source relative to script location
+    source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
+fi
+unset _COMPAT_PATH BOT_HOME_FALLBACK
+
+# Preserve TASK_ID before set -u (compat.sh may affect shell options)
+_TASK_ID_SAVED="${TASK_ID}"
+
 set -euo pipefail
+
+# Restore TASK_ID after set -u activation
+TASK_ID="${_TASK_ID_SAVED}"
+unset _TASK_ID_SAVED
 
 # ask-claude.sh - Core wrapper around `claude -p` for AI task execution
 # Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET]
@@ -19,43 +53,37 @@ set -euo pipefail
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
 LOG_FILE="${BOT_HOME}/logs/task-runner.jsonl"
 
-# --- Batch mode (토큰 절감) ---
-# === 배치 모드 vs 대화형 모드 ===
-#
-# [배치 모드 (JARVIS_BATCH_MODE=1, 기본값)]
-#   - claude -p CLI에 --disable-slash-commands, --no-session-persistence 플래그 추가
-#   - 효과: 세션 파일 (~/.cache/claude-cli/sessions/)에 저장 안 함
-#           → 메모리 누적 방지, 토큰 절감 (매 호출마다 깔끔한 새 세션)
-#   - 부작용: /file, /read 등 슬래시 명령 불가능 → 대신 전체 파일 내용을 프롬프트에 포함
-#   - 용도: 크론 태스크, batch 스크립트 (ask-claude.sh의 기본값)
-#
-# [대화형 모드 (JARVIS_BATCH_MODE=0)]
-#   - claude -p CLI가 세션 파일을 사용하여 컨텍스트 유지
-#   - 효과: 동일 사용자/채널이 연속 호출 시 마지막 대화 기억
-#   - 문제점: tokenCount 누적 위험 (위의 세션 좀비 청소 메커니즘 필요)
-#   - 용도: Discord 봇의 messageCreate (단일 스레드 대화)
-#
-# [주의사항]
-#   ❌ "배치 모드면 항상 비용이 적다" → 틀림
-#   ✓ 옳은 것: "배치 모드는 세션 누적을 방지하므로 예측 가능한 비용"
-#             "대화형 모드는 컨텍스트가 계속 커져서 후반부 호출이 비쌈"
-#
-# ask-claude.sh는 크론/배치 태스크 전용 진입점이므로 기본값 1.
-# llm-gateway.sh의 _llm_claude_cli가 이 값을 보고 claude -p에 다음 플래그 추가:
-#   --disable-slash-commands, --no-session-persistence,
-#   --setting-sources ""
-# NOTE: --exclude-dynamic-system-prompt-sections는 2026-05-15에 제거됨 (Claude CLI 미지원)
-# 호출자가 대화형 용도로 전환하고 싶으면 JARVIS_BATCH_MODE=0 명시 export.
-export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
+# --- Inherit allowedTools from parent task for debug-cron-* variants ---
+# debug-cron-* 태스크는 자동 생성되므로 tasks.json에 없음 → 원본 태스크 설정 상속
+# contract 버전(-contract 접미사)은 bash 기반 검증만 필요하므로 Bash,Read로 제한
+if [[ "$TASK_ID" == *"debug-cron"* && "${3:-}" == "" ]]; then
+    # Extract original task ID from debug-cron-TASKID[-contract] pattern
+    ORIGINAL_TASK_ID=$(echo "$TASK_ID" | sed 's/debug-cron-//; s/-contract$//')
 
-# --- Arguments ---
-TASK_ID="${1:?Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET]}"
-PROMPT="${2:?Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET]}"
-ALLOWED_TOOLS="${3:-Read}"
-TIMEOUT="${4:-180}"
-MAX_BUDGET="${5:-}"
-RESULT_RETENTION="${6:-7}"
-MODEL="${7:-}"
+    # contract 버전은 Bash,Read만 허용 (verifyCmd 실행 + 파일 읽기만 필요)
+    if [[ "$TASK_ID" == *"-contract" ]]; then
+        ALLOWED_TOOLS="Bash,Read"
+    else
+        # 원본 태스크의 allowedTools 상속
+        if [[ -f "${BOT_HOME}/config/tasks.json" ]]; then
+            _INHERITED_TOOLS=$(jq -r ".tasks[] | select(.id == \"${ORIGINAL_TASK_ID}\") | .allowedTools // empty" "${BOT_HOME}/config/tasks.json" 2>/dev/null || true)
+            if [[ -n "$_INHERITED_TOOLS" ]]; then
+                ALLOWED_TOOLS="$_INHERITED_TOOLS"
+            fi
+        fi
+    fi
+fi
+
+# --- Batch mode (TASK_ID 확정 후에만 평가 가능) ---
+export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
+if [[ "$TASK_ID" == "morning-standup" || "$TASK_ID" == *"morning-standup"* \
+   || "$TASK_ID" == "personal-schedule-daily" || "$TASK_ID" == *"personal-schedule-daily"* \
+   || "$TASK_ID" == "daily-summary" || "$TASK_ID" == *"daily-summary"* ]]; then
+    # Disable batch mode only for non-debug variants (debug-cron-* should remain in batch mode)
+    if [[ "$TASK_ID" != *"debug-cron"* ]]; then
+        export JARVIS_BATCH_MODE=0
+    fi
+fi
 
 # --- Dependency check ---
 for cmd in gtimeout claude jq; do
@@ -87,7 +115,50 @@ log_jsonl() {
 }
 
 # --- Cleanup trap ---
+# 토큰 원장 기록 — 성공/실패 어느 경로로 끝나도 남긴다.
+#
+# [2026-08-23] 종전에는 이 기록이 스크립트 맨 끝(성공 경로)에만 있었다. 그런데 그 앞
+#   completion workflow 블록에 exit 1 이 5개 있어(빈 결과·검증실패·업로드실패·레지스트리
+#   실패·예상외 코드), 그 경로로 끝나면 LLM 은 이미 호출돼 돈이 나갔는데 원장에 한 줄도
+#   안 남았다. 그 결과 실비용 기록이 2026-08-06 이후 0건이 됐고, 일일 캡을 실측으로
+#   산정하려던 과제(df-cost-field-cap-recalibrate)가 근거를 얻지 못한 채 멈춰 있었다.
+#   "실패해도 비용은 발생한다" — 원장은 결과가 아니라 지출을 기록해야 한다.
+_TOKEN_LEDGER_WRITTEN=0
+write_token_ledger() {
+    if [[ "${_TOKEN_LEDGER_WRITTEN}" == "1" ]]; then return 0; fi
+    # LLM 호출 전에 끝났으면 기록할 지출이 없다 (COST 변수는 응답 파싱 시점에 정의된다)
+    if [[ -z "${COST_USD:-}" && -z "${ACTUAL_COST_USD:-}" ]]; then return 0; fi
+    _TOKEN_LEDGER_WRITTEN=1
+    local _st="${1:-incomplete}"
+    local _lf="${BOT_HOME}/state/token-ledger.jsonl"
+    mkdir -p "$(dirname "$_lf")" 2>/dev/null || true
+    # 실패 경로에서는 RESULT_FILE 이 아예 없을 수 있다. 리다이렉션 실패는 셸이 내는
+    # 에러라 2>/dev/null 로 안 잡히므로, 존재를 먼저 확인한다.
+    local _bytes=0 _hash=""
+    if [[ -n "${RESULT_FILE:-}" && -f "${RESULT_FILE}" ]]; then
+        _bytes=$(wc -c < "$RESULT_FILE" 2>/dev/null | LC_ALL=C tr -d ' ' || echo 0)
+        _hash=$(shasum -a 256 "$RESULT_FILE" 2>/dev/null | cut -c1-16 || echo "")
+    fi
+    jq -cn --arg ts "$(date -u +%FT%TZ)" \
+           --arg task "${TASK_ID:-unknown}" \
+           --arg model "${MODEL:-default}" \
+           --arg status "$_st" \
+           --arg result_hash "${_hash:-}" \
+           --argjson input "${INPUT_TOKENS:-0}" \
+           --argjson output "${OUTPUT_TOKENS:-0}" \
+           --argjson cost_usd "${COST_USD:-0}" \
+           --argjson actual_cost_usd "${ACTUAL_COST_USD:-0}" \
+           --arg source "ask-claude" \
+           --argjson duration_ms "$(( ${DURATION:-0} * 1000 ))" \
+           --argjson result_bytes "${_bytes:-0}" \
+           --argjson max_budget_usd "${MAX_BUDGET:-0}" \
+           '{ts:$ts, task:$task, model:$model, source:$source, status:$status, input:$input, output:$output, cost_usd:$cost_usd, actual_cost_usd:$actual_cost_usd, duration_ms:$duration_ms, result_bytes:$result_bytes, result_hash:$result_hash, max_budget_usd:$max_budget_usd}' \
+        >> "$_lf" 2>/dev/null || true
+}
+
 cleanup() {
+    # WORK_DIR 을 지우기 전에 기록한다 — RESULT_FILE 해시·크기를 읽어야 하기 때문.
+    write_token_ledger "incomplete" || true
     rm -rf "$WORK_DIR"
     rm -f "$PID_FILE"
     [[ -z "${CAFFEINATE_PID:-}" ]] || kill "${CAFFEINATE_PID}" 2>/dev/null || true
@@ -129,6 +200,35 @@ START_TIME=$(date +%s)
 source "${BOT_HOME}/lib/context-loader.sh"
 load_context
 
+# --- Task-specific prompt preprocessing ---
+# schedule-coherence: inject actual data instead of relying on MCP tool calls
+# Apply to both main and debug-cron-* variants
+if [[ "$TASK_ID" == "schedule-coherence" || "$TASK_ID" == *"debug-cron-schedule-coherence"* ]]; then
+    _SCHED_USER_JSON=""
+    _SCHED_CRONTAB_DATA=""
+
+    # Read user-schedule.json
+    if [[ -f "${BOT_HOME}/config/user-schedule.json" ]]; then
+        _SCHED_USER_JSON=$(cat "${BOT_HOME}/config/user-schedule.json" 2>/dev/null || echo "{}")
+    else
+        _SCHED_USER_JSON="{}"
+    fi
+
+    # Read crontab output - filter for morning hours (4:00-10:59)
+    # Pattern: cron lines with hour field 4-10 (format: minute hour day month dow command)
+    # Cron format uses single-digit hours (4, 5, 6...10), not zero-padded (04, 05...)
+    _SCHED_CRONTAB_DATA=$(crontab -l 2>/dev/null | grep -E '\s+([4-9]|10)\s' | head -20)
+    if [[ -z "$_SCHED_CRONTAB_DATA" ]]; then
+        _SCHED_CRONTAB_DATA="(no cron entries found in morning hours 4:00-10:59)"
+    fi
+
+    # Inject data into prompt
+    PROMPT="${PROMPT//\{USER_SCHEDULE_JSON\}/$_SCHED_USER_JSON}"
+    PROMPT="${PROMPT//\{CRONTAB_OUTPUT\}/$_SCHED_CRONTAB_DATA}"
+
+    log_jsonl "info" "schedule-coherence: prompt preprocessed with user-schedule and crontab data" "0"
+fi
+
 # --- Rule Guard PRE-EXECUTION (Cluster cl-e04e4028dd5db00f): 확정 규칙 체크리스트 주입 ---
 # preply/tutor 태스크 시작 시 rule-registry에서 확정 규칙을 로드해 SYSTEM_PROMPT에 주입
 # 목적: 새 세트 작업 전 '예문 3개 고정·문법1장·숙제3종세트' 등 확정 규칙 망각 방지
@@ -142,6 +242,32 @@ ${_RULE_CHECKLIST}
 <!-- /SECTION:rule-guard-cl-e04e4028 -->"
     fi
 fi
+
+# --- Metacognition Guard PRE-EXECUTION (Cluster cl-5f83b707a075fb13): 메타인지 실패 방어 ---
+# 반복 패턴: '규칙 탓으로 단정 → 실측 없이 재단언' + '다시 확인해봐' 신호 무시
+# 방어: 사용자 프롬프트에서 메타인지 요청 신호 감지 시 SYSTEM_PROMPT에
+#       "핵심 가정 명시 → 실측 재검증" 지시 섹션을 자동 주입
+# 강제 트리거: JARVIS_META_CHECK=1 환경변수로 신호 감지 없이도 가드레일 주입 가능
+#   (--meta-check 플래그 대안; positional-arg 호환성 유지)
+_CL_5F83_GUARD="${BOT_HOME}/lib/cluster-guard-cl-5f83b707a075fb13.sh"
+if [[ -f "$_CL_5F83_GUARD" ]]; then
+    source "$_CL_5F83_GUARD" 2>/dev/null || true
+    if command -v meta_check_detect_signal >/dev/null 2>&1; then
+        _META_TRIGGER_SOURCE=""
+        if [[ "${JARVIS_META_CHECK:-0}" == "1" ]]; then
+            _META_TRIGGER_SOURCE="forced(JARVIS_META_CHECK=1)"
+        fi
+        if meta_check_detect_signal "$PROMPT" 2>/dev/null; then
+            [[ -z "$_META_TRIGGER_SOURCE" ]] && _META_TRIGGER_SOURCE="auto-signal"
+            _META_SECTION=$(meta_check_inject_guardrail "$TASK_ID" 2>/dev/null || true)
+            SYSTEM_PROMPT="${SYSTEM_PROMPT}${_META_SECTION}"
+            unset _META_SECTION
+            log_jsonl "info" "meta_check_guard: ${_META_TRIGGER_SOURCE} — guardrail injected (cluster=cl-5f83b707a075fb13)" "0"
+        fi
+        unset _META_TRIGGER_SOURCE
+    fi
+fi
+unset _CL_5F83_GUARD
 
 # --- Load Execution Verdict Wrapper (Cluster cl-e30aee511af89e13: prevent stderr-based missjudgment) ---
 source "${BOT_HOME}/lib/execution-verdict-wrapper.sh" 2>/dev/null || true
@@ -157,6 +283,29 @@ if [[ -f "${BOT_HOME}/lib/requirement-check-guard.sh" ]]; then
         check_requirements_pre "$TASK_ID" "$PROMPT" 2>/dev/null || true
     fi
 fi
+
+# --- Offer Evaluation Market Verification Guard (Cluster cl-1908ed6c137a5b1a): 오퍼 평가 시 시장 데이터 조회 강제 ---
+# 반복 패턴: 직급의 시장 기준 미확인 상태로 오퍼 평가 단언
+# 방어: 오퍼 평가 요청 감지 시 WebSearch 기반 시장 데이터를 컨텍스트에 자동 주입
+_CL_OFFER_GUARD="${BOT_HOME}/lib/cluster-guard-cl-1908ed6c137a5b1a.sh"
+if [[ -f "$_CL_OFFER_GUARD" ]]; then
+    source "$_CL_OFFER_GUARD" 2>/dev/null || true
+    if command -v guard_offer_eval_pre_check >/dev/null 2>&1; then
+        guard_offer_eval_pre_check "$TASK_ID" "$PROMPT" 2>/dev/null || true
+
+        # 오퍼 평가 요청이 감지되면 컨텍스트 주입
+        _OFFER_STATUS=$(get_guard_status 2>/dev/null || echo "triggered=false")
+        if [[ "$_OFFER_STATUS" == *"triggered=true"* ]]; then
+            _OFFER_CONTEXT=$(get_market_context_section 2>/dev/null || true)
+            if [[ -n "$_OFFER_CONTEXT" ]]; then
+                SYSTEM_PROMPT="${SYSTEM_PROMPT}${_OFFER_CONTEXT}"
+                log_jsonl "info" "offer_eval_guard: market verification context injected (cluster=cl-1908ed6c137a5b1a)" "0"
+            fi
+        fi
+        unset _OFFER_STATUS _OFFER_CONTEXT
+    fi
+fi
+unset _CL_OFFER_GUARD
 
 # --- Duplicate Request Guard (Cluster cl-3d5ba801bdad1df9): 중복 요청 방지 ---
 # 반복 패턴: 2분 내 동일 요청 반복 실행으로 불필요한 비용 + 중복 결과 생성
@@ -376,8 +525,19 @@ if command -v circuit_check >/dev/null 2>&1; then
 fi
 
 CLAUDE_EXIT=0
-# fd 9를 tee 프로세스에 연결 — 명시적 close/wait으로 race condition 방지
-exec 9> >(tee -a "$STDERR_HIST" > "$STDERR_LOG")
+# Filter out MAX_BUDGET=0 (claude -p doesn't accept 0)
+# Handle both string and numeric formats (e.g., "0.30", "1.00", "0")
+_BUDGET_ARG=""
+_BUDGET_VAL=""
+if [[ -n "$MAX_BUDGET" ]]; then
+    # Check if budget is a valid positive number (handles "0.30", "1.00", etc)
+    if echo "$MAX_BUDGET" | grep -qE '^[0-9]+(\.[0-9]+)?$' && ! echo "$MAX_BUDGET" | grep -qE '^0+(\.[0]*)?$'; then
+        _BUDGET_ARG="--max-budget-usd"
+        _BUDGET_VAL="$MAX_BUDGET"
+    fi
+fi
+
+# stderr를 파일에 직접 append (fd 리다이렉트 제거로 hang 방지)
 run_with_retry llm_call \
     --prompt "$PROMPT" \
     --system "$SYSTEM_PROMPT" \
@@ -386,15 +546,18 @@ run_with_retry llm_call \
     --output "$CLAUDE_OUTPUT_TMP" \
     --work-dir "$WORK_DIR" \
     --mcp-config "${JARVIS_MCP_CONFIG:-${BOT_HOME}/config/empty-mcp.json}" \
-    ${MAX_BUDGET:+--max-budget "$MAX_BUDGET"} \
+    ${_BUDGET_ARG:+$_BUDGET_ARG "$_BUDGET_VAL"} \
     ${MODEL:+--model "$MODEL"} \
-    2>&9 || CLAUDE_EXIT=$?
-exec 9>&-  # tee에 EOF 전송
+    2>> "$STDERR_LOG" || CLAUDE_EXIT=$?
+unset _BUDGET_ARG _BUDGET_VAL
+# Append stderr to historical log as well (for trend analysis)
+if [[ -s "$STDERR_LOG" ]]; then
+    cat "$STDERR_LOG" >> "$STDERR_HIST" 2>/dev/null || true
+fi
 # caffeinate 먼저 종료 (교착 방지: caffeinate -w $$ 는 스크립트 종료까지 대기하므로
 # wait 호출 시 caffeinate ↔ wait 무한 교착 발생)
 [[ -z "${CAFFEINATE_PID:-}" ]] || kill "${CAFFEINATE_PID}" 2>/dev/null || true
 CAFFEINATE_PID=""
-wait       # tee 완전 종료 대기 → stderr 유실 없음
 
 # --- Circuit update (Phase 3): 결과 반영 (성공 = closed 복귀 / 실패 = open 차단) ---
 if command -v circuit_update >/dev/null 2>&1; then
@@ -404,8 +567,13 @@ fi
 
 RAW_OUTPUT=""
 if [[ -s "$CLAUDE_OUTPUT_TMP" ]]; then
-    # claude -p --output-format json은 JSONL 형식을 반환할 수 있음 — 마지막 라인이 최종 result
-    RAW_OUTPUT=$(tail -1 "$CLAUDE_OUTPUT_TMP")
+    # contract 태스크: 전체 파일 내용 필요 (markdown 블록 처리를 위해)
+    if [[ "$TASK_ID" == *"-contract" ]]; then
+        RAW_OUTPUT=$(cat "$CLAUDE_OUTPUT_TMP")
+    else
+        # 비-contract: JSONL 형식, 마지막 non-empty 라인이 최종 result
+        RAW_OUTPUT=$(grep -v '^ *$' "$CLAUDE_OUTPUT_TMP" | tail -1)
+    fi
 fi
 
 if [[ $CLAUDE_EXIT -ne 0 ]]; then
@@ -439,21 +607,42 @@ fi
 END_TIME=$(date +%s)
 DURATION=$(( END_TIME - START_TIME ))
 
-# --- Validate JSON and extract result ---
+# --- Validate JSON and extract result (with markdown fallback for contract tasks) ---
+# contract 태스크는 markdown 형식으로 응답을 받을 수 있음 → JSON 블록 추출 시도
+_extracted_json=""
 if [[ -z "$RAW_OUTPUT" ]] || ! echo "$RAW_OUTPUT" | jq -e '.' >/dev/null 2>&1; then
-    log_jsonl "error" "Invalid JSON output from claude (exit=$CLAUDE_EXIT)" "$DURATION"
-    if [[ -s "$CLAUDE_OUTPUT_TMP" ]]; then
-        cp "$CLAUDE_OUTPUT_TMP" "${RESULT_FILE%.md}-raw.txt"
+    # JSON 파싱 실패 시, contract 태스크라면 markdown에서 ```json 블록 추출
+    if [[ "$TASK_ID" == *"-contract" ]]; then
+        _extracted_json=$(printf '%s\n' "$RAW_OUTPUT" | sed -n '/^```json$/,/^```$/p' | sed '1d;$d' 2>/dev/null || true)
+        if [[ -n "$_extracted_json" ]] && echo "$_extracted_json" | jq -e '.' >/dev/null 2>&1; then
+            RAW_OUTPUT="$_extracted_json"
+            log_jsonl "info" "contract: JSON extracted from markdown block" "$DURATION"
+        else
+            # JSON 추출도 실패
+            log_jsonl "error" "Invalid JSON output from claude (exit=$CLAUDE_EXIT)" "$DURATION"
+            if [[ -s "$CLAUDE_OUTPUT_TMP" ]]; then
+                cp "$CLAUDE_OUTPUT_TMP" "${RESULT_FILE%.md}-raw.txt"
+            fi
+            if [[ -n "${_IDEM_HASH:-}" ]] && command -v record_command_end >/dev/null 2>&1; then
+                record_command_end "$TASK_ID" "$_IDEM_HASH" "failed" "" "Invalid JSON output from claude" 2>/dev/null || true
+                unset _IDEM_HASH
+            fi
+            record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
+            exit 1
+        fi
+    else
+        # 비-contract 태스크의 JSON 파싱 실패
+        log_jsonl "error" "Invalid JSON output from claude (exit=$CLAUDE_EXIT)" "$DURATION"
+        if [[ -s "$CLAUDE_OUTPUT_TMP" ]]; then
+            cp "$CLAUDE_OUTPUT_TMP" "${RESULT_FILE%.md}-raw.txt"
+        fi
+        if [[ -n "${_IDEM_HASH:-}" ]] && command -v record_command_end >/dev/null 2>&1; then
+            record_command_end "$TASK_ID" "$_IDEM_HASH" "failed" "" "Invalid JSON output from claude" 2>/dev/null || true
+            unset _IDEM_HASH
+        fi
+        record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
+        exit 1
     fi
-
-    # Idempotency guard: Record command failure (Cluster cl-3e0048f79eb206f9)
-    if [[ -n "${_IDEM_HASH:-}" ]] && command -v record_command_end >/dev/null 2>&1; then
-        record_command_end "$TASK_ID" "$_IDEM_HASH" "failed" "" "Invalid JSON output from claude" 2>/dev/null || true
-        unset _IDEM_HASH
-    fi
-
-    record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
-    exit 1
 fi
 
 # Check for error subtypes (e.g., error_max_budget_usd)
@@ -493,8 +682,8 @@ if [[ "$SUBTYPE" == error_* ]] || [[ "$IS_ERROR" == "true" ]]; then
     exit 1
 fi
 
-RESULT=$(echo "$RAW_OUTPUT" | jq -r '.result // empty')
-if [[ -z "$RESULT" ]]; then
+_CLAUDE_TEXT=$(echo "$RAW_OUTPUT" | jq -r '.result // empty')
+if [[ -z "$_CLAUDE_TEXT" ]]; then
     log_jsonl "error" "Empty result from claude" "$DURATION"
     echo "$RAW_OUTPUT" > "${RESULT_FILE%.md}-raw.txt"
 
@@ -507,6 +696,124 @@ if [[ -z "$RESULT" ]]; then
     record_outcome "$TASK_ID" "false" "$(( DURATION * 1000 ))" "0" || true
     exit 1
 fi
+
+# --- Extract JSON from Claude's response (handle mixed text+JSON cases) ---
+# Claude may respond with explanatory text + JSON. Extract the JSON object.
+RESULT=""
+# Try 1: Entire response is valid JSON
+if echo "$_CLAUDE_TEXT" | jq -e '.' >/dev/null 2>&1; then
+    RESULT="$_CLAUDE_TEXT"
+else
+    # Try 2: Find JSON, handling markdown code blocks
+    # Use Python to extract the first valid JSON object
+    RESULT=$(python3 << 'PYTHON_EOF' 2>/dev/null || true
+import sys, json, re
+text = sys.stdin.read().strip()
+
+# Try removing markdown code blocks first
+text_cleaned = re.sub(r'^```(?:json|javascript|js)?\s*\n', '', text)
+text_cleaned = re.sub(r'\n```\s*$', '', text_cleaned)
+text_cleaned = text_cleaned.strip()
+
+# Try 1: Entire response is valid JSON (after cleanup)
+try:
+    obj = json.loads(text_cleaned)
+    print(json.dumps(obj))
+    sys.exit(0)
+except:
+    pass
+
+# Try 2: Find first '{' and extract JSON
+for search_text in [text_cleaned, text]:
+    start_idx = search_text.find('{')
+    if start_idx >= 0:
+        for end_idx in range(len(search_text), start_idx, -1):
+            try:
+                candidate = search_text[start_idx:end_idx]
+                obj = json.loads(candidate)
+                print(json.dumps(obj))
+                sys.exit(0)
+            except:
+                pass
+PYTHON_EOF
+    ) < <(echo "$_CLAUDE_TEXT")
+fi
+
+if [[ -z "$RESULT" ]]; then
+    # JSON 추출 실패: text-response 태스크(morning-standup, daily-summary 등)는 원본 텍스트 사용
+    # 2026-08-12: morning-standup 크론 실패의 근본 원인 — JSON을 찾지 못하면 일반 텍스트를 그대로 사용
+    log_jsonl "warn" "No JSON found in response — using text response as-is (task=$TASK_ID)" "$DURATION"
+    RESULT="$_CLAUDE_TEXT"
+fi
+
+unset _CLAUDE_TEXT
+
+# --- Contract 파일 저장 (contract 태스크인 경우) ---
+# contract 태스크에서 claude가 반환한 contract JSON을 sprint-contracts 디렉토리에 저장
+if [[ "$TASK_ID" == *"-contract" ]]; then
+    # RESULT가 contract JSON인지 확인 (objective + successCriteria 필드 확인)
+    if echo "$RESULT" | jq -e '.objective and .successCriteria' >/dev/null 2>&1; then
+        # 원본 태스크 ID 추출
+        _ORIG_TASK_ID="${TASK_ID%-contract}"
+
+        # contract 파일 생성: sprint-contract.sh 스타일
+        _SC_DIR="${BOT_HOME}/state/sprint-contracts"
+        mkdir -p "$_SC_DIR"
+
+        _objective=$(echo "$RESULT" | jq -r '.objective')
+        _criteria=$(echo "$RESULT" | jq '.successCriteria // []')
+        _max_iter=$(echo "$RESULT" | jq '.maxIterations // 3')
+        _now=$(date -u '+%Y-%m-%dT%H:%M:%S+09:00')
+
+        # criteria에 verified: false 기본값 추가
+        _enriched_criteria=$(echo "$_criteria" | jq '[.[] | . + {verified: false}]' 2>/dev/null)
+
+        # contract JSON 생성
+        _contract_obj=$(jq -n \
+            --arg taskId "$_ORIG_TASK_ID" \
+            --arg createdAt "$_now" \
+            --arg objective "$_objective" \
+            --argjson successCriteria "$_enriched_criteria" \
+            --argjson maxIterations "$_max_iter" \
+            '{
+                taskId: $taskId,
+                createdAt: $createdAt,
+                status: "in_progress",
+                contract: {
+                    objective: $objective,
+                    successCriteria: $successCriteria,
+                    maxIterations: $maxIterations
+                },
+                iterations: []
+            }' 2>/dev/null)
+
+        if [[ -n "$_contract_obj" ]]; then
+            echo "$_contract_obj" > "${_SC_DIR}/${_ORIG_TASK_ID}.json"
+            log_jsonl "info" "contract: contract 파일 생성 완료 (원본 태스크=${_ORIG_TASK_ID})" "$DURATION"
+        fi
+        unset _SC_DIR _objective _criteria _max_iter _now _enriched_criteria _contract_obj _ORIG_TASK_ID
+    fi
+fi
+
+# --- Extract cost and token usage ---
+# [2026-08-13] cost_usd 는 claude CLI 원본에 존재하지 않는 키다 (정본은 total_cost_usd).
+#   그 탓에 이 원장의 ask-claude 행 4,672건이 전량 0으로 기록됐다.
+#   다만 cost_usd 를 즉시 정정하면 여태 0이라 잠들어 있던 일일 캡(기본 $10)이 깨어나
+#   하루 250~380회 도는 크론이 첫 시간에 전면 차단된다.
+#   → 관측 우선: 실비용은 actual_cost_usd 에만 적재하고 cost_usd 는 당분간 종전 동작 유지.
+#     1주 실측 후 JARVIS_DAILY_CAP_USD 를 재산정하고 두 필드를 통합한다.
+#
+# [2026-08-23] 이 블록을 평가자(evaluator)·완료 워크플로 '앞'으로 옮겼다.
+#   종전에는 뒤에 있어서, 평가 실패(EVALUATOR_FAIL)나 워크플로 실패로 exit 하면
+#   LLM 은 이미 호출돼 돈이 나갔는데 비용을 읽기도 전에 끝났다 — 원장에 한 줄도 안 남았다.
+#   지출은 결과 품질과 무관하게 발생하므로, 응답을 받은 직후 가장 먼저 계량한다.
+COST_USD=$(echo "$RAW_OUTPUT" | jq -r '.cost_usd // 0')
+# 폴백 프로바이더(gemini/deepseek/openai/ollama)는 llm-gateway 가 cost_usd 로 정규화하므로 둘 다 읽는다.
+ACTUAL_COST_USD=$(echo "$RAW_OUTPUT" | jq -r '.total_cost_usd // .cost_usd // 0')
+INPUT_TOKENS=$(echo "$RAW_OUTPUT" | jq -r '.usage.input_tokens // 0')
+OUTPUT_TOKENS=$(echo "$RAW_OUTPUT" | jq -r '.usage.output_tokens // 0')
+COST_EXTRA=$(printf '"cost_usd":%s,"input_tokens":%s,"output_tokens":%s' \
+    "${COST_USD:-0}" "${INPUT_TOKENS:-0}" "${OUTPUT_TOKENS:-0}")
 
 # --- Tier 1: 독립 평가자 (evaluator.sh) ---
 # pass=통과 / warn=통과하지만 ledger에 경고 기록 / fail=재시도 또는 실패 처리
@@ -536,6 +843,13 @@ if [[ -f "$EVALUATOR_LIB" ]]; then
     fi
 fi
 
+# --- Metacognition Guard POST-EXECUTION (Cluster cl-5f83b707a075fb13): 응답 내 가정 명시 검증 ---
+# 메타인지 신호가 있었던 경우, 응답에 핵심 가정 명시 여부 확인 (경고만, 차단 없음)
+if command -v meta_check_validate_response >/dev/null 2>&1; then
+    meta_check_validate_response "$TASK_ID" "$RESULT" 2>/dev/null || \
+        log_jsonl "warn" "meta_check_guard: response lacks explicit assumptions — cluster=cl-5f83b707a075fb13" "$DURATION"
+fi
+
 # --- Tier 1.5: 근본원인 분석 검증 가드 (root-cause-validator.sh) ---
 # 클러스터 cl-d8daa113f8bb5b30 대응: 초기 권고가 근본 해법이 아니었음 패턴 방지
 # pass=근본해결 / warn=부분분석 / block=근본미분석(차단)
@@ -563,12 +877,7 @@ if [[ -f "$ROOT_CAUSE_LIB" && ${BASH_VERSINFO[0]:-0} -ge 4 ]]; then
     fi
 fi
 
-# --- Extract cost and token usage ---
-COST_USD=$(echo "$RAW_OUTPUT" | jq -r '.cost_usd // 0')
-INPUT_TOKENS=$(echo "$RAW_OUTPUT" | jq -r '.usage.input_tokens // 0')
-OUTPUT_TOKENS=$(echo "$RAW_OUTPUT" | jq -r '.usage.output_tokens // 0')
-COST_EXTRA=$(printf '"cost_usd":%s,"input_tokens":%s,"output_tokens":%s' \
-    "${COST_USD:-0}" "${INPUT_TOKENS:-0}" "${OUTPUT_TOKENS:-0}")
+# (비용·토큰 추출은 평가자 앞으로 이동했다 — 2026-08-23. 위쪽 "Extract cost and token usage" 참조)
 
 # --- Sanitize result: strip meta-text that pollutes future context ---
 RESULT=$(printf '%s' "$RESULT" | sed '/^결과를 .*에 저장했습니다/d; /^Sources:$/,/^$/d')
@@ -578,6 +887,9 @@ RESULT=$(printf '%s' "$RESULT" | sed '/^결과를 .*에 저장했습니다/d; /^
   printf '# Task: %s\nDate: %s\n\n## Prompt\n%s\n\n## Result\n%s\n' \
     "$TASK_ID" "$(date -u +%Y-%m-%d)" "$PROMPT" "$RESULT"
 } > "$RESULT_FILE"
+
+# --- Output result to stdout (for cron verification) ---
+echo "$RESULT"
 
 # --- Post-save file validation (Cluster cl-dcd8ff3443b1f052: 파일 저장 후 자동 검증) ---
 # 파일 저장/업로드 후 경로, 크기, 내용을 자동으로 검증하는 가드
@@ -738,6 +1050,35 @@ if [[ -f "${BOT_HOME}/lib/guard-completion-check.sh" ]]; then
     fi
 fi
 
+# --- Guard: Completion evidence checker (Cluster cl-00a1f0d4cb0a4200) ---
+# 완료·성공·통과 단언 시 근거(출력) 필수 검증 — 상시 주입 파일 stale 감지
+# 후처리 검증 로직 — 기존 동작 차단 없음 (경고 로깅만)
+if [[ -f "${BOT_HOME}/lib/completion-evidence-checker.sh" ]]; then
+    source "${BOT_HOME}/lib/completion-evidence-checker.sh" 2>/dev/null || true
+
+    if command -v validate_completion_evidence >/dev/null 2>&1; then
+        # RESULT 텍스트에서 완료 선언 + 근거 검증
+        if ! validate_completion_evidence "$RESULT" 2>/dev/null; then
+            log_jsonl "warn" "Completion evidence check FAILED — statement without proof logged" "0"
+        fi
+    fi
+fi
+
+# --- Guard: Stale rule detector (Cluster cl-00a1f0d4cb0a4200) ---
+# 규칙 파일 신선도 검사 — 30일 이상 경과 파일 경고
+# 세션 시작 후 첫 ask-claude 호출 시만 실행하여 반복 검사 방지
+if [[ -f "${BOT_HOME}/lib/stale-rule-detector.sh" ]]; then
+    source "${BOT_HOME}/lib/stale-rule-detector.sh" 2>/dev/null || true
+
+    # 세션별 stale 검사 플래그 (한 번만 실행)
+    if command -v detect_stale_rules >/dev/null 2>&1 && [[ -z "${_STALE_RULES_CHECKED:-}" ]]; then
+        if ! detect_stale_rules 30 2>/dev/null; then
+            log_jsonl "info" "Stale rule files detected (see context warning)" "0"
+        fi
+        export _STALE_RULES_CHECKED=1
+    fi
+fi
+
 # --- Guard: File existence assertion validator (Cluster cl-3dbad2477e65b7b7) ---
 # 파일 존재 판단 오류 클러스터 방어: 응답의 파일 단언과 실제 존재 여부 대조
 # 후처리 검증 로직 — 기존 동작 차단 없음 (경고 로깅만)
@@ -862,24 +1203,9 @@ fi
 #   - 7일 보관 후 자동 rotation (downstream: archive-ledger.sh)
 #
 # SSoT ledger for all LLM spending. Downstream: daily cap, 80% alert, dedup detection.
-LEDGER_FILE="${BOT_HOME}/state/token-ledger.jsonl"
-mkdir -p "$(dirname "$LEDGER_FILE")" 2>/dev/null || true
-LEDGER_RESULT_BYTES=$(wc -c < "$RESULT_FILE" 2>/dev/null | tr -d ' ' || echo 0)
-LEDGER_RESULT_HASH=$(shasum -a 256 "$RESULT_FILE" 2>/dev/null | cut -c1-16 || echo "")
-LEDGER_MODEL="${MODEL:-default}"
-jq -cn --arg ts "$(date -u +%FT%TZ)" \
-       --arg task "$TASK_ID" \
-       --arg model "$LEDGER_MODEL" \
-       --arg status "success" \
-       --arg result_hash "$LEDGER_RESULT_HASH" \
-       --argjson input "${INPUT_TOKENS:-0}" \
-       --argjson output "${OUTPUT_TOKENS:-0}" \
-       --argjson cost_usd "${COST_USD:-0}" \
-       --argjson duration_ms "$(( DURATION * 1000 ))" \
-       --argjson result_bytes "${LEDGER_RESULT_BYTES:-0}" \
-       --argjson max_budget_usd "${MAX_BUDGET:-0}" \
-       '{ts:$ts, task:$task, model:$model, status:$status, input:$input, output:$output, cost_usd:$cost_usd, duration_ms:$duration_ms, result_bytes:$result_bytes, result_hash:$result_hash, max_budget_usd:$max_budget_usd}' \
-    >> "$LEDGER_FILE" 2>/dev/null || true
+# 성공 경로 기록. 실패·중단 경로는 cleanup(EXIT trap)의 write_token_ledger 가 담당한다.
+# 둘 중 먼저 부른 쪽만 쓰고 나머지는 _TOKEN_LEDGER_WRITTEN 플래그로 무시된다.
+write_token_ledger "success"
 
 # --- Mark board reactions as processed ---
 if [[ -n "${_board_pending_json:-}" ]]; then
@@ -889,3 +1215,4 @@ fi
 
 # --- Output result to stdout ---
 echo "$RESULT"
+exit 0
