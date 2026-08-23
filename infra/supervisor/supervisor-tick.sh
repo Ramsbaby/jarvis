@@ -173,7 +173,31 @@ fi
 NEED_ALERT=false
 DELTA_COUNT=$(echo "$ALERT_NEW" | jq '[.new_circuit_open, .new_err_files] | map(length) | add // 0')
 [ "$DELTA_COUNT" -gt 0 ] && NEED_ALERT=true
-[ "${#CRITICAL[@]}" -gt 0 ] && NEED_ALERT=true
+
+# CRITICAL 은 '새로 생긴 것'이 아니라 '지금 상태'다. 해소될 때까지 매 틱(5분) 참이므로
+# 그대로 두면 같은 이상 하나가 무한히 알림을 낸다 — 2026-08-23 RAG 15.5시간 정지 때
+# 동일 내용이 2시간 반 동안 119건 발송돼 진짜 새 경고가 그 속에 묻혔다.
+# → 내용이 같으면 CRITICAL_THROTTLE_MIN(기본 30분)에 1회만 보낸다.
+#   내용이 바뀌면(새 항목 추가·해소) 해시가 달라져 즉시 발송된다. delta 알림은 이 제한과 무관.
+CRITICAL_THROTTLE_MIN="${SUPERVISOR_CRITICAL_THROTTLE_MIN:-30}"
+if [ "${#CRITICAL[@]}" -gt 0 ]; then
+    CRIT_HASH=$(printf '%s\n' "${CRITICAL[@]}" | shasum -a 256 2>/dev/null | cut -c1-16)
+    CRIT_MARKER="${BOT_HOME}/state/supervisor-critical-${CRIT_HASH}.marker"
+    NOW_EPOCH=$(date +%s)
+    LAST_SENT=0
+    if [ -f "$CRIT_MARKER" ]; then
+        LAST_SENT=$(cat "$CRIT_MARKER" 2>/dev/null || echo 0)
+        case "$LAST_SENT" in (''|*[!0-9]*) LAST_SENT=0 ;; esac
+    fi
+    if [ $(( NOW_EPOCH - LAST_SENT )) -ge $(( CRITICAL_THROTTLE_MIN * 60 )) ]; then
+        NEED_ALERT=true
+        echo "$NOW_EPOCH" > "$CRIT_MARKER" 2>/dev/null || true
+        # 내용이 바뀌면 이전 해시 마커는 쓸모없다 — 24시간 지난 마커를 함께 정리한다.
+        find "${BOT_HOME}/state" -maxdepth 1 -name 'supervisor-critical-*.marker' -mtime +1 -delete 2>/dev/null || true
+    else
+        log "critical 억제: 동일 내용 ${CRITICAL_THROTTLE_MIN}분 스로틀 (hash=${CRIT_HASH}, 경과 $(( (NOW_EPOCH - LAST_SENT) / 60 ))분)"
+    fi
+fi
 
 if [ "$NEED_ALERT" = "true" ]; then
     # Discord 카드 송출
