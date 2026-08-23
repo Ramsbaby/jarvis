@@ -37,6 +37,23 @@ EPOCH="$(date +%s)"
 mkdir -p "$LEDGER_DIR" "$THROTTLE_DIR" "$BACKUP_DIR"
 
 # Canonical symlink mapping (bash 3.2 호환 — 평행 배열)
+#
+# 2026-08-07 — "그림자 폴더 통합분"(2026-07-27 추가, COMPAT_HOME/{prompts,adr,watchdog,
+#   tmp,archive,teams,backups,work,docs,data,wiki,ledger,results,context,runtime,
+#   logs,inbox,state} + COMPAT_HOME/{config,discord})을 통째로 제거했다.
+#   COMPAT_HOME(~/.jarvis)이 DOT_JARVIS(~/jarvis/runtime)를 가리키는 심링크인 이상,
+#   "${COMPAT_HOME}/X" 는 항상 "${DOT_JARVIS}/X" 와 물리적으로 동일한 경로로 풀린다.
+#   그런데 이 블록의 expected_target 도 항상 "${HOME}/jarvis/runtime/X" — 즉 자기 자신.
+#   COMPAT_HOME이 정상일 때조차 "X가 X를 가리키는 심링크인가"를 묻는 구조라 X가
+#   조금이라도 실디렉토리인 순간(늘 그렇다 — X는 runtime의 진짜 하위 데이터) 무조건
+#   "유령 디렉토리"로 오판해 정본 데이터를 스태시로 옮기고 자기참조 심링크로 덮어썼다.
+#   L86 COMPAT_HOME 드리프트 가드가 무력화됐던 유일한 이유는 COMPAT_HOME 자체가
+#   드리프트해 있었기 때문일 뿐 — 2026-08-07 드리프트를 고치자마자 이 블록이 20개
+#   항목 전부를 파괴했다(정본 runtime/ 자체 포함, CLI auto-memory 전역 ELOOP 원인).
+#   COMPAT_HOME이 ~/.jarvis 전체를 가리키는 단일 심링크인 이상, 그 하위 항목은
+#   이미 자동으로 올바르게 해석된다 — 개별 항목 등재는 애초에 불필요했다.
+#   보호가 필요한 대상은 DOT_JARVIS/{infra,bin,lib,scripts}(SSoT 참조, 자기참조 아님)
+#   뿐이며, COMPAT_HOME 쪽은 그 4개만 중복 확인해도 충분하다.
 EXPECTED_LINK_PATHS=(
   "${DOT_JARVIS}/infra"
   "${DOT_JARVIS}/bin"
@@ -45,32 +62,6 @@ EXPECTED_LINK_PATHS=(
   "${COMPAT_HOME}/bin"
   "${COMPAT_HOME}/lib"
   "${COMPAT_HOME}/scripts"
-  "${COMPAT_HOME}/config"
-  "${COMPAT_HOME}/discord"
-  # 2026-07-27 그림자 폴더 통합분 — COMPAT_HOME(=~/.jarvis) 쪽만 등재한다.
-  #   DOT_JARVIS 는 이름과 달리 런타임 폴더(위 L20 주석)이므로 여기에 쓰면
-  #   "runtime/X → runtime/X" 자기참조 링크가 만들어져 실폴더가 통째로 치워진다(실제 발생).
-  #   이 링크가 실폴더로 되돌아가면 저장소가 다시 둘로 갈라져, 같은 조회 명령이
-  #   BOT_HOME 에 따라 다른 답을 낸다 — 브리핑 이중 발송·작업 DB 분열의 공통 뿌리였다.
-  #   rag 는 양쪽 LanceDB 가 모두 현역이라 의도적으로 제외(합치면 검색 품질 손실).
-  "${COMPAT_HOME}/prompts"
-  "${COMPAT_HOME}/adr"
-  "${COMPAT_HOME}/watchdog"
-  "${COMPAT_HOME}/tmp"
-  "${COMPAT_HOME}/archive"
-  "${COMPAT_HOME}/teams"
-  "${COMPAT_HOME}/backups"
-  "${COMPAT_HOME}/work"
-  "${COMPAT_HOME}/docs"
-  "${COMPAT_HOME}/data"
-  "${COMPAT_HOME}/wiki"
-  "${COMPAT_HOME}/ledger"
-  "${COMPAT_HOME}/results"
-  "${COMPAT_HOME}/context"
-  "${COMPAT_HOME}/runtime"
-  "${COMPAT_HOME}/logs"
-  "${COMPAT_HOME}/inbox"
-  "${COMPAT_HOME}/state"
 )
 EXPECTED_LINK_TARGETS=(
   "${SSOT}"
@@ -80,26 +71,6 @@ EXPECTED_LINK_TARGETS=(
   "${SSOT}/bin"
   "${SSOT}/lib"
   "${SSOT}/scripts"
-  "${HOME}/jarvis/runtime/config"
-  "${HOME}/jarvis/runtime/discord"
-  "${HOME}/jarvis/runtime/prompts"
-  "${HOME}/jarvis/runtime/adr"
-  "${HOME}/jarvis/runtime/watchdog"
-  "${HOME}/jarvis/runtime/tmp"
-  "${HOME}/jarvis/runtime/archive"
-  "${HOME}/jarvis/runtime/teams"
-  "${HOME}/jarvis/runtime/backups"
-  "${HOME}/jarvis/runtime/work"
-  "${HOME}/jarvis/runtime/docs"
-  "${HOME}/jarvis/runtime/data"
-  "${HOME}/jarvis/runtime/wiki"
-  "${HOME}/jarvis/runtime/ledger"
-  "${HOME}/jarvis/runtime/results"
-  "${HOME}/jarvis/runtime/context"
-  "${HOME}/jarvis/runtime/runtime"
-  "${HOME}/jarvis/runtime/logs"
-  "${HOME}/jarvis/runtime/inbox"
-  "${HOME}/jarvis/runtime/state"
 )
 
 # Ledger emitter
@@ -152,6 +123,17 @@ recover_link() {
   fi
 
   if [[ -d "$link_path" && ! -L "$link_path" ]]; then
+    # 2026-08-07 추가 — 2차 방어선. link_path 의 물리 경로가 정본 루트(DOT_JARVIS)나
+    #   레포 루트 자체로 풀리면 절대 옮기지 않는다. 위 COMPAT_HOME 가드가 뚫려도
+    #   여기서 한 번 더 막는다 — "유령 디렉토리"로 오판해 정본 데이터를 통째로
+    #   스태시 이동시키는 사고(2026-08-06)를 어떤 경로로든 재발시키지 않기 위함.
+    local link_real
+    link_real="$(cd -P "$link_path" 2>/dev/null && pwd || true)"
+    if [[ -n "$link_real" ]] && { [[ "$link_real" == "$DOT_JARVIS" ]] || [[ "$link_real" == "${HOME}/jarvis" ]]; }; then
+      emit "error" "ghost-dir-guard-blocked" "$link_path" "resolved=${link_real} — 정본 루트와 동일, 이동 거부"
+      alert_throttled "ghost-dir-guard-blocked" "$link_path" "🔴 유령 디렉토리 복구 차단됨" "resolved=${link_real} 이 정본 루트와 동일 — 수동 확인 필요"
+      return 1
+    fi
     # 실제 디렉토리로 변했음 → 백업 후 제거 + 심링크 재생성
     mv "$link_path" "$recovery_stash"
     ln -s "$expected_target" "$link_path"
@@ -173,6 +155,24 @@ recover_link() {
   return 0
 }
 
+# 2026-08-07 추가 — COMPAT_HOME 드리프트 가드.
+#   COMPAT_HOME(~/.jarvis)이 DOT_JARVIS(~/jarvis/runtime)가 아닌 다른 곳(예: ~/jarvis
+#   레포 루트)을 가리키면, 아래 COMPAT_HOME 기반 항목들의 물리 경로가 정본 데이터
+#   디렉토리 자체로 풀려버린다. 그 상태에서 recover_link 의 "유령 디렉토리" 분기가
+#   돌면 실데이터를 스태시로 옮기고 자기참조 심링크를 만든다 — 2026-08-06 실제 발생,
+#   ~/jarvis/runtime 자체가 깨져 CLI auto-memory 가 전역 ELOOP 로 무너졌다.
+#   L50-55 주석이 DOT_JARVIS 쪽 자기참조는 미리 막았지만, COMPAT_HOME 쪽 드리프트는
+#   막지 못했다. 여기서 COMPAT_HOME 이 실제로 DOT_JARVIS 를 가리키는지 먼저 검증하고,
+#   아니면 COMPAT_HOME 기반 항목은 전부 건너뛴다(추측 복구보다 스킵이 안전하다).
+COMPAT_HOME_REAL="$(cd -P "$COMPAT_HOME" 2>/dev/null && pwd || true)"
+if [[ "$COMPAT_HOME_REAL" != "$DOT_JARVIS" ]]; then
+  SKIP_COMPAT_CHECKS=1
+  emit "error" "compat-home-drift" "$COMPAT_HOME" "resolved=${COMPAT_HOME_REAL:-<unresolved>} expected=${DOT_JARVIS} — COMPAT_HOME 기반 심링크 검사 스킵"
+  alert_throttled "compat-home-drift" "$COMPAT_HOME" "🔴 COMPAT_HOME 드리프트 감지 — 심링크 자동복구 스킵" "resolved=${COMPAT_HOME_REAL:-<unresolved>} expected=${DOT_JARVIS}"
+else
+  SKIP_COMPAT_CHECKS=0
+fi
+
 violations=0
 recoveries=0
 
@@ -181,6 +181,10 @@ idx=0
 while (( idx < ${#EXPECTED_LINK_PATHS[@]} )); do
   link_path="${EXPECTED_LINK_PATHS[$idx]}"
   expected="${EXPECTED_LINK_TARGETS[$idx]}"
+  if (( SKIP_COMPAT_CHECKS == 1 )) && [[ "$link_path" == "${COMPAT_HOME}"/* ]]; then
+    idx=$((idx + 1))
+    continue
+  fi
   if ! recover_link "$link_path" "$expected"; then
     recoveries=$((recoveries + 1))
   fi
