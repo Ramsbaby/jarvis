@@ -10,20 +10,20 @@
 //       유령 경로 발견 시 ledger append + Discord jarvis-system 알림 + exit 2.
 //
 // Schedule: tasks.json에 `23 3 * * *` (매일 03:23 KST) 로 등록 — 24h 내 감지 보장.
-// Ledger: ~/jarvis/runtime/ledger/tasks-prompt-path-audit.jsonl
+// Ledger: ~/.openclaw-data/jarvis/runtime/ledger/tasks-prompt-path-audit.jsonl
 
 import fs from 'node:fs';
 import os from 'node:os';
 
 const HOME = os.homedir();
-const TASKS_FILE = `${HOME}/jarvis/runtime/config/tasks.json`;
-const LEDGER_DIR = `${HOME}/jarvis/runtime/ledger`;
+const TASKS_FILE = `${HOME}/.openclaw-data/jarvis/runtime/config/tasks.json`;
+const LEDGER_DIR = `${HOME}/.openclaw-data/jarvis/runtime/ledger`;
 const LEDGER_FILE = `${LEDGER_DIR}/tasks-prompt-path-audit.jsonl`;
 const MONITORING_CANDIDATES = [
-  `${HOME}/jarvis/runtime/config/monitoring.json`,
-  `${HOME}/jarvis/runtime/config/monitoring.json`,
+  `${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json`,
+  `${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json`,
 ];
-const BOT_HOME_CANDIDATES = [`${HOME}/jarvis/runtime`, `${HOME}/.jarvis`];
+const BOT_HOME_CANDIDATES = [`${HOME}/.openclaw-data/jarvis/runtime`, `${HOME}/.jarvis`];
 
 // 확장자 바운더리 있는 정규식 — `.json`이 `.js`로 오탐되는 문제 방지
 const EXEC_RE =
@@ -101,7 +101,7 @@ async function notifyDiscord(issues) {
     ...lines,
     '',
     '대응: 스크립트 복원하거나 `tasks.json`에서 경로 갱신/태스크 disable.',
-    'ledger: `~/jarvis/runtime/ledger/tasks-prompt-path-audit.jsonl`',
+    'ledger: `~/.openclaw-data/jarvis/runtime/ledger/tasks-prompt-path-audit.jsonl`',
   ].join('\n');
   try {
     const res = await fetch(webhook, {

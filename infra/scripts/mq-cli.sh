@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 DB_PATH="${BOT_HOME}/state/messages.db"
 SQLITE="/usr/bin/sqlite3"
 

@@ -27,7 +27,7 @@
 set -uo pipefail
 
 JARVIS_HOME="${HOME}/.jarvis"
-INFRA="${HOME}/jarvis/infra"
+INFRA="${HOME}/.openclaw-data/jarvis/infra"
 GUARD="${INFRA}/guards/pdf-pipeline-checkpoint.sh"
 CI_LOG_DIR="${JARVIS_HOME}/runtime/state/pdf-pipeline"
 CI_LOG="${CI_LOG_DIR}/ci-check.jsonl"

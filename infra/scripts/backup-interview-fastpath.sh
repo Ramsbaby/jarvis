@@ -1,12 +1,12 @@
 #!/bin/bash
 # backup-interview-fastpath.sh
-# .gitignore된 interview-fast-path.js를 ~/jarvis/.local-backup/에 timestamp별 백업.
+# .gitignore된 interview-fast-path.js를 ~/.openclaw-data/jarvis/.local-backup/에 timestamp별 백업.
 # 23:30 KST stash 사고 영구 차단용 — git reset/stash 시 디스크 휘발 위험을 백업으로 복원.
 # cron 등록 권장: 매시간 (0 * * * *)
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 BACKUP_DIR="$JARVIS_HOME/.local-backup"
 SOURCE="$JARVIS_HOME/infra/discord/lib/interview-fast-path.js"
 TS=$(TZ=Asia/Seoul date +%Y%m%d-%H%M%S)

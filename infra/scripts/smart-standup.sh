@@ -5,14 +5,14 @@
 # 오너가 온라인이면 즉시 company-agent.mjs --team standup 실행.
 #
 # Usage (crontab):
-#   5 8 * * * /bin/bash ~/jarvis/runtime/scripts/smart-standup.sh >> ~/jarvis/runtime/logs/company-agent.log 2>&1
+#   5 8 * * * /bin/bash ~/.openclaw-data/jarvis/runtime/scripts/smart-standup.sh >> ~/.openclaw-data/jarvis/runtime/logs/company-agent.log 2>&1
 
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 STATE_FILE="$BOT_HOME/state/smart-standup.json"
@@ -42,6 +42,17 @@ if [[ "$ONLINE" == "true" ]]; then
     log "오너 온라인 확인 — 스탠드업 실행"
     # state 기록 (당일 날짜 저장)
     jq -n --arg d "$TODAY" '{"retries":0,"last_run":"","last_run_date":$d}' > "$STATE_FILE"
+
+    # --- 데이터 신선도 사전 점검 (Cluster cl-02f731ffc275d999 defense) ---
+    # 스탠드업 보고 직전 참조 데이터 age를 점검하고 stale이면 로그에 경고.
+    # 실행은 절대 차단하지 않는다 (|| true) — 기존 동작 100% 보존.
+    _FRESHNESS_GUARD="${BOT_HOME}/../infra/lib/data-freshness-guard.sh"
+    [[ -f "$_FRESHNESS_GUARD" ]] || _FRESHNESS_GUARD="${HOME}/.openclaw-data/jarvis/infra/lib/data-freshness-guard.sh"
+    if [[ -f "$_FRESHNESS_GUARD" ]]; then
+        # shellcheck disable=SC1090
+        { source "$_FRESHNESS_GUARD" && data_freshness_summary; } 2>&1 | tee -a "$CRON_LOG" >/dev/null || true
+    fi
+
     exec "$NODE" "$AGENT" --team standup
 fi
 

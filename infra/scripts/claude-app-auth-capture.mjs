@@ -12,7 +12,7 @@
  *   node claude-app-auth-capture.mjs
  */
 
-import playwright from '/Users/ramsbaby/jarvis/infra/discord/node_modules/playwright/index.js';
+import playwright from '/Users/ramsbaby/.openclaw-data/jarvis/infra/discord/node_modules/playwright/index.js';
 const { chromium } = playwright;
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';

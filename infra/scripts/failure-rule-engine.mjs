@@ -11,7 +11,7 @@
  *   node failure-rule-engine.mjs outcome "rule-id" success|fail → 신뢰도 갱신
  *   node failure-rule-engine.mjs report              → 전체 규칙 요약
  *
- * 저장소: ~/jarvis/runtime/state/failure-rules.jsonl
+ * 저장소: ~/.openclaw-data/jarvis/runtime/state/failure-rules.jsonl
  */
 
 import {

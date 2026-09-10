@@ -32,7 +32,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 BOT_SCRIPT="$BOT_HOME/discord/discord-bot.js"
 ENV_FILE="$BOT_HOME/discord/.env"
 NODE_BIN="${NODE_BIN:-/opt/homebrew/bin/node}"
@@ -285,7 +285,7 @@ fi
 
 _start_ts=$(date +%s)
 cd "$BOT_HOME/discord" || fail_and_heal "디렉토리 이동 실패: $BOT_HOME/discord"
-export NODE_PATH="/Users/ramsbaby/jarvis/runtime/discord/node_modules${NODE_PATH:+:$NODE_PATH}"
+export NODE_PATH="/Users/ramsbaby/.openclaw-data/jarvis/runtime/discord/node_modules${NODE_PATH:+:$NODE_PATH}"
 "$NODE_BIN" discord-bot.js &
 _BOT_PID=$!
 trap 'log "SIGTERM 수신 — 봇 정상 종료 중 (PID $_BOT_PID)..."; kill "$_BOT_PID" 2>/dev/null; wait "$_BOT_PID" 2>/dev/null; exit 0' SIGTERM SIGINT

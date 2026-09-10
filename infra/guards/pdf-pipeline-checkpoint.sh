@@ -29,7 +29,7 @@ JARVIS_HOME="${HOME}/.jarvis"
 STATE_DIR="${JARVIS_HOME}/runtime/state/pdf-pipeline"
 JOURNAL="${STATE_DIR}/checkpoints.jsonl"
 CLUSTER_ID="cl-8a2b1b50fcd5ba63"
-INFRA="${HOME}/jarvis/infra"
+INFRA="${HOME}/.openclaw-data/jarvis/infra"
 
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 

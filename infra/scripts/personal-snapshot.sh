@@ -4,9 +4,9 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 LOG_FILE="$JARVIS_HOME/runtime/logs/personal-snapshot.log"
-DISCORD_VISUAL="$HOME/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 SNAPSHOT_FILE="$JARVIS_HOME/runtime/state/personal-snapshot-state.json"
 
 mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$SNAPSHOT_FILE")"

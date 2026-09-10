@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 NOTES_DIR="${BOT_HOME}/agent-notes"
 
 TASK_ID="${1:?Usage: read-agent-note.sh TASK_ID [--markdown|--json|--prompt]}"

@@ -4,11 +4,11 @@ set -euo pipefail
 # route-result.sh - Route results to Discord, ntfy, file, or alert
 # Usage: route-result.sh <mode> <task-id> <message>
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 CONFIG="${BOT_HOME}/config/monitoring.json"
 
 # --- Runtime guards (Cluster cl-a1a431b0e672e736: path assertion before verification) ---
-source "${HOME}/jarvis/infra/lib/guards.sh" 2>/dev/null || true
+source "${HOME}/.openclaw-data/jarvis/infra/lib/guards.sh" 2>/dev/null || true
 assert_directory_exists "$BOT_HOME" "bot home" || exit 1
 assert_file_readable "$CONFIG" "monitoring config" || exit 1
 
@@ -221,11 +221,25 @@ get_channel_id() {
 # --- 통합 Discord 송출: channel_id 있으면 Bot API, 없으면 webhook ---
 _discord_curl() {
     local payload="$1"
+    # 2026-09-10 오픈클로 이식: 디스코드 전면 제거. 웹훅 비활성 표지가 있으면 위 NO_EXTERNAL 경로로 넘긴다.
+    # 이렇게 안 하면 url="null" 로 curl 이 나가 실패 코드가 호출자에 전파된다.
+    # 복구: monitoring.json 의 _webhook_disabled_20260910 → webhook.
+    if [[ "$(jq -r 'has("_webhook_disabled_20260910")' "$CONFIG" 2>/dev/null)" == "true" ]]; then
+        export JARVIS_NO_EXTERNAL=1
+    fi
+    # JARVIS_NO_EXTERNAL=1 (2026-09-04, SELF-HEAL-PLAN 1d): 테스트·dry-run 은 외부로 나가지 않는다.
+    # 9/4 tracker 테스트 쉼이 실제 채널로 송출된 사고 후속. 파일에만 기록하고 성공 코드를 돌려준다.
+    if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
+        mkdir -p "${BOT_HOME}/logs" 2>/dev/null || true
+        printf '%s [NO_EXTERNAL] src=route-result.sh ch=%s task=%s len=%s\n' "$(date -u +%FT%TZ)" \
+            "${CHANNEL:-default}" "${TASK_ID:-}" "${#payload}" >> "${BOT_HOME}/logs/no-external.log" 2>/dev/null || true
+        echo "204"; return 0
+    fi
     local channel_id
     channel_id=$(get_channel_id)
     if [[ -n "$channel_id" ]]; then
         local token
-        token=$(grep -m1 '^DISCORD_TOKEN=' "${BOT_HOME:-$HOME/jarvis/runtime}/.env" 2>/dev/null | cut -d= -f2-)
+        token=$(grep -m1 '^DISCORD_TOKEN=' "${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}/.env" 2>/dev/null | cut -d= -f2-)
         curl -s -o /dev/null -w "%{http_code}" \
             -X POST "https://discord.com/api/v10/channels/${channel_id}/messages" \
             -H "Authorization: Bot ${token}" \
@@ -243,7 +257,7 @@ _discord_curl() {
 # --- 송출 감사 원장 (2026-06-11 신설): 채널별 송출량·실패율 30일 추이 측정 기반 ---
 _route_audit_log() {
     local kind="$1" result="$2"
-    local ledger_dir="${BOT_HOME:-$HOME/jarvis/runtime}/ledger"
+    local ledger_dir="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}/ledger"
     mkdir -p "$ledger_dir" 2>/dev/null || return 0
     jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --arg src "task-result-route" --arg k "$kind" \
@@ -363,7 +377,7 @@ _build_header() {
 }
 
 # --- Embed color by severity — 단일 정의(discord-severity.sh) 위임 (2026-06-11 중앙화) ---
-source "$HOME/jarvis/infra/lib/discord-severity.sh"
+source "$HOME/.openclaw-data/jarvis/infra/lib/discord-severity.sh"
 _severity_embed_color() {
     local c
     c=$(severity_color "${1:-}")

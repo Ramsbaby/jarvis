@@ -6,7 +6,7 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 LOG_FILE="$JARVIS_HOME/runtime/logs/stabilization-review.log"
 REPORT="$JARVIS_HOME/runtime/wiki/meta/stabilization-review-2026-05-15.md"
 
@@ -59,7 +59,7 @@ AUTH_ERROR_7D=$(find "$JARVIS_HOME/runtime/logs" -name ".repeated-fail-*-AUTH_ER
 # ── 6. 자체 권고 (룰 기반) ────────────────────────────────────────
 RECOMMENDATIONS=()
 if [ "$SKILL_DRYRUN" -ge 5 ] && [ "$SKILL_SPAWN" -eq 0 ]; then
-    RECOMMENDATIONS+=("✅ Skill production 활성화 OK — touch ~/jarvis/runtime/state/skill-extract-production-active")
+    RECOMMENDATIONS+=("✅ Skill production 활성화 OK — touch ~/.openclaw-data/jarvis/runtime/state/skill-extract-production-active")
 fi
 DEAD_COUNT=$(echo "$DEAD_CRONS" | wc -w | tr -d ' ')
 if [ "$DEAD_COUNT" -ge 3 ]; then

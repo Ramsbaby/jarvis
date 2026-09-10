@@ -423,16 +423,25 @@ export function buildDepthGuardSection({ botHome, channelId }) {
       "- '이거 어때?' 류엔 결론 + 이유 + 장단점 + 더 나은 대안을 압축해 담는다. 내용 없는 되묻기·'좋아요' 한 줄·무료 AI식 일반론 금지 (빈약 ≠ 간결).",
       "- 사용자가 '자세히/더/왜/깊게'를 요청하면 그때 확장한다.",
       '- 감정 발화는 이 길이 규칙과 무관 — 공감 가드가 주도한다(짧더라도 따뜻하게).',
-      '- 마크다운 헤딩(##/###)·테이블(| |) 금지. 불릿(-)·이모지는 유지.',
+      // [2026-08-03] 헤딩 금지 해제 — persona-discord.md가 "섹션 머리는 ## 헤딩"을 지시하는데
+      //   같은 프롬프트에 헤딩 금지가 함께 들어가 정면 충돌하고 있었다.
+      //   디스코드는 H1~H3를 렌더하므로 헤딩이 스캔에 도움이 된다. 표는 미지원이라 금지 유지.
+      '- 테이블(| |)은 디스코드에서 렌더되지 않으니 쓰지 않는다. 헤딩·불릿(-)·이모지는 쓴다.',
     ].join('\n');
   }
   const personaPath = join(botHome, 'context', 'owner', 'persona-discord.md');
   try {
     if (!existsSync(personaPath)) return '';
     const content = readFileSync(personaPath, 'utf-8');
-    const start = content.indexOf('## 질문 길이');
-    const end = content.indexOf('\n## 인지 원칙');
-    if (start < 0 || end <= start) return '';
+    // [2026-08-03] 추출 앵커 교체. 종전 '## 질문 길이'~'## 인지 원칙' 구간은
+    //   persona-discord.md 전면 개편(8/2)으로 사라져 분석 채널 깊이 가드가 빈 문자열로
+    //   주입되고 있었다(무증상 소실). 지금은 화면·사실 규칙 두 절을 score 9로 보호한다.
+    const start = content.indexOf('## 화면');
+    const end = content.indexOf('\n## 하지 않는 것');
+    if (start < 0 || end <= start) {
+      console.error('[depth-guard] persona-discord.md 앵커 미발견 — 깊이 가드 미주입');
+      return '';
+    }
     const guard = content.slice(start, end).trim();
     if (!guard) return '';
     return `--- 응답 깊이 가드 (분석·예측·조언 — 항상 준수) ---\n${guard}`;
@@ -440,6 +449,29 @@ export function buildDepthGuardSection({ botHome, channelId }) {
     console.error(`[depth-guard] persona-discord.md 로드 실패 — ${e.message}`);
     return '';
   }
+}
+
+/**
+ * [2026-07-30] 입장 유지 가드 — 주인님 반박에 근거 없이 답을 바꾸는 아첨(sycophancy) 차단.
+ *   배경: CLI 룰(~/.claude/rules) 실측에서 "완료 선언 검증" 계열 지시가 4개 파일에 64회 반복된 반면
+ *   "반박에 답을 바꾸지 마라"는 0회였다. 주인님이 같은 질문을 여러 번 하시게 되는 루프의 직접 원인.
+ *   헤더 토큰 "입장 유지 가드"를 유지해 inferSectionName이 stance-guard(score 9)로 인식 → budget 보호.
+ *   감정 턴 제외(공감 가드 주도 — 위로 상황에서 "입장 유지"는 역효과).
+ *   SSoT: ~/.claude/rules/jarvis-answer-protocol.md §2 (CLI 측 동일 룰)
+ */
+export function buildStanceGuardSection() {
+  return [
+    '--- 입장 유지 가드 (반박·재질문 — 항상 준수) ---',
+    '주인님의 반박·재질문·"그게 맞아?"·짜증은 틀렸다는 판정이 아니라 재검토 요청이다.',
+    '반박을 받으면 먼저 구분한다 — 주인님이 **새 사실**을 주셨는가, 같은 사실에 **의문**을 표하셨는가.',
+    '- 새 사실이 있을 때만 답을 바꾼다. 바꿀 때는 "정정합니다: X → Y. 무엇이 바뀌게 했는가: (그 새 사실)"로 밝힌다.',
+    '- 새 사실이 없으면 입장을 유지하고 근거를 다시 댄다. "다시 보니 아닌 것 같습니다"로 물러서는 것은 아첨이며, 주인님께 틀린 정보를 드리는 것과 같다.',
+    '- 첫 답이 실제로 틀렸다면 틀린 이유를 말한다 — "확인하지 않고 답했습니다"처럼. 이유 없는 번복 금지.',
+    '- 주인님이 짜증을 내셔도 사실은 바뀌지 않는다. 어조만 조절하고 내용은 근거대로 유지한다.',
+    '- 잘못을 인정할 때는 인정 + 원인 + 재발 방지 3종. 인정만으로 끝내지 않는다.',
+    '- 품질 책임을 주인님께 넘기지 않는다. "틀리면 짚어주십시오" / "확인해 주시면" 금지.',
+    '- 답하기 전 확인할 데이터가 있으면 한 번에 전부 읽고 답한다. 답하다가 추가로 읽게 되면 범위 파악을 잘못한 것이다.',
+  ].join('\n');
 }
 
 /**
@@ -1033,7 +1065,7 @@ export function buildPreplyStudentSection({ messageText, botHome }) {
     // 쓰기 안내: 새 정보를 받으면 레지스트리에 즉시 반영 (다음에 또 묻지 않도록)
     parts.push(
       '✍️ 보람님이 새 학생 정보나 기존 학생의 변경 정보를 주면, 작업과 함께 ' +
-      '`bash ~/jarvis/infra/scripts/preply-student.sh upsert <학생명> \'{"country":"...","age":0,"interests":["..."]}\'` 로 ' +
+      '`bash ~/.openclaw-data/jarvis/infra/scripts/preply-student.sh upsert <학생명> \'{"country":"...","age":0,"interests":["..."]}\'` 로 ' +
       '즉시 레지스트리에 저장하라(말로만 "저장했다" 금지 — 케이리 사고). 교재 전송(send)은 최신파일을 자동 갱신한다.'
     );
 

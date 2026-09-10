@@ -773,7 +773,7 @@ export class RAGEngine {
         } catch(_) {}
       }
 
-      // 심볼릭 링크 경로 정규화 (2026-06-25 [H3] 재발 방지): ~/.jarvis ↔ ~/jarvis/runtime
+      // 심볼릭 링크 경로 정규화 (2026-06-25 [H3] 재발 방지): ~/.jarvis ↔ ~/.openclaw-data/jarvis/runtime
       // 둘은 symlink로 같은 파일이나 경로 문자열이 달라, id(`${filePath}:i`)·source 가 갈리면
       // mergeInsert('id')가 중복 삽입한다. 물리 경로로 통일해 이중 인덱싱을 원천 차단.
       try { filePath = realpathSync(filePath); } catch (_) { /* 파일 부재 시 원본 유지 */ }

@@ -36,7 +36,7 @@
  *   4. 성공하면 rateTracker.record() 호출 (타임스탬프 추가)
  *
  * [파일 구조]
- *   ~/jarvis/runtime/state/rate-tracker.json
+ *   ~/.openclaw-data/jarvis/runtime/state/rate-tracker.json
  *   - 구조: [1781143914412, 1781143915000, ...] (밀리초 타임스탐프 배열)
  *   - 크기: ~3.6MB (900개 호출 × 4bytes + overhead)
  *   - 부팅 시: 5시간 이전 항목 자동 제거 (prune)

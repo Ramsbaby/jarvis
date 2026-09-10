@@ -8,11 +8,11 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 LEDGER="$JARVIS_HOME/runtime/state/token-ledger.jsonl"
 LOG_FILE="$JARVIS_HOME/runtime/logs/llm-cost-cap-monitor.log"
 CAP_MARKER="$JARVIS_HOME/runtime/state/llm-daily-cap-exceeded"
-DISCORD_VISUAL="$HOME/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 
 CAP="${LLM_DAILY_CAP_USD:-20.00}"
 WARN_PCT="${LLM_DAILY_WARN_PCT:-80}"

@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] crontab 쓰기가 막혀(rc=124) 스크립트 층에 가드를 둔다.
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/weekly-mistake-heatmap
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/weekly-mistake-heatmap" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[weekly-mistake-heatmap] 중지 플래그 있음 (state/stopped/weekly-mistake-heatmap)"
+    exit 0
+fi
+
 # weekly-mistake-heatmap.sh — 주간 오답 히트맵 Discord 리포트
 #
 # 매주 월요일 09:00 KST 실행. 지난 7일 ledger 집계로 상위 5개 재발 패턴 +
@@ -10,7 +18,7 @@
 
 set -uo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LEDGER="${BOT_HOME}/state/mistake-ledger.jsonl"
 RECURRENCE="${BOT_HOME}/state/mistake-recurrence.json"
 CHECKLIST_IDX="${BOT_HOME}/wiki/meta/checklists/INDEX.md"
@@ -121,8 +129,8 @@ if skill_dist:
         lines.append(f"  · {s}: {n}건")
     lines.append("")
 
-lines.append("리포트: ~/jarvis/runtime/wiki/meta/learned-mistakes.md")
-lines.append("체크리스트: ~/jarvis/runtime/wiki/meta/checklists/INDEX.md")
+lines.append("리포트: ~/.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md")
+lines.append("체크리스트: ~/.openclaw-data/jarvis/runtime/wiki/meta/checklists/INDEX.md")
 print('\n'.join(lines))
 PYEOF
 )

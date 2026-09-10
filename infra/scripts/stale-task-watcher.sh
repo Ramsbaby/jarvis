@@ -14,7 +14,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 BOT_HOME="${BOT_HOME:-$JARVIS_HOME}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 LOG="${JARVIS_HOME}/logs/stale-task-watcher.log"

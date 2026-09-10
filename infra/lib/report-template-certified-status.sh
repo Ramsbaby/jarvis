@@ -6,13 +6,13 @@
 #   기존 report-template-verified.sh를 보완
 #
 # 사용:
-#   source ~/jarvis/runtime/infra/lib/report-template-certified-status.sh
+#   source ~/.openclaw-data/jarvis/runtime/infra/lib/report-template-certified-status.sh
 #   report_certified_status CLUSTER_ID TASK_ID WORK_TYPE CERT_LEVEL MESSAGE
 
 set -o pipefail
 
 # 상수
-_REPORT_TEMPLATE_DIR="${HOME}/jarvis/runtime/reports"
+_REPORT_TEMPLATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/reports"
 
 # 내부: 디렉토리 초기화
 _report_template_init() {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-ajqe-dispatch 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/jarvis/runtime/state/stopped/ajqe-dispatch
+// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/ajqe-dispatch
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
 if (__sc(__sh() + '/jarvis/runtime/state/stopped/ajqe-dispatch') && process.env.OPENCLAW_JOB !== '1') {

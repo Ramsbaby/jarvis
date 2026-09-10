@@ -11,14 +11,14 @@
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 LA_DIR="$HOME/Library/LaunchAgents"
 SCRIPTS_DIR="$JARVIS_HOME/infra/scripts"
 DOCS_DIR="$JARVIS_HOME/infra/docs"
 LOG_FILE="$JARVIS_HOME/runtime/logs/docs-freshness-audit.log"
 # 서술형(손으로 쓴) 문서가 코드보다 며칠 이상 뒤처지면 보고할지. 기본 30일.
 DOC_DRIFT_DAYS="${DOC_DRIFT_DAYS:-30}"
-DISCORD_VISUAL="$HOME/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"

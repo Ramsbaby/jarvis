@@ -10,7 +10,7 @@
 #   4. 기존 동작 파괴 없음
 #
 # 사용:
-#   source ~/jarvis/runtime/infra/lib/cluster-guard-cl-de6a0a68c5da81f9.sh
+#   source ~/.openclaw-data/jarvis/runtime/infra/lib/cluster-guard-cl-de6a0a68c5da81f9.sh
 #
 #   # 업로드 작업 검증
 #   guard_async_upload "upload-001" "/path/to/file" "https://server/upload"
@@ -24,15 +24,15 @@
 set -o pipefail
 
 # 의존성
-source "${HOME}/jarvis/runtime/infra/lib/async-work-guard.sh" 2>/dev/null || {
+source "${HOME}/.openclaw-data/jarvis/runtime/infra/lib/async-work-guard.sh" 2>/dev/null || {
     echo "ERROR: async-work-guard.sh not found" >&2
     exit 1
 }
 
 # 상수
 CLUSTER_ID="cl-de6a0a68c5da81f9"
-STATE_DIR="${HOME}/jarvis/runtime/state/cluster-guards"
-REPORT_DIR="${HOME}/jarvis/runtime/reports"
+STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/cluster-guards"
+REPORT_DIR="${HOME}/.openclaw-data/jarvis/runtime/reports"
 
 # 내부: 디렉토리 초기화
 _guard_init() {

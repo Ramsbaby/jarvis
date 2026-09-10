@@ -26,7 +26,7 @@ log_error() {
 }
 
 # Configuration
-INFRA_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+INFRA_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 CONV_DIR="${INFRA_HOME}/data/claude-conversations"
 JSONL_DIR="${INFRA_HOME}/data/claude-conversations-jsonl"
 STATE_FILE="${INFRA_HOME}/state/rag-conv-state.json"

@@ -3,10 +3,10 @@
  * skill-extractor.mjs — Hermes 패턴 흡수: task done → skill 자동 생성
  *
  * 입력:  task transcript (또는 task id로 DB에서 조회)
- * 출력:  ~/jarvis/runtime/wiki/skills/skill-{slug}.md
+ * 출력:  ~/.openclaw-data/jarvis/runtime/wiki/skills/skill-{slug}.md
  *
  * 사용:
- *   node ~/jarvis/infra/lib/skill-extractor.mjs --task-id <id> [--transcript <file>] [--dry-run]
+ *   node ~/.openclaw-data/jarvis/infra/lib/skill-extractor.mjs --task-id <id> [--transcript <file>] [--dry-run]
  *
  * 호출 시점: dev-queue task done 시 background (jarvis-coder.sh 또는 coder-functions.sh hook)
  */

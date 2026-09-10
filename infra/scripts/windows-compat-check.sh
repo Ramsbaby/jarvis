@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis}"
 
 # ============================================================================
 # 색상 정의

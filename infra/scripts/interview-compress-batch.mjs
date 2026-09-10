@@ -159,7 +159,7 @@ async function main() {
       req.end();
     });
   } catch (err) {
-    console.error(`❌ verifier-server 미가동 — 먼저 기동하십시오: bash ~/jarvis/runtime/scripts/interview-ralph-start.sh`);
+    console.error(`❌ verifier-server 미가동 — 먼저 기동하십시오: bash ~/.openclaw-data/jarvis/runtime/scripts/interview-ralph-start.sh`);
     process.exit(1);
   }
 

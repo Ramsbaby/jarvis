@@ -8,7 +8,7 @@
 #   - 이전 수정 이력과 대조
 #
 # 사용:
-#   source ~/jarvis/infra/lib/error-duplicate-tracker.sh
+#   source ~/.openclaw-data/jarvis/infra/lib/error-duplicate-tracker.sh
 #   track_error_duplicate "$TASK_ID" "$ERROR_TYPE" "$ERROR_MSG" "$SOLUTION"
 #
 #   반환값:
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 # 오류 중복 추적 디렉토리
-_ERROR_TRACKER_DIR="${HOME}/jarvis/runtime/state/error-duplicate-tracker"
+_ERROR_TRACKER_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/error-duplicate-tracker"
 _ERROR_TRACKER_LEDGER="${_ERROR_TRACKER_DIR}/session-errors.jsonl"
 _ERROR_HISTORY="${_ERROR_TRACKER_DIR}/error-history.json"
 

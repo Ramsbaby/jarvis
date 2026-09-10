@@ -3,8 +3,8 @@
 # [오픈클로 이식 2026-09-10] 판정 D — 정지.
 # 근거: tasks.json 의 event_trigger 보유 활성 태스크가 0건이다. 이벤트를 감지해도
 #   매칭될 태스크가 없어 로그에 "매칭되는 태스크 없음"만 쌓는다(실측). 상주 프로세스를 태울 이유가 없다.
-# 재개: rm ~/jarvis/runtime/state/stopped/event-watcher
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/event-watcher" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/event-watcher
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/event-watcher" ]]; then
     echo "[event-watcher] 중지 플래그 있음 — 트리거 대상 0건"
     exit 0
 fi
@@ -12,7 +12,7 @@ fi
 set -euo pipefail
 
 # event-watcher.sh — 이벤트 트리거 파일 감지 → 태스크 즉시 실행
-# 30초마다 ~/jarvis/runtime/state/events/*.trigger 파일 스캔
+# 30초마다 ~/.openclaw-data/jarvis/runtime/state/events/*.trigger 파일 스캔
 # LaunchAgent (ai.jarvis.event-watcher.plist) 또는 백그라운드 데몬으로 실행
 #
 # 이벤트 발생 방법:
@@ -22,7 +22,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 EVENTS_DIR="${BOT_HOME}/state/events"
 LOG="${BOT_HOME}/logs/event-watcher.log"
 TASKS_FILE=""

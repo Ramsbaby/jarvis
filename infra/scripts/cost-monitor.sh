@@ -3,7 +3,7 @@
 # Cost Monitoring & Alerting Script
 # routing-metrics.jsonl을 모니터링하고 이상 탐지 시 Discord 알림 발송
 
-BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 METRICS_FILE="$BOT_HOME/logs/routing-metrics.jsonl"
 MONITORING_CONFIG="$BOT_HOME/infra/config/task-routing-config.json"
 
@@ -16,7 +16,7 @@ check_daily_gemini_cost() {
     fi
 
     local today=$(date +%Y-%m-%d)
-    local total_cost=$(jq -r --arg date "$today" \
+    local total_cost=$(jq -s -r --arg date "$today" \
         '[.[] | select(.ts | startswith($date)) and .api_provider == "gemini" | .cost_target] | add // 0' \
         "$METRICS_FILE" 2>/dev/null || echo "0")
 
@@ -31,9 +31,9 @@ check_fallback_rate() {
         return 0
     fi
 
-    local fallback_count=$(jq -r '[.[] | select(.success == "false" or .success == false)] | length' \
+    local fallback_count=$(jq -s '[.[] | select(.success == "false" or .success == false)] | length' \
         "$METRICS_FILE" 2>/dev/null || echo "0")
-    local total_count=$(jq -r 'length' "$METRICS_FILE" 2>/dev/null || echo "0")
+    local total_count=$(jq -s 'length' "$METRICS_FILE" 2>/dev/null || echo "0")
 
     if [[ $total_count -gt 0 ]]; then
         local fallback_rate=$((fallback_count * 100 / total_count))

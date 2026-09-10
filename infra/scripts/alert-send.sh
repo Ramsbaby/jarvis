@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 ALERT_STATE_DIR="$BOT_HOME/state"
 LAST_ALERT_FILE="$ALERT_STATE_DIR/last-alert"
@@ -18,6 +18,13 @@ if [[ ! -f "$MONITORING_CONFIG" ]]; then
 fi
 
 WEBHOOK_URL=$(jq -r '.webhooks["jarvis-system"] // .webhook.url' "$MONITORING_CONFIG")
+# 2026-09-10 오픈클로 이식: 디스코드를 전면 제거했다. 웹훅이 "고장나서 없는 것"과 "일부러 없앤 것"을
+# 가르지 않으면 호출자마다 rc=1 가짜 실패가 쌓인다. 비활성 표지가 있으면 이미 설계된
+# JARVIS_NO_EXTERNAL 경로(파일 기록 후 성공)로 넘긴다. 복구: monitoring.json 의 _webhook_disabled_20260910 → webhook.
+if [[ -z "$WEBHOOK_URL" || "$WEBHOOK_URL" == "null" ]] \
+   && [[ "$(jq -r 'has("_webhook_disabled_20260910")' "$MONITORING_CONFIG")" == "true" ]]; then
+    export JARVIS_NO_EXTERNAL=1
+fi
 COOLDOWN_SECONDS=$(jq -r '.alerts.cooldown_seconds // 300' "$MONITORING_CONFIG")
 NTFY_ENABLED=$(jq -r '.ntfy.enabled // false' "$MONITORING_CONFIG")
 NTFY_SERVER=$(jq -r '.ntfy.server // "https://ntfy.sh"' "$MONITORING_CONFIG")
@@ -80,7 +87,7 @@ _send_audit_log() {
 }
 
 # Discord Embed 색상 — 단일 정의(discord-severity.sh) 위임 (2026-06-11 중앙화)
-source "$HOME/jarvis/infra/lib/discord-severity.sh"
+source "$HOME/.openclaw-data/jarvis/infra/lib/discord-severity.sh"
 get_color() {
     severity_color "$1"
 }
@@ -147,16 +154,30 @@ send_alert() {
             '{"embeds":[{"title":$title,"description":$desc,"color":$color,"timestamp":$ts,"footer":{"text":$footer}}]}')
     fi
 
-    # Webhook 전송
+    # Webhook 전송 — JARVIS_NO_EXTERNAL=1 (2026-09-04, 1d) 이면 파일 기록만 하고 성공으로 간주
     local http_code rc=0
-    http_code=$(curl -s -o /tmp/webhook_response.txt -w "%{http_code}" -X POST "$WEBHOOK_URL" \
-        -H "Content-Type: application/json" \
-        -d "$embed_json" 2>&1)
+    if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
+        mkdir -p "${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs" 2>/dev/null || true
+        printf '%s [NO_EXTERNAL] src=alert-send.sh ch=%s title=%s len=%s\n' "$(date -u +%FT%TZ)" "$channel" "${title:0:60}" "${#embed_json}" \
+            >> "${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs/no-external.log" 2>/dev/null || true
+        http_code="204"
+    else
+        http_code=$(curl -s -o /tmp/webhook_response.txt -w "%{http_code}" -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$embed_json" 2>&1)
+    fi
 
     if [[ "$http_code" == "204" ]] || [[ "$http_code" == "200" ]]; then
         set_last_alert "$message_hash"
-        echo "Alert sent (Discord): $title"
-        _send_audit_log "$level" "$channel" "$title" "sent"
+        # 2026-09-10: NO_EXTERNAL 경로는 실제로 아무것도 보내지 않는데 "sent"라고 찍어
+        # 감사에서 "송출 중"으로 오독됐다. 두 경우를 문자열과 감사기록 양쪽에서 가른다.
+        if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
+            echo "Alert suppressed (송출 비활성 — 파일 기록만): $title"
+            _send_audit_log "$level" "$channel" "$title" "suppressed:no_external"
+        else
+            echo "Alert sent (Discord): $title"
+            _send_audit_log "$level" "$channel" "$title" "sent"
+        fi
     else
         local body
         body=$(cat /tmp/webhook_response.txt 2>/dev/null || echo "")

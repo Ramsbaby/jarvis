@@ -1,1 +1,0 @@
-/Users/ramsbaby/jarvis/runtime/private/scripts/preply-today.sh

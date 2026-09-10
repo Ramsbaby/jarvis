@@ -7,17 +7,17 @@
 # 호출: post-fix-verification.sh [--audit-log <log_file>] [--fix-files <csv>] [--target-cluster <id>]
 #
 # 환경:
-#   BOT_HOME: Jarvis 홈 (기본값: ~/jarvis/runtime)
+#   BOT_HOME: Jarvis 홈 (기본값: ~/.openclaw-data/jarvis/runtime)
 #   DRY_RUN: true면 실제 수정하지 않고 리포트만 생성
 
-export JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"
+export JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 source "${JARVIS_HOME}/lib/compat.sh" || {
   echo "ERROR: Failed to source compat.sh from $JARVIS_HOME" >&2
   exit 1
 }
 set -uo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LOG_FILE="$BOT_HOME/logs/post-fix-verification.log"
 VERIFICATION_REPORT="$BOT_HOME/results/verifications/$(date +%Y-%m-%d_%H%M%S)_verify.md"
 CROSS_VALIDATOR="$BOT_HOME/bin/auditor-cross-validator.mjs"

@@ -1,7 +1,7 @@
 /**
  * ErrorTracker — records user-facing errors and sends recovery apologies on restart.
  *
- * State file: ~/jarvis/runtime/state/error-tracker.json
+ * State file: ~/.openclaw-data/jarvis/runtime/state/error-tracker.json
  * Schema: { errors: [{ channelId, userId, errorMessage, timestamp }], lastApology: { channelId: timestamp } }
  */
 

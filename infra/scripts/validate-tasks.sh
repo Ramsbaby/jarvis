@@ -16,11 +16,11 @@ set -uo pipefail
 #   1 — 검증 실패
 #
 # Usage:
-#   ~/jarvis/runtime/scripts/validate-tasks.sh
-#   ~/jarvis/runtime/scripts/validate-tasks.sh /path/to/tasks.json
+#   ~/.openclaw-data/jarvis/runtime/scripts/validate-tasks.sh
+#   ~/.openclaw-data/jarvis/runtime/scripts/validate-tasks.sh /path/to/tasks.json
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 
 # tasks.json 경로: 인자 > effective-tasks.json > tasks.json
 TASKS_FILE="${1:-}"
@@ -133,8 +133,13 @@ TILDE_WARNS=0
 while IFS=$'\t' read -r tid script_path; do
   [[ -z "$script_path" ]] && continue
 
-  # ~ → $HOME, $BOT_HOME → 실제 경로 변환 (Node.js existsSync가 못하는 것을 셸에서 수행)
+  # 인자 제거: 첫 번째 공백까지만 파일 경로로 취급 (예: "script.sh --arg val" → "script.sh")
+  script_path="${script_path%% *}"
+
+  # ~ → $HOME, $BOT_HOME, $HOME 변환 (Node.js existsSync가 못하는 것을 셸에서 수행)
   resolved="${script_path/#\~/$HOME}"
+  resolved="${resolved/\$\{HOME\}/$HOME}"
+  resolved="${resolved/\$HOME/$HOME}"
   resolved="${resolved/\$BOT_HOME/$BOT_HOME}"
   resolved="${resolved/\$\{BOT_HOME\}/$BOT_HOME}"
 

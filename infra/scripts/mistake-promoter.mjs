@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-mistake-promoter 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/jarvis/runtime/state/stopped/mistake-promoter
+// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/mistake-promoter
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
 if (__sc(__sh() + '/jarvis/runtime/state/stopped/mistake-promoter') && process.env.OPENCLAW_JOB !== '1') {
@@ -14,7 +14,7 @@ if (__sc(__sh() + '/jarvis/runtime/state/stopped/mistake-promoter') && process.e
 // 매일 04:10 KST cron 실행 (재발 카운터 03:30 → 체크리스트 03:45 → 승격 04:10).
 //
 // 동작 흐름:
-//   ① 입력: ~/jarvis/runtime/state/mistake-recurrence.json 의 top_clusters (빈도순 최대 10개)
+//   ① 입력: ~/.openclaw-data/jarvis/runtime/state/mistake-recurrence.json 의 top_clusters (빈도순 최대 10개)
 //      — recurrence-audit.sh 가 매일 03:30 생성. 파일 부재 시 audit 1회 재실행으로 복구.
 //   ② 판정: llm-gateway.sh 경유 sonnet 1콜 — 클러스터별 {skip|tier_a|tier_b|tier_c}
 //      + tier_a 는 룰 블록 텍스트 생성 (쉬운말 · BLOCKING 톤 · 출처 클러스터 ID 명기)
@@ -207,8 +207,8 @@ const RULES_HEADER = `# jarvis-autolearn — 오답 클러스터 자동 승격 �
 
 > ⚠️ **자동 관리 파일** — \`mistake-promoter.mjs\` 가 생성·관리합니다. **블록 단위 삭제로 롤백**하십시오.
 > 블록 경계: \`<!-- AL:BEGIN id=... -->\` ~ \`<!-- AL:END id=... -->\`
-> 활성 블록 ${MAX_ACTIVE_BLOCKS}개 초과 시 가장 오래된 블록은 \`~/jarvis/runtime/backups/autolearn-archive.md\` 로 이동됩니다.
-> 처리 원장: \`~/jarvis/runtime/ledger/promoter-ledger.jsonl\`
+> 활성 블록 ${MAX_ACTIVE_BLOCKS}개 초과 시 가장 오래된 블록은 \`~/.openclaw-data/jarvis/runtime/backups/autolearn-archive.md\` 로 이동됩니다.
+> 처리 원장: \`~/.openclaw-data/jarvis/runtime/ledger/promoter-ledger.jsonl\`
 `;
 
 // 활성 블록 30개 초과 시 가장 오래된(파일 상단) 블록을 아카이브로 이동
@@ -492,7 +492,7 @@ function main() {
         counters.proposed += 1;
         notify('retro', `규칙 승격 제안 ${todayKST()} ${prop.id}`, {
           제안: prop.id, 제목: v.title || cluster.seed, 근거: `${prop.evidence_count}건`, 클러스터: v.id,
-          승격: `node ~/jarvis/infra/scripts/rule-proposal-ctl.mjs promote ${prop.id} --to <규칙파일>`,
+          승격: `node ~/.openclaw-data/jarvis/infra/scripts/rule-proposal-ctl.mjs promote ${prop.id} --to <규칙파일>`,
           제안서: PROPOSALS_MD,
         });
       }
@@ -510,7 +510,7 @@ function main() {
         // 2026-06-12 사고: "Discord에 결과 보고"라는 자유 지시만 주자 야간 에이전트가 monitoring.json에서
         // jarvis-boram(가족 채널) 웹훅을 임의로 골라 내부 완료 임베드를 오발송. 보고 명령을 정확히 고정한다.
         '완료 보고는 반드시 아래 명령 한 가지만 사용한다 (monitoring.json 웹훅 직접 호출·임의 채널 선택 절대 금지):',
-        `source ~/jarvis/infra/lib/discord-route.sh && discord_route info "오답승격 가드 구현 완료 ${v.id}" "클러스터=${v.id},결과=<한줄요약>"`,
+        `source ~/.openclaw-data/jarvis/infra/lib/discord-route.sh && discord_route info "오답승격 가드 구현 완료 ${v.id}" "클러스터=${v.id},결과=<한줄요약>"`,
       ].join('\n');
       const q = enqueueDevQueue(v.id, `[오답승격 tier_b] ${v.title || cluster.seed.slice(0, 40)}`, promptText);
       ledgerAppend({ ...base, status: 'proposed_dev_queue', dev_queue_action: q.action || 'unknown' });

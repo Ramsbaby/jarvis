@@ -12,7 +12,7 @@
 #   - API timeout으로 인한 파일 손상 후 불완전한 상태 인식 지연
 #
 # 사용 예:
-#   source ~/jarvis/infra/lib/post-save-file-guard.sh
+#   source ~/.openclaw-data/jarvis/infra/lib/post-save-file-guard.sh
 #   validate_and_report_file "/path/to/file.pdf" "ko" "discord-upload"
 #   # or
 #   post_save_file_guard "/path/to/file.pdf" "ko" "task-name"
@@ -33,10 +33,10 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # 상수
-JARVIS_LIB="${HOME}/jarvis/infra/lib"
+JARVIS_LIB="${HOME}/.openclaw-data/jarvis/infra/lib"
 FILE_VALIDATOR="${JARVIS_LIB}/file-validator.sh"
 COMPLETION_VALIDATOR="${JARVIS_LIB}/completion-file-validator-guard.sh"
-LOG_DIR="${HOME}/jarvis/logs"
+LOG_DIR="${HOME}/.openclaw-data/jarvis/logs"
 VALIDATION_LEDGER="${LOG_DIR}/file-validation-ledger.jsonl"
 
 # 로그 생성

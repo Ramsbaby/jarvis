@@ -13,7 +13,7 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 SCRIPT_NAME="pattern-detect-schedule-request"
 LOG_FILE="$JARVIS_HOME/runtime/logs/${SCRIPT_NAME}.log"
 STATE_FILE="$JARVIS_HOME/runtime/state/${SCRIPT_NAME}-state.json"

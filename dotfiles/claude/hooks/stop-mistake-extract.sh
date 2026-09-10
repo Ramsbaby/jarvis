@@ -90,6 +90,31 @@ fi
 
 log "signal detected, invoking extractor --file: $LATEST"
 
+# ── 메모리 압박 게이트 (2026-08-01 커널 패닉 재발 방지) ─────────────────────
+# rag-index-safe.sh와 동일 기준 재사용. Haiku 서브프로세스 spawn 전 확인.
+GUARD_LIB="${HOME}/.claude/hooks/lib/mem-pressure-gate.sh"
+if [[ -f "$GUARD_LIB" ]]; then
+  # shellcheck source=/dev/null
+  source "$GUARD_LIB"
+  if reason=$(mem_pressure_should_skip); then
+    log "SKIP: ${reason} — 오답노트 추출 연기 (다음 트리거에서 재시도)"
+    exit 0
+  fi
+fi
+
+# ── 교차 동시성 슬롯 (2026-08-01 패닉 재발 방지) ────────────────────────────
+# rag-index-safe.sh / vera-autosummon-runner와 전역 2슬롯 공유. 슬롯 없으면 즉시 skip.
+SLOT_LIB="${HOME}/.claude/hooks/lib/heavy-hook-slot.sh"
+if [[ -f "$SLOT_LIB" ]]; then
+  # shellcheck source=/dev/null
+  source "$SLOT_LIB"
+  if ! heavy_slot_acquire "mistake-extract"; then
+    log "SKIP: 교차 동시성 슬롯 없음(다른 무거운 훅 실행 중) — 다음 트리거에서 재시도"
+    exit 0
+  fi
+  trap 'heavy_slot_release' EXIT
+fi
+
 # ── Homebrew PATH (훅 컨텍스트 node 해상 보험) ──────────────────────────────
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
@@ -107,14 +132,33 @@ COUNT=$(printf '%s\n' "$RESULT" | grep -oE '\*\*[0-9]+건 추가\*\*' | grep -oE
 if [[ -n "${COUNT:-}" && "$COUNT" -gt 0 ]]; then
   TITLES=$(printf '%s\n' "$RESULT" | grep -E '^- \*\*' | head -3 | sed -e 's/^- \*\*//' -e 's/\*\*$//' | tr '\n' '|' | sed 's/|$//' || true)
   VISUAL="${HOME}/.jarvis/scripts/discord-visual.mjs"
+
+  # 2026-07-27 소음 감축: 하루 1회로 묶는다.
+  # 실측 — 이 알림이 7일 111회(일 16회)로 단일 항목 최다였다. 추출 자체는 정상 동작이고
+  # 오답은 원장에 그대로 쌓이므로, 세션마다 카드를 받을 이유가 없다(받아도 할 행동이 없다).
+  # 억제된 사이의 건수는 다음 발송 때 함께 표시한다.
+  _AG="${HOME}/jarvis/infra/lib/alert-gate.sh"
+  # shellcheck source=/dev/null
+  [[ -f "$_AG" ]] && source "$_AG" 2>/dev/null || true
+  if declare -F alert_ratelimit >/dev/null 2>&1; then
+    if ! alert_ratelimit "mistake-extract-session" 86400; then
+      log "Discord 억제 — 하루 1회 정책 (count=${COUNT}, 대기 $(alert_ratelimit_pending mistake-extract-session)건)"
+      exit 0
+    fi
+    PENDING=$(alert_ratelimit_pending mistake-extract-session)
+  else
+    PENDING=0
+  fi
+
   if [[ -f "$VISUAL" ]]; then
     DATA=$(jq -cn \
       --arg count "${COUNT}건" \
       --arg titles "${TITLES:-(제목 없음)}" \
-      --arg source "Stop 훅 실시간" \
+      --arg source "Stop 훅 (하루 1회 요약)" \
+      --arg pending "${PENDING:-0}회 (억제된 이전 세션)" \
       --arg ts "$(date '+%Y-%m-%d %H:%M KST')" \
-      '{title:"🧠 오답노트 추출 — 세션 종료", data:{"추출":$count, "항목":$titles, "경로":$source}, timestamp:$ts}' 2>>"$LOG" || echo '{}')
-    if ! node "$VISUAL" --type stats --data "$DATA" --channel jarvis-system >>"$LOG" 2>&1; then
+      '{title:"🧠 오답노트 추출 — 일일 요약", data:{"추출":$count, "항목":$titles, "경로":$source, "그사이":$pending}, timestamp:$ts}' 2>>"$LOG" || echo '{}')
+    if ! node "$VISUAL" --type stats --data "$DATA" --channel jarvis-retro >>"$LOG" 2>&1; then
       log "WARN: Discord 송출 실패 (exit 0 유지)"
     else
       log "Discord 송출 완료 (count=${COUNT})"

@@ -17,7 +17,7 @@ ng()   { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
 sk()   { echo "  ⏭️  $1"; SKIP=$((SKIP+1)); }
 head2() { echo; echo "── $1"; }
 
-JARVIS="${HOME}/jarvis"
+JARVIS="${HOME}/.openclaw-data/jarvis"
 SESS="${JARVIS}/runtime/context/claude-code-sessions"
 RAW="${SESS}-raw"
 TMP=$(mktemp -d)
@@ -263,7 +263,7 @@ else
 fi
 
 # (d) 잡음 키워드 방지 — 2글자 토큰의 공백 삽입 오매칭
-NOISE=$(echo "{\"prompt\":\"어제 통화에서 복지포인트 얘기 뭐였지\",\"session_id\":\"t$RANDOM\"}" \
+NOISE=$(echo "{\"prompt\":\"어제 통화에서 회의 안건 얘기 뭐였지\",\"session_id\":\"t$RANDOM\"}" \
         | timeout 15 bash "$RHOOK" 2>&1 | grep -o "검색어: [^·]*" | head -1)
 if [[ "$NOISE" != *"어 제"* ]]; then ok "2글자 오매칭 없음 (${NOISE:-검색어없음})"; else ng "잡음 키워드: $NOISE"; fi
 

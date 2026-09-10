@@ -11,7 +11,7 @@
  *   C-3 = Nexus paused
  *   C-4 = tasks.json에서 명시적 disabled
  *
- * 출력: ~/jarvis/runtime/state/policy-fix-manifest.csv
+ * 출력: ~/.openclaw-data/jarvis/runtime/state/policy-fix-manifest.csv
  */
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';

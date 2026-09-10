@@ -8,13 +8,13 @@
 # - 완료 검증 결과를 별도 로그에 기록
 #
 # 사용:
-#   source ~/jarvis/runtime/scripts/completion-guard-integration.sh
+#   source ~/.openclaw-data/jarvis/runtime/scripts/completion-guard-integration.sh
 #   verify_completion_with_guard "task-id" "target_count" "completed_count"
 
 set -euo pipefail
 
-GUARD_LOG="${HOME}/jarvis/runtime/logs/completion-guard.log"
-VALIDATOR_SCRIPT="${HOME}/jarvis/runtime/scripts/completion-validator.sh"
+GUARD_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/completion-guard.log"
+VALIDATOR_SCRIPT="${HOME}/.openclaw-data/jarvis/runtime/scripts/completion-validator.sh"
 
 mkdir -p "$(dirname "$GUARD_LOG")" 2>/dev/null || true
 

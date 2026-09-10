@@ -8,20 +8,20 @@
 #   3) External — $BOARD_EXT_URL (2xx/3xx/4xx 응답)
 #
 # 실패 레이어 식별 후 해당 LaunchAgent만 kickstart. Discord 알림 24h 스로틀.
-# 원장: $HOME/jarvis/runtime/state/board-watchdog.jsonl (10MB rotate).
+# 원장: $HOME/.openclaw-data/jarvis/runtime/state/board-watchdog.jsonl (10MB rotate).
 #
 # 환경변수:
-#   BOARD_EXT_URL   외부 URL (필수). ~/jarvis/runtime/.env 또는 shell profile에서 export.
+#   BOARD_EXT_URL   외부 URL (필수). ~/.openclaw-data/jarvis/runtime/.env 또는 shell profile에서 export.
 #   BOARD_TUNNEL_NAME cloudflared 터널 이름 (기본: jarvis-board)
 #
 # LaunchAgent ai.jarvis.board-watchdog (StartInterval 300)로 기동.
 set -euo pipefail
 
-# 운영용 env 자동 로드 — SSoT 경로(~/jarvis/runtime/.env) 직접 참조.
-# ~/.jarvis는 ~/jarvis/runtime 심링크라 둘 다 동작하지만 SSoT 일관성을 위해 실제 경로 사용.
+# 운영용 env 자동 로드 — SSoT 경로(~/.openclaw-data/jarvis/runtime/.env) 직접 참조.
+# ~/.jarvis는 ~/.openclaw-data/jarvis/runtime 심링크라 둘 다 동작하지만 SSoT 일관성을 위해 실제 경로 사용.
 # source 시 발생하는 stderr(파싱 에러 등)은 별도 로그로 격리해 watchdog 로그를 더럽히지 않음.
-ENV_FILE="${HOME}/jarvis/runtime/.env"
-ENV_ERR_LOG="${HOME}/jarvis/runtime/logs/env-load-errors.log"
+ENV_FILE="${HOME}/.openclaw-data/jarvis/runtime/.env"
+ENV_ERR_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/env-load-errors.log"
 if [ -f "$ENV_FILE" ]; then
   mkdir -p "$(dirname "$ENV_ERR_LOG")"
   set -a
@@ -32,15 +32,15 @@ if [ -f "$ENV_FILE" ]; then
   set +a
 fi
 
-LEDGER="${HOME}/jarvis/runtime/state/board-watchdog.jsonl"
-THROTTLE_DIR="${HOME}/jarvis/runtime/state/board-watchdog-throttle"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/state/board-watchdog.jsonl"
+THROTTLE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/board-watchdog-throttle"
 LOCAL_URL="http://localhost:3100/api/health"
 FALLBACK_URL="http://localhost:3100/"
 EXT_URL="${BOARD_EXT_URL:-}"
 TUNNEL_NAME="${BOARD_TUNNEL_NAME:-jarvis-board}"
 
 if [ -z "$EXT_URL" ]; then
-  echo "[ERROR] BOARD_EXT_URL 환경변수 미설정. ~/jarvis/runtime/.env 에 추가하세요." >&2
+  echo "[ERROR] BOARD_EXT_URL 환경변수 미설정. ~/.openclaw-data/jarvis/runtime/.env 에 추가하세요." >&2
   exit 1
 fi
 TS="$(date +%Y-%m-%dT%H:%M:%S%z)"
@@ -62,8 +62,8 @@ alert_throttled() {
     last=$(cat "$marker" 2>/dev/null || echo 0)
     (( EPOCH - last < 86400 )) && return 0
   fi
-  if [[ -f "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" ]]; then
-    /opt/homebrew/bin/node "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" \
+  if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" ]]; then
+    /opt/homebrew/bin/node "${HOME}/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" \
       --type stats \
       --data "{\"title\":\"🚨 jarvis-board ${layer} down — auto-recovering\",\"data\":{\"layer\":\"${layer}\",\"detail\":\"${detail}\",\"ledger\":\"${LEDGER}\"},\"timestamp\":\"${TS}\"}" \
       --channel jarvis-system 2>/dev/null || true

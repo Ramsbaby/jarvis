@@ -9,6 +9,12 @@ JARVIS_HOME="${JARVIS_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 BOT_HOME="${BOT_HOME:-$JARVIS_HOME}"
 export BOT_HOME
 
+# 자율 에이전트 역할 표식 — 하위 claude -p 세션의 PreToolUse 훅(jarvis-agent-write-boundary.sh)이
+# 이 값을 보고 config/context/wiki/state/ledger·~/.claude·LaunchAgents·crontab·tasks.db 쓰기를 차단한다.
+# 2026-09-04 코더가 runtime/config/tasks.json 을 7월 백업으로 덮어쓴 사고 후속 (SELF-HEAL-PLAN-2026-09.md 1a).
+# 배선: infra/config/claude-batch-hooks.json (llm-gateway.sh 가 --settings 로 주입). env 는 claude 까지 상속된다.
+export JARVIS_AGENT_ROLE="${JARVIS_AGENT_ROLE:-coder}"
+
 # 공용 함수 로드 (run_one_task, update_queue, pick_next_task 등)
 source "${BOT_HOME}/lib/coder-functions.sh"
 

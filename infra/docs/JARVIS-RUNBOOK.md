@@ -64,6 +64,35 @@ done
 
 ---
 
+## 🔍 감시·경보 작업 전 SOP (cl-ea9810ebd3a98d01)
+
+> **새 감시 규칙·도구 제안 전 반드시 아래 순서를 따른다.**
+> 생략 시 중복 경보 생성·거짓양성 위험 → 알림 피로 유발.
+
+### Step 1 — 기존 인프라 전수 조회 (필수)
+```bash
+~/jarvis/scripts/list-monitors.sh
+```
+
+### Step 2 — 거짓양성 체크리스트 (필수)
+```bash
+~/jarvis/scripts/list-monitors.sh --fp-check
+```
+
+### Step 3 — 거짓양성 자동 검사 (새 규칙 추가 시)
+```bash
+~/jarvis/infra/guards/false-positive-guard.sh "<규칙명>" "<탐지키워드>" --threshold <값> --window <쿨다운초>
+```
+
+### Step 4 — 기존 경보 상태 확인
+```bash
+~/jarvis/infra/scripts/monitoring-pre-check.sh
+```
+
+상세 가이드: `~/jarvis/infra/docs/CLUSTER-GUARD-CL-EA9810EBD3A98D01-GUIDE.md`
+
+---
+
 ## 🔧 일반적 문제 해결
 
 ### "Discord 봇이 응답 안 함"

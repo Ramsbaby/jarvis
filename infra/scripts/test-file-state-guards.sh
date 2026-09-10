@@ -10,7 +10,7 @@
 #   [4] 통합 플로우
 #
 # 실행법:
-#   bash /Users/ramsbaby/jarvis/infra/scripts/test-file-state-guards.sh
+#   bash /Users/ramsbaby/.openclaw-data/jarvis/infra/scripts/test-file-state-guards.sh
 
 set -euo pipefail
 

@@ -3,7 +3,7 @@
  *
  * Priority: JARVIS_RAG_HOME > BOT_HOME/rag > ~/.local/share/jarvis/rag
  *
- * - Owner (BOT_HOME=~/jarvis/runtime set): uses existing ~/jarvis/runtime/rag/
+ * - Owner (BOT_HOME=~/.openclaw-data/jarvis/runtime set): uses existing ~/.openclaw-data/jarvis/runtime/rag/
  * - New user (nothing set): uses XDG-compliant ~/.local/share/jarvis/rag/
  */
 

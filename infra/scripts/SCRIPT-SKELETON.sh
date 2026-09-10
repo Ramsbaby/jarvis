@@ -10,7 +10,7 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 LOG_FILE="$JARVIS_HOME/runtime/logs/{SCRIPT_NAME}.log"
 LEDGER="$JARVIS_HOME/runtime/state/{SCRIPT_NAME}-ledger.jsonl"
 

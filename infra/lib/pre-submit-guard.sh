@@ -26,9 +26,9 @@ set -euo pipefail
 # ─── 상수 ────────────────────────────────────────────────────────────────────
 readonly GUARD_VERSION="1.0.0"
 readonly GUARD_CLUSTER="cl-b267f5e68d51853c"
-readonly GUARD_LOG_DIR="${HOME}/jarvis/runtime/logs"
+readonly GUARD_LOG_DIR="${HOME}/.openclaw-data/jarvis/runtime/logs"
 readonly GUARD_LOG_FILE="${GUARD_LOG_DIR}/pre-submit-guard.jsonl"
-readonly GUARD_STATE_DIR="${HOME}/jarvis/runtime/state"
+readonly GUARD_STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state"
 
 # ─── 완료 단언 감지 패턴 ──────────────────────────────────────────────────────
 # 실행 검증 없이 완료를 단언하는 전형적인 표현들

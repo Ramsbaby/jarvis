@@ -269,7 +269,7 @@ async function main() {
     const matched = loadMatched();
     if (!matched?.results) {
       console.error('❌ matched.json이 없습니다. 먼저 수집/스코어링을 실행하세요.');
-      console.error('   cd ~/jarvis/infra && node scripts/inbox-crawl.mjs && node scripts/inbox-match.mjs --detail');
+      console.error('   cd ~/.openclaw-data/jarvis/infra && node scripts/inbox-crawl.mjs && node scripts/inbox-match.mjs --detail');
       process.exit(1);
     }
     printList(matched.results.filter(j => j.score >= 60), '📋 매칭 결과 (60점 이상)');

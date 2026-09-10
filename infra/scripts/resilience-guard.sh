@@ -9,9 +9,9 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 LOG_FILE="$JARVIS_HOME/runtime/logs/resilience-guard.log"
-DISCORD_VISUAL="$HOME/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 STATE_DIR="$JARVIS_HOME/runtime/state/resilience"
 
 mkdir -p "$STATE_DIR"

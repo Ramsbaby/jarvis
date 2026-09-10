@@ -5,7 +5,7 @@ set -euo pipefail
 # 패턴 매칭(auditor)으로 못 잡는 로직 버그, 보안 취약점, SSoT 위반을 LLM이 검증
 # 크론: 매주 일요일 05:00
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 REVIEW_DIR="${BOT_HOME}/results/code-review"
 TODAY="$(date +%F)"
 REVIEW_FILE="${REVIEW_DIR}/${TODAY}.md"
@@ -120,7 +120,7 @@ log "Calling claude -p for semantic review..."
 #   이전 값 claude-sonnet-4-20250514 는 은퇴한 날짜 지정 스냅샷이라 호출이 매번 실패했고,
 #   주간 리포트가 몇 주째 "## ERROR" 한 줄만 생성되고 있었다(2026-07-19 기록으로 확인).
 #   하드코딩이 원인이었으므로 같은 방식으로 되돌리지 않고 SSoT 참조로 바꾼다.
-_POLICY_FILE="${JARVIS_HOME:-$HOME/jarvis}/runtime/context/model-policy.json"
+_POLICY_FILE="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}/runtime/context/model-policy.json"
 _REVIEW_MODEL=$(jq -r '.currentLatest.sonnet // empty' "$_POLICY_FILE" 2>/dev/null)
 if [[ -z "$_REVIEW_MODEL" ]]; then
     _REVIEW_MODEL="claude-sonnet-5"   # SSoT 를 못 읽을 때 대비
@@ -219,7 +219,7 @@ python3 << 'PYEOF'
 import re, sys, os
 from datetime import datetime, timedelta
 
-handoff = os.path.expanduser("~/jarvis/runtime/rag/handoff.md")
+handoff = os.path.expanduser("~/.openclaw-data/jarvis/runtime/rag/handoff.md")
 archive = os.environ.get("ARCHIVE_FILE", "")
 cutoff = os.environ.get("CUTOFF", "")
 

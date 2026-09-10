@@ -19,7 +19,7 @@
  *   { status: 'error',   error }
  *
  * Exit codes: 항상 0.
- * Log: ~/jarvis/runtime/logs/wiki-ingest-claude-app.log
+ * Log: ~/.openclaw-data/jarvis/runtime/logs/wiki-ingest-claude-app.log
  */
 
 import {

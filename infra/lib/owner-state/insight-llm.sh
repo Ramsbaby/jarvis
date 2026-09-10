@@ -6,7 +6,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export LC_ALL="${LC_ALL:-en_US.UTF-8}" LANG="${LANG:-en_US.UTF-8}"   # 한글 바이트 처리 (cron 로케일 누락 방지)
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 SNAPSHOT="${BOT_HOME}/state/owner-state/snapshot-latest.json"
 LLM_OUT="${BOT_HOME}/state/owner-state/llm-out.json"
 FEEDBACK="${BOT_HOME}/state/owner-state/feedback.jsonl"

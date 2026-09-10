@@ -3,7 +3,7 @@
  * context-extractor.mjs
  *
  * Discord + Claude Code 대화 기록에서 도메인별 컨텍스트를 추출해
- * ~/jarvis/runtime/context/claude-memory/ 에 domain-full.md / domain-summary.md 저장.
+ * ~/.openclaw-data/jarvis/runtime/context/claude-memory/ 에 domain-full.md / domain-summary.md 저장.
  *
  * 실행: node context-extractor.mjs [YYYY-MM-DD] [--domain career|tech|jarvis|finance|personal|all]
  * 크론: launchd com.jarvis.context-extractor (매일 01:00)

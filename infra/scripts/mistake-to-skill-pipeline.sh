@@ -4,7 +4,7 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 MISTAKES="$JARVIS_HOME/runtime/wiki/meta/learned-mistakes.md"
 STATE_FILE="$JARVIS_HOME/runtime/state/mistake-to-skill-state.json"
 LOG_FILE="$JARVIS_HOME/runtime/logs/mistake-to-skill.log"
@@ -45,8 +45,8 @@ if [ "$NEW_COUNT" -gt "$CHUNK_SIZE" ]; then
     # 끝에 echo로 state 업데이트하므로 일단 처리 후 LAST=$UPDATED_LAST 사용
     CURRENT_FOR_STATE="$UPDATED_LAST"
     # Discord 알림: chunk 처리 중
-    if [ -f "$HOME/jarvis/runtime/scripts/discord-visual.mjs" ]; then
-        node "$HOME/jarvis/runtime/scripts/discord-visual.mjs" --type stats --data \
+    if [ -f "$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" ]; then
+        node "$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" --type stats --data \
             "$(jq -nc --arg ts "$(date '+%Y-%m-%d %H:%M KST')" --arg n "$((CURRENT - LAST))" --arg c "$CHUNK_SIZE" \
                 '{title:"📚 사고→skill chunk 처리", data:{"신규 사고 총":$n,"이번 chunk":$c,"나머지":"내일 처리"}, timestamp:$ts}')" \
             --channel jarvis-system 2>&1 | tee -a "$LOG_FILE" || true

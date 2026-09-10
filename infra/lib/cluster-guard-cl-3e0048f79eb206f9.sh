@@ -16,10 +16,10 @@ set -euo pipefail
 
 # 상수
 readonly CLUSTER_ID="cl-3e0048f79eb206f9"
-readonly DB_PATH="${HOME}/jarvis/runtime/state/command-state-${CLUSTER_ID}.db"
-readonly STATE_DIR="${HOME}/jarvis/runtime/state/cluster-guards"
+readonly DB_PATH="${HOME}/.openclaw-data/jarvis/runtime/state/command-state-${CLUSTER_ID}.db"
+readonly STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/cluster-guards"
 readonly STATE_FILE="${STATE_DIR}/cl-3e0048f79eb206f9-command-state.json"
-readonly LOCK_DIR="${HOME}/jarvis/runtime/state/guard-locks"
+readonly LOCK_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/guard-locks"
 
 # 디렉토리 초기화
 _init_guard_dirs() {

@@ -5,7 +5,7 @@
  * Reclaims physical space from deleted rows and rebuilds the FTS index.
  * Intended for daily cron execution (03:00 every day).
  *
- * Usage: node ~/jarvis/runtime/bin/rag-compact.mjs
+ * Usage: node ~/.openclaw-data/jarvis/runtime/bin/rag-compact.mjs
  */
 
 import { join } from 'node:path';

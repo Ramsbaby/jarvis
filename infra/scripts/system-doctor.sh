@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; IS_LINUX=false
   case "$(uname -s)" in Darwin) IS_MACOS=true ;; Linux) IS_LINUX=true ;; esac
@@ -332,7 +332,7 @@ check_claude_isolation() {
     # 실측 — 이 보정 전에는 claude-switch.sh(안내 메시지), model-routing-integration.sh(주석),
     # gen-system-overview.sh(문서 문자열)가 매번 위반으로 집계됐다.
     grep -rlE 'spawnSync\(CLAUDE_BIN|\.local/bin/claude.{0,40}(-p|--print)|claude (-p|--print)' \
-      "$HOME/jarvis/infra/scripts" "$HOME/jarvis/infra/lib" 2>/dev/null \
+      "$HOME/.openclaw-data/jarvis/infra/scripts" "$HOME/.openclaw-data/jarvis/infra/lib" 2>/dev/null \
       | grep -vE '\.bak|\.LOCKED|node_modules|\.md$|\.disabled' \
       | while read -r _cand; do
           # 주석 제거 + 출력문(echo/printf/문서생성 헬퍼/마크다운 표) 제외 후에도 남으면 실제 호출.
@@ -358,7 +358,7 @@ check_claude_isolation() {
 # 3중 검사 — 실패 항목은 WARN. optional=true(선등기)는 artifact 미생성 시
 # 조용히 통과시켜 영구 오탐을 방지한다 (설계 v2 결함 3 정정).
 check_learning_consumers() {
-  local REG="$HOME/jarvis/runtime/config/learning-consumer-registry.json"
+  local REG="$HOME/.openclaw-data/jarvis/runtime/config/learning-consumer-registry.json"
   if [[ ! -f "$REG" ]]; then
     add_result "학습-소비처" "WARN" "등기부 부재: learning-consumer-registry.json"
     return
@@ -450,7 +450,7 @@ log "점검 완료 — OK:$ok WARN/FAIL:$wf"
 # ── 원장 적재 (cron-scan) ─────────────────────────────────────────────────────
 # 2026-04-25 verify Agent 적발: cron 매일 06:00 실행 결과가 doctor-ledger.jsonl에
 # 안 적재되어 주간 audit이 운영 추세를 못 봄. type:"cron-scan"으로 명시 적재.
-LEDGER="${HOME}/jarvis/runtime/state/doctor-ledger.jsonl"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/state/doctor-ledger.jsonl"
 if command -v jq >/dev/null 2>&1; then
   # overall 판정: wf=0 → green / wf<3 → yellow / 그 외 → red
   if (( wf == 0 )); then overall="green"

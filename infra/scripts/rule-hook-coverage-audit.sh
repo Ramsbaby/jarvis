@@ -19,16 +19,16 @@
 #   - severity=critical: 매핑 있다는데 hook 코드 실제 부재 (false-positive 매핑)
 set -euo pipefail
 
-LOG="${HOME}/jarvis/runtime/logs/rule-hook-coverage-audit.log"
-RULES_MD="${HOME}/jarvis/runtime/wiki/meta/learned-mistakes.md"
+LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/rule-hook-coverage-audit.log"
+RULES_MD="${HOME}/.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md"
 HOOKS_DIR="${HOME}/.claude/hooks"
-JARVIS_BIN="${HOME}/jarvis/infra/scripts"
+JARVIS_BIN="${HOME}/.openclaw-data/jarvis/infra/scripts"
 
 log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*" | tee -a "${LOG}"; }
 log "=== rule-hook-coverage-audit 시작 ==="
 
 # 1) 총 룰 카운트 — [2026-07-22] 본체+아카이브 glob 집계(아카이빙 후 카운트 왜곡 방지)
-source "$HOME/jarvis/infra/lib/learned-mistakes-glob.sh"
+source "$HOME/.openclaw-data/jarvis/infra/lib/learned-mistakes-glob.sh"
 TOTAL=$(lm_grep "^## " | wc -l | tr -d ' \n')
 TOTAL=${TOTAL:-0}
 log "총 룰 entry: ${TOTAL}건"
@@ -97,14 +97,14 @@ log "상세: ${DETAIL}"
 
 # 7) Discord 알림 (warning/critical만)
 if [[ "${SEVERITY}" != "info" ]]; then
-  ALERT="${HOME}/jarvis/runtime/scripts/alert.sh"
+  ALERT="${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh"
   if [[ -x "${ALERT}" ]]; then
     bash "${ALERT}" "${SEVERITY}" "${TITLE}" "${DETAIL}" 2>&1 | tee -a "${LOG}"
   fi
 fi
 
 # 8) 결과 ledger 저장 (시계열 추세 관측용)
-LEDGER="${HOME}/jarvis/runtime/ledger/rule-hook-coverage.jsonl"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/rule-hook-coverage.jsonl"
 mkdir -p "$(dirname "${LEDGER}")"
 printf '{"ts":"%s","total":%d,"hook_mapped":%d,"coverage_pct":%d,"mapped_valid":%d,"mapped_ghost":%d,"active_hooks":%d,"severity":"%s"}\n' \
   "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${TOTAL}" "${F_HOOK}" "${COVERAGE_PCT}" "${MAPPED_VALID}" "${MAPPED_GHOST}" "${ACTIVE_HOOKS}" "${SEVERITY}" \

@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] crontab 쓰기가 막혀(rc=124) 스크립트 층에 가드를 둔다.
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/cf-pages-deploy-notify
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/cf-pages-deploy-notify" ]]; then
+    echo "[cf-pages-deploy-notify] 중지 플래그 있음 (state/stopped/cf-pages-deploy-notify)"
+    exit 0
+fi
+
 # cf-pages-deploy-notify.sh
 # Cloudflare Pages 배포 상태를 폴링해 변화 시 Discord(#jarvis-career)로 알림. # privacy:allow career-narratives
 # CF는 GitHub deployment_status를 안 보내므로 CF API 직접 폴링이 유일하게 확실한 방법.
 # 크론: */3 * * * * (3분 폴링). 상태 파일로 중복 알림 방지.
 set -euo pipefail
 
-ENV="${HOME}/jarvis/runtime/.env"
-STATE="${HOME}/jarvis/runtime/state/cf-deploy-last.txt"
-MON="${HOME}/jarvis/runtime/config/monitoring.json"
+ENV="${HOME}/.openclaw-data/jarvis/runtime/.env"
+STATE="${HOME}/.openclaw-data/jarvis/runtime/state/cf-deploy-last.txt"
+MON="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
 PROJECT="ramsbaby-blog-starter"
+STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state"
 
 CF_KEY=$(grep '^CLOUDFLARE_API_KEY=' "$ENV" 2>/dev/null | cut -d= -f2- || true)
 CF_EMAIL=$(grep '^CLOUDFLARE_EMAIL=' "$ENV" 2>/dev/null | cut -d= -f2- || true)
@@ -79,20 +88,34 @@ BRANCH=$(echo "$DEPLOY" | jq -r '.deployment_trigger.metadata.branch // "?"' 2>/
 KEY="$ID:$STAGE:$STATUS"
 LAST=$(cat "$STATE" 2>/dev/null || echo "")
 
+# 상태 파일 쓰기 헬퍼 함수
+write_state() {
+  [ -d "$STATE_DIR" ] || mkdir -p "$STATE_DIR" 2>/dev/null || true
+  if ! echo "$1" > "$STATE.tmp$$" 2>/dev/null; then
+    echo "ERROR: 상태 파일 쓰기 실패 ($STATE)" >&2; return 1
+  fi
+  mv "$STATE.tmp$$" "$STATE" 2>/dev/null || true
+  return 0
+}
+
 # 첫 실행(baseline)은 알림 없이 현재 상태만 기록
-if [ -z "$LAST" ]; then echo "$KEY" > "$STATE"; echo "baseline 초기화: $KEY"; exit 0; fi
+if [ -z "$LAST" ]; then
+  write_state "$KEY"
+  echo "baseline 초기화: $KEY"
+  exit 0
+fi
 # 변화 없으면 종료
 [ "$KEY" = "$LAST" ] && exit 0
 
 case "$STATUS" in
   success)
-    [ "$STAGE" = "deploy" ] && { EMOJI="✅"; TITLE="배포 완료"; COLOR=3066993; } || { echo "$KEY" > "$STATE"; exit 0; } ;;
+    [ "$STAGE" = "deploy" ] && { EMOJI="✅"; TITLE="배포 완료"; COLOR=3066993; } || { write_state "$KEY"; exit 0; } ;;
   failure)
     EMOJI="❌"; TITLE="배포 실패 (${STAGE})"; COLOR=15158332 ;;
   active|running)
     EMOJI="🔵"; TITLE="배포 진행 중 (${STAGE})"; COLOR=3447003 ;;
   *)
-    echo "WARN: 알 수 없는 배포 상태: $STATUS — skip" >&2; echo "$KEY" > "$STATE"; exit 0 ;;
+    echo "WARN: 알 수 없는 배포 상태: $STATUS — skip" >&2; write_state "$KEY"; exit 0 ;;
 esac
 
 PAYLOAD=$(jq -n \
@@ -106,5 +129,5 @@ PAYLOAD=$(jq -n \
 WEBHOOK_RESP=$(curl -s -w "\n%{http_code}" -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK" 2>&1)
 WEBHOOK_CODE=$(echo "$WEBHOOK_RESP" | tail -1)
 [ "$WEBHOOK_CODE" != "204" ] && [ "$WEBHOOK_CODE" != "200" ] && { echo "ERROR: webhook 호출 실패 (HTTP $WEBHOOK_CODE) — skip" >&2; exit 0; }
-echo "$KEY" > "$STATE"
+write_state "$KEY"
 echo "INFO: 알림 전송: $TITLE ($KEY)"

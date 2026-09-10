@@ -13,7 +13,7 @@
 # 출력 예시:
 #   {
 #     "timestamp": "2026-06-14T09:00:00Z",
-#     "session_path": "~/jarvis/context",
+#     "session_path": "~/.openclaw-data/jarvis/context",
 #     "total_bytes": 524288,
 #     "file_count": 42,
 #     "estimated_tokens": 65000,
@@ -26,7 +26,7 @@
 set -euo pipefail
 
 # 설정
-SESSION_PATH="${1:-${HOME}/jarvis/runtime/state}"
+SESSION_PATH="${1:-${HOME}/.openclaw-data/jarvis/runtime/state}"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # 함수: 파일 크기를 토큰으로 추정 (4 chars ≈ 1 token)

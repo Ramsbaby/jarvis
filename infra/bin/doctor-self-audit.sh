@@ -12,7 +12,7 @@ set -euo pipefail
 
 DOCTOR_MD="${HOME}/.claude/commands/jarvis-doctor.md"
 MCP_JSON="${HOME}/.mcp.json"
-TASKS_JSON="${HOME}/jarvis/runtime/config/tasks.json"
+TASKS_JSON="${HOME}/.openclaw-data/jarvis/runtime/config/tasks.json"
 LA_DIR="${HOME}/Library/LaunchAgents"
 
 WARNINGS=0
@@ -97,7 +97,7 @@ audit_tasks_coverage() {
 audit_doctor_ledger() {
   echo ""
   echo "=== T-D. doctor-ledger.jsonl 축적 상태 ==="
-  local ledger="${HOME}/jarvis/runtime/state/doctor-ledger.jsonl"
+  local ledger="${HOME}/.openclaw-data/jarvis/runtime/state/doctor-ledger.jsonl"
   if [ ! -f "$ledger" ]; then
     warn "doctor-ledger.jsonl 없음 — /doctor 한 번도 실행 안 됨"
     return

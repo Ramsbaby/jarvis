@@ -2,9 +2,9 @@
 # shadow-path-merge.sh — 그림자 디렉터리에 새던 데이터를 정본으로 이관 (1회성 마이그레이션)
 #
 # 배경: JARVIS_HOME/BOT_HOME 혼선으로 데이터가 두 그림자 경로에 샜다.
-#   B형: ~/jarvis/runtime/runtime/**  ← "$JARVIS_HOME/runtime/..." 에서 JARVIS_HOME 이 한 단계 아래로 떨어진 경우
+#   B형: ~/.openclaw-data/jarvis/runtime/runtime/**  ← "$JARVIS_HOME/runtime/..." 에서 JARVIS_HOME 이 한 단계 아래로 떨어진 경우
 #   A형: ~/.jarvis/runtime/**         ← 스크립트에 하드코딩된 경로  # ALLOW-DOTJARVIS
-#   정본: ~/jarvis/runtime/**  (실측: state 14,315개/1.1GB — 그림자는 0~122개)
+#   정본: ~/.openclaw-data/jarvis/runtime/**  (실측: state 14,315개/1.1GB — 그림자는 0~122개)
 #
 # 처리 규칙 (데이터 손실 0 원칙):
 #   1) 실행 전 그림자 전체를 보관소에 복사 (되돌리기 가능)
@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-JARVIS_ROOT="${JARVIS_ROOT:-${HOME}/jarvis}"
+JARVIS_ROOT="${JARVIS_ROOT:-${HOME}/.openclaw-data/jarvis}"
 CANON="${JARVIS_ROOT}/runtime"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARCHIVE="${CANON}/state/migrations/shadow-merge-${STAMP}"

@@ -52,6 +52,12 @@ evaluate_result() {
     result_words=$(printf '%s' "$result" | wc -w | tr -d ' ')
 
     if [[ -z "$result" ]] || (( result_words < 2 )); then
+        # allowEmptyResult=true 설정이 있으면 빈 결과도 통과
+        if [[ "${ALLOW_EMPTY_RESULT:-false}" == "true" ]]; then
+            EVALUATOR_VERDICT="pass"
+            EVALUATOR_REASON="empty_result_allowed"
+            return 0
+        fi
         EVALUATOR_VERDICT="fail"
         EVALUATOR_REASON="empty_result (${result_words} words)"
         return 0

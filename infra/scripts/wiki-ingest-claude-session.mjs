@@ -19,7 +19,7 @@
  *
  * Exit codes: 항상 0. 세션 저장 파이프라인을 절대 차단하지 않음.
  *
- * Log: ~/jarvis/runtime/logs/wiki-ingest-claude.log
+ * Log: ~/.openclaw-data/jarvis/runtime/logs/wiki-ingest-claude.log
  *
  * ═══════════════════════════════════════════════════════════════
  * CONCEPT: SESSION FILE vs CONTEXT TOKEN
@@ -140,8 +140,14 @@ function findLatestSession(projectSlug = null) {
 
 // ── LLM 추출 프롬프트 ────────────────────────────────────────────────────────
 function buildExtractionPrompt(sessionContent) {
+  // [2026-08-04] 뒷부분만 남기던 방식 폐기 — 앞·뒤 양쪽에서 샘플링한다.
+  //   2026-08-03 세션은 처우협상이 앞쪽, 훅 개선 논의가 뒤쪽이었는데
+  //   slice(-N)이 앞쪽을 통째로 버려 커리어 fact가 25건 중 0건이었다.
+  const half = Math.floor(MAX_INPUT_CHARS / 2);
   const trimmed = sessionContent.length > MAX_INPUT_CHARS
-    ? '...(앞부분 생략)\n' + sessionContent.slice(-MAX_INPUT_CHARS)
+    ? sessionContent.slice(0, half) +
+      `\n\n…(중략 ${(sessionContent.length - MAX_INPUT_CHARS).toLocaleString()}자)…\n\n` +
+      sessionContent.slice(-half)
     : sessionContent;
 
   return [

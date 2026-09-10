@@ -10,8 +10,8 @@
 #   5) 24h 추세 (state JSONL append-only)
 #   6) Discord #jarvis-system 카드 송출
 #
-# 출력: ~/jarvis/runtime/state/system-memory-trend.jsonl (시계열 누적)
-#       ~/jarvis/runtime/logs/system-memory-trend.log
+# 출력: ~/.openclaw-data/jarvis/runtime/state/system-memory-trend.jsonl (시계열 누적)
+#       ~/.openclaw-data/jarvis/runtime/logs/system-memory-trend.log
 
 set -uo pipefail
 
@@ -20,8 +20,8 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PA
 # v4.45 hotfix: set -e 제거 — pipe SIGPIPE(141) 등 비치명 에러로 스크립트 전체 중단되는 사고 방지.
 # 개별 명령 실패는 || echo 0 / || true 로 안전 처리. 끝까지 실행되어 JSONL 적재 보장.
 
-LOG="${HOME}/jarvis/runtime/logs/system-memory-trend.log"
-STATE="${HOME}/jarvis/runtime/state/system-memory-trend.jsonl"
+LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/system-memory-trend.log"
+STATE="${HOME}/.openclaw-data/jarvis/runtime/state/system-memory-trend.jsonl"
 mkdir -p "$(dirname "$LOG")" "$(dirname "$STATE")"
 
 NOW=$(date '+%Y-%m-%d %H:%M:%S')
@@ -115,7 +115,7 @@ SIGNALS="${SIGNALS%· }"
 echo "[$NOW] PhysMem used=${USED_MB}MB unused=${UNUSED_MB}MB compressor=${COMPRESSOR_MB}MB | swap=${SWAP_USED}/${SWAP_TOTAL}MB (${SWAP_PCT}%) | Claude CLI total=${CLAUDE_TOTAL} long=${CLAUDE_LONG} | bot ${BOT_RSS_MB}MB | $SIGNALS" >> "$LOG"
 
 # Discord 카드 송출 (jarvis-system)
-WEBHOOK_FILE="${HOME}/jarvis/runtime/config/monitoring.json"
+WEBHOOK_FILE="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
 if [[ -f "$WEBHOOK_FILE" ]]; then
   WEBHOOK=$(node -e "try { console.log(JSON.parse(require('fs').readFileSync('$WEBHOOK_FILE','utf-8')).webhooks?.['jarvis-system']||'') } catch{}" 2>/dev/null)
   if [[ -n "$WEBHOOK" ]]; then
@@ -154,7 +154,7 @@ if (( UNUSED_MB < CRIT_UNUSED )); then
 fi
 if [[ -n "$CRIT_REASON" ]]; then
   TOP3=$(ps -axo rss,comm | sort -nrk1 | head -3 | awk '{printf "%s(%dMB) ", substr($2,length($2)-18), $1/1024}')
-  if source "${HOME}/jarvis/infra/lib/discord-route.sh" 2>/dev/null; then
+  if source "${HOME}/.openclaw-data/jarvis/infra/lib/discord-route.sh" 2>/dev/null; then
     discord_route critical "맥미니 메모리 위험" \
       "사유=${CRIT_REASON},swap=${SWAP_USED}/${SWAP_TOTAL}MB,여유=${UNUSED_MB}MB,상위=${TOP3}" 2>/dev/null || true
   fi

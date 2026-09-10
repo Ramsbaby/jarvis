@@ -188,7 +188,7 @@ async function actionRestart(sent) {
 
   if (signal === 'discord-bot-unhealthy') {
     try {
-      execSync('bash ~/jarvis/infra/scripts/bot-preflight.sh', { encoding: 'utf-8', stdio: 'pipe' });
+      execSync('bash ~/.openclaw-data/jarvis/infra/scripts/bot-preflight.sh', { encoding: 'utf-8', stdio: 'pipe' });
       result = '✅ 봇 재시작 완료 (bot-preflight.sh).';
     } catch (e) {
       result = `❌ 봇 재시작 실패: ${e.message.slice(0, 200)}`;

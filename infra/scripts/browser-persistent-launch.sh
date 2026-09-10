@@ -6,7 +6,7 @@
 set -euo pipefail
 
 PORT="${JARVIS_BROWSER_CDP_PORT:-9222}"
-PROFILE="${JARVIS_BROWSER_PROFILE:-$HOME/jarvis/runtime/state/browser-profile}"
+PROFILE="${JARVIS_BROWSER_PROFILE:-$HOME/.openclaw-data/jarvis/runtime/state/browser-profile}"
 CACHE="$HOME/Library/Caches/ms-playwright"
 
 # 최신 chromium-* 빌드의 실행파일을 동적으로 찾음 (버전 하드코딩 회피 — 업데이트 시 자동 추종)

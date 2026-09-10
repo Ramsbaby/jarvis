@@ -327,9 +327,18 @@ async function saveState(state) {
       let survivorSample = '';
       try {
         const existing = JSON.parse(existingRaw);
-        const { existsSync } = await import('node:fs');
+        const { existsSync, realpathSync } = await import('node:fs');
+        // 2026-09-10 추가: '별칭 접기'는 정당한 축소다.
+        //   같은 실파일이 ~/.jarvis · ~/jarvis · 정본 경로로 각각 키를 갖고 있었다
+        //   (실측 8,779키 / 실파일 4,117 — 이관으로 BOT_HOME 문자열이 바뀔 때마다 한 벌씩 늘었다).
+        //   realpath 로 접으면 옛 키는 사라지지만 그 파일은 정본 키로 살아 있다.
+        //   realpath 를 안 보면 이 정상 정리를 사고로 오판해 state 가 영구 동결된다.
+        const _rp = (p) => { try { return realpathSync(p); } catch { return p; } };
         for (const f of Object.keys(existing)) {
-          if (!(f in state) && existsSync(f)) { illegitimateDrop = true; survivorSample = f; break; }
+          if (f in state) continue;
+          if (!existsSync(f)) continue;   // 디스크 부재 = 정당한 prune
+          if (_rp(f) in state) continue;  // 별칭 접기 = 정당한 축소
+          illegitimateDrop = true; survivorSample = f; break;
         }
       } catch { illegitimateDrop = true; /* 검증 실패 시 보수적으로 거부 */ }
 
@@ -918,6 +927,36 @@ async function main() {
   // rag-watch 큐의 index 항목 병합 (정규 스캔에 없는 파일 추가)
   for (const fp of pendingQueueIndexes) {
     if (!targets.includes(fp)) targets.push(fp);
+  }
+
+  // ── 경로 별칭 정규화 (2026-09-10 신설) ────────────────────────────────────
+  // state 키가 '입력된 문자열 경로' 그대로였다. 그래서 BOT_HOME 문자열이 바뀌면
+  // 같은 물리 파일이 새 키로 들어와 코퍼스 전량이 '신규'로 판정되고 재색인된다.
+  // 실제로 그렇게 됐다 — 오픈클로 이관 당일 index-state 키 8,779개 중 실파일은 4,117개뿐이었고
+  // 별칭이 세 벌(`~/.jarvis` 4,090 · `~/jarvis` 4,072 · 정본 599)이었다.
+  // realpath 로 한 번 접어두면 어느 별칭으로 들어와도 같은 항목을 가리키므로 재색인이 사라진다.
+  // (심링크가 끊긴 경로는 realpath 가 실패하므로 원본 문자열을 그대로 둔다 — 조용한 유실 방지)
+  {
+    const { realpathSync } = await import('node:fs');
+    const rp = (p) => { try { return realpathSync(p); } catch { return p; } };
+
+    const seen = new Set(); const uniq = [];
+    for (const t of targets) { const r = rp(t); if (!seen.has(r)) { seen.add(r); uniq.push(r); } }
+    const dropped = targets.length - uniq.length;
+    targets.length = 0; targets.push(...uniq);
+
+    const mtOf = (v) => (typeof v === 'object' && v !== null) ? v.mtime : v;
+    let folded = 0;
+    for (const k of Object.keys(state)) {
+      const r = rp(k);
+      if (r === k) continue;
+      const cur = state[r];
+      if (cur === undefined || (mtOf(state[k]) ?? 0) > (mtOf(cur) ?? 0)) state[r] = state[k];
+      delete state[k]; folded++;
+    }
+    if (folded > 0 || dropped > 0) {
+      ragLog(`[rag-index] 경로 별칭 정규화: state 키 ${folded}개 접음 · 대상 중복 ${dropped}개 제거 (남은 대상 ${targets.length})`);
+    }
   }
 
   // Prune state entries for files that no longer exist (메모리/디스크 누수 방지)

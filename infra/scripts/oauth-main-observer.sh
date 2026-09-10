@@ -19,7 +19,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 set -uo pipefail
 
 CRED="${HOME}/.claude/.credentials.json"
-LEDGER="${HOME}/jarvis/runtime/ledger/oauth-main-observer.jsonl"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/oauth-main-observer.jsonl"
 mkdir -p "$(dirname "$LEDGER")" 2>/dev/null || true
 
 [[ -f "$CRED" ]] || { echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"err\":\"no-credentials\"}" >> "$LEDGER"; exit 0; }
@@ -80,7 +80,7 @@ if [[ "$HTTP" == "401" ]]; then
   _cd="/tmp/jarvis-observer-401-alert.cd"
   if [[ ! -f "$_cd" ]] || (( $(date +%s) - $(stat -f %m "$_cd" 2>/dev/null || echo 0) > 3600 )); then
     touch "$_cd"
-    bash "${HOME}/jarvis/runtime/scripts/alert.sh" critical "🧟 메인 토큰 401 + 좀비세션" "$_msg" 2>/dev/null || true
+    bash "${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh" critical "🧟 메인 토큰 401 + 좀비세션" "$_msg" 2>/dev/null || true
   fi
 elif [[ -n "$ZOMBIE_PID" ]]; then
   # 아직 안 죽었어도 8h+ 세션 있으면 사전 경고 (예방)

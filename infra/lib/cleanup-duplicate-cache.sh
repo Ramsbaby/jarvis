@@ -17,9 +17,9 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 GUARD_SCRIPT="${BOT_HOME}/lib/duplicate-request-guard.mjs"
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis}"
 
 # 새 가드 함수 로드 (cl-e30aee511af89e13 방어)
 source "${JARVIS_HOME}/infra/lib/exit-code-first-wrapper.sh" 2>/dev/null || {
@@ -33,7 +33,7 @@ source "${JARVIS_HOME}/infra/lib/status-guard.sh" 2>/dev/null || {
 
 # 작업 식별자 (일일 중복 방지)
 TASK_ID="cleanup-duplicate-cache"
-STATE_DIR="${HOME}/jarvis/runtime/state"
+STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state"
 
 # --- Step 1: 재실행 전 상태 확인 (TTL: 24시간) ---
 if should_skip_task "$TASK_ID" "$STATE_DIR" 86400; then

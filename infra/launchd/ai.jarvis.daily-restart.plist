@@ -7,7 +7,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/ramsbaby/jarvis/runtime/scripts/bot-daily-restart.sh</string>
+        <string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/scripts/bot-daily-restart.sh</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -17,9 +17,9 @@
         <integer>0</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>/Users/ramsbaby/jarvis/runtime/logs/daily-restart.log</string>
+    <string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/daily-restart.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/ramsbaby/jarvis/runtime/logs/daily-restart.log</string>
+    <string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/daily-restart.log</string>
     <key>RunAtLoad</key>
     <false/>
 </dict>

@@ -16,7 +16,7 @@
 #   SUPERVISOR_HEAL_AUDIT=path → audit jsonl 위치 (default: tasks.db addTask)
 
 # ── env ─────────────────────────────────────────────────────────────
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 DOT_JARVIS="${HOME}/.jarvis"
 FIX_LEDGER="${BOT_HOME}/state/supervisor-fix-ledger.jsonl"
 FIX_ATTEMPT_DIR="${BOT_HOME}/state/supervisor-fix-attempts"
@@ -244,17 +244,17 @@ ${summary}
 # MANDATORY FIRST STEPS (Read tool 호출 필수, 진단 전 반드시)
 - 진단을 시작하기 전에 다음 중 최소 2개를 Read tool로 직접 읽어라.
 - Read 호출이 0회면 본 진단은 **fail-quality**로 거부된다 (품질 게이트).
-1. ~/jarvis/infra/docs/MAP.md  # 시스템 맵 — 본 결함이 어느 컴포넌트인지 매핑
-2. ~/jarvis/infra/docs/ARCHITECTURE.md  # self-healing 4-layer 구조
-3. ~/jarvis/infra/docs/OPERATIONS.md  # 운영 + escalation tree
-4. ~/jarvis/runtime/wiki/meta/learned-mistakes.md  # 오답노트 — 같은 결함 과거 진단
-5. ~/jarvis/infra/supervisor/lib/fix-library.sh  # 안전 fix 함수 reference
+1. ~/.openclaw-data/jarvis/infra/docs/MAP.md  # 시스템 맵 — 본 결함이 어느 컴포넌트인지 매핑
+2. ~/.openclaw-data/jarvis/infra/docs/ARCHITECTURE.md  # self-healing 4-layer 구조
+3. ~/.openclaw-data/jarvis/infra/docs/OPERATIONS.md  # 운영 + escalation tree
+4. ~/.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md  # 오답노트 — 같은 결함 과거 진단
+5. ~/.openclaw-data/jarvis/infra/supervisor/lib/fix-library.sh  # 안전 fix 함수 reference
 
 # ALLOWED ACTIONS (via Bash tool, when DRYRUN=0)
 - launchctl kickstart -k gui/\$(id -u)/<label>
 - bash ~/.jarvis/scripts/rag-index-cron.sh  # ALLOW-DOTJARVIS
 - rm ~/.jarvis/state/circuit-breaker/<name>.json (circuit reset만)  # ALLOW-DOTJARVIS
-- bash ~/jarvis/runtime/scripts/<known-script>.sh
+- bash ~/.openclaw-data/jarvis/runtime/scripts/<known-script>.sh
 - Read-only 진단: grep, find, jq, cat, ls, tail
 
 # FORBIDDEN (실행 시 audit failure)
@@ -270,7 +270,7 @@ Diagnose + 1회 안전 복구 시도. 5분 내 종료.
 EOF
 )
 
-    local ask_claude="${HOME}/jarvis/infra/bin/ask-claude.sh"
+    local ask_claude="${HOME}/.openclaw-data/jarvis/infra/bin/ask-claude.sh"
     if [ ! -x "$ask_claude" ]; then
         _fix_log "fix_llm_solve" "$summary" "fail" "ask-claude.sh 없음"
         return 3

@@ -25,9 +25,9 @@ set -euo pipefail
 
 CLUSTER_ID="cl-f6921eb1d5ea4c87"
 CLUSTER_NAME="Partial Completion False Declaration"
-GUARD_STATE_DIR="${HOME}/jarvis/runtime/state/cluster-guards/${CLUSTER_ID}"
-GUARD_LOG="${HOME}/jarvis/runtime/logs/cluster-completion-guard-${CLUSTER_ID}.log"
-GUARD_REPORT="${HOME}/jarvis/runtime/reports/cluster-completion-guard-${CLUSTER_ID}.json"
+GUARD_STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/cluster-guards/${CLUSTER_ID}"
+GUARD_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/cluster-completion-guard-${CLUSTER_ID}.log"
+GUARD_REPORT="${HOME}/.openclaw-data/jarvis/runtime/reports/cluster-completion-guard-${CLUSTER_ID}.json"
 
 # 색상 코드
 RED='\033[0;31m'
@@ -233,9 +233,9 @@ record_guard_execution() {
     _log INFO "Recording guard execution: task=$task_id, passed=$passed"
 
     # mistake-cluster-guard.mjs를 호출하여 재발 추적
-    if [[ -f "${HOME}/jarvis/infra/lib/mistake-cluster-guard.mjs" ]]; then
+    if [[ -f "${HOME}/.openclaw-data/jarvis/infra/lib/mistake-cluster-guard.mjs" ]]; then
         if [[ "$passed" == "false" ]]; then
-            node "${HOME}/jarvis/infra/lib/mistake-cluster-guard.mjs" \
+            node "${HOME}/.openclaw-data/jarvis/infra/lib/mistake-cluster-guard.mjs" \
                 record-recurrence "$CLUSTER_ID" \
                 "Task $task_id: partial completion detected and blocked by guard" 2>/dev/null || true
         fi

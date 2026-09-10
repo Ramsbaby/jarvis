@@ -2,7 +2,7 @@
 // skill-loop-notify.mjs — pending 초안의 Discord 결재 카드 송출 (+월요일 묶음 재안내)
 // 카드 버튼 처리: infra/discord/lib/approval.js (slapprove/slreject/slhold → decision 파일 기록)
 // Usage: node skill-loop-notify.mjs [--digest-only]
-// 설계: ~/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 6)
+// 설계: ~/.openclaw-data/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 6)
 
 import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';

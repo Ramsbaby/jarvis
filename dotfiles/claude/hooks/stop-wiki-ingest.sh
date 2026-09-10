@@ -72,6 +72,31 @@ fi
 
 log "ingesting: $LATEST"
 
+# ── 메모리 압박 게이트 (2026-08-01 커널 패닉 재발 방지) ─────────────────────
+# rag-index-safe.sh와 동일 기준 재사용. Haiku 서브프로세스 spawn 전 확인.
+GUARD_LIB="${HOME}/.claude/hooks/lib/mem-pressure-gate.sh"
+if [[ -f "$GUARD_LIB" ]]; then
+  # shellcheck source=/dev/null
+  source "$GUARD_LIB"
+  if reason=$(mem_pressure_should_skip); then
+    log "SKIP: ${reason} — Haiku 호출 연기 (다음 트리거에서 재시도)"
+    exit 0
+  fi
+fi
+
+# ── 교차 동시성 슬롯 (2026-08-01 패닉 재발 방지) ────────────────────────────
+# rag-index-safe.sh / vera-autosummon-runner와 전역 2슬롯 공유. 슬롯 없으면 즉시 skip.
+SLOT_LIB="${HOME}/.claude/hooks/lib/heavy-hook-slot.sh"
+if [[ -f "$SLOT_LIB" ]]; then
+  # shellcheck source=/dev/null
+  source "$SLOT_LIB"
+  if ! heavy_slot_acquire "wiki-ingest"; then
+    log "SKIP: 교차 동시성 슬롯 없음(다른 무거운 훅 실행 중) — 다음 트리거에서 재시도"
+    exit 0
+  fi
+  trap 'heavy_slot_release' EXIT
+fi
+
 # ── Homebrew PATH (크론 경로는 아니지만 node 해상 보험) ─────────────────────
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 

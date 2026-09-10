@@ -54,7 +54,7 @@ const BOT_NAME = process.env.BOT_NAME || 'Claude Bot';
  *
  * [1] 세션 저장소 (SessionStore)
  *   - 역할: 디스코드 스레드 ID ↔ Claude 세션 ID 매핑
- *   - 파일: ~/jarvis/runtime/state/sessions.json
+ *   - 파일: ~/.openclaw-data/jarvis/runtime/state/sessions.json
  *   - 데이터 구조:
  *     {
  *       "123456789-987654321": {
@@ -68,7 +68,7 @@ const BOT_NAME = process.env.BOT_NAME || 'Claude Bot';
  *
  * [2] 레이트 트래커 (RateTracker)
  *   - 역할: 5시간 슬라이딩 윈도우 기반 API 호출 속도 제한
- *   - 파일: ~/jarvis/runtime/state/rate-tracker.json
+ *   - 파일: ~/.openclaw-data/jarvis/runtime/state/rate-tracker.json
  *   - 형식: [timestamp_ms, timestamp_ms, ...]
  *   - 임계값: 5시간에 900 호출 (180 calls/hour)
  *   - 경고: 80% 초과 시 warning, 90% 초과 시 reject
@@ -214,7 +214,7 @@ async function registerSlashCommands(clientId, guildId) {
   ];
 
   // ---------------------------------------------------------------------------
-  // SSoT 스킬 자동 등록 — ~/jarvis/runtime/skills/*.md 를 Discord 슬래시 커맨드로 승격
+  // SSoT 스킬 자동 등록 — ~/.openclaw-data/jarvis/runtime/skills/*.md 를 Discord 슬래시 커맨드로 승격
   // CLI의 `/mock-interview 지원회사` 경험을 디스코드에서 그대로 재현.
   // 중복 이름은 기존 하드코딩 커맨드가 우선 (스킬 무시).
   // ---------------------------------------------------------------------------
@@ -528,8 +528,22 @@ client.once('clientReady', async () => {
 const handlerState = { sessions, rateTracker, semaphore, activeProcesses, client };
 startErrorReplayer(client, handleMessage, handlerState, () => isShuttingDown); // 2026-07-17: 장애로 죽은 요청 자동 재생
 
+// 2026-09-09: 오픈클로 이관 병행 기간 한정 — 오픈클로 봇(자비스-oc)을 명시적으로 부른
+// 메시지에는 이 봇이 답하지 않는다. 둘 다 답해서 같은 질문에 답이 두 개 오는 것을 막는다.
+// 회차 6에서 이 봇을 끌 때 이 블록도 같이 지운다.
+const OC_BOT_IDS = (process.env.OPENCLAW_BOT_IDS || '1547221919219187822,1547223508201898167')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+function mentionsOpenclawBot(message) {
+  const raw = message?.content || '';
+  return OC_BOT_IDS.some((id) => raw.includes(`<@${id}>`) || raw.includes(`<@&${id}>`) || raw.includes(`<@!${id}>`));
+}
+
 client.on('messageCreate', (message) => {
   if (isShuttingDown) return; // 종료 중 신규 세션 생성 차단 — orphan 방지
+  if (mentionsOpenclawBot(message)) {
+    log('info', 'Skipping message addressed to OpenClaw bot', { channelId: message?.channelId });
+    return;
+  }
   lastMessageAt = Date.now();
   handleMessage(message, handlerState).catch(async (err) => {
     log('error', 'Unhandled error in handleMessage', { error: err.message, stack: err.stack });

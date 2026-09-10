@@ -982,7 +982,7 @@ export async function handleInteraction(interaction, deps) {
 
   } else {
     // ---------------------------------------------------------------------------
-    // SSoT 스킬 폴백 — 하드코딩 커맨드에 없으면 ~/jarvis/runtime/skills/ 확인
+    // SSoT 스킬 폴백 — 하드코딩 커맨드에 없으면 ~/.openclaw-data/jarvis/runtime/skills/ 확인
     // 매치되면 채널에 `/skillname target` 메시지를 프록시 발송 (registerSlashProxy로
     // 원 사용자 ID 매핑). messageCreate 필터가 이 프록시를 통과시켜 정상 처리.
     // ---------------------------------------------------------------------------

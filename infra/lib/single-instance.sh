@@ -2,7 +2,7 @@
 # single-instance.sh — cron 단일 인스턴스 lock (cascade 충돌 방지)
 #
 # 사용:
-#   source ~/jarvis/infra/lib/single-instance.sh
+#   source ~/.openclaw-data/jarvis/infra/lib/single-instance.sh
 #   single_instance "{cron-name}"   # 시작 직후 호출
 #
 # 동작:

@@ -11,16 +11,16 @@
 #   - supervisor-tick-ledger.jsonl
 #
 # 출력:
-#   - ~/jarvis/runtime/wiki/meta/weekly-retro-YYYY-WW.md
+#   - ~/.openclaw-data/jarvis/runtime/wiki/meta/weekly-retro-YYYY-WW.md
 #   - Discord #jarvis-system 카드
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 DB="$JARVIS_HOME/runtime/state/tasks.db"
 WIKI_META="$JARVIS_HOME/runtime/wiki/meta"
 LOG_FILE="$JARVIS_HOME/runtime/logs/weekly-self-retro.log"
-DISCORD_VISUAL="$HOME/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$WIKI_META" "$(dirname "$LOG_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"
@@ -71,7 +71,7 @@ fi
 
 # ── 5. 학습된 오답노트 신규 추가 ────────────────────────────────────
 # [2026-07-22] 본체+아카이브 glob 집계(아카이빙 후 카운트 급락 방지). ※변수명은 7D이나 실제 전체 2026 항목 카운트(기존 라벨 유지).
-source "$HOME/jarvis/infra/lib/learned-mistakes-glob.sh"
+source "$HOME/.openclaw-data/jarvis/infra/lib/learned-mistakes-glob.sh"
 NEW_MISTAKES_7D=$(lm_grep "^## 2026-" | wc -l | tr -d ' \n')
 
 # ── 6. 자비스 자체 평가 (단순 룰) ───────────────────────────────────

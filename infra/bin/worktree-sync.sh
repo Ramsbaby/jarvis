@@ -20,13 +20,13 @@
 #   - dry-run 모드 지원 (`--dry-run`) — 실제 merge 수행 안 함
 #
 # 호출:
-#   bash ~/jarvis/infra/bin/worktree-sync.sh          # 실 merge
-#   bash ~/jarvis/infra/bin/worktree-sync.sh --dry-run # 대상만 출력
+#   bash ~/.openclaw-data/jarvis/infra/bin/worktree-sync.sh          # 실 merge
+#   bash ~/.openclaw-data/jarvis/infra/bin/worktree-sync.sh --dry-run # 대상만 출력
 #
 # 스케줄 권고:
 #   매일 00:00 KST (LaunchAgent ai.jarvis.worktree-sync 또는 crontab)
 #
-# 로그: ~/jarvis/runtime/logs/worktree-sync.log (append-only, daily 로테이션 권장)
+# 로그: ~/.openclaw-data/jarvis/runtime/logs/worktree-sync.log (append-only, daily 로테이션 권장)
 
 set -euo pipefail
 
@@ -34,10 +34,10 @@ set -euo pipefail
 DRY_RUN=0
 if [[ "${1:-}" == "--dry-run" ]]; then DRY_RUN=1; fi
 
-REPO="${HOME}/jarvis"
-LOG_DIR="${HOME}/jarvis/runtime/logs"
+REPO="${HOME}/.openclaw-data/jarvis"
+LOG_DIR="${HOME}/.openclaw-data/jarvis/runtime/logs"
 LOG_FILE="${LOG_DIR}/worktree-sync.log"
-DISCORD_VISUAL="${HOME}/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="${HOME}/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 DISCORD_CHANNEL="jarvis-system"
 
 mkdir -p "$LOG_DIR"

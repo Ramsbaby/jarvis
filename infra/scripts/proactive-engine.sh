@@ -14,7 +14,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 PERSONAL_DATES="$BOT_HOME/context/owner/personal-dates.json"
 FOLLOW_UPS="$BOT_HOME/context/owner/follow-ups.json"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"

@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
 LEDGER="$BOT_HOME/state/error-ledger.jsonl"
 ARCHIVE_DIR="$BOT_HOME/state/error-ledger-archive"
 RETENTION_DAYS=7

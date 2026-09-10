@@ -2,12 +2,12 @@
 set -euo pipefail
 # symlink-health-check.sh — 디렉토리 symlink 건전성 자동 검증
 #
-# ~/jarvis/runtime/ 의 핵심 디렉토리 symlink이 깨졌는지 매시간 검증.
+# ~/.openclaw-data/jarvis/runtime/ 의 핵심 디렉토리 symlink이 깨졌는지 매시간 검증.
 # 깨지면 즉시 Discord + ntfy 알림 → 수동 복구 안내.
 #
 # 크론: 매시간 (e2e-test와 별도 — symlink은 e2e보다 빈번히 체크)
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LOG="${BOT_HOME}/logs/symlink-health.log"
 ROUTE="${BOT_HOME}/bin/route-result.sh"
 
@@ -42,7 +42,7 @@ if [[ -n "$BROKEN" || -n "$MISSING" ]]; then
   MSG="🚨 **Symlink Health Check 실패**"
   [[ -n "$BROKEN" ]] && MSG="${MSG}\n\n**깨진 symlink:**${BROKEN}"
   [[ -n "$MISSING" ]] && MSG="${MSG}\n\n**누락 파일:**${MISSING}"
-  MSG="${MSG}\n\n복구: \`cd ~/jarvis && bash infra/scripts/symlink-repair.sh\`"
+  MSG="${MSG}\n\n복구: \`cd ~/.openclaw-data/jarvis && bash infra/scripts/symlink-repair.sh\`"
 
   log "FAIL: broken=${BROKEN} missing=${MISSING}"
 

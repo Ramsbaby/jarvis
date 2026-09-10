@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 TASKS_FILE="$BOT_HOME/config/effective-tasks.json"
 [[ -f "$TASKS_FILE" ]] || TASKS_FILE="$BOT_HOME/config/tasks.json"
@@ -51,7 +51,7 @@ export DRY_RUN
 python3 << 'PYEOF'
 import json, os, subprocess, sys
 
-BOT_HOME = os.environ.get('BOT_HOME', os.path.expanduser('~/jarvis/runtime'))
+BOT_HOME = os.environ.get('BOT_HOME', os.path.expanduser('~/.openclaw-data/jarvis/runtime'))
 LAUNCH_AGENTS = os.path.expanduser('~/Library/LaunchAgents')
 TASKS_FILE = os.environ['TASKS_FILE']
 DRY_RUN = os.environ.get('DRY_RUN', '') == '--dry-run'

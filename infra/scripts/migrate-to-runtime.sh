@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# migrate-to-runtime.sh — A2 마이그레이션: ~/jarvis/runtime → ~/jarvis/runtime
+# migrate-to-runtime.sh — A2 마이그레이션: ~/.openclaw-data/jarvis/runtime → ~/.openclaw-data/jarvis/runtime
 #
 # Phase 1: Dry-run — 뭐가 어디로 옮겨지는지 보고만 (실제 이동 없음)
-# Phase 2: Copy — ~/.jarvis의 런타임 데이터를 ~/jarvis/runtime/으로 복사
-# Phase 3: Symlink (호환성) — ~/jarvis/runtime 심링크로 ~/jarvis/runtime 가리킴
+# Phase 2: Copy — ~/.jarvis의 런타임 데이터를 ~/.openclaw-data/jarvis/runtime/으로 복사
+# Phase 3: Symlink (호환성) — ~/.openclaw-data/jarvis/runtime 심링크로 ~/.openclaw-data/jarvis/runtime 가리킴
 #            → OSS 사용자(5 fork)가 기존 경로 쓰던 것도 그대로 동작
-# Phase 4: Code rewrite — 코드 내 BOT_HOME, ~/jarvis/runtime 하드코딩 전수 수정
+# Phase 4: Code rewrite — 코드 내 BOT_HOME, ~/.openclaw-data/jarvis/runtime 하드코딩 전수 수정
 #            → 점진 배포 (이번 스크립트 밖)
 #
 # Usage:
@@ -15,7 +15,7 @@ set -euo pipefail
 #   bash migrate-to-runtime.sh --verify     # 무결성 검증
 
 LEGACY="${HOME}/.jarvis"
-RUNTIME="${HOME}/jarvis/runtime"
+RUNTIME="${HOME}/.openclaw-data/jarvis/runtime"
 MODE="${1:---dry-run}"
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }

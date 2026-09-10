@@ -12,7 +12,7 @@
  * Phase 4: index.md 재생성
  * Phase 5: 메트릭 기록
  *
- * Log: ~/jarvis/runtime/logs/wiki-ingest.log
+ * Log: ~/.openclaw-data/jarvis/runtime/logs/wiki-ingest.log
  */
 
 import {

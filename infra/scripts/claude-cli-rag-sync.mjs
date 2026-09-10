@@ -4,7 +4,7 @@
  * Claude CLI 세션(.jsonl) → RAG inbox 변환 싱크
  *
  * ~/.claude/projects/ 하위 .jsonl 파일에서 user/assistant 대화 추출 후
- * ~/jarvis/runtime/inbox/claude-cli-YYYYMMDD-{sessionId}.md 로 저장
+ * ~/.openclaw-data/jarvis/runtime/inbox/claude-cli-YYYYMMDD-{sessionId}.md 로 저장
  * → rag-watch.mjs가 감지해 LanceDB 자동 인덱싱
  *
  * 사용법: node claude-cli-rag-sync.mjs [--dry-run]
@@ -24,7 +24,11 @@ const STATE_FILE = join(BOT_HOME, 'state', 'cli-rag-sync.json');
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const MIN_CONTENT_LEN = 30;   // 너무 짧은 메시지 스킵
-const MAX_CONTENT_LEN = 2000; // 메시지당 최대 길이
+const MAX_CONTENT_LEN = 2000; // RAG 청크 크기 (상한이 아니라 분할 단위)
+// [2026-08-04] 긴 메시지를 자르지 않고 청크로 쪼개 전부 인덱싱한다.
+//   기존에는 2,000자에서 잘라 버렸고, 통화 녹취 19,803자 중 90%가 RAG에 들어가지 못했다.
+const HARD_CAP = 40_000;      // 로그 덤프 폭주 방어용 최종 상한
+const ASSISTANT_CHUNK_CAP = 2; // 자비스 답변은 앞 2청크(4,000자)만 색인 — 자기 메아리 방지
 
 function log(msg) {
   console.log(`[${new Date().toISOString()}] [cli-rag-sync] ${msg}`);
@@ -114,9 +118,8 @@ function parseSession(filePath) {
     const text = extractText(msgRaw);
     if (!text || text.length < MIN_CONTENT_LEN) continue;
 
-    // 시스템 주입(긴 context prefix) 스킵 — user 메시지에서 RAG 등 주입된 데이터 제외
-    // 실제 사용자 입력만 짧게 남김
-    const trimmedText = _stripRepeatedLines(text.slice(0, MAX_CONTENT_LEN));
+    // 반복 라인(로그 덤프)만 걷어내고 본문은 보존한다 — 분할은 toMarkdown에서 한다.
+    const trimmedText = _stripRepeatedLines(text.slice(0, HARD_CAP));
 
     turns.push({ role: type, text: trimmedText, ts });
   }
@@ -142,12 +145,29 @@ function toMarkdown(session, fileDate) {
   for (const turn of turns) {
     const timeStr = turn.ts ? turn.ts.slice(11, 16) : '';
     const roleLabel = turn.role === 'user' ? '**[사용자]**' : '**[Jarvis CLI]**';
-    lines.push(`## ${roleLabel} ${timeStr}`);
-    lines.push('');
-    lines.push(turn.text);
-    lines.push('');
-    lines.push('---');
-    lines.push('');
+    // 긴 메시지는 버리지 않고 청크로 나눠 싣는다 (RAG 검색 단위 = 청크).
+    // [2026-08-04] 단, 오너 발화와 자비스 답변을 비대칭으로 다룬다.
+    //   오너 발화 = 원본 사실(통화 녹취·오퍼레터·메일) → 한 글자도 자르지 않는다.
+    //   자비스 답변 = 그 사실의 재구성물 → 앞 2청크만. 전량 색인하면 검색 결과가
+    //   자기 과거 답변으로 채워져, 오너가 준 사실보다 자비스 추론이 위로 올라온다.
+    //   (2026-08-04 사고: 자비스가 자기 옛 계산표를 근거로 삼아 오답 3회)
+    const isOwner = turn.role === 'user';
+    const all = _chunk(turn.text, MAX_CONTENT_LEN);
+    const chunks = isOwner ? all : all.slice(0, ASSISTANT_CHUNK_CAP);
+    const dropped = all.length - chunks.length;
+    chunks.forEach((chunk, i) => {
+      const part = all.length > 1 ? ` (${i + 1}/${all.length})` : '';
+      lines.push(`## ${roleLabel} ${timeStr}${part}`);
+      lines.push('');
+      lines.push(chunk);
+      if (dropped > 0 && i === chunks.length - 1) {
+        lines.push('');
+        lines.push(`_(자비스 답변 뒷부분 ${dropped}청크는 색인 제외 — 원문: session-recall.sh)_`);
+      }
+      lines.push('');
+      lines.push('---');
+      lines.push('');
+    });
   }
 
   return lines.join('\n');
@@ -155,6 +175,24 @@ function toMarkdown(session, fileDate) {
 
 // [2026-07-09] 극단 반복 라인(에러 스택·로그 덤프 재출력) 축약 — 같은 라인 5회+ 반복은 노이즈.
 //   보수적 품질 게이트: 턴 삭제 없이 반복 라인만 제거. 정상 대화는 반복이 적어 영향 없음.
+// [2026-08-04] 긴 메시지를 청크로 분할. 줄 경계를 지켜 문장이 잘리지 않게 한다.
+function _chunk(text, size) {
+  if (text.length <= size) return [text];
+  const out = [];
+  let buf = '';
+  for (const line of text.split('\n')) {
+    if (buf && buf.length + line.length + 1 > size) { out.push(buf); buf = ''; }
+    // 한 줄 자체가 청크보다 길면 그 줄만 강제 분할
+    if (line.length > size) {
+      for (let i = 0; i < line.length; i += size) out.push(line.slice(i, i + size));
+      continue;
+    }
+    buf = buf ? `${buf}\n${line}` : line;
+  }
+  if (buf) out.push(buf);
+  return out;
+}
+
 function _stripRepeatedLines(text) {
   const lines = text.split('\n');
   const cnt = {};

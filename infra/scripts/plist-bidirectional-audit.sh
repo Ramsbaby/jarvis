@@ -12,13 +12,13 @@
 # bot-cron.sh 우회 → 이 케이스가 spec_mismatch 로 분류되어 주간 주기 안에 반드시 적발.
 #
 # 실행: 주 1회 (tasks.json 에 schedule: "0 5 * * 0" 로 등록 예정)
-# 출력: ~/jarvis/runtime/ledger/plist-bidirectional-audit.jsonl + Discord 리포트
+# 출력: ~/.openclaw-data/jarvis/runtime/ledger/plist-bidirectional-audit.jsonl + Discord 리포트
 
 # -u 제거: bash 3.2 + 빈 배열 `${ARR[@]}` 참조가 unbound 로 실패하는 버그 회피.
 # 이 스크립트는 변수 초기화가 모두 명시적이므로 -u 없어도 안전.
 set -eo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LA_DIR="${HOME}/Library/LaunchAgents"
 LEDGER_DIR="${BOT_HOME}/ledger"
 LEDGER="${LEDGER_DIR}/plist-bidirectional-audit.jsonl"
@@ -187,7 +187,7 @@ fi
     echo ""
   fi
 
-  echo "-# ledger: \`~/jarvis/runtime/ledger/plist-bidirectional-audit.jsonl\` · 다음 실행: 다음 주 일요일 05:00 KST"
+  echo "-# ledger: \`~/.openclaw-data/jarvis/runtime/ledger/plist-bidirectional-audit.jsonl\` · 다음 실행: 다음 주 일요일 05:00 KST"
 }
 
 # ledger 의 summary 항목을 참조하면 cron-master 등에서 최근 주간 결과 picking 가능

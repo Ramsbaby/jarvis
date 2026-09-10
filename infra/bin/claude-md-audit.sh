@@ -5,11 +5,11 @@
 #   "claude-md-improver"가 CLAUDE.md를 6가지 기준으로 평가하는 패턴을 자비스에 이식.
 #
 # 매주 1회 cron 실행 → cron-master 일일 리포트에 통합.
-# 결과 JSON: ~/jarvis/runtime/state/claude-md-audit.json
+# 결과 JSON: ~/.openclaw-data/jarvis/runtime/state/claude-md-audit.json
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LOG_FILE="${BOT_HOME}/logs/claude-md-audit.log"
 RESULT="${BOT_HOME}/state/claude-md-audit.json"
 
@@ -23,7 +23,7 @@ log "=== CLAUDE.md Audit start ==="
 # 점검 대상 (LLM에 자동 주입되는 모든 CLAUDE.md / rules)
 CANDIDATES=(
   "${HOME}/CLAUDE.md"
-  "${HOME}/jarvis/CLAUDE.md"
+  "${HOME}/.openclaw-data/jarvis/CLAUDE.md"
 )
 # .claude/rules/*.md 추가
 while IFS= read -r f; do CANDIDATES+=("$f"); done < <(ls "${HOME}"/.claude/rules/*.md 2>/dev/null)
@@ -61,7 +61,7 @@ DUP_LINES=$(cat "${CANDIDATES[@]}" 2>/dev/null \
   | sort | uniq -c | awk '$1 >= 3 {sum++} END {print sum+0}')
 
 # 3. 작동 안 하는 명령 검사 (bash 명령 패턴 grep — 실제 호출 흔적 0건)
-# 단순화: ~/.jarvis/scripts/*.sh / ~/jarvis/infra/bin/*.sh 호출 grep만  # ALLOW-DOTJARVIS
+# 단순화: ~/.jarvis/scripts/*.sh / ~/.openclaw-data/jarvis/infra/bin/*.sh 호출 grep만  # ALLOW-DOTJARVIS
 BROKEN_CMDS=0
 DEAD_REFS=()
 for f in "${CANDIDATES[@]}"; do

@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # RCA 게이트 설정
-RCA_GATE_LOG="${RCA_GATE_LOG:-${HOME}/jarvis/runtime/logs/rca-gate.log}"
+RCA_GATE_LOG="${RCA_GATE_LOG:-${HOME}/.openclaw-data/jarvis/runtime/logs/rca-gate.log}"
 RCA_GATE_ENABLED="${RCA_GATE_ENABLED:-1}"
 RCA_GATE_STRICT="${RCA_GATE_STRICT:-1}"  # 1: 차단, 0: 경고만
 

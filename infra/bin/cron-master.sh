@@ -21,7 +21,7 @@
 set -euo pipefail
 
 # --- Runtime guards (Cluster cl-a1a431b0e672e736: path assertion before verification) ---
-source "${HOME}/jarvis/infra/lib/guards.sh" 2>/dev/null || true
+source "${HOME}/.openclaw-data/jarvis/infra/lib/guards.sh" 2>/dev/null || true
 assert_variable_set "HOME" "home directory" || exit 1
 
 # DRY_RUN 조기 초기화 (set -u nounset 안티패턴 해결)
@@ -30,7 +30,7 @@ DRY_RUN="${CRON_MASTER_DRY_RUN:-0}"
 # 자체 로그 (Blocker #2 대응: plist StandardOutPath는 bot-cron.sh 우회 경로라 0B.
 # 모든 로깅은 파일 기록 → cron-master 본인이 죽어도 사후 조사 가능)
 # stdout은 Discord 라우팅을 위해 순수하게 유지 (dedup digest 계산 영향 최소화)
-SELF_LOG="${HOME}/jarvis/runtime/logs/cron-master-self.log"
+SELF_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/cron-master-self.log"
 mkdir -p "$(dirname "$SELF_LOG")"
 assert_directory_exists "$(dirname "$SELF_LOG")" "cron-master log directory" -w || exit 1
 # 헤더는 self-log에만 기록 (stdout에 누출되면 Discord 전송 skip 시 빈 쓰레기 전송됨)
@@ -43,9 +43,22 @@ assert_directory_exists "$(dirname "$SELF_LOG")" "cron-master log directory" -w 
 # 이전 echo 사용 시 bare stdout 4줄 누출 → Discord digest 변동 → dedup 실패.
 log() { echo "[$(date '+%H:%M:%S')] $*" >> "${SELF_LOG:-/dev/null}"; }
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LOG_DIR="$BOT_HOME/logs"
 LA_DIR="$HOME/Library/LaunchAgents"
+
+# [2026-08-26] "끈 것이 되살아나지 않는다" 단일 판정.
+# tasks.json 의 enabled=false 는 의도된 비활성이므로 bootstrap 대상에서 뺀다.
+# 종전에는 이 판정이 stale 감사 루프에만 있어 UNLOADED 루프가 30분마다 재등록했고,
+# 8/26 수동으로 끈 태스크 7건이 같은 날 전부 다시 로드됐다. 판정을 한 곳으로 모은다.
+# 주의: jq `// "true"` 는 boolean false 도 falsy 로 취급 → has("enabled") + 명시 비교.
+task_disabled() {
+  local id="${1#com.jarvis.}"; id="${id#ai.jarvis.}"
+  jq -r --arg id "$id" '
+    .tasks[]? | select(.id == $id)
+    | if has("enabled") and .enabled == false then "true" else "false" end
+  ' "${BOT_HOME}/config/tasks.json" 2>/dev/null | head -1 | grep -qx "true"
+}
 NOW=$(date '+%Y-%m-%d')  # dedup 수리(2026-06-22): 본문 시각 제거 — 매 실행 변동이 digest를 바꿔 중복 송출 유발. 정확 시각은 self-log(L34)·NOW_EPOCH 보존
 NOW_EPOCH=$(date +%s)
 TODAY=$(date +%Y-%m-%d)
@@ -54,7 +67,7 @@ CUTOFF=$(date -v-24H '+%Y-%m-%d %H:%M:%S' 2>/dev/null \
   || date -d '24 hours ago' '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "1970-01-01 00:00:00")
 
 # 감지 원장 (일 단위 시계열 — 주간 추세 분석 기반)
-DAILY_LEDGER="${HOME}/jarvis/runtime/state/cron-master-daily.jsonl"
+DAILY_LEDGER="${HOME}/.openclaw-data/jarvis/runtime/state/cron-master-daily.jsonl"
 mkdir -p "$(dirname "$DAILY_LEDGER")"
 
 # 어제 엔트리 조회
@@ -118,6 +131,8 @@ if [[ "$DRY_RUN" != "1" ]]; then
     [[ -f "$p" ]] || continue
     label=$(basename "$p" .plist)
     if ! echo "$LOADED_SET" | grep -qx "$label"; then
+      # 의도된 비활성은 "언로드"로 경보하지도, 되살리지도 않는다
+      if task_disabled "$label"; then continue; fi
       UNLOADED+=("$label")
     fi
   done
@@ -131,8 +146,8 @@ fi
 BYPASS_LIST=""
 if [[ "$DRY_RUN" != "1" ]]; then
   if [[ -x "$BOT_HOME/../infra/scripts/cron-auditor.sh" ]] \
-     || [[ -x "$HOME/jarvis/infra/scripts/cron-auditor.sh" ]]; then
-    AUDITOR_OUT=$(timeout 60 bash "$HOME/jarvis/infra/scripts/cron-auditor.sh" 2>/dev/null || true)
+     || [[ -x "$HOME/.openclaw-data/jarvis/infra/scripts/cron-auditor.sh" ]]; then
+    AUDITOR_OUT=$(timeout 60 bash "$HOME/.openclaw-data/jarvis/infra/scripts/cron-auditor.sh" 2>/dev/null || true)
     BYPASS_LIST=$(echo "$AUDITOR_OUT" \
       | awk '/^## \[output:discord BYPASS/,/^## \[요약\]/' \
       | grep -E '  [a-z]' | awk '{print $1}' | tr '\n' ' ' || true)
@@ -164,11 +179,11 @@ fi
 #   - Dry-run: CRON_MASTER_DRY_RUN=1 이면 계획만 표시, 실제 실행 skip
 #
 # 스텁 배치 기능 제거 이유:
-#   ~/jarvis/runtime/bin → ~/jarvis/infra/bin 심링크 체인으로 git 추적 디렉토리에
+#   ~/.openclaw-data/jarvis/runtime/bin → ~/.openclaw-data/jarvis/infra/bin 심링크 체인으로 git 추적 디렉토리에
 #   stub이 무단 침투하는 설계 결함 발견 (2026-04-20 초기 구현에서 19개 침범).
 #   유령 스크립트는 감지만 하고 주인님이 수동으로 판단·처리한다.
 
-REPAIR_LEDGER="${HOME}/jarvis/runtime/state/cron-master-ledger.jsonl"
+REPAIR_LEDGER="${HOME}/.openclaw-data/jarvis/runtime/state/cron-master-ledger.jsonl"
 mkdir -p "$(dirname "$REPAIR_LEDGER")"
 REPAIRS=()
 
@@ -268,6 +283,13 @@ attempt_bootstrap() {
   local lbl="$1"
   local plist="$LA_DIR/$lbl.plist"
   local count verdict bootstrap_err safe_err load_status
+
+  # 의도된 비활성은 어느 경로로 들어와도 되살리지 않는다 (2026-08-26)
+  if task_disabled "$lbl"; then
+    REPAIRS+=("SKIP bootstrap $lbl (tasks.json enabled=false — 의도된 비활성)")
+    log_repair "bootstrap-skip" "$lbl" "success" "disabled"
+    return
+  fi
 
   # [2026-04-24] 이미 정상 loaded + exit=0인 agent는 bootout/bootstrap 생략.
   # 불필요한 bootout이 "Bootstrap failed: 5: Input/output error"를 유발 (daily-summary 자정 3일 연속 실패).
@@ -436,14 +458,8 @@ for name in "${AUDIT_LOGS[@]}"; do
   age_h=$(( (NOW_EPOCH - mtime) / 3600 ))
   # 48h 이상 업데이트 없으면 stale
   if [[ "$age_h" -gt 48 ]]; then
-    # [2026-04-23 재적용] tasks.json enabled=false 태스크는 stale 판정 제외
-    # 주의: jq `// "true"`는 boolean false도 falsy로 취급 → has("enabled") + 명시 비교
-    _tasks_json="${BOT_HOME:-$HOME/.jarvis}/config/tasks.json"
-    _task_disabled=$(jq -r --arg id "$name" '
-      .tasks[]? | select(.id == $id)
-      | if has("enabled") and .enabled == false then "true" else "false" end
-    ' "$_tasks_json" 2>/dev/null | head -1)
-    if [[ "$_task_disabled" == "true" ]]; then
+    # [2026-04-23 재적용 / 2026-08-26 task_disabled() 로 통합] 의도된 비활성은 stale 판정 제외
+    if task_disabled "$name"; then
       log "SKIP stale(${name}): tasks.json enabled=false — 의도된 비활성, bootstrap 건너뜀"
       continue
     fi
@@ -464,7 +480,7 @@ done
 fi
 
 # ── 4.6.5. Phase 3c-2: 미해결 감사 경고 추적 (wiki-lint 리포트 이슈 수) ──────
-WIKI_META="${HOME}/jarvis/runtime/wiki/meta"
+WIKI_META="${HOME}/.openclaw-data/jarvis/runtime/wiki/meta"
 LATEST_LINT_REPORT=""
 LATEST_LINT_ISSUES=0
 if [[ -d "$WIKI_META" ]]; then
@@ -483,7 +499,7 @@ fi
 # 최근 7일간 [source:discord] 태그가 1건도 안 붙으면 autoExtract 침묵으로 판정.
 # 오늘 조치 3에서 발견한 패턴의 자동 감지 장치.
 DISCORD_INJECTIONS_7D=0
-WIKI_ROOT="${HOME}/jarvis/runtime/wiki"
+WIKI_ROOT="${HOME}/.openclaw-data/jarvis/runtime/wiki"
 if [[ -d "$WIKI_ROOT" ]]; then
   for i in 0 1 2 3 4 5 6; do
     day=$(date -v-${i}d +%Y-%m-%d 2>/dev/null || date -d "$i days ago" +%Y-%m-%d 2>/dev/null || echo "")
@@ -515,7 +531,7 @@ fi
 #   3) JARVIS_CRON_FORCE_REPORT=1 이면 항상 강제 전송 (디버깅용).
 # allowEmptyResult=true 로 tasks.json 설정되어 있어 빈 출력 허용.
 
-LAST_DIGEST_FILE="${HOME}/jarvis/runtime/state/cron-master-last-digest.txt"
+LAST_DIGEST_FILE="${HOME}/.openclaw-data/jarvis/runtime/state/cron-master-last-digest.txt"
 mkdir -p "$(dirname "$LAST_DIGEST_FILE")"
 
 # 현재 이슈 digest 계산 (정렬된 ISSUES + PERMA_FAILS 합쳐 hash)
@@ -576,7 +592,7 @@ fi
 # ── 4.9. plist-bypass-autofix 통계 수집 (2026-04-22) ─────────────────────────
 # plist-bypass-autofix.sh가 남긴 ledger를 파싱해 오늘의 감지→수정→검증 통계 수집.
 # BYPASS 재발 방지 가드의 가시화 — 감지만 하고 끝나지 않도록 리포트에 건수 표기.
-BYPASS_AUTOFIX_LEDGER="${HOME}/jarvis/runtime/state/plist-bypass-autofix.jsonl"
+BYPASS_AUTOFIX_LEDGER="${HOME}/.openclaw-data/jarvis/runtime/state/plist-bypass-autofix.jsonl"
 BYPASS_AUTOFIX_SUMMARY=""
 BYPASS_AUTOFIX_TARGETS=()
 if [[ -f "$BYPASS_AUTOFIX_LEDGER" ]]; then

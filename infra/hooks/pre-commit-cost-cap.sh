@@ -6,14 +6,14 @@
 # 결과 status != OK 면 commit 차단.
 #
 # 설치:
-#   ln -sf ~/jarvis/infra/hooks/pre-commit-cost-cap.sh \
-#     ~/jarvis/.git/hooks/pre-commit
+#   ln -sf ~/.openclaw-data/jarvis/infra/hooks/pre-commit-cost-cap.sh \
+#     ~/.openclaw-data/jarvis/.git/hooks/pre-commit
 #   (또는 cp + chmod +x)
 
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 
 # 1. tasks.json staged 여부 확인
 if ! git diff --cached --name-only | grep -qE '(runtime|infra)/config/tasks\.json$'; then

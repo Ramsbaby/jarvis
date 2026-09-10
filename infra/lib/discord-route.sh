@@ -2,7 +2,7 @@
 # discord-route.sh — Discord 채널 라우팅 wrapper (severity → channel)
 #
 # 사용:
-#   source ~/jarvis/infra/lib/discord-route.sh
+#   source ~/.openclaw-data/jarvis/infra/lib/discord-route.sh
 #   discord_route critical "title" "key=val,key2=val2"
 #   discord_route info "..."
 #   discord_route retro "..."
@@ -18,16 +18,16 @@
 #   그 디렉터리가 존재하지 않았다. 그 결과 아래 파일 존재 게이트에서 막혀
 #   discord_route() 와 discord_route_payload() 알림이 발송 전에 반환됐다.
 #   바로 아래 두 변수와 동일한 표기로 통일한다.
-DISCORD_VISUAL="${HOME}/jarvis/infra/scripts/discord-visual.mjs"
-_CHANNEL_MAP_GUARD="${HOME}/jarvis/infra/guards/validate-channel-map.sh"
-_EGRESS_AUDIT_LOG="${HOME}/jarvis/runtime/logs/egress-audit.log"
+DISCORD_VISUAL="${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs"
+_CHANNEL_MAP_GUARD="${HOME}/.openclaw-data/jarvis/infra/guards/validate-channel-map.sh"
+_EGRESS_AUDIT_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/egress-audit.log"
 
 # JARVIS_NO_EXTERNAL=1 (2026-09-04, SELF-HEAL-PLAN 1d): 테스트·dry-run 은 외부로 나가지 않는다.
 # 9/4 tracker 테스트 쉼이 실제 채널로 송출된 사고 후속. 억제된 송출은 runtime/logs/no-external.log 에만 남긴다.
 # 사용: _no_external <src> <channel> <bytes> && return 0
 _no_external() {
     [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]] || return 1
-    local log="${BOT_HOME:-${HOME}/jarvis/runtime}/logs/no-external.log"
+    local log="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs/no-external.log"
     mkdir -p "$(dirname "$log")" 2>/dev/null || true
     printf '%s [NO_EXTERNAL] src=%s ch=%s len=%s\n' "$(date -u +%FT%TZ)" "$1" "$2" "$3" >> "$log" 2>/dev/null || true
     return 0
@@ -73,7 +73,7 @@ _discord_route_channel() {
 # 중복 송출 차단 (2026-06-11): 동일 severity+제목이 쿨다운(기본 1h) 내 재송출되면 스킵.
 # cron 호출자 다수(system-doctor·cron-master 등)가 자체 중복 차단이 없어 라우터 공통으로 막는다.
 # 비활성화/조정: DISCORD_ROUTE_COOLDOWN_SECS=0 (또는 원하는 초)
-_DISCORD_ROUTE_DEDUP_DIR="${HOME}/jarvis/runtime/state/discord-route-dedup"
+_DISCORD_ROUTE_DEDUP_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/discord-route-dedup"
 _discord_route_dedup_ok() {
     local key="$1"
     local cooldown="${DISCORD_ROUTE_COOLDOWN_SECS:-3600}"
@@ -128,7 +128,7 @@ discord_route_payload() {
 discord_route_raw() {
     local channel_name="$1" content="$2"
     local monitoring="${HOME}/.jarvis/config/monitoring.json"
-    [ -f "$monitoring" ] || monitoring="${HOME}/jarvis/runtime/config/monitoring.json"
+    [ -f "$monitoring" ] || monitoring="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
 
     _channel_map_guard_check || return 1
 

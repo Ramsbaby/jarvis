@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] 판정 D — 정지.
 # 근거: 산출물 claim-correction-ledger.jsonl 을 읽는 곳이 자비스 전체에 0건 — 완전 고아
-# 재개: rm ~/jarvis/runtime/state/stopped/claim-correction-tracker
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/claim-correction-tracker" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/claim-correction-tracker
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/claim-correction-tracker" ]]; then
     echo "[claim-correction-tracker] 중지 플래그 있음 (판정 D)"
     exit 0
 fi
@@ -18,7 +18,7 @@ set -uo pipefail
 # ratio = corrections/claims. 높을수록 "단정이 자주 되돌려짐"(나쁨). 추세가 낮아지면 개선.
 
 SESSION="${1:-$(ls -t "$HOME/.claude/projects/-Users-ramsbaby-jarvis"/*.jsonl 2>/dev/null | head -1)}"
-LEDGER="$HOME/jarvis/runtime/state/claim-correction-ledger.jsonl"
+LEDGER="$HOME/.openclaw-data/jarvis/runtime/state/claim-correction-ledger.jsonl"
 mkdir -p "$(dirname "$LEDGER")"
 [ -f "$SESSION" ] || { echo "no session transcript"; exit 1; }
 

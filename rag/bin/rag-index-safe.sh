@@ -39,6 +39,22 @@ fi
 echo $$ > "${LOCK_DIR}/pid"
 trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
 
+# ── 교차 동시성 슬롯 (2026-08-01 패닉 재발 방지) ────────────────────────────
+# stop-wiki-ingest / stop-mistake-extract / vera-autosummon-runner와 전역 2슬롯 공유.
+# 위 락은 rag-index 자기 자신의 중복 실행만 막는다 — 옆 훅이 지금 무거운 작업
+# 중인지는 모른다. 슬롯 없으면 이번 트리거는 건너뛰고 다음 주기(LaunchAgent 30분)에서
+# 재시도 — 인덱싱은 실시간성이 없어 연기해도 손실 없음. compact/WAL 로직은 무수정.
+SLOT_LIB="${HOME}/.claude/hooks/lib/heavy-hook-slot.sh"
+if [[ -f "$SLOT_LIB" ]]; then
+  # shellcheck source=/dev/null
+  source "$SLOT_LIB"
+  if ! heavy_slot_acquire "rag-index"; then
+    echo "[$(date '+%Y-%m-%dT%H:%M:%S')] [rag-index-safe] SKIP: 교차 동시성 슬롯 없음(다른 무거운 훅 실행 중) — 다음 주기에서 재시도" >> "$LOG"
+    exit 0
+  fi
+  trap 'rm -rf "$LOCK_DIR"; heavy_slot_release' EXIT INT TERM
+fi
+
 # ── 시스템 메모리 압박 게이트 (2026-06-23 freeze 사고 재발방지 · 2026-07-07 재보정) ──
 # 16GB RAM 머신에서 28GB LanceDB 풀 리빌드가 메모리 압박을 유발해 시스템 응답성이 급락(freeze)한 사고 방지용.
 # [2026-07-07 재보정] 기존 "swap_used > 2560MB(2.5GB)면 SKIP" 규칙은 과보수적이었음:

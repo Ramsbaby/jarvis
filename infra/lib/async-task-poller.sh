@@ -25,8 +25,8 @@
 set -o pipefail
 
 # 상수 정의
-_ASYNC_STATE_DIR="${ASYNC_STATE_DIR:=${HOME}/jarvis/runtime/state/async-tasks}"
-_ASYNC_LOG_DIR="${ASYNC_LOG_DIR:=${HOME}/jarvis/runtime/logs/async}"
+_ASYNC_STATE_DIR="${ASYNC_STATE_DIR:=${HOME}/.openclaw-data/jarvis/runtime/state/async-tasks}"
+_ASYNC_LOG_DIR="${ASYNC_LOG_DIR:=${HOME}/.openclaw-data/jarvis/runtime/logs/async}"
 
 # 내부: 디렉토리 초기화
 _async_init() {

@@ -16,14 +16,14 @@
 #
 # 사용법:
 #   # 1. PDF 페이지 수 검증
-#   ~/jarvis/infra/guards/completion-validation-guard.sh validate-pdf "/path/to/file.pdf"
+#   ~/.openclaw-data/jarvis/infra/guards/completion-validation-guard.sh validate-pdf "/path/to/file.pdf"
 #
 #   # 2. 파일 전송 응답 검증
-#   ~/jarvis/infra/guards/completion-validation-guard.sh validate-upload \
+#   ~/.openclaw-data/jarvis/infra/guards/completion-validation-guard.sh validate-upload \
 #       --response "$RESPONSE" --expected-file-size 1024
 #
 #   # 3. 중복 파일 검사
-#   ~/jarvis/infra/guards/completion-validation-guard.sh check-duplicate \
+#   ~/.openclaw-data/jarvis/infra/guards/completion-validation-guard.sh check-duplicate \
 #       --file "/path/to/file" --hash-db "$HASH_DB_FILE"
 #
 # 성공 기준:

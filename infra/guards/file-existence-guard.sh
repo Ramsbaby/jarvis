@@ -12,13 +12,13 @@
 #
 # 사용법:
 #   # 1. 가드 실행: 지정 경로 탐색 + JSON 결과 출력
-#   ~/jarvis/infra/guards/file-existence-guard.sh scan /path/to/file
+#   ~/.openclaw-data/jarvis/infra/guards/file-existence-guard.sh scan /path/to/file
 #
 #   # 2. 가드 실행: 디렉토리 패턴 탐색
-#   ~/jarvis/infra/guards/file-existence-guard.sh scan "~/jarvis/**/*.sh"
+#   ~/.openclaw-data/jarvis/infra/guards/file-existence-guard.sh scan "~/.openclaw-data/jarvis/**/*.sh"
 #
 #   # 3. 응답 검증: 파일 단언과 실제 탐색 결과 대조
-#   ~/jarvis/infra/guards/file-existence-guard.sh validate \
+#   ~/.openclaw-data/jarvis/infra/guards/file-existence-guard.sh validate \
 #       --scan-result "$JSON_SCAN" \
 #       --response "$RESPONSE_TEXT"
 #

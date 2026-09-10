@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-dup-request-cleanup(매시) 로 이관. OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/jarvis/runtime/state/stopped/duplicate-request-guard
+// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/duplicate-request-guard
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
 if (__sc(__sh() + '/jarvis/runtime/state/stopped/duplicate-request-guard') && process.env.OPENCLAW_JOB !== '1') {

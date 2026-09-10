@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# rewrite-plists-to-runtime.sh — LaunchAgent plist의 ~/jarvis/runtime 경로를
-# ~/jarvis/runtime 경로로 일괄 치환. A2 migration Phase D 선결.
+# rewrite-plists-to-runtime.sh — LaunchAgent plist의 ~/.openclaw-data/jarvis/runtime 경로를
+# ~/.openclaw-data/jarvis/runtime 경로로 일괄 치환. A2 migration Phase D 선결.
 #
 # Usage:
 #   bash rewrite-plists-to-runtime.sh --dry-run   # 변경 사항 미리보기만
 #   bash rewrite-plists-to-runtime.sh --apply     # 실제 치환 + 재등록
 #
 # 동작:
-#   1. ~/Library/LaunchAgents/*.plist 중 ~/jarvis/runtime 참조하는 것 탐지
+#   1. ~/Library/LaunchAgents/*.plist 중 ~/.openclaw-data/jarvis/runtime 참조하는 것 탐지
 #   2. 백업 → ~/backup/plists-phase-d/<TS>/
-#   3. 치환: /Users/ramsbaby/jarvis/runtime/ → /Users/ramsbaby/jarvis/runtime/
+#   3. 치환: /Users/ramsbaby/.openclaw-data/jarvis/runtime/ → /Users/ramsbaby/.openclaw-data/jarvis/runtime/
 #   4. 각 LaunchAgent bootout + bootstrap (재등록)
 #   5. 결과 원장 기록
 
@@ -19,11 +19,11 @@ PLIST_DIR="$HOME/Library/LaunchAgents"
 BACKUP_ROOT="$HOME/backup/plists-phase-d"
 TS=$(date '+%Y-%m-%d-%H%M%S')
 BACKUP_DIR="$BACKUP_ROOT/$TS"
-LOG="$HOME/jarvis/runtime/logs/phase-d-plists.log"
+LOG="$HOME/.openclaw-data/jarvis/runtime/logs/phase-d-plists.log"
 UID_NUM=$(id -u)
 
-OLD_PREFIX="/Users/ramsbaby/jarvis/runtime/"
-NEW_PREFIX="/Users/ramsbaby/jarvis/runtime/"
+OLD_PREFIX="/Users/ramsbaby/.openclaw-data/jarvis/runtime/"
+NEW_PREFIX="/Users/ramsbaby/.openclaw-data/jarvis/runtime/"
 
 mkdir -p "$(dirname "$LOG")"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }

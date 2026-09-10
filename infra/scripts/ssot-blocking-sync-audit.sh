@@ -1,125 +1,105 @@
 #!/usr/bin/env bash
-# ssot-blocking-sync-audit.sh — CLI ↔ 디스코드 봇 BLOCKING 룰 양쪽 SSoT 동기화 점검
+# ssot-blocking-sync-audit.sh — 표면 간 규칙 문장 누락 감시
 #
-# 2026-05-25 신설 — Surface Memory Boundary 메타 가드의 코드 hook.
-# 사고 사례: 2026-05-25 jarvis-core.md L16 "특정기업 발표일 예측" 사고 사례가
-#            CLI 전용 룰로만 존재하고 persona-discord.md에 미주입 → 디스코드 봇 깊이 부족 응답.
-#            "룰만 등재되고 hook 없으면 학습 무효" 패턴.
+# 2026-08-14 전면 재작성.
+#   옛 방식: 'BLOCKING' 이라는 단어가 붙은 절 제목을 세어 양쪽 개수를 비교했다.
+#   실패한 이유 두 겹 —
+#     ① 읽던 파일 jarvis-core.md 가 2026-08-02 삭제됐는데 경로가 그대로였다 (입력 상실)
+#     ② 'BLOCKING' 표기 규칙 자체가 양쪽에서 사라져, 경로를 고쳐도 양쪽 0개 → 격차 영구 0
+#   그 결과 "GAP 검출: 0건"을 로그에 찍은 뒤 jq 오류로 죽었다. 로그만 보면 건강해 보이는
+#   거짓 합격이었고, 그래서 '쉽게 써라'가 넉 달간 사라진 것을 아무도 통보받지 못했다.
 #
-# 동작:
-#   1) jarvis-core.md에서 BLOCKING 섹션 제목 추출
-#   2) "봇 적용 대상 키워드" 필터링 (응답·깊이·말투·인지·예측·분석·판단·가드 등)
-#   3) persona-discord.md에서 동일 추출
-#   4) jarvis-core 봇 적용 대상 중 persona-discord에 없는 것 → GAP
-#   5) GAP 발견 시 Discord critical + ledger 적재
-#   6) GAP 0이면 silent (cron spam 방지)
+#   새 방식: infra/config/rule-covenant.json 에 등재된 문장이 각 표면에 실재하는지 본다.
+#            개수가 아니라 문장 자체를 찾으므로, 표기 규칙이 바뀌어도 눈이 멀지 않는다.
 #
-# 트리거: LaunchAgent ai.jarvis.ssot-blocking-sync-audit (매주 월 04:10 KST)
+# 출력 계약은 그대로 유지한다 (LaunchAgent·원장 형식 불변):
+#   runtime/ledger/ssot-blocking-sync-audit.jsonl 에 한 줄 append, gap_count>0 이면 alert.sh critical
 
 set -euo pipefail
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-LOG="${HOME}/jarvis/runtime/logs/ssot-blocking-sync-audit.log"
-LEDGER="${HOME}/jarvis/runtime/ledger/ssot-blocking-sync-audit.jsonl"
-
-CLI_FILE="${HOME}/.claude/rules/jarvis-core.md"
-BOT_FILE="${HOME}/jarvis/runtime/context/owner/persona-discord.md"
-
-# 봇 적용 대상 BLOCKING 키워드 (디스코드 봇 응답에도 가드되어야 하는 룰의 핵심 단어)
-BOT_RELEVANT_KEYWORDS="응답|깊이|말투|인지|예측|분석|판단|가드|존댓말|시간 표기|호칭|페르소나|시적|얕|편견|편향"
+COVENANT="${HOME}/.openclaw-data/jarvis/infra/config/rule-covenant.json"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/ssot-blocking-sync-audit.jsonl"
+LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/ssot-blocking-sync-audit.log"
 
 mkdir -p "$(dirname "$LEDGER")" "$(dirname "$LOG")"
-
 log() { echo "[$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M:%S%z')] $*" | tee -a "${LOG}"; }
+
 log "=== ssot-blocking-sync-audit 시작 ==="
 
-# ─── 1) jarvis-core.md BLOCKING 섹션 제목 추출 ───
-# 패턴 1: `- **제목** (...BLOCKING...)`
-# 패턴 2: `#### 제목 (BLOCKING)`
-cli_titles=$(grep -E "BLOCKING" "$CLI_FILE" 2>/dev/null | \
-  grep -E "^- \*\*|^####" | \
-  sed -E 's/^- \*\*([^*]+)\*\*.*/\1/; s/^#### ([^(]+) *\(.*\).*/\1/' | \
-  sed 's/[[:space:]]*$//' || true)
-
-cli_count=$(echo "$cli_titles" | grep -c . || echo 0)
-log "jarvis-core.md BLOCKING 섹션 헤더: ${cli_count}개"
-
-# ─── 2) 봇 적용 대상 키워드 필터링 ───
-cli_bot_relevant=$(echo "$cli_titles" | grep -E "$BOT_RELEVANT_KEYWORDS" || true)
-cli_bot_count=$(echo "$cli_bot_relevant" | grep -c . || echo 0)
-log "→ 봇 적용 대상 (키워드 매칭): ${cli_bot_count}개"
-if [ -n "$cli_bot_relevant" ]; then
-  echo "$cli_bot_relevant" | while IFS= read -r t; do
-    [ -z "$t" ] && continue
-    log "  • $t"
-  done
+if [ ! -f "$COVENANT" ]; then
+  log "치명: 언약 파일 없음 — $COVENANT"
+  log "  감시기가 입력을 잃으면 조용히 통과하지 않는다. 종료코드 1로 실패를 남긴다."
+  exit 1
 fi
 
-# ─── 3) persona-discord.md BLOCKING 섹션 제목 추출 ───
-# 패턴: `## 제목 (BLOCKING...)`
-bot_titles=$(grep -E "BLOCKING" "$BOT_FILE" 2>/dev/null | \
-  grep -E "^## " | \
-  sed -E 's/^## ([^(]+) *\(.*\).*/\1/' | \
-  sed 's/[[:space:]]*$//' || true)
+# 표면 경로 해석 (~ 확장)
+resolve() { echo "$1" | sed "s|^~|${HOME}|"; }
 
-bot_count=$(echo "$bot_titles" | grep -c . || echo 0)
-log "persona-discord.md BLOCKING 섹션 헤더: ${bot_count}개"
-if [ -n "$bot_titles" ]; then
-  echo "$bot_titles" | while IFS= read -r t; do
-    [ -z "$t" ] && continue
-    log "  • $t"
-  done
-fi
+gaps=()
+checked=0
 
-# ─── 4) GAP 검출 — jarvis-core 봇 적용 대상 중 persona-discord에 없는 것 ───
-gaps=""
-gap_count=0
-if [ -n "$cli_bot_relevant" ]; then
-  while IFS= read -r cli_title; do
-    [ -z "$cli_title" ] && continue
-    # cli_title의 핵심 키워드 (' —' 또는 ' ('  앞까지) 추출하여 bot_titles에 grep
-    # 예: "모델 깊이 가드 — 스케일업..." → "모델 깊이 가드"
-    # head -c 20 사용 시 UTF-8 multi-byte 중간 잘림 → fuzzy 매칭 실패. sed 결과 그대로 사용.
-    cli_key=$(echo "$cli_title" | sed -E 's/ —.*//; s/ \(.*//')
-    if ! echo "$bot_titles" | grep -qF "$cli_key"; then
-      gaps="${gaps}${gaps:+|}${cli_title}"
-      gap_count=$((gap_count + 1))
+# 언약 항목을 한 줄 TSV 로 뽑는다: id \t 문장 \t 적용표면(쉼표)
+while IFS=$'\t' read -r cid sentence targets; do
+  [ -z "$cid" ] && continue
+  for surf in ${targets//,/ }; do
+    path_raw=$(jq -r --arg s "$surf" '.surfaces[$s] // empty' "$COVENANT")
+    [ -z "$path_raw" ] && { gaps+=("${cid}: 표면 '${surf}' 경로 미등재"); continue; }
+    path=$(resolve "$path_raw")
+    checked=$((checked+1))
+    if [ ! -f "$path" ]; then
+      gaps+=("${cid}: ${surf} 파일 없음 (${path_raw})")
+      continue
     fi
-  done <<< "$cli_bot_relevant"
-fi
-
-log "GAP 검출: ${gap_count}건"
-if [ -n "$gaps" ]; then
-  echo "$gaps" | tr '|' '\n' | while IFS= read -r g; do
-    [ -z "$g" ] && continue
-    log "  🚨 $g (persona-discord.md 미등재)"
+    if ! grep -qF -- "$sentence" "$path"; then
+      gaps+=("${cid}: ${surf} 에 없음 — \"${sentence}\"")
+    fi
   done
+done < <(jq -r '.covenant[] | [.id, .["문장"], (.["적용"] | join(","))] | @tsv' "$COVENANT")
+
+gap_count=${#gaps[@]}
+log "언약 문장 검사: ${checked}건 확인 / 누락 ${gap_count}건"
+
+# 0건 검사는 통과가 아니라 실패다.
+# 옛 감시기가 정확히 이 상태로 "GAP 0건"을 찍으며 넉 달을 침묵했다.
+if (( checked == 0 )); then
+  log "치명: 한 건도 검사하지 못했다 — 언약 파일을 못 읽었거나 비어 있다."
+  log "  이 상태를 '이상 없음'으로 기록하지 않는다. 종료코드 1."
+  jq -cn --arg ts "$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M:%S%z')" \
+    '{ts:$ts, checked:0, gap_count:-1, status:"broken", gaps:["감시기가 입력을 읽지 못함"]}' >> "$LEDGER"
+  exit 1
 fi
 
-# ─── 5) ledger 적재 ───
-gaps_json=$(echo "$gaps" | tr '|' '\n' | jq -R . 2>/dev/null | jq -sc . 2>/dev/null || echo '[]')
-status="ok"
-(( gap_count > 0 )) && status="critical"
+if (( gap_count > 0 )); then
+  for g in "${gaps[@]}"; do log "  ✗ $g"; done
+else
+  log "  전부 실재 — 표면 간 누락 없음"
+fi
+
+# ─── 원장 적재 (형식 불변) ───
+gaps_json=$(printf '%s\n' "${gaps[@]:-}" | jq -R . | jq -sc 'map(select(length>0))')
+status="ok"; (( gap_count > 0 )) && status="critical"
 
 jq -cn \
   --arg ts "$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M:%S%z')" \
-  --argjson cli "${cli_count:-0}" \
-  --argjson cli_bot "${cli_bot_count:-0}" \
-  --argjson bot "${bot_count:-0}" \
-  --argjson gaps "${gap_count:-0}" \
+  --argjson checked "$checked" \
+  --argjson gaps "$gap_count" \
   --arg status "$status" \
   --argjson gap_list "$gaps_json" \
-  '{ts:$ts, cli_total:$cli, cli_bot_relevant:$cli_bot, bot_total:$bot, gap_count:$gaps, status:$status, gaps:$gap_list}' \
+  '{ts:$ts, checked:$checked, gap_count:$gaps, status:$status, gaps:$gap_list}' \
   >> "$LEDGER"
 
-# ─── 6) Discord critical alert (GAP 발견 시만) ───
+# ─── 경보 (누락 시에만) ───
 if (( gap_count > 0 )); then
-  ALERT_SCRIPT="${HOME}/jarvis/runtime/scripts/alert.sh"
+  ALERT_SCRIPT="${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh"
   if [ -x "$ALERT_SCRIPT" ]; then
-    title="🚨 SSoT BLOCKING 룰 동기화 GAP ${gap_count}건"
-    detail="jarvis-core.md(CLI) BLOCKING 봇 적용 대상 ${cli_bot_count}개 중 ${gap_count}개가 persona-discord.md에 미등재. 양쪽 SSoT 동기화 필요. 상세: ${LEDGER}"
+    title="🚨 규칙 문장 누락 ${gap_count}건 — 표면 간 동기화 깨짐"
+    detail="언약(rule-covenant.json)에 등재된 문장이 일부 표면에서 사라졌습니다. 상세: ${LEDGER}"
     bash "$ALERT_SCRIPT" critical "$title" "$detail" 2>&1 | tee -a "$LOG" || true
+  else
+    log "  경보 스크립트 없음 — $ALERT_SCRIPT"
   fi
 fi
 
-log "=== ssot-blocking-sync-audit 종료 (status=${status}) ==="
+log "=== 완료 (누락 ${gap_count}건) ==="
 exit 0

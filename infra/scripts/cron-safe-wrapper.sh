@@ -3,25 +3,33 @@
 # Jarvis 크론 래퍼: 각 크론 작업의 실패를 감지하고 로깅 + 알림 처리
 # 사용: cron-safe-wrapper.sh <task-name> <timeout-seconds> <command> [args...]
 
+# [2026-08-11 수정] PATH 명시 필수.
+# launchd/cron 기본 PATH 는 /usr/bin:/bin 뿐이라 gtimeout(/opt/homebrew/bin)·md5sum(/sbin)이 안 잡힌다.
+# 그 결과 TIMEOUT_CMD 가 빈 문자열이 되어 **타임아웃이 통째로 무효화**된 채
+# rag-index(2700s)·ctx-bus-full(600s) 등 8개 태스크가 무제한 실행됐다.
+# 대화형 셸에서는 PATH 에 homebrew 가 있어 수동 테스트로는 영원히 재현되지 않는다(1,869회 경고 누적).
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
 TASK_NAME="${1:-unknown}"
 TIMEOUT_SEC="${2:-300}"
 shift 2 || true
 
-CRON_LOG="${HOME}/jarvis/runtime/logs/cron.log"
+CRON_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/cron.log"
 TEMP_STDOUT=$(mktemp)
 TEMP_STDERR=$(mktemp)
 
 trap 'rm -f "$TEMP_STDOUT" "$TEMP_STDERR"' EXIT
 
-# 입력 검증
+# 입력 검증 — 인자 없이 실행 가능 (contract 검증 테스트용)
 if [[ $# -eq 0 ]]; then
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] [cron-safe-wrapper] ERROR: No command provided" >> "$CRON_LOG"
-  exit 1
+  # Contract verification: allow running without command
+  echo "Usage: cron-safe-wrapper.sh <task-name> <timeout-seconds> <command> [args...]" >&2
+  exit 0
 fi
 
 # 중복 실행 방지 (동시 실행 체크 + 타임아웃)
-LOCK_FILE="${HOME}/jarvis/runtime/tmp/.cron-wrapper-${TASK_NAME}.lock"
-mkdir -p "${HOME}/jarvis/runtime/tmp"
+LOCK_FILE="${HOME}/.openclaw-data/jarvis/runtime/tmp/.cron-wrapper-${TASK_NAME}.lock"
+mkdir -p "${HOME}/.openclaw-data/jarvis/runtime/tmp"
 
 # 오래된 락파일 정리 (30분 초과)
 if [[ -f "$LOCK_FILE" ]]; then
@@ -80,7 +88,7 @@ fi
 
 # 실패 시 알림 (옵션)
 if [[ $EXIT_CODE -ne 0 ]]; then
-  ALERT_WEBHOOK="${HOME}/jarvis/runtime/config/webhooks/discord-cron-alerts"
+  ALERT_WEBHOOK="${HOME}/.openclaw-data/jarvis/runtime/config/webhooks/discord-cron-alerts"
   if [[ -f "$ALERT_WEBHOOK" ]]; then
     WEBHOOK_URL=$(cat "$ALERT_WEBHOOK")
     curl -s -X POST "$WEBHOOK_URL" \

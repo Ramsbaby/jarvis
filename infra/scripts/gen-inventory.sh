@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-gen-inventory(04:30) 로 이관. OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/jarvis/runtime/state/stopped/gen-inventory
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/gen-inventory" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/gen-inventory
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/gen-inventory" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[gen-inventory] 중지 플래그 있음"
     exit 0
 fi
@@ -20,11 +20,11 @@ set -euo pipefail
 #   ${VAULT_DIR:-$HOME/vault}/01-system/launchd-manifest.md
 #   ${VAULT_DIR:-$HOME/vault}/01-system/webhook-registry.md
 #
-# crontab 등록: 30 4 * * * ~/jarvis/runtime/scripts/gen-inventory.sh >> ~/jarvis/runtime/logs/gen-inventory.log 2>&1
+# crontab 등록: 30 4 * * * ~/.openclaw-data/jarvis/runtime/scripts/gen-inventory.sh >> ~/.openclaw-data/jarvis/runtime/logs/gen-inventory.log 2>&1
 # ============================================================
 
-TASKS_JSON="$HOME/jarvis/runtime/config/tasks.json"
-MONITORING_JSON="$HOME/jarvis/runtime/config/monitoring.json"
+TASKS_JSON="$HOME/.openclaw-data/jarvis/runtime/config/tasks.json"
+MONITORING_JSON="$HOME/.openclaw-data/jarvis/runtime/config/monitoring.json"
 OUT_DIR="${VAULT_DIR:-$HOME/vault}/01-system"
 TODAY="$(date +%Y-%m-%d)"
 TIMESTAMP="$(date '+%Y-%m-%d %H:%M:%S')"

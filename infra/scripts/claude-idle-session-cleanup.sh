@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] 판정 D — 정지.
 # 근거: crontab:152가 --kill 없이 항상 dry-run으로만 호출(기본값 DRY_RUN=1), 실측 로그 전부 mode=dry-run — 실제 종료 기능이 한 번도 발동한 적 없는 상시 공회전.
-# 재개: rm ~/jarvis/runtime/state/stopped/claude-idle-session-cleanup
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/claude-idle-session-cleanup" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/claude-idle-session-cleanup
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/claude-idle-session-cleanup" ]]; then
     echo "[claude-idle-session-cleanup] 중지 플래그 있음 (판정 D)"
     exit 0
 fi

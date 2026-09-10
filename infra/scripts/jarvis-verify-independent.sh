@@ -9,7 +9,7 @@ set -euo pipefail
 #   판정(CONFIRMED / REFUTED / UNCERTAIN)과 실측 근거를 돌려준다.
 #
 # 왜 필요한가 (설계 출처):
-#   ~/jarvis/runtime/wiki/meta/how-to-become-jarvis-20260719.md
+#   ~/.openclaw-data/jarvis/runtime/wiki/meta/how-to-become-jarvis-20260719.md
 #     · 원리 A — 검증자는 생성자와 격리되어야 한다(coherence trap 방지)
 #     · 원리 B — 실측 신호(파일 존재·exit code·grep·launchctl)가 있을 때만 판정
 #     · 섹션 6 실행 흐름 — [블라인드 검증자] 노드의 "명령으로 부르는" 첫 버전
@@ -17,7 +17,7 @@ set -euo pipefail
 #   해법은 "자비스를 더 똑똑하게"가 아니라 "자비스 밖에 독립 검증자를 세우는 것".
 #
 # LLM 호출 규약 (실측 확인 — 2026-07-19):
-#   ~/jarvis/infra/bin/ask-claude.sh 를 표준 경유로 사용한다.
+#   ~/.openclaw-data/jarvis/infra/bin/ask-claude.sh 를 표준 경유로 사용한다.
 #   인자 순서:  TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET] [RETENTION] [MODEL]
 #   격리 장수명 토큰(setup-token, 1년)은 llm-gateway._llm_claude_cli 가 자동 주입.
 #   결과는 ask-claude.sh 가 최종 `echo "$RESULT"` 로 stdout 출력 → 여기서 캡처.
@@ -42,7 +42,7 @@ set -euo pipefail
 #   0 = CONFIRMED   3 = REFUTED   4 = UNCERTAIN   1 = 검증 자체 실패(LLM 무응답)
 #   2 = 사용법 오류
 #
-# 원장(ledger): ~/jarvis/runtime/ledger/independent-verify.jsonl (append-only)
+# 원장(ledger): ~/.openclaw-data/jarvis/runtime/ledger/independent-verify.jsonl (append-only)
 #
 # 자동 트리거 확장 방향 (다음 단계 — 이번 스코프 제외):
 #   Claude Code Stop 훅 또는 ask-claude.sh 완료 직전에서 "완료/성공/존재" 선언을
@@ -53,9 +53,9 @@ set -euo pipefail
 export HOME="${HOME:-$(eval echo ~"$(whoami)")}"
 export PATH="${PATH:-/usr/bin:/bin}:/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin"
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 ASK_CLAUDE="${BOT_HOME}/bin/ask-claude.sh"
-LEDGER_FILE="${HOME}/jarvis/runtime/ledger/independent-verify.jsonl"
+LEDGER_FILE="${HOME}/.openclaw-data/jarvis/runtime/ledger/independent-verify.jsonl"
 
 log() { echo "[$(date '+%H:%M:%S')] $*" >&2; }
 
@@ -130,6 +130,14 @@ ${CLAIM}${CONTEXT_BLOCK}
 2. **실측 근거가 없으면 CONFIRMED를 절대 쓰지 마라.** 확인 불가·근거 부재는 REFUTED.
    주장 자체가 상태로 판정 불가능한 주관/의견이면 UNCERTAIN.
 3. 실제로 실행한 명령과 그 출력만 근거로 인정한다. "아마", "보통", "일반적으로" 금지.
+
+[품질 루브릭 — 검증 대상이 "자비스 응답 텍스트"일 때만 적용, 그 외 주장(파일·크론·상태)엔 무시]
+응답 품질을 6축(각 0~2점, 만점 12)으로 함께 채점하라:
+A 좌표결합(오너의 날짜·금액·실명이 논거에 박혀 있나) · B 장면화(추상 수식어 대신 수치범위·시점·행동인가) ·
+C 다음수(다음 이벤트와 그때 쓸 것을 제안하며 닫나) · D 사실라벨링(불확실 주장 전부에 추정/미검증/출처 표시) ·
+E 근거인용(경로·명령 출력 인용) · F 분해완전성(되물을 하위질문이 안 남나).
+A·D축은 [추가 맥락]으로 동봉된 SSoT 발췌와 대조해서만 채점한다 — SSoT 발췌가 없으면 그 두 축은 "미채점"으로 표기.
+채점했다면 판정 직전 줄에 정확히: RUBRIC: A=n B=n C=n D=n E=n F=n total=n/12
 
 [출력 형식 — 정확히 이 형식으로 끝맺어라]
 먼저 실행한 명령과 관측 결과를 3줄 이내로:

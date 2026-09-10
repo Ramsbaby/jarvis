@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 RESULTS_DIR="${JARVIS_HOME}/runtime/results/news-briefing"
 LOG_FILE="${JARVIS_HOME}/runtime/logs/post-news-briefing.log"
 TASK_STORE="${JARVIS_HOME}/infra/lib/task-store.mjs"

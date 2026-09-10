@@ -14,7 +14,7 @@
 #   - openai-ledger.jsonl
 #   - interview-curated/ 디렉토리 전체 (md sidecars)
 #
-# 출력: ~/jarvis/runtime/state/snapshots/<label>-<YYYYMMDD-HHMM>/
+# 출력: ~/.openclaw-data/jarvis/runtime/state/snapshots/<label>-<YYYYMMDD-HHMM>/
 #   manifest.json + 위 파일/tarball
 #
 # 2026-04-28 비서실장 3차 (옵션 A+C 동시 적용 준비)
@@ -23,9 +23,9 @@ set -euo pipefail
 
 LABEL="${1:-untitled}"
 TS="$(TZ=Asia/Seoul date +%Y%m%d-%H%M)"
-SNAP_DIR="${HOME}/jarvis/runtime/state/snapshots/${LABEL}-${TS}"
-STATE_DIR="${HOME}/jarvis/runtime/state"
-CURATED_DIR="${HOME}/jarvis/runtime/wiki/05-career/interview-curated"
+SNAP_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/snapshots/${LABEL}-${TS}"
+STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state"
+CURATED_DIR="${HOME}/.openclaw-data/jarvis/runtime/wiki/05-career/interview-curated"
 
 mkdir -p "$SNAP_DIR"
 
@@ -45,8 +45,8 @@ fi
 
 # 3. ralph runner PID + git HEAD + manifest
 RALPH_PID="$(pgrep -f interview-ralph-runner || echo none)"
-GIT_HEAD="$(cd "${HOME}/jarvis" && git rev-parse HEAD 2>/dev/null || echo unknown)"
-GIT_BRANCH="$(cd "${HOME}/jarvis" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+GIT_HEAD="$(cd "${HOME}/.openclaw-data/jarvis" && git rev-parse HEAD 2>/dev/null || echo unknown)"
+GIT_BRANCH="$(cd "${HOME}/.openclaw-data/jarvis" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 
 # 4. ralph-rounds.jsonl 마지막 라인 → 라운드 메트릭 추출
 LAST_ROUND_METRICS="{}"
@@ -77,5 +77,5 @@ echo "   🐍 ralph_pid: $RALPH_PID"
 echo "   🌿 git: $GIT_BRANCH @ ${GIT_HEAD:0:7}"
 
 # 6. 옵션: comparison 자동 호출 시 사용할 latest symlink
-ln -sfn "$SNAP_DIR" "${HOME}/jarvis/runtime/state/snapshots/latest-${LABEL}"
+ln -sfn "$SNAP_DIR" "${HOME}/.openclaw-data/jarvis/runtime/state/snapshots/latest-${LABEL}"
 echo "   🔗 latest-${LABEL} → $(basename "$SNAP_DIR")"

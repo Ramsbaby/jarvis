@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # skill-loop-nightly.sh — 스킬 자가 생성 루프 야간 배치 (선별 → 추출)
 # DRYRUN 모드: SKILL_LOOP_DRYRUN=1 (기본) — 초안만 생성, Discord 카드 송출 안 함
-# 설계: ~/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 5)
+# 설계: ~/.openclaw-data/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 5)
 set -euo pipefail
 
 export HOME="${HOME:-$(eval echo "~$(whoami)")}"
 export PATH="${PATH}:/opt/homebrew/bin:/usr/local/bin"
 
-SCRIPTS_DIR="${HOME}/jarvis/infra/scripts"
-DRAFTS_DIR="${HOME}/jarvis/runtime/state/skill-drafts"
-LEDGER="${HOME}/jarvis/runtime/ledger/skill-loop.jsonl"
+SCRIPTS_DIR="${HOME}/.openclaw-data/jarvis/infra/scripts"
+DRAFTS_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/skill-drafts"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/skill-loop.jsonl"
 MAX="${SKILL_LOOP_MAX:-3}"
 TODAY="$(date +%F)"
 
@@ -25,7 +25,7 @@ fi
 # 실패 관측: tasks.json discordChannel도 script 태스크엔 비실효 → 직접 알림 (B2 수리)
 on_fail() {
   printf '{"ts":"%s","event":"batch-failed","line":"%s"}\n' "$(date -u +%FT%TZ)" "${1:-?}" >> "$LEDGER" 2>/dev/null || true
-  node "${HOME}/jarvis/infra/scripts/discord-visual.mjs" --type stats \
+  node "${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs" --type stats \
     --data "{\"title\":\"⚠️ skill-loop 야간 배치 실패\",\"data\":{\"시각\":\"$(date '+%F %T KST')\",\"실패 라인\":\"${1:-?}\",\"로그\":\"results/skill-loop-nightly\"},\"timestamp\":\"${TODAY}\"}" \
     --channel jarvis-system >/dev/null 2>&1 || true
 }
@@ -78,15 +78,19 @@ for(const l of lines){try{const o=JSON.parse(l);const d=(o.ts||"").slice(0,10);c
 }catch(_){}}
 const days=Object.keys(byDay).sort();
 let streak=0;
+// [2026-08-26] 종전에는 sel===0 인 날을 건너뛰기만 해서 스트릭이 끊기지 않았다.
+//   그 결과 8/10~8/25 내내 선별이 0건이었는데도 옛 기록이 streak=3 을 살려두어
+//   "선별은 되는데 초안이 0건"이라는 경보가 매일 나갔다. 선별 자체가 없는 날은
+//   이 경보가 말하는 증상이 성립하지 않으므로 연속을 끊는다.
 for(let i=days.length-1;i>=0;i--){const v=byDay[days[i]];
   if(v.sel>0 && v.draft===0) streak++;
-  else if(v.sel>0 && v.draft>0) break;
+  else break;
 }
 console.log(streak);
 ' 2>/dev/null || echo 0)"
 if [ "${DRY_STREAK:-0}" -ge 3 ]; then
   echo "⚠️ 조용한 무산출 ${DRY_STREAK}일 연속 — jarvis-system 경고 송출"
-  node "${HOME}/jarvis/infra/scripts/discord-visual.mjs" --type stats \
+  node "${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs" --type stats \
     --data "{\"title\":\"⚠️ skill-loop 조용한 무산출 ${DRY_STREAK}일 연속\",\"data\":{\"증상\":\"선별은 되는데 초안 생성 0건\",\"의심\":\"추출 게이트·경로 이슈\",\"점검\":\"skill-loop-extract 로그 + selected/draft-created ledger\",\"시각\":\"$(date '+%F %T KST')\"},\"timestamp\":\"${TODAY}\"}" \
     --channel jarvis-system >/dev/null 2>&1 || true
 fi

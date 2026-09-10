@@ -1,99 +1,24 @@
-Data privacy comes first, always.
+Data privacy comes first.
 
-All user-facing command line output should make use of emojis for visual hierarchy.
-
-## AI Navigation (Start Here)
-
-Any AI agent or human touching this repo for the first time should read in this order:
-
-1. **[infra/docs/MAP.md](infra/docs/MAP.md)** — 1-minute entry point: purpose, layout, subsystems, "where to find what"
-2. **[infra/docs/TASKS-INDEX.md](infra/docs/TASKS-INDEX.md)** — Auto-generated catalog of scheduled tasks (count in `tasks-index.json.totalTasks`), grouped by team
-3. **[infra/docs/TEAMS-CRONS.md](infra/docs/TEAMS-CRONS.md)** — Reverse index: team → owned crons
-4. **[infra/docs/CONFIG.md](infra/docs/CONFIG.md)** — Config inventory and safe-edit checklist
-5. **[infra/docs/ARCHITECTURE.md](infra/docs/ARCHITECTURE.md)** — Deep design (message flow, Discord runner, session mgmt)
-6. **[infra/docs/OPERATIONS.md](infra/docs/OPERATIONS.md)** — Incident response, cron schedules, log paths
-
-면접봇 작업 시 반드시 먼저 읽을 것:
-- **[infra/docs/INTERVIEW-BOT.md](infra/docs/INTERVIEW-BOT.md)** — 면접봇 풀 기획 문서 (아키텍처·불변식·버전 히스토리)
-- **`runtime/context/interview-bot-profile.md`** — Jarvis 세션 주입용 압축본 (불변식·파라미터·상태 파일 경로)
-
-Regenerate `TASKS-INDEX.md` + `tasks-index.json` after any `~/jarvis/runtime/config/tasks.json` change:
-
-```bash
-node ~/jarvis/infra/scripts/gen-tasks-index.mjs
-```
+구조·크론·설정은 `infra/docs/MAP.md`부터 본다. 면접봇은 `infra/docs/INTERVIEW-BOT.md`.
+`runtime/config/tasks.json` 변경 후 `node infra/scripts/gen-tasks-index.mjs`.
 
 ## Development Rules
 
-- No hardcoded user paths — use environment variables (`BOT_HOME`, `JARVIS_RAG_HOME`)
-- No hardcoded secrets — use `.env` files, never commit tokens/webhooks
-- No hardcoded language patterns — keep prompts language-agnostic
-- Shell scripts: `set -euo pipefail`, quote all variables, trap cleanup
-- Naming: `[domain]-[target]-[action]` (e.g., `rag-index-safe.sh`)
+- 사용자 경로·시크릿 하드코딩 금지 — `BOT_HOME`·`JARVIS_RAG_HOME`·`.env`
+- 언어 패턴 하드코딩 금지 — 프롬프트는 언어 중립으로
+- 셸: `set -euo pipefail`, 변수 쿼팅, trap 정리. macOS엔 `flock`·`md5sum`·`gtimeout`이 기본 PATH에 없다 — 크론 스크립트는 PATH를 명시한다
+- 명명: `[도메인]-[대상]-[동작]`
+- 3파일 이상 편집·구조 변경 전 `scripts/pre-edit-scan.sh`, 경로 불확실하면 `scripts/ssot-path-guard.sh --all <파일명>`
+- Conventional commits: `feat:` `fix:` `refactor:` `docs:` `chore:`
 
-## Golden Path — 작업 착수 전 고정 순서 (2026-04-21)
+## 프롬프트 SSoT — 표면마다 다른 파일을 읽는다
 
-크고 모호한 요청을 받으면 다음 순서를 기본 흐름으로 삼습니다.
-2026-04-15 메이커 에반 유튜브("GStack + Superpowers 후기")의 워크플로우를 Jarvis 철학(Iron Laws · SSoT · 집사 페르소나)으로 재구성한 것.
+| 표면 | SSoT |
+|---|---|
+| Claude Code CLI (앱에서 `claude rc` 원격 접속 포함) | `~/.claude/rules/jarvis.md` + paths 게이트 파일 |
+| 디스코드 봇 | `runtime/context/owner/persona-discord.md` · 감정 턴은 `persona-discord-emotional.md`가 **통째로 대체**한다 |
+| claude.ai 앱 직접 사용 | 서버가 프롬프트를 쥔다 — Jarvis 통제 불가 |
 
-1. `/brainstorm` — 아이디어 인터뷰 (역질문 15~20개로 암묵 공백 선제 노출) + UI mockup 3안
-2. 필요 시 `/office-hours` — 옵션 A vs B 트레이드오프 매트릭스 의사결정
-3. `/autoplan` — 단계별 계획 분해 (Writing Plans = 설계 도면)
-4. `/plan-review` — 11섹션 체크리스트 엄격 리뷰
-5. `/verify` — 7-Gate + Contrarian Challenge (독립 감사관 Agent)
-6. worktree 분리 → `/codex` 또는 `/orchestrate` 병렬 구현
-7. 완료 후 `/design-review` — AI slop 감식 (생산 후 시각 감사)
-8. `/ship` → `/retro` + 필요 시 `/oops`로 오답노트 실시간 기재
-
-**스킵 규칙**: 주인님이 "그냥 해" 하시면 1~4 단계 생략 가능 — 단, 생략 시 리스크 고지 필수. 작은 버그 수정·문서 편집은 전체 플로우 강제 안 함.
-
-**SSoT**: 본 파일(`~/jarvis/CLAUDE.md`)이 Golden Path의 단일 진실 공급원. worktree 복제본은 주기적으로 git merge로 동기.
-
-**기능 매트릭스 출처**: `~/jarvis/rag/analyses/evan-gstack-superpowers-20260421.md` (영상 분석 + Verify 감사관 지적 반영).
-
-## Surface Memory Boundary — 표면 통합 메모리 경계
-
-**원칙**: Jarvis는 **뇌 하나**(`~/jarvis/runtime/wiki/` + RAG + memory files). 여러 표면(디스코드/Claude Code CLI/macOS 앱)은 그 뇌의 입·출력 단말일 뿐. 읽기는 표면 무관하게 공유되고, 쓰기도 동일한 저장소로 수렴한다.
-
-### 사용 규칙
-
-- **기억이 쌓여야 하는 작업은 Claude Code CLI**에서 한다 — 세션 종료 자동 주입 + RAG 증분 인덱싱이 보장됨.
-- **macOS 앱에서 중요한 결정·사실이 나오면 반드시 `/remember`**로 명시적 주입. macOS 앱은 자동 주입이 원리상 불가하므로(대화 이력이 claude.ai 서버 전용) `/remember`가 **유일한 기억 입금 창구**다.
-- **디스코드는 이미 turn 단위 자동 주입** 중이므로 `/remember` 호출 불필요 (단, 긴 대화에서 핵심만 추려 명시적으로 남기고 싶을 때는 사용 가능).
-- 쓰기 경로는 표면마다 다르지만 저장소는 `addFactToWiki` 하나로 수렴하며, `[source:X]` 태그로 어느 표면에서 쌓였는지 추적한다.
-
-> 표면별 읽기·쓰기 매트릭스와 주입 경로 상세는 `infra/docs/ARCHITECTURE.md`를 보라. 여기 옮겨 적지 않는다.
-
-### BLOCKING 룰 등재 시 양쪽 SSoT 적용 (2026-05-25 영구 등재 · BLOCKING)
-
-> **읽기·쓰기 저장소는 통합되어 있지만, 시스템 프롬프트(LLM 행동 가드)는 표면별 분리**임을 명시.
-
-#### 시스템 프롬프트 SSoT (표면별 분리)
-
-| 표면 | 시스템 프롬프트 SSoT | 누가 읽나 |
-|---|---|---|
-| **Claude Code CLI** | `~/.claude/rules/jarvis-*.md` (jarvis-core·jarvis-persona·jarvis-ethos·integrations·discord-visualization) | Claude Code CLI 자동 주입 |
-| **디스코드 봇** | `~/jarvis/runtime/context/owner/persona-discord.md` + `personas.json` (채널별) + `user-profile.md` + `preferences.md` + 17단계 systemParts 합성 (claude-runner.js) | 디스코드 봇이 매 응답마다 합성 |
-| **Claude macOS 앱** | claude.ai 서버 (사용자 system prompt 설정) | 외부 — Jarvis 통제 불가 |
-
-#### BLOCKING 룰 등재 강제 (재발 방지 — 2026-05-25 사고 기반)
-
-분석·예측·판단·응답 깊이·인지 원칙·말투 같은 **LLM 행동 가드** BLOCKING 룰 등재 시 다음 단계 필수:
-
-1. **CLI 측 등재**: `~/.claude/rules/jarvis-core.md` (또는 jarvis-persona·jarvis-ethos)
-2. **디스코드 봇 측 등재**: `~/jarvis/runtime/context/owner/persona-discord.md`
-3. **상호 참조 명시**: 양쪽에 "동일 룰이 다른 SSoT에도 적용됨" 1줄 메모
-
-#### 사고 사례 (영구 학습)
-2026-05-25 — jarvis-core.md L16에 "특정기업 발표일 예측 패턴 매칭" BLOCKING 사고 사례 명시되어 있었으나 **CLI 전용**이었고 디스코드 봇 persona-discord.md에 미적용. 결과: 같은 도메인·같은 질문 유형에서 디스코드 봇이 깊이 부족 응답. V1-V5 진단 후 A+B 수정으로 양쪽 동시 적용 완료. 상세: `~/jarvis/runtime/wiki/meta/learned-mistakes.md` 5/25 entry (line 17).
-
-#### 자기검열 (BLOCKING 룰 등재 직전 필수)
-1. 이 룰이 CLI 행동만 가드하는가, 디스코드 봇도 가드해야 하는가?
-2. 디스코드 봇도 적용해야 한다면 persona-discord.md에 등재했는가?
-3. 양쪽 SSoT에 동일 사고 사례 인용했는가?
-
-위 3개 통과해야 BLOCKING 룰 등재 완료. 한 곳만 등재 = **표면별 불일치 메타 결함 재발**.
-
-## Git
-
-Commit messages: conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`)
+말투·응답 규칙은 CLI와 디스코드 **양쪽에** 등재한다. 한쪽만 고치면 표면별로 다른 답이 나온다.
+감정 턴 파일은 안전 규칙을 상속하지 않으므로, 금액·검증 규칙을 고칠 때 별도로 확인한다.

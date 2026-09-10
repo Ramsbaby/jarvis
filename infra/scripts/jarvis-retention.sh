@@ -8,10 +8,10 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 ARCHIVE_DIR="$JARVIS_HOME/runtime/state/archive/$(date +%Y-%m)"
 LOG_FILE="$JARVIS_HOME/runtime/logs/jarvis-retention.log"
-DISCORD_VISUAL="$HOME/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$ARCHIVE_DIR" "$(dirname "$LOG_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"

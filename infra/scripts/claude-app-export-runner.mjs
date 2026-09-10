@@ -14,10 +14,10 @@
  *   DEBUG=1 node claude-app-export-runner.mjs         # headed + 디버그
  *
  * Exit: 항상 0.
- * Log: ~/jarvis/runtime/logs/claude-app-export.log
+ * Log: ~/.openclaw-data/jarvis/runtime/logs/claude-app-export.log
  */
 
-import playwright from '/Users/ramsbaby/jarvis/infra/discord/node_modules/playwright/index.js';
+import playwright from '/Users/ramsbaby/.openclaw-data/jarvis/infra/discord/node_modules/playwright/index.js';
 const { chromium } = playwright;
 import {
   readFileSync, existsSync, mkdirSync, writeFileSync,

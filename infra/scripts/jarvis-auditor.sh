@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Cross-platform compat
-export JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"  # BOT_HOME 환경변수 오염 방지 (QW-14, 2026-04-13)
+export JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"  # BOT_HOME 환경변수 오염 방지 (QW-14, 2026-04-13)
 source "${JARVIS_HOME}/lib/compat.sh" || {
   echo "ERROR: Failed to source compat.sh from $JARVIS_HOME" >&2
   exit 1
@@ -15,7 +15,7 @@ set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 CONFIG_DIR="$BOT_HOME/config"
 STATE_DIR="$BOT_HOME/state"
 RESULTS_DIR="$BOT_HOME/results/auditor"
@@ -36,6 +36,11 @@ done
 
 COOLDOWN_HOURS=20
 MAX_AUTO_FIXES=5
+# 같은 티켓 재큐 금지 시간 — cron-failure-tracker.sh 의 TICKET_COOLDOWN_H 와 같은 규칙.
+# task-store enqueue 는 done/failed/skipped 를 무조건 queued 로 되돌린다. 이 감사는 Stop 훅
+# (stop-changelog.sh) 으로 세션이 끝날 때마다 돌기 때문에, 근거 파일이 그대로면 코더가
+# 같은 티켓을 답장마다 다시 받는다 — 2026-09-05 e2e 오탐 티켓 1건으로 코더 4회(각 ~45분) 실행.
+TICKET_COOLDOWN_H="${TICKET_COOLDOWN_H:-72}"
 
 # 보호 파일 (자동수정 금지)
 PROTECTED_FILES="discord-bot.js monitoring.json tasks.json company-dna.md autonomy-levels.md .env rag-engine.mjs rag-index.mjs effective-tasks.json calendar.json social.json system.json secrets.json"
@@ -240,10 +245,14 @@ EOJSON
 
 # Enqueue an issue to tasks.db via task-store.mjs enqueue CLI
 # jarvis-coder.sh는 tasks.db를 소비하므로 dev-queue.json 방식은 사용하지 않음
+# 인자: <title> [priority] [context] [evidence]
+#   evidence = 무엇을 보고 고장이라 판단했는지 (명령 출력·파일 경로·수치). SELF-HEAL-PLAN 2a.
+#   meta.evidence 로 저장돼 코더 프롬프트에 주입된다 — 근거 없는 티켓은 코더가 할 일을 지어낸다.
 enqueue_to_devqueue() {
     local title="$1"
     local priority="${2:-medium}"
     local context="${3:-}"
+    local evidence="${4:-}"
 
     if [[ "$DRY_RUN" == true ]]; then
         log "DRY-RUN enqueue: $title (priority=$priority)"
@@ -257,12 +266,26 @@ enqueue_to_devqueue() {
     local slug
     slug="code-fix-$(echo "$title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//' | cut -c1-40 | sed 's/-*$//')"
 
+    # 쿨다운: 코더가 최근에 이미 이 티켓을 끝냈으면(done/failed/skipped) 다시 주지 않는다.
+    # 쿨다운 안에 같은 근거가 또 잡혔다는 건 코더 수준에서 못 고치는 문제 또는 오탐이므로 사람 판단으로 넘긴다.
+    local prev prev_status prev_age_h
+    prev=$(node "${BOT_HOME}/lib/task-store.mjs" get "$slug" 2>/dev/null | grep -v ExperimentalWarning || true)
+    prev_status=$(echo "$prev" | jq -r '.status // ""' 2>/dev/null || echo "")
+    prev_age_h=$(echo "$prev" | jq -r 'if .updated_at then ((now * 1000 - .updated_at) / 3600000 | floor) else "" end' 2>/dev/null || echo "")
+    if [[ "$prev_status" == "done" || "$prev_status" == "failed" || "$prev_status" == "skipped" ]] \
+        && [[ -n "$prev_age_h" && "$prev_age_h" -lt "$TICKET_COOLDOWN_H" ]]; then
+        log "COOLDOWN skip: $slug (코더 ${prev_status} ${prev_age_h}h 전, 쿨다운 ${TICKET_COOLDOWN_H}h) — 같은 근거 반복, 사람 확인 필요"
+        report "  - ⏸️ 재큐 안 함: \`$slug\` — ${prev_age_h}h 전 코더 ${prev_status} (쿨다운 ${TICKET_COOLDOWN_H}h)"
+        return 0
+    fi
+
     local prompt_text="다음 Jarvis 코드 이슈를 분석하고 수정하라.
 
 문제: ${title}
 상세: ${context}
+근거(evidence): ${evidence:-없음}
 
-수정 시 기존 동작 파괴 금지. 수정 후 Discord #jarvis-system에 결과 보고."
+수정 시 기존 동작 파괴 금지. 근거가 실제 고장이 아니면(감사 오탐) 코드를 고치지 말고 결과에 '오탐: <이유>' 를 적고 끝내라. 수정 후 Discord #jarvis-system에 결과 보고."
 
     # dev-queue v2 (2026-04-22): 같은 감사 사이클의 이슈들을 한 박스(batch)로 묶는다.
     # batch_id = "auditor-<YYYYMMDD-HH>" — 시간 단위 그룹핑
@@ -277,6 +300,7 @@ enqueue_to_devqueue() {
         --priority "$priority" \
         --source "jarvis-auditor" \
         --batch-id "$batch_id" \
+        --evidence "${evidence:0:2000}" \
         --type "code-fix" 2>/dev/null) || { log "WARN: dev-queue 적재 실패 (non-fatal)"; return 0; }
 
     local action
@@ -345,7 +369,8 @@ run_node_syntax_audit() {
 
     local found=0
     while IFS= read -r -d '' js_file; do
-        if ! node --check "$js_file" 2>/dev/null; then
+        local check_err=""
+        if ! check_err=$(node --check "$js_file" 2>&1 >/dev/null); then
             local rel_path="${js_file#"$BOT_HOME"/}"
             report "- FAIL: \`$rel_path\` — syntax error"
             found=$(( found + 1 ))
@@ -354,7 +379,8 @@ run_node_syntax_audit() {
 
             create_l3_request "node-syntax" "Node.js syntax error in $rel_path" "manual" \
                 "\"file\": \"$rel_path\""
-            enqueue_to_devqueue "코드 이상: $rel_path — Node.js 문법 오류" "high" "node --check 실패: $rel_path"
+            enqueue_to_devqueue "코드 이상: $rel_path — Node.js 문법 오류" "high" "node --check 실패: $rel_path" \
+                "node --check $js_file → $(echo "$check_err" | grep -v '^$' | head -4 | tr '\n' ' ' | cut -c1-600)"
         fi
     done < <(find "$BOT_HOME/discord" "$BOT_HOME/lib" "$BOT_HOME/bin" \
         -not -path '*/node_modules/*' \
@@ -575,7 +601,8 @@ run_launchagent_audit() {
             found=$(( found + 1 ))
             ((TOTAL_ISSUES++))
             ((WARN_ISSUES++))
-            enqueue_to_devqueue "LaunchAgent 미로드: $svc" "high" "launchctl print gui/${uid}/${svc} 3회 재시도 후 실패 — 서비스 미등록 또는 크래시"
+            enqueue_to_devqueue "LaunchAgent 미로드: $svc" "high" "launchctl print gui/${uid}/${svc} 3회 재시도 후 실패 — 서비스 미등록 또는 크래시" \
+                "launchctl print gui/${uid}/${svc} → $(launchctl print "gui/${uid}/${svc}" 2>&1 | head -2 | tr '\n' ' ' | cut -c1-200); plist=$([[ -f "$HOME/Library/LaunchAgents/${svc}.plist" ]] && echo present || echo missing)"
         else
             local pid
             pid=$(launchctl list "$svc" 2>/dev/null | awk 'NR==2{print $1}' || echo "-")
@@ -584,7 +611,8 @@ run_launchagent_audit() {
                 found=$(( found + 1 ))
                 ((TOTAL_ISSUES++))
                 ((WARN_ISSUES++))
-                enqueue_to_devqueue "LaunchAgent PID 없음: $svc" "medium" "launchctl list 결과 PID 없음 — 서비스 중단 가능성"
+                enqueue_to_devqueue "LaunchAgent PID 없음: $svc" "medium" "launchctl list 결과 PID 없음 — 서비스 중단 가능성" \
+                    "launchctl list ${svc} → $(launchctl list "$svc" 2>&1 | sed -n '1,2p' | tr '\n' ' ' | cut -c1-200)"
             fi
         fi
     done
@@ -640,7 +668,8 @@ run_health_freshness_audit() {
             report "- WARN: health.json stale ($(( age / 60 ))m old, threshold $(( stale_threshold / 60 ))m)"
             ((TOTAL_ISSUES++))
             ((WARN_ISSUES++))
-            enqueue_to_devqueue "헬스체크 STALE: health.json $(( age / 60 ))분 미갱신" "medium" "system-health 크론 미실행 또는 실패 의심 — stale threshold $(( stale_threshold / 60 ))m 초과"
+            enqueue_to_devqueue "헬스체크 STALE: health.json $(( age / 60 ))분 미갱신" "medium" "system-health 크론 미실행 또는 실패 의심 — stale threshold $(( stale_threshold / 60 ))m 초과" \
+                "${health_file}: last_check=${last_check} (${age}s 전, 임계 ${stale_threshold}s); tasks.db system-health=$(node "${BOT_HOME}/lib/task-store.mjs" get system-health 2>/dev/null | jq -c '{status, lastError: .meta.lastError, updated_at}' 2>/dev/null || echo '조회실패'); cron.log=$(grep '\[system-health\]' "${BOT_HOME}/logs/cron.log" 2>/dev/null | grep -E 'SUCCESS|FAILED|ERROR' | tail -1 | cut -c1-120)"
         else
             report "- OK: health.json fresh ($(( age / 60 ))m ago)"
         fi
@@ -688,9 +717,22 @@ run_e2e_audit() {
         done <<< "$fails"
         TOTAL_ISSUES=$((TOTAL_ISSUES + fail_count))
         WARN_ISSUES=$((WARN_ISSUES + fail_count))
+        # e2e-cron 이 편집 중인 트리(`# TREE: dirty`)를 검사한 결과면 FAIL 은 미완성 편집일 수 있다.
+        # 티켓을 만들면 코더가 없는 고장을 고치러 간다 (2026-09-05 오탐 티켓 → 코더 4회 실행, inc-20260905-8a26d2b6).
+        # SUSPECT 로만 보고하고, 다음 날 clean 트리 검사에서도 FAIL 이면 그때 티켓이 만들어진다.
+        local tree_line
+        tree_line=$(head -1 "$result_file" 2>/dev/null | grep '^# TREE: dirty' || true)
+        if [[ -n "$tree_line" ]]; then
+            log "SUSPECT: e2e FAIL ${fail_count}건은 편집 중 트리 검사 결과 (${tree_line}) — 티켓 미생성"
+            report "  - ⚠️ SUSPECT: 편집 중 트리에서 검사됨 (${tree_line#\# TREE: }) — 티켓 미생성, 다음 clean 검사에서 재판정"
+            report ""
+            return
+        fi
         msg="E2E Test Failed: $fail_count items from $result_date"
         desc="Detected $fail_count FAIL items in e2e-health result file"
-        enqueue_to_devqueue "$msg" "high" "$desc"
+        # 근거 = 실제 FAIL 줄 (없으면 코더가 어떤 테스트인지 지어낸다 — 2026-04~08 e2e 티켓 6건이 이 경로)
+        enqueue_to_devqueue "$msg" "high" "$desc" \
+            "${result_file}: $(echo "$fails" | head -10 | sed 's/^[[:space:]]*//' | tr '\n' '|' | cut -c1-1200)"
     else
         report "- OK: No e2e failures detected"
     fi

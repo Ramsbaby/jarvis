@@ -32,7 +32,7 @@ set -euo pipefail
 # [Config]
 # ═════════════════════════════════════════════════════════════════════════════════
 
-REPO_GUARD_STATE_DIR="${BOT_HOME:-$HOME/jarvis/runtime}/state/repo-guard"
+REPO_GUARD_STATE_DIR="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}/state/repo-guard"
 REPO_GUARD_LOG="${REPO_GUARD_STATE_DIR}/repo-paths-$(date +%F).log"
 REPO_GUARD_SNAPSHOT="${REPO_GUARD_STATE_DIR}/repo-snapshot-${TASK_ID:-unknown}.json"
 

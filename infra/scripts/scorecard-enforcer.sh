@@ -17,7 +17,7 @@
 
 set -uo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LOG="${BOT_HOME}/logs/scorecard-enforcer.log"
 mkdir -p "$(dirname "$LOG")"
 

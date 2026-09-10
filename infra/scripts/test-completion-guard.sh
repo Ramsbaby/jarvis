@@ -4,8 +4,8 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
-DISCORD_ROUTE_LIB="${HOME}/jarvis/infra/lib/discord-route.sh"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+DISCORD_ROUTE_LIB="${HOME}/.openclaw-data/jarvis/infra/lib/discord-route.sh"
 
 # ── 테스트 설정 ────────────────────────────────────────────────────────────
 
@@ -120,7 +120,7 @@ run_tests() {
     # T4: 워크플로우 스크립트 기본 실행
     _test_start "워크플로우 스크립트: 성공 경로 (exit 0)"
     # 워크플로우 스크립트 존재 확인
-    if [[ -x "${HOME}/jarvis/infra/scripts/task-completion-workflow.sh" ]]; then
+    if [[ -x "${HOME}/.openclaw-data/jarvis/infra/scripts/task-completion-workflow.sh" ]]; then
         _test_pass
     else
         _test_fail "워크플로우 스크립트 미발견 또는 실행 불가"
@@ -129,7 +129,7 @@ run_tests() {
     # T5: 워크플로우 스크립트: 빈 result 거부 (exit 100)
     _test_start "워크플로우 스크립트: 빈 result 거부 (exit 100)"
     set +e  # exit code 보존
-    "${HOME}/jarvis/infra/scripts/task-completion-workflow.sh" \
+    "${HOME}/.openclaw-data/jarvis/infra/scripts/task-completion-workflow.sh" \
         "test-workflow-empty" "" "test" >/dev/null 2>&1
     WORKFLOW_EXIT=$?
     set -e

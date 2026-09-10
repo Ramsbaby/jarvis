@@ -1,1 +1,1 @@
-/Users/ramsbaby/jarvis/rag/scripts/rag-compact-safe.sh
+../../rag/scripts/rag-compact-safe.sh

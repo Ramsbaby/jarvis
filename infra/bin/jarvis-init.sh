@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # Usage: jarvis-init.sh
 
-JARVIS_HOME="${HOME}/jarvis/runtime"
+JARVIS_HOME="${HOME}/.openclaw-data/jarvis/runtime"
 
 # --- Colors ---
 BOLD='\033[1m'

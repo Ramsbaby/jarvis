@@ -3,8 +3,8 @@
  * validate-tasks.mjs — tasks.json JSON Schema 검증
  *
  * Usage:
- *   node ~/jarvis/infra/scripts/validate-tasks.mjs
- *   node ~/jarvis/infra/scripts/validate-tasks.mjs --fix   # (향후: auto-fix 가능한 오류 수정)
+ *   node ~/.openclaw-data/jarvis/infra/scripts/validate-tasks.mjs
+ *   node ~/.openclaw-data/jarvis/infra/scripts/validate-tasks.mjs --fix   # (향후: auto-fix 가능한 오류 수정)
  *
  * 종료 코드:
  *   0 — 검증 통과
@@ -144,7 +144,7 @@ if (missingAddedAt.length > 0) {
 // 양쪽 등록 = 중복 실행 위험. 기본 WARN-only, JARVIS_VALIDATE_STRICT=1로 reject 전환.
 // 사고 사례: 2026-05-07 24건 crontab 중복 실행 → fail_24h 226건 본진. 5/7 적용 후
 // 5/8 새벽 다른 세션 작업으로 코드 사라짐 → 재구현.
-// 참조: ~/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md 4-A·4-B
+// 참조: ~/.openclaw-data/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md 4-A·4-B
 //
 // 예외 카테고리(SSoT 등재 — verify B2 fix): meta-audit / system-monitor /
 // retention/archive / bot-runner는 plist 직접 작성 OK이므로 위반에서 제외.
@@ -210,7 +210,7 @@ if (violations.length > 0) {
     log(`  · ${id} → ${sources.join(', ')}`);
   }
   log(`  해결: crontab에서 제거 후 tasks.json만 유지.`);
-  log(`  참조: ~/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md`);
+  log(`  참조: ~/.openclaw-data/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md`);
   if (STRICT) {
     log(`  STRICT 모드 — exit 1 (JARVIS_VALIDATE_STRICT=1)`);
     process.exit(1);

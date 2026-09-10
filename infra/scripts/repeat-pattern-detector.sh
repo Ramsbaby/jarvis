@@ -2,15 +2,15 @@
 # repeat-pattern-detector.sh — 7일 세션 요약에서 반복 패턴 → 자동화 후보 알림
 # 매주 일 21:30 KST (weekly-self-retro 22:00 30분 전)
 #
-# 데이터: ~/jarvis/runtime/state/session-summaries/*.md
+# 데이터: ~/.openclaw-data/jarvis/runtime/state/session-summaries/*.md
 # 분석: 같은 명령/질문 패턴이 ≥3회 등장 → "자동화하시죠?" 카드
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 SESSIONS_DIR="$JARVIS_HOME/runtime/state/session-summaries"
 LOG_FILE="$JARVIS_HOME/runtime/logs/repeat-pattern-detector.log"
-DISCORD_VISUAL="$HOME/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 THRESHOLD=3
 
 mkdir -p "$(dirname "$LOG_FILE")"

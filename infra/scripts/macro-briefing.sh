@@ -2,10 +2,7 @@
 # macro-briefing.sh — 시장 매크로 분석 스크립트
 # 이 스크립트는 Jarvis bot-cron.sh의 macro-briefing 태스크를 독립적으로 실행합니다.
 # 일정: 월~금 23:30 KST (UTC 14:30)
-# 실행: claude -p macro-briefing
-
-# Early error handling
-trap 'echo "[ERROR] Script failed at line $LINENO (exit: $?)" >&2' ERR
+# 실행: ./macro-briefing.sh
 
 set -euo pipefail
 
@@ -13,27 +10,25 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-# Claude Max subscription mode — no API key needed
+# Claude Max subscription mode
 unset ANTHROPIC_API_KEY 2>/dev/null || true
 
-# Batch mode optimization for cron tasks
+# Batch mode for cron tasks
 export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
 
-# Working directories - match bot-cron.sh path convention
-# bot-cron.sh uses: BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
-# Runtime data is stored in separate ~/jarvis/runtime by plugin-loader.sh
+# Working directories
 BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
-RUNTIME_HOME="${HOME}/jarvis/runtime"
+RUNTIME_HOME="${HOME}/.openclaw-data/jarvis/runtime"
 
-# Use RUNTIME_HOME for logs when available, fallback to BOT_HOME
+# Use RUNTIME_HOME for logs when available
 if [[ -d "$RUNTIME_HOME" ]]; then
     LOG_DIR="${RUNTIME_HOME}/logs"
+    BOT_HOME="${RUNTIME_HOME}"
+    export BOT_HOME
 else
     LOG_DIR="${BOT_HOME}/logs"
 fi
-RESULT_FILE="${LOG_DIR}/macro-briefing-result.json"
 
-# Ensure log directory exists
 mkdir -p "$LOG_DIR"
 
 # === Functions ===
@@ -50,24 +45,24 @@ error_exit() {
 }
 
 # === Dependency check ===
-for cmd in claude jq; do
+for cmd in jq; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         error_exit "$cmd not found in PATH"
     fi
 done
 
+ASK_CLAUDE_SCRIPT="${HOME}/.openclaw-data/jarvis/infra/bin/ask-claude.sh"
+[[ -f "$ASK_CLAUDE_SCRIPT" ]] || error_exit "ask-claude.sh not found at $ASK_CLAUDE_SCRIPT"
+
 # === Task Execution ===
 
 log "START"
 
-# Load task configuration from multiple search paths
-# Priority: BOT_HOME effective-tasks.json → BOT_HOME tasks.json → RUNTIME_HOME configs
+# Load task configuration
 TASKS_FILE=""
 for candidate in \
     "${BOT_HOME}/config/effective-tasks.json" \
-    "${BOT_HOME}/config/tasks.json" \
-    "${RUNTIME_HOME}/config/effective-tasks.json" \
-    "${RUNTIME_HOME}/config/tasks.json"; do
+    "${BOT_HOME}/config/tasks.json"; do
     if [[ -f "$candidate" ]]; then
         TASKS_FILE="$candidate"
         log "Using tasks file: $TASKS_FILE"
@@ -75,96 +70,66 @@ for candidate in \
     fi
 done
 
-if [[ -z "$TASKS_FILE" ]]; then
-    error_exit "tasks.json not found in any config path"
-fi
+[[ -n "$TASKS_FILE" ]] || error_exit "tasks.json not found"
 
-# Extract prompt and other settings from tasks.json
+# Extract task parameters
 PROMPT=$(jq -r '.tasks[] | select(.id == "macro-briefing") | .prompt' "$TASKS_FILE" 2>/dev/null)
-if [[ -z "$PROMPT" ]]; then
-    error_exit "Failed to extract macro-briefing prompt from tasks.json"
-fi
+[[ -n "$PROMPT" ]] || error_exit "No prompt found for macro-briefing"
 
-log "Executing claude with Bash,Read,Write tool support"
+ALLOWED_TOOLS=$(jq -r '.tasks[] | select(.id == "macro-briefing") | .allowedTools // "Read"' "$TASKS_FILE" 2>/dev/null)
+MAX_BUDGET=$(jq -r '.tasks[] | select(.id == "macro-briefing") | .maxBudget // ""' "$TASKS_FILE" 2>/dev/null)
+MODEL=$(jq -r '.tasks[] | select(.id == "macro-briefing") | .model // ""' "$TASKS_FILE" 2>/dev/null)
 
-# Create temporary files
-TMP_OUTPUT=$(mktemp) || error_exit "Failed to create temp output file"
-trap "rm -f \"$TMP_OUTPUT\"" EXIT
+log "Executing macro-briefing via ask-claude.sh"
+log "Task: macro-briefing | Tools: $ALLOWED_TOOLS | Model: $MODEL | Budget: $MAX_BUDGET"
+log "ASK_CLAUDE_SCRIPT: $ASK_CLAUDE_SCRIPT"
+log "Prompt length: ${#PROMPT} chars"
 
-# Execute Claude and capture output with timeout
-log "Running: claude -p (prompt size: $(echo -n "$PROMPT" | wc -c) bytes)"
+# Debug: write args to temp file for inspection
+DEBUG_ARGS="/tmp/macro-briefing-args-debug-$$.txt"
+cat > "$DEBUG_ARGS" << 'EOF'
+Task ID: macro-briefing
+ALLOWED_TOOLS:
+EOF
+echo "$ALLOWED_TOOLS" >> "$DEBUG_ARGS"
+cat >> "$DEBUG_ARGS" << 'EOF'
+TIMEOUT: 600
+MAX_BUDGET:
+EOF
+echo "$MAX_BUDGET" >> "$DEBUG_ARGS"
+cat >> "$DEBUG_ARGS" << 'EOF'
+RESULT_RETENTION: 7
+MODEL:
+EOF
+echo "$MODEL" >> "$DEBUG_ARGS"
+log "Debug args saved to: $DEBUG_ARGS"
 
-# Set 540s timeout (90% of 600s task timeout to allow cleanup)
-CLAUDE_TIMEOUT=540
-
-# Use gtimeout (GNU timeout) if available, fall back to timeout
-TIMEOUT_CMD="timeout"
-if command -v gtimeout >/dev/null 2>&1; then
-    TIMEOUT_CMD="gtimeout"
-fi
-
-# Execute Claude with stdin for better special character handling
-# Use printf to ensure proper encoding (no trailing newline issues with echo)
-PROMPT_FILE=$(mktemp) || error_exit "Failed to create temp prompt file"
-printf '%s' "$PROMPT" > "$PROMPT_FILE" || error_exit "Failed to write prompt to temp file"
-trap "rm -f \"$PROMPT_FILE\" \"$TMP_OUTPUT\"" EXIT
-
-if $TIMEOUT_CMD "$CLAUDE_TIMEOUT" claude -p < "$PROMPT_FILE" > "$TMP_OUTPUT" 2>&1; then
-    log "Claude execution succeeded"
-else
-    rc=$?
-    if [[ $rc -eq 124 ]]; then
-        log "Claude execution timeout (${CLAUDE_TIMEOUT}s exceeded)"
-        error_exit "Claude timeout after ${CLAUDE_TIMEOUT}s"
+# Call ask-claude.sh with task parameters (with retry)
+# Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET] [RESULT_RETENTION] [MODEL]
+log "Starting ask-claude.sh call..."
+log "Environment: BOT_HOME=$BOT_HOME, PATH=$PATH"
+log "ASK_CLAUDE_SCRIPT exists: $(test -f "$ASK_CLAUDE_SCRIPT" && echo yes || echo no)"
+log "ASK_CLAUDE_SCRIPT executable: $(test -x "$ASK_CLAUDE_SCRIPT" && echo yes || echo no)"
+MAX_RETRIES=3
+RETRY_COUNT=0
+while (( RETRY_COUNT < MAX_RETRIES )); do
+    if BOT_HOME="$BOT_HOME" "$ASK_CLAUDE_SCRIPT" "macro-briefing" "$PROMPT" "$ALLOWED_TOOLS" "600" "$MAX_BUDGET" "7" "$MODEL" >> "${LOG_DIR}/macro-briefing.log" 2>&1; then
+        log "ask-claude.sh completed successfully"
+        break
+    else
+        EXIT_CODE=$?
+        (( RETRY_COUNT++ ))
+        if (( RETRY_COUNT < MAX_RETRIES )); then
+            log "ask-claude.sh failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 10s..."
+            sleep 10
+        else
+            log "ask-claude.sh failed after $MAX_RETRIES attempts with exit code $EXIT_CODE"
+            # Results may still be saved even on evaluator failure - continue instead of exiting
+            log "Proceeding despite ask-claude.sh failure (results may be available)"
+        fi
     fi
-    log "Claude execution failed with exit code $rc"
-    if [[ -s "$TMP_OUTPUT" ]]; then
-        log "Claude stderr/output (first 100 lines):"
-        head -100 "$TMP_OUTPUT" | while IFS= read -r line; do
-            log "  $line"
-        done
-    fi
-    error_exit "Claude execution failed with exit code $rc"
-fi
+done
 
-# Verify output is not empty
-if [[ ! -s "$TMP_OUTPUT" ]]; then
-    error_exit "Claude produced empty output"
-fi
-
-log "Claude output received ($(wc -c < "$TMP_OUTPUT" | tr -d ' ') bytes, $(wc -l < "$TMP_OUTPUT" | tr -d ' ') lines)"
-
-# Log full output
-cat "$TMP_OUTPUT" >> "${LOG_DIR}/macro-briefing.log" || log "WARN: Failed to append output to log file"
-
-# Try to extract and validate JSON from output
-JSON_SAVED=false
-if jq '.' "$TMP_OUTPUT" >/dev/null 2>&1; then
-    # Whole file is valid JSON
-    cp "$TMP_OUTPUT" "$RESULT_FILE" && {
-        log "Successfully saved JSON result to $RESULT_FILE"
-        JSON_SAVED=true
-    } || log "WARN: Failed to copy JSON result file"
-else
-    # Try to find JSON object in output
-    if grep -q '{' "$TMP_OUTPUT"; then
-        # Extract potential JSON line(s)
-        while IFS= read -r line; do
-            if echo "$line" | jq '.' >/dev/null 2>&1; then
-                echo "$line" > "$RESULT_FILE" && {
-                    log "Extracted and saved JSON result to $RESULT_FILE"
-                    JSON_SAVED=true
-                }
-                break
-            fi
-        done < <(grep '{' "$TMP_OUTPUT")
-    fi
-
-    if [[ "$JSON_SAVED" == "false" ]]; then
-        log "WARN: No valid JSON found in output, saving full output to result file"
-        cp "$TMP_OUTPUT" "$RESULT_FILE" || log "WARN: Failed to save result file"
-    fi
-fi
-
+# Results are automatically saved to ${BOT_HOME}/results/macro-briefing/ by ask-claude.sh
 log "SUCCESS"
 exit 0

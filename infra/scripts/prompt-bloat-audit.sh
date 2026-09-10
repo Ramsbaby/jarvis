@@ -15,7 +15,7 @@ set -uo pipefail
 # 스케줄 LA는 정책상 crontab 이관 대상(별도 작업)이나, 최소 수술로 스크립트 내 PATH 보정(plist 미변경).
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
 
-BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
 SNAPSHOT="${BOT_HOME}/state/system-prompt-snapshot.md"
 DROPS="${BOT_HOME}/state/prompt-budget-drops.jsonl"
 LOG="${BOT_HOME}/logs/prompt-bloat-audit.log"
@@ -82,8 +82,8 @@ SHOULD_NOTIFY="false"
 [ "$STATUS" = "WARN" ] && SHOULD_NOTIFY="true"
 [ "$DOW" = "1" ] && SHOULD_NOTIFY="true"
 
-if [ "$SHOULD_NOTIFY" = "true" ] && [ -f "$HOME/jarvis/runtime/scripts/discord-visual.mjs" ]; then
-    node "$HOME/jarvis/runtime/scripts/discord-visual.mjs" --type stats --data \
+if [ "$SHOULD_NOTIFY" = "true" ] && [ -f "$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" ]; then
+    node "$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" --type stats --data \
         "$(jq -nc \
             --arg ts "$(date '+%Y-%m-%d %H:%M KST')" \
             --arg bytes "$CURRENT_BYTES bytes" \

@@ -17,7 +17,7 @@ fi
 NEW_TOKEN="$1"
 CRED="${HOME}/.claude/.credentials.json"
 TOKEN_FILE="${HOME}/.claude/.long-lived-token"
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LEDGER="${BOT_HOME}/ledger/oauth-refresh-ledger.jsonl"
 
 # 형식 검증

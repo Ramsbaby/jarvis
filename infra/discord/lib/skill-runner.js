@@ -128,7 +128,7 @@ export async function runSkill(skillName, userMessage, options = {}) {
 일부 스킬 MD에 \`openclaw\` / \`~/.openclaw/\` 경로 참조가 있으나, 이는 레거시 오염입니다.
 Jarvis 환경에서는 다음으로 해석:
 - \`openclaw status\` → (Discord에선 실행 불가, CLI 세션에서 \`/doctor\` 안내)
-- \`~/.openclaw/logs/\` → \`~/jarvis/runtime/logs/\`
+- \`~/.openclaw/logs/\` → \`~/.openclaw-data/jarvis/runtime/logs/\`
 - \`ai.openclaw.*\` → \`ai.jarvis.*\`
 
 ## Discord 응답 형식

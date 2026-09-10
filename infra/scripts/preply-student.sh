@@ -16,9 +16,9 @@ set -euo pipefail
 #   preply-student.sh pdf <파일> [추가파일...]   # 학생 전송용 PDF 변환
 #   preply-student.sh send <메시지> <파일...>    # jarvis-preply-tutor 채널에 첨부 업로드
 
-JARVIS="${HOME}/jarvis"
+JARVIS="${HOME}/.openclaw-data/jarvis"
 REGISTRY="${JARVIS}/runtime/config/preply-students.json"
-MATERIAL_DIR="${PREPLY_MATERIAL_DIR:-${HOME}/jarvis/runtime/preply-materials}"
+MATERIAL_DIR="${PREPLY_MATERIAL_DIR:-${HOME}/.openclaw-data/jarvis/runtime/preply-materials}"
 DISCORD_DIR="${JARVIS}/infra/discord"
 PDF_SCRIPT="${JARVIS}/infra/scripts/preply-html2pdf.mjs"
 UPLOAD_SCRIPT="${JARVIS}/infra/scripts/preply-upload.mjs"
@@ -486,7 +486,7 @@ print(hits)
   loss_out=$(python3 - "$f" <<'PYEOF'
 import re, json, os, sys, time
 f = sys.argv[1]
-LEDGER = os.path.expanduser('~/jarvis/runtime/state/preply-verify-ledger.jsonl')
+LEDGER = os.path.expanduser('~/.openclaw-data/jarvis/runtime/state/preply-verify-ledger.jsonl')
 html = open(f).read()
 classes = {}
 for m in re.findall(r'class="([^"]+)"', html):

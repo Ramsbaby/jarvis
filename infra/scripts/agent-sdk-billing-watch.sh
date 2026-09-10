@@ -23,7 +23,7 @@
 set -uo pipefail
 
 # ── 경로 설정 ──────────────────────────────────────────────────────────────────
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 BOT_HOME="${BOT_HOME:-$JARVIS_HOME/runtime}"
 LOG_FILE="$BOT_HOME/logs/agent-sdk-billing-watch.log"
 STATE_DIR="$BOT_HOME/state/agent-sdk-billing-watch"

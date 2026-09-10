@@ -7,7 +7,7 @@ set -euo pipefail
 # Execute : ask-claude.sh 위임 (Opus 기반 복합 분석)
 # Verify  : 5개 섹션(성공률/비용/안정성/Top3/개선목표) + 파일 저장 확인
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 TASK_ID="monthly-review"
 LEDGER="${BOT_HOME}/state/token-ledger.jsonl"
 RAG_INDEX_LOG="${BOT_HOME}/logs/rag-index.log"
@@ -74,14 +74,14 @@ stage_execute() {
     log "STAGE 2: execute (ask-claude.sh 위임)"
     local ask_claude="${BOT_HOME}/bin/ask-claude.sh"
     if [[ ! -x "$ask_claude" ]]; then
-        ask_claude="${HOME}/jarvis/infra/bin/ask-claude.sh"
+        ask_claude="${HOME}/.openclaw-data/jarvis/infra/bin/ask-claude.sh"
     fi
     local report_path="${REPORTS_DIR}/monthly-review-$(date +%Y-%m).md"
     local prompt="ultrathink
 
 지난 달 Jarvis 운영 회고:
 1) 크론 태스크 성공률 목표(90%) vs 달성
-2) OpenAI API 비용 현황 (~/jarvis/runtime/logs/rag-index.log 기반 임베딩 건수 추정 + ~/jarvis/runtime/state/token-ledger.jsonl 집계)
+2) OpenAI API 비용 현황 (~/.openclaw-data/jarvis/runtime/logs/rag-index.log 기반 임베딩 건수 추정 + ~/.openclaw-data/jarvis/runtime/state/token-ledger.jsonl 집계)
 3) 시스템 안정성 (watchdog 로그 크래시 횟수)
 4) 가장 많이 실행된 태스크 Top 3
 5) 다음 달 개선 목표 3가지

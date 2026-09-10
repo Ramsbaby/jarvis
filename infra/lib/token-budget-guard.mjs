@@ -182,10 +182,20 @@ export class TokenBudgetGuard {
     const taskCostUsd = taskLedger.totalCostUsd * factor;
     const dailyCostUsd = dailyLedger.totalCostUsd * factor;
 
+    // maxBudget(tasks.json)은 **1회 실행분** 예산이므로 24h 누적합과 비교하면 안 된다.
+    // 누적합을 쓰면 하루 24회 도는 태스크가 4회째에 자기 예산을 "초과"한 것으로 오판된다.
+    // 폭주 루프 탐지라는 본래 목적에는 창 내 단일 실행 최댓값이 맞다.
+    const taskMaxRunRawUsd = taskLedger.entries.reduce(
+      (m, e) => Math.max(m, Number(e.cost_usd) || 0), 0);
+    const taskMaxRunUsd = taskMaxRunRawUsd * factor;
+
     const result = {
       taskId: this.taskId,
       taskCostUsd: +taskCostUsd.toFixed(6),
       taskCostRawUsd: +taskLedger.totalCostUsd.toFixed(6),
+      taskMaxRunUsd: +taskMaxRunUsd.toFixed(6),
+      taskMaxRunRawUsd: +taskMaxRunRawUsd.toFixed(6),
+      taskRunsInWindow: taskLedger.entries.length,
       dailyCostUsd: +dailyCostUsd.toFixed(6),
       dailyCostRawUsd: +dailyLedger.totalCostUsd.toFixed(6),
       tokenizerCorrectionFactor: factor,
@@ -202,18 +212,18 @@ export class TokenBudgetGuard {
       throw new BudgetExceededError(msg, { ...result, reason: 'daily_cap_exceeded' });
     }
 
-    // ── 태스크별 예산 초과 체크 ──
-    if (this.maxBudgetUsd > 0 && taskCostUsd >= this.maxBudgetUsd) {
-      const msg = `[TOKEN_BUDGET_GUARD] TASK_BUDGET_EXCEEDED: task=${this.taskId} cost=${taskCostUsd.toFixed(4)} USD >= budget=${this.maxBudgetUsd} USD`;
+    // ── 태스크별 예산 초과 체크 (1회 실행분 최댓값 기준) ──
+    if (this.maxBudgetUsd > 0 && taskMaxRunUsd >= this.maxBudgetUsd) {
+      const msg = `[TOKEN_BUDGET_GUARD] TASK_BUDGET_EXCEEDED: task=${this.taskId} maxRun=${taskMaxRunUsd.toFixed(4)} USD >= budget=${this.maxBudgetUsd} USD (window24h_total=${taskCostUsd.toFixed(4)}, runs=${taskLedger.entries.length})`;
       writeGuardLog('ERROR', this.taskId, msg, result);
       process.stderr.write(msg + '\n');
       throw new BudgetExceededError(msg, { ...result, reason: 'task_budget_exceeded' });
     }
 
     // ── 경고 임계값 체크 (태스크) ──
-    if (this.maxBudgetUsd > 0 && taskCostUsd >= this.maxBudgetUsd * this.warnThreshold) {
-      const pct = ((taskCostUsd / this.maxBudgetUsd) * 100).toFixed(1);
-      const msg = `[TOKEN_BUDGET_GUARD] WARN: task=${this.taskId} cost=${taskCostUsd.toFixed(4)} USD (${pct}% of budget ${this.maxBudgetUsd} USD)`;
+    if (this.maxBudgetUsd > 0 && taskMaxRunUsd >= this.maxBudgetUsd * this.warnThreshold) {
+      const pct = ((taskMaxRunUsd / this.maxBudgetUsd) * 100).toFixed(1);
+      const msg = `[TOKEN_BUDGET_GUARD] WARN: task=${this.taskId} maxRun=${taskMaxRunUsd.toFixed(4)} USD (${pct}% of budget ${this.maxBudgetUsd} USD)`;
       writeGuardLog('WARN', this.taskId, msg, result);
       process.stderr.write(msg + '\n');
     }

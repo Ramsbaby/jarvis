@@ -17,7 +17,7 @@ set -euo pipefail
 # ── 환경 ──────────────────────────────────────────────────────────
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 DOT_JARVIS="${HOME}/.jarvis"
-RUNTIME="${HOME}/jarvis/runtime"
+RUNTIME="${HOME}/.openclaw-data/jarvis/runtime"
 LOG_DIR="${RUNTIME}/logs"
 RESULT_DIR="${RUNTIME}/state/results"
 mkdir -p "$LOG_DIR" "$RESULT_DIR"

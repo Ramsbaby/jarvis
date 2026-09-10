@@ -19,11 +19,11 @@
 #
 # Usage: cron-bidirectional-audit.sh [--json]
 #   --json  ledger 형식 JSONL 만 출력 (크론 호출용)
-# 산출물: ~/jarvis/runtime/ledger/cron-bidirectional-audit.jsonl
+# 산출물: ~/.openclaw-data/jarvis/runtime/ledger/cron-bidirectional-audit.jsonl
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LA_DIR="${HOME}/Library/LaunchAgents"
 TASKS_FILE="${BOT_HOME}/config/effective-tasks.json"
 [[ -f "$TASKS_FILE" ]] || TASKS_FILE="${BOT_HOME}/config/tasks.json"

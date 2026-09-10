@@ -14,7 +14,7 @@
 #   - ntfy topic (실제 값)
 #   - AGENT_API_KEY 값
 #
-# 설치: ln -sf ~/jarvis/infra/scripts/pii-precommit-hook.sh ~/jarvis/.git/hooks/pre-commit
+# 설치: ln -sf ~/.openclaw-data/jarvis/infra/scripts/pii-precommit-hook.sh ~/.openclaw-data/jarvis/.git/hooks/pre-commit
 
 set -euo pipefail
 

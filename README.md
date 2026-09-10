@@ -10,20 +10,36 @@
 </p>
 
 
-<<<<<<< Updated upstream
+> ### 📦 Project status — 2026-09-09
+>
+> **Jarvis is moving onto [OpenClaw 2.0](https://github.com/openclaw/openclaw) as its runtime.**
+> The ideas stay. The plumbing is being handed to a maintained upstream.
+>
+> | Layer | What it is | Status |
+> |---|---|---|
+> | **Plugins & skills** | `infra/openclaw-plugins/` (OpenClaw) · [`.claude-plugin/`](.claude-plugin/marketplace.json) (Claude Code) | **Actively developed** |
+> | **Standalone stack** | Discord bot · cron + LaunchAgent fleet · RAG · wiki slots | **Frozen** — kept public for reference. Issues and PRs stay open, but expect slow replies |
+>
+> **Why.** One person cannot keep a 24/7 platform current. OpenClaw has 900+ contributors doing the plumbing;
+> what is actually mine is the token ledger, budget caps, wiki slots and channel personas — those become plugins.
+> The full log, failures included, is in [`docs/plan/openclaw2-migration-plan.md`](docs/plan/openclaw2-migration-plan.md).
+>
+> **This repository is not archived and not going away.** Only the layer underneath it is changing.
+
+<details>
+<summary>Earlier notices (April – June 2026)</summary>
+
 > **⚠️ Migration Notice (2026-04-17)**: Runtime data relocated from `~/.jarvis/` → `~/jarvis/runtime/`.
-=======
-> **⚠️ Migration Notice (2026-04-17)**: Runtime data relocated from `~/jarvis/runtime/` → `~/jarvis/runtime/`.
->>>>>>> Stashed changes
 > Existing installations: `~/.jarvis` remains as a backward-compatible symlink through **2026-10-17** (D+180).
-> Fresh installs: use `~/jarvis/runtime/` directly. See [docs/A2-MIGRATION.md](infra/docs/A2-MIGRATION.md) (upcoming).
+> Fresh installs: use `~/jarvis/runtime/` directly.
 
 > **🔧 Refactor Notice (2026-04-20)**: Modules `career-*` / `job-*` were renamed to `profile-*` / `inbox-*` in commit `e74f168` to reflect a more generic, owner-agnostic abstraction.
 > Legacy commit messages and closed issues may still reference the old names. **Current HEAD is the canonical naming.**
 
 > **📋 Recent Updates (2026-05-08 → 2026-06-27)**: 262 commits — the project grew ~40% since the last README refresh.
-> Highlights: **Compound Learning** (mistake clusters auto-promoted to permanent behavioural rules — the same error stops recurring) · **Proactive Owner State Engine** (infers your focus/mood and speaks first) · **Response Quality Gates** (auto-regenerates shallow or over-asserted replies) · **Image→Memory pipeline** (screenshots flow into long-term memory) · **3-tier notification routing** (severity-split channels).
-> **Scale now**: 358 automation scripts · 136 scheduled tasks · 170 LaunchAgents · 60+ skills. **Verified 7-day cron LLM cost: $9.42** (theoretical API price; $0 on a Claude subscription). See [CHANGELOG.md](CHANGELOG.md).
+> Highlights: **Compound Learning** (mistake clusters auto-promoted to permanent behavioural rules) · **Proactive Owner State Engine** · **Response Quality Gates** · **Image→Memory pipeline** · **3-tier notification routing**. See [CHANGELOG.md](CHANGELOG.md).
+
+</details>
 
 > **🧩 Claude Code Plugins (2026-05-13)**: `jarvis-goal` · `jarvis-deep-interview` · `jarvis-plan-review` — Anthropic `/goal` port with irreversibility guard, Sorbh/interview-me convergent gating port, gstack `/plan-ceo-review` 11-section port. All OSS-safe English.
 > Install: `/plugin marketplace add Ramsbaby/jarvis` · See [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) for plugin details.
@@ -31,12 +47,6 @@
 <p align="center">
   <strong>AI operations platform that manages itself 24/7</strong><br>
   Discord Bot + RAG Knowledge Base + Insight Layer + Self-Healing Automation
-</p>
-
-<p align="center">
-  <a href="https://github.com/Ramsbaby/jarvis/stargazers"><img src="https://img.shields.io/github/stars/Ramsbaby/jarvis?style=social" alt="Stars"></a>
-  <a href="https://github.com/Ramsbaby/jarvis/network/members"><img src="https://img.shields.io/github/forks/Ramsbaby/jarvis?style=social" alt="Forks"></a>
-  <a href="https://github.com/Ramsbaby/jarvis/commits"><img src="https://img.shields.io/github/last-commit/Ramsbaby/jarvis" alt="Last commit"></a>
 </p>
 
 <p align="center">
@@ -64,7 +74,7 @@
 > **"An AI assistant that audits your systems, analyses news, and writes code — while you sleep."**
 
 Message it on Discord and it chats. Send a voice message and it understands. Drop a file and it remembers.
-Overnight, 358 automation scripts run 136 scheduled tasks. If a service dies, it self-recovers within 3 minutes.
+Overnight, 418 automation scripts run 115 active scheduled tasks. If a service dies, it self-recovers within 3 minutes.
 Every dawn, it analyses your behavioural patterns and responds knowing what you're focused on right now.
 Zero API charges — runs on a Claude subscription. 100% of your data stays on your machine.
 
@@ -72,14 +82,16 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 
 ### Architecture
 
+<sub>Counts below describe the author's running instance, measured 2026-09-09. The repository ships the scripts and plugin sources; the task/LaunchAgent fleet is generated locally on first setup.</sub>
+
 | Layer | Components | Role |
 |:---:|------|------|
-| **Interface** | Discord (text + voice) | 24/7 conversational UI. 60+ skills/commands, buttons, voice recognition |
+| **Interface** | Discord (text + voice) | 24/7 conversational UI. Slash commands, buttons, voice recognition |
 | **Brain** | Claude + 8 AI agent teams | Chat, analysis, code generation, decision-making |
 | **Harness** | Prompt Harness + Progressive Compaction + Session Handoff | Tiered prompt loading (77% token savings), 3-stage context management (40K/60K/80K), structured state transfer between sessions |
 | **Memory** | RAG (LanceDB) + **LLM Wiki** + Insight Layer + **Importance Gate** | 10,000+ doc search + Stateful wiki + behavioural metrics + Mem0-style scoring (score ≥ 3 only stored) |
 | **Defense** | BoundedMap + Error Ledger + API Semaphore + Failure Rule Engine | Memory leak prevention, silent error tracking, concurrent API protection, auto pattern matching for known failures |
-| **Automation** | 358 scripts + 136 scheduled tasks (170 LaunchAgents on macOS, PM2 on Linux) | Self-healing, dawn audits, news briefing, auto code execution |
+| **Automation** | 418 scripts + 115 active scheduled tasks (181 LaunchAgents loaded on macOS, PM2 on Linux) | Self-healing, dawn audits, news briefing, auto code execution |
 | **Integration** | MCP + Google Calendar + GitHub | External service connectivity |
 
 ## Core Features
@@ -105,11 +117,13 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 
 ## How Jarvis Compares
 
+<sub>Written before the 2026-09 decision to run on OpenClaw. Kept as-is for the record — the comparison is no longer a competitive one. See the project status at the top.</sub>
+
 |  | **Jarvis** | **Claude Memory** | **ChatGPT Memory** | **[OpenClaw](https://docs.openclaw.ai) Dreaming** |
 |---|:---:|:---:|:---:|:---:|
 | **Memory** | RAG + **LLM Wiki** + Insight Layer | File-based (CLAUDE.md + Auto Dream) | Inject-all (every memory, every turn) | 3-phase sleep cycle (Light → REM → Deep) |
 | **Trend Detection** | Yes (topic freq shifts, entity momentum) | No | No | Yes (REM-phase pattern extraction) |
-| **Automation** | 358 scripts + self-healing | No (CLI tool) | No | 1 cron (dreaming sweep) |
+| **Automation** | 418 scripts + self-healing | No (CLI tool) | No | 1 cron (dreaming sweep) |
 | **Autonomous Coding** | Yes (Dev-Queue → jarvis-coder) | No | No | No |
 | **Multi-User** | Yes (isolated memory + family mode) | No (single user) | No (single user) | No (single agent) |
 | **Cost** | $0 (Claude subscription) | $0 (subscription) | $0 (free tier) | $0 (open source) |
@@ -398,7 +412,7 @@ Jarvis doesn't just chat — it **writes code**.
 </p>
 <p align="center"><em>Automated system health check: 10 services monitored every 6 hours</em></p>
 
-Jarvis doesn't just run — it **heals itself**. 358 automation scripts, 170 LaunchAgents, 136 scheduled tasks. Multi-layer self-recovery + systemic defense:
+Jarvis doesn't just run — it **heals itself**. 418 automation scripts, 181 loaded LaunchAgents, 115 active scheduled tasks. Multi-layer self-recovery + systemic defense:
 
 **Harness (Anthropic 4-function pattern)**:
 - **Guides**: Tiered prompt loading — Tier 0 (always, <3KB) / Tier 1 (keyword-triggered)

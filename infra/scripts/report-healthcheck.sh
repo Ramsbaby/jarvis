@@ -14,7 +14,7 @@ THRESHOLD_HOURS="${THRESHOLD_HOURS:-30}"
 DRY_RUN="${DRY_RUN:-0}"
 BOARD_DB="${BOARD_DB:-$HOME/jarvis-board/data/board.db}"
 
-LOG_FILE="$HOME/jarvis/runtime/logs/report-healthcheck.log"
+LOG_FILE="$HOME/.openclaw-data/jarvis/runtime/logs/report-healthcheck.log"
 mkdir -p "$(dirname "$LOG_FILE")"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
@@ -31,7 +31,7 @@ fi
 
 # ── Discord 봇 err.log 감시 (early-warn) ───────────────────────────
 # 최근 60분 내에 err.log가 쓰였으면 경고. 조용한 실패(=재기동 루프 등)를 조기 포착.
-ERR_LOG="$HOME/jarvis/runtime/logs/discord-bot.err.log"
+ERR_LOG="$HOME/.openclaw-data/jarvis/runtime/logs/discord-bot.err.log"
 if [[ -f "$ERR_LOG" ]]; then
   err_size=$(stat -f %z "$ERR_LOG" 2>/dev/null || stat -c %s "$ERR_LOG" 2>/dev/null || echo 0)
   err_mtime=$(stat -f %m "$ERR_LOG" 2>/dev/null || stat -c %Y "$ERR_LOG" 2>/dev/null || echo 0)

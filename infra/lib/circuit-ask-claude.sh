@@ -23,8 +23,8 @@ source "${BOT_HOME:-${HOME}/.jarvis}/infra/lib/guards.sh" 2>/dev/null || {
   exit 1
 }
 
-CIRCUIT_FILE="${BOT_HOME:-${HOME}/jarvis/runtime}/state/circuit-ask-claude.json"
-CIRCUIT_LEDGER="${BOT_HOME:-${HOME}/jarvis/runtime}/ledger/circuit-ask-claude.jsonl"
+CIRCUIT_FILE="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/state/circuit-ask-claude.json"
+CIRCUIT_LEDGER="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/ledger/circuit-ask-claude.jsonl"
 
 mkdir -p "$(dirname "$CIRCUIT_FILE")" "$(dirname "$CIRCUIT_LEDGER")" 2>/dev/null || true
 

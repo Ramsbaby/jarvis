@@ -134,3 +134,74 @@ search_brave "q1" & search_brave "q2" & search_brave "q3" & search_brave "q4" & 
 
 - 도메인: `discord`, `jarvis`, `watchdog`, `rag`, `alert`
 - 예: `bot-watchdog.sh`, `rag-index.mjs`, `jarvis-cron.sh`
+
+## 설정 실효성 검증 절차 (cl-19d6b30bf68b02db)
+
+크론·설정 변경 시 "파일에는 쓰였지만 프로세스는 읽지 못한" 상태를 원천 차단하는 절차.
+
+### 1. 변경 전 preflight 체크 (precheck-dangerous.sh)
+
+설정/크론 파일 편집 명령이 감지되면 자동으로:
+- 실행 중인 프로세스의 실제 env 값 조회 (LaunchAgent plist 포함)
+- tasks.json schema 유효성 검증
+- 파일 문법 검증 단계 안내
+
+예:
+```bash
+# tasks.json 편집 시 자동 실행
+vim ~/jarvis/config/tasks.json
+# → precheck-dangerous.sh가 현재 활성 태스크 수, disabled 상태 등을 보고
+```
+
+### 2. 파생값 재검산 (validate-config-sanity.sh)
+
+D-day·합계·비율 계산 직후 자동 검증.
+
+**사용 예시:**
+
+```bash
+# 모든 내장 테스트 케이스 실행 (5가지)
+~/jarvis/infra/scripts/validate-config-sanity.sh --test
+
+# D-day 검증 (마감일 >= 오늘)
+~/jarvis/infra/scripts/validate-config-sanity.sh --check-dday 2026-09-04
+
+# 합계 검증 (개별 금액 합 == 총합)
+~/jarvis/infra/scripts/validate-config-sanity.sh --check-sum 600 100 200 300
+
+# 기본값: tasks.json 검증 (disabled + active == total)
+~/jarvis/infra/scripts/validate-config-sanity.sh
+```
+
+**5가지 내장 테스트 케이스:**
+1. 손절선 거리 검증: (현재가 > 손절선) && (현재가 > 스크립트값)
+2. 비율 합계 검증: ±0.01 오차 범위 내 100%
+3. D-day 검증: (마감일 >= 오늘)
+4. 합계 검증: (개별 값 합 == 기대값)
+5. 태스크 개수: (disabled + active == total)
+
+### 3. 변경 후 실효값 검증
+
+파일 변경 후 반드시 다음 단계 실행:
+
+```bash
+# 1. 파일 문법 검증
+bash -n ~/jarvis/infra/bin/cron-master.sh
+
+# 2. LaunchAgent 재시작 (macOS)
+launchctl stop ai.jarvis.bot-cron && sleep 2 && launchctl start ai.jarvis.bot-cron
+
+# 3. 다음 스케줄 실행 후 로그 확인
+tail -f ~/.jarvis/logs/cron-master.log
+
+# 4. 실행 중인 프로세스 env 재검증
+ps aux | grep bot-cron | grep -v grep
+launchctl list | grep ai.jarvis
+```
+
+### 설정은 파일이 아니라 프로세스의 값이 실효
+
+- `.env` 파일 수정 → 프로세스가 로드하기 전까지 미적용
+- `tasks.json` 편집 → 다음 스케줄까지 기존 설정으로 실행
+- `cron-master.sh` 변경 → LaunchAgent 재시작 필수
+- 확인하지 않은 설정값은 `— 미검증`이라고 표시

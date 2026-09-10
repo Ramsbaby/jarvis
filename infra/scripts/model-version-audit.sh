@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # model-version-audit.sh — Jarvis 모델 사용 정책 자동 검증
-# SSoT: ~/jarvis/runtime/context/model-policy.json
+# SSoT: ~/.openclaw-data/jarvis/runtime/context/model-policy.json
 # 정책 위반 발견 시 Discord #jarvis-system 알림 + 로그
 #
 # 매주 월 09:00 KST 자동 실행 (ai.jarvis.model-version-audit LaunchAgent)
-# 수동 실행: bash ~/jarvis/infra/scripts/model-version-audit.sh
+# 수동 실행: bash ~/.openclaw-data/jarvis/infra/scripts/model-version-audit.sh
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 SSOT_REGISTRY="${JARVIS_HOME}/runtime/context/ssot-registry.json"
 TASKS_FILE="${JARVIS_HOME}/runtime/config/tasks.json"
 LOG_FILE="${JARVIS_HOME}/runtime/logs/model-version-audit.log"
-DISCORD_VISUAL="${HOME}/jarvis/infra/scripts/discord-visual.mjs"
+DISCORD_VISUAL="${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs"
 
 # SSoT Registry에서 model-policy 경로 단일 참조 (권고 ③ 통합 — 2026-05-08)
 POLICY_FILE_RAW=$(jq -r '.operationalPolicy[]? | select(.name=="model-policy") | .path' "$SSOT_REGISTRY" 2>/dev/null || echo "")

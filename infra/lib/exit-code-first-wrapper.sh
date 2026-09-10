@@ -66,7 +66,7 @@ evaluate_command_result() {
             fi
             printf '[%s] %s task=%s exit_code=%d stderr_sample="%s"\n' \
                 "$timestamp" "$result_status" "$task_id" "$exit_code" "$stderr_content" >> \
-                "${JARVIS_HOME:-${HOME}/jarvis/runtime}/logs/exit-code-wrapper.log" 2>/dev/null || true
+                "${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs/exit-code-wrapper.log" 2>/dev/null || true
         fi
         return 0
     else
@@ -79,7 +79,7 @@ evaluate_command_result() {
             fi
             printf '[%s] %s task=%s exit_code=%d stderr="%s"\n' \
                 "$timestamp" "$result_status" "$task_id" "$exit_code" "$stderr_content" >> \
-                "${JARVIS_HOME:-${HOME}/jarvis/runtime}/logs/exit-code-wrapper.log" 2>/dev/null || true
+                "${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs/exit-code-wrapper.log" 2>/dev/null || true
         fi
         return 1
     fi
@@ -143,7 +143,7 @@ log_decision() {
     local timestamp
     timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-    local log_dir="${JARVIS_HOME:-${HOME}/jarvis/runtime}/logs"
+    local log_dir="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs"
     mkdir -p "$log_dir" 2>/dev/null || true
 
     local log_entry="{\"ts\":\"$timestamp\",\"task\":\"$task_id\",\"decision\":\"$decision\",\"exit_code\":$exit_code"

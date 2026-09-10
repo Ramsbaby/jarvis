@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] jarvis-launchd-guardian(*/3) 으로 이관. OPENCLAW_JOB=1 로 통과한다.
 # crontab 6행이 남아 있으나 crontab 쓰기가 막혀(rc=124) 스크립트 층에서 이중 실행을 막는다.
-# 재개: rm ~/jarvis/runtime/state/stopped/launchd-guardian
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/launchd-guardian" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/launchd-guardian
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/launchd-guardian" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[launchd-guardian] 중지 플래그 있음 — 오픈클로로 이관됨"
     exit 0
 fi
@@ -14,7 +14,7 @@ set -euo pipefail
 # Runs every 3 minutes via cron. Detects unloaded launchd services and re-registers them.
 # Ensures critical LaunchAgents remain registered after system sleep or restart.
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 # Cross-platform compat
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
 

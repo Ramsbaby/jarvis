@@ -1,1 +1,1 @@
-/Users/ramsbaby/jarvis/infra/discord/discord-bot.js
+../infra/discord/discord-bot.js

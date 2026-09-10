@@ -6,9 +6,14 @@
 #  - FSM 무변경: done 전이 "직전"에 호출 (dev-queue v2 헌법 '상태 머신 변경 없음' 준수)
 #  - 작업 에이전트와 별개 프롬프트의 독립 감사관 (ask-claude.sh 경유
 #    → 서킷브레이커·token-budget-guard·token-ledger 자동 상속)
-#  - fail-open on infra error: 검증 인프라 장애(서킷 open·예산 소진·타임아웃)는
-#    게이트가 큐를 막지 않고 SKIPPED_*로 원장 기록 후 통과
 #  - fail-closed on FAIL verdict: 명시적 불합격은 차단 (enforce 모드)
+#  - fail-closed on infra error (2026-09-04): 검증 인프라 장애(서킷 open·예산 소진·타임아웃·
+#    판정 파싱 실패·스냅샷 없음)는 enforce 모드에서 UNAVAILABLE_* 로 return 1 — 통과가 아니라
+#    '사람 검토 보류' 다. 호출자는 VERIFY_GATE_VERDICT 가 UNAVAILABLE_* 이면 재시도 카운트를
+#    태우지 않고 패치를 보존한 뒤 failed(needs_human) 로 둔다 (coder-functions.sh _sc_hold_for_human).
+#    2026-09-04 이전엔 SKIPPED_* 로 통과시켰고, 그 경로가 무검증 done 의 한 축이었다.
+#    warn 모드에서는 종전대로 SKIPPED_* 통과 (원장 기록).
+#  - SKIPPED_OFF(off 모드)·SKIPPED_NO_CHANGES(diff 없음)는 모드 무관 통과 — 볼 것이 없다.
 #
 # 원장: ${BOT_HOME}/ledger/verify-gate.jsonl (append-only)
 
@@ -21,9 +26,27 @@ VERIFY_GATE_BUDGET="${VERIFY_GATE_BUDGET:-0.50}"       # verify-<id> 24h 누적 
 VERIFY_GATE_TIMEOUT="${VERIFY_GATE_TIMEOUT:-120}"      # 검증 1회 타임아웃 (초)
 VERIFY_GATE_DIFF_CAP="${VERIFY_GATE_DIFF_CAP:-15000}"  # 감사관에게 주는 diff 최대 바이트
 VERIFY_GATE_LEDGER="${BOT_HOME}/ledger/verify-gate.jsonl"
+# diff 를 읽는 저장소 — 코더 worktree 모드(1b)에서는 coder-functions 가 JARVIS_CODER_REPO 로 worktree 를 넘긴다.
+# 함수 호출 시점에 읽는다(활성 worktree 는 태스크마다 바뀌므로 source 시점에 고정하면 안 된다).
+_vg_repo() { echo "${JARVIS_CODER_REPO:-$BOT_HOME}"; }
 
 VERIFY_GATE_VERDICT=""
 VERIFY_GATE_FEEDBACK=""
+
+# 검증 불가 처리 — enforce: UNAVAILABLE_<사유> + return 1 (보류) / warn·off: SKIPPED_<사유> + return 0
+# _verify_gate_unavailable <task_id> <사유키> <상세> [duration]
+_verify_gate_unavailable() {
+    local task_id="$1" key="$2" detail="${3:-}" duration="${4:-0}"
+    if [[ "$JARVIS_VERIFY_GATE" == "enforce" ]]; then
+        VERIFY_GATE_VERDICT="UNAVAILABLE_${key}"
+        VERIFY_GATE_FEEDBACK="독립 검증을 수행하지 못했다(${key}: ${detail:0:200}). 미검증은 통과가 아니다 — 패치를 보존하고 사람 검토로 보류한다."
+        _verify_gate_ledger "$task_id" "$VERIFY_GATE_VERDICT" "$detail" "$duration"
+        return 1
+    fi
+    VERIFY_GATE_VERDICT="SKIPPED_${key}"
+    _verify_gate_ledger "$task_id" "$VERIFY_GATE_VERDICT" "$detail" "$duration"
+    return 0
+}
 
 _verify_gate_ledger() {
     local task_id="$1" verdict="$2" detail="${3:-}" duration="${4:-0}"
@@ -51,18 +74,17 @@ run_verify_gate() {
         return 0
     fi
     if [[ -z "$snapshot_hash" ]]; then
-        VERIFY_GATE_VERDICT="SKIPPED_NO_SNAPSHOT"
-        _verify_gate_ledger "$task_id" "$VERIFY_GATE_VERDICT" "git snapshot 없음"
-        return 0
+        _verify_gate_unavailable "$task_id" "NO_SNAPSHOT" "git snapshot 없음 — diff 를 만들 수 없다"
+        return $?
     fi
 
     # 신규 파일을 diff에 노출하되 완전 스테이징은 하지 않음(--intent-to-add) —
     # 완전 스테이징 후 reset --hard 조합은 태스크와 무관한 타 프로세스의 신규 파일까지
     # 삭제하는 데이터 손실 벡터가 됨 (2026-07-17 리뷰 실증)
-    git -C "$BOT_HOME" add -A --intent-to-add >/dev/null 2>&1 || true
+    git -C "$(_vg_repo)" add -A --intent-to-add >/dev/null 2>&1 || true
     local diff_stat diff_body
-    diff_stat=$(git -C "$BOT_HOME" diff --stat "$snapshot_hash" 2>/dev/null || true)
-    diff_body=$(git -C "$BOT_HOME" diff "$snapshot_hash" 2>/dev/null | head -c "$VERIFY_GATE_DIFF_CAP" || true)
+    diff_stat=$(git -C "$(_vg_repo)" diff --stat "$snapshot_hash" 2>/dev/null || true)
+    diff_body=$(git -C "$(_vg_repo)" diff "$snapshot_hash" 2>/dev/null | head -c "$VERIFY_GATE_DIFF_CAP" || true)
     if [[ -z "$diff_body" ]]; then
         VERIFY_GATE_VERDICT="SKIPPED_NO_CHANGES"
         _verify_gate_ledger "$task_id" "$VERIFY_GATE_VERDICT" "변경 없음"
@@ -72,7 +94,7 @@ run_verify_gate() {
     # 게이트 의존 인프라 변조 차단 — 작업자가 검증 체인 자체(ask-claude·게이트·게이트웨이 등)를
     # 고장내면 fail-open이 무검증 통과로 악용됨. 의존 파일 변경은 자동 승인 불가, 주인님 결재로 격상
     local _tampered
-    _tampered=$(git -C "$BOT_HOME" diff --name-only "$snapshot_hash" 2>/dev/null \
+    _tampered=$(git -C "$(_vg_repo)" diff --name-only "$snapshot_hash" 2>/dev/null \
         | grep -E '(verify-gate\.sh|ask-claude\.sh|llm-gateway\.sh|coder-functions\.sh|task-store\.mjs|task-fsm\.mjs|circuit-ask-claude\.sh|retry-wrapper\.sh)$' || true)
     if [[ -n "$_tampered" && "$JARVIS_VERIFY_GATE" == "enforce" ]]; then
         VERIFY_GATE_VERDICT="FAIL_GATE_TAMPER"
@@ -93,6 +115,7 @@ run_verify_gate() {
 
 ## 태스크 (id: ${task_id})
 ${task_name}
+${JARVIS_CODER_REPO:+저장소 경로(격리 작업 사본): ${JARVIS_CODER_REPO} — 파일을 직접 열어 확인할 때 이 경로 기준이다. ~/.openclaw-data/jarvis 본체가 아니다.}
 
 ## 태스크 원문 프롬프트
 ${task_prompt:0:2000}
@@ -123,11 +146,10 @@ ${diff_body}
         "verify-${task_id}" "$verify_prompt" "Read" "$VERIFY_GATE_TIMEOUT" "$VERIFY_GATE_BUDGET" "14" "") || _vg_exit=$?
     _t1=$(date +%s)
 
-    # fail-open: 검증 인프라 자체 실패는 큐를 막지 않는다
+    # 검증 인프라 자체 실패 — enforce 는 보류(return 1), warn 은 통과 (헤더 참조)
     if [[ $_vg_exit -ne 0 || -z "$_vg_out" ]]; then
-        VERIFY_GATE_VERDICT="SKIPPED_ERROR"
-        _verify_gate_ledger "$task_id" "$VERIFY_GATE_VERDICT" "ask-claude exit=${_vg_exit}" "$(( _t1 - _t0 ))"
-        return 0
+        _verify_gate_unavailable "$task_id" "ERROR" "ask-claude exit=${_vg_exit}" "$(( _t1 - _t0 ))"
+        return $?
     fi
 
     # verdict 추출 — 마지막 json_verdict 펜스 채택 (diff 주입으로 앞쪽에 위조 펜스를
@@ -146,9 +168,8 @@ ${diff_body}
     fi
 
     if [[ -z "$verdict" ]]; then
-        VERIFY_GATE_VERDICT="SKIPPED_UNPARSEABLE"
-        _verify_gate_ledger "$task_id" "$VERIFY_GATE_VERDICT" "verdict 파싱 실패: ${_vg_out:0:200}" "$(( _t1 - _t0 ))"
-        return 0
+        _verify_gate_unavailable "$task_id" "UNPARSEABLE" "verdict 파싱 실패: ${_vg_out:0:200}" "$(( _t1 - _t0 ))"
+        return $?
     fi
 
     if [[ "$verdict" == "PASS" ]]; then

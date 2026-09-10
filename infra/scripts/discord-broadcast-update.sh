@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 판정 D — 정지.
+# 근거: 자체 send_embed가 monitoring.json.webhooks를 직접 조회해 no-external 브릿지를 안 탄다 → 알림 100% 유실. auto_deploy 재시작 대상도 제거된 디스코드 봇
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/update-broadcast
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/update-broadcast" ]]; then
+    echo "[update-broadcast] 중지 플래그 있음 (판정 D)"
+    exit 0
+fi
+
 set -euo pipefail
 
 # update-broadcast.sh - Git 변경 감지 → jarvis-system Discord 알림
@@ -17,7 +26,7 @@ if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -s "$_ISO_TOKEN_FILE" ]; then
 fi
 export ANTHROPIC_API_KEY=""
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 STATE_FILE="$BOT_HOME/state/triggers/update-broadcast.last-sha"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 LOG="$BOT_HOME/logs/update-broadcast.log"

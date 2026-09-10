@@ -159,7 +159,7 @@ function m5_outfile() {
     out.linked_measure_script = join(HOME, 'jarvis/infra/scripts/outfile-hook-holdout-measure.py');
     out.measure_after = b.measure_date_dplus14 || '2026-08-03';
     out.baseline_windows = b.baseline_windows || null;
-    out.run_hint = 'python3 ~/jarvis/infra/scripts/outfile-hook-holdout-measure.py --measure  (D+14 이후)';
+    out.run_hint = 'python3 ~/.openclaw-data/jarvis/infra/scripts/outfile-hook-holdout-measure.py --measure  (D+14 이후)';
   } catch (e) { out.note = '측정불가: outfile baseline 파싱 실패 — '+e.message; }
   return out;
 }
@@ -320,11 +320,26 @@ if (argv.includes('--session-reminder')) {
   const DEFER_FILE = join(HOME, 'jarvis/runtime/ledger/deferred-tasks.jsonl');
 
   // (마스터 스위치) open && revisit_on<=오늘 인 미뤄둔 과제 — 이게 있어야만 리마인더가 뜬다.
+  //
+  // ★ 2026-08-23 결함 수정 — **id 별 최신 레코드로 접은 뒤** 판정한다.
+  //   deferred-tasks.jsonl 은 추가 전용(append-only) 원장이라 한 과제가 여러 줄로 존재한다.
+  //   종전 구현은 줄마다 독립 판정해서, 나중에 done 으로 닫아도 **앞줄의 open 이 그대로 남아**
+  //   리마인더가 영구히 다시 떴다. 실제로 8/23 에 닫힌 df-mistake-route-effect ·
+  //   df-retro-route-reaim 이 같은 날 세션에서 "복기일 도래"로 올라왔다.
+  //   revisit_on 도 같은 문제를 겪는다 — 뒷줄에서 복기일을 9/6 으로 미뤄도
+  //   앞줄의 8/3·8/20 이 살아 있어 조기 발화한다.
+  //
+  //   원장 자체는 건드리지 않는다. 이력을 지우는 것은 손실이고, 잘못된 쪽은 읽는 방법이다.
   const dueDeferred = [];
   if (existsSync(DEFER_FILE)) {
+    const latest = new Map();   // id → 마지막 레코드 (나중 줄이 이긴다)
     for (const raw of readFileSync(DEFER_FILE, 'utf8').split('\n')) {
       const s = raw.trim(); if (!s) continue;
       let r; try { r = JSON.parse(s); } catch { continue; }
+      // id 가 없는 레코드는 접을 키가 없으므로 줄 자체를 키로 삼아 종전 동작을 유지한다.
+      latest.set(r.id || `__noid__${latest.size}`, r);
+    }
+    for (const r of latest.values()) {
       if ((r.status || 'open') !== 'open') continue;
       if (r.revisit_on && todayStr < r.revisit_on) continue;   // 아직 복기할 때 아님
       dueDeferred.push(r);

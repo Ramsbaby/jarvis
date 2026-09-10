@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-hook-canary-test 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/jarvis/runtime/state/stopped/hook-canary-test
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/hook-canary-test" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/hook-canary-test
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/hook-canary-test" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[hook-canary-test] 중지 플래그 있음 — 오픈클로로 이관됨"
     exit 0
 fi
@@ -16,8 +16,8 @@ fi
 set -euo pipefail
 
 HOOK="${HOME}/.claude/hooks/stop-question-pattern-guard.sh"
-LEDGER="${HOME}/jarvis/runtime/ledger/hook-canary.jsonl"
-ALERT="${HOME}/jarvis/infra/scripts/alert-send.sh"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/hook-canary.jsonl"
+ALERT="${HOME}/.openclaw-data/jarvis/infra/scripts/alert-send.sh"
 mkdir -p "$(dirname "$LEDGER")"
 
 tmp=$(mktemp /tmp/hook-canary-XXXX.jsonl)

@@ -7,7 +7,7 @@
  *   2) 결정사항은 rag/decisions.md 에 append
  *   3) auto-insights 파일을 lancedb에 재인덱싱
  *
- * 실행: node ~/jarvis/runtime/lib/insight-extractor.mjs [--days N]
+ * 실행: node ~/.openclaw-data/jarvis/runtime/lib/insight-extractor.mjs [--days N]
  * 크론: 30 3 * * * (session-summarizer 30분 후)
  */
 
@@ -418,7 +418,7 @@ async function updateUserProfile(userId, decisions, patterns) {
 // → 다음 자비스 대화 시 시스템 프롬프트에 자동 포함됨
 function updateMemoryMd(today, decisions, openItems) {
   let existing = '';
-  try { existing = readFileSync(MEMORY_FILE, 'utf-8'); } catch { return; }
+  try { existing = readFileSync(MEMORY_FILE, 'utf-8'); } catch { /* 신규 파일 — 부트스트랩 */ }
 
   // 오늘 이미 기록됐으면 skip
   if (existing.includes(`<!-- synth:${today} -->`)) {

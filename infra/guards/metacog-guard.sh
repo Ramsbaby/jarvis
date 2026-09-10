@@ -6,17 +6,17 @@
 #               자가진단 결과를 JSONL로 기록해 회고 시 정량 측정 지원.
 #
 # 사용법:
-#   ~/jarvis/infra/guards/metacog-guard.sh [context_label]
+#   ~/.openclaw-data/jarvis/infra/guards/metacog-guard.sh [context_label]
 #   context_label: 점검 맥락 식별자 (기본값 "manual")
 #
 # 성공 기준:
-#   [1] ~/jarvis/runtime/logs/metacog-diagnose.jsonl 에 JSONL 레코드 기록
+#   [1] ~/.openclaw-data/jarvis/runtime/logs/metacog-diagnose.jsonl 에 JSONL 레코드 기록
 #   [2] 취약점 미충족 항목이 있으면 exit 1, 전부 통과 시 exit 0
 
 set -euo pipefail
 
 # ── 경로 상수 ──────────────────────────────────────────────────────────────────
-JARVIS_HOME="${HOME}/jarvis"
+JARVIS_HOME="${HOME}/.openclaw-data/jarvis"
 LOG_FILE="${JARVIS_HOME}/runtime/logs/metacog-diagnose.jsonl"
 CLUSTER_ID="cl-a092fb85afd92ba8"
 CONTEXT_LABEL="${1:-manual}"

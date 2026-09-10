@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 TEST_TASK_ID="test-idempotency-$$"
 TEST_PROMPT="Test prompt for idempotency check"
 TEST_TOOLS="Read,Edit"

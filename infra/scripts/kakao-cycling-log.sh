@@ -4,10 +4,10 @@
 
 set -euo pipefail
 
-TOKEN_FILE="$HOME/.openclaw/secrets/kakao-token.json"
+TOKEN_FILE="${BOT_HOME:-$HOME/.jarvis}/secrets/kakao-token.json"
 
 # 토큰 갱신 (만료 임박 시 자동)
-bash "$(dirname "$0")/../../openclaw/scripts/kakao-token-refresh.sh" > /dev/null 2>&1 || true
+bash "$(dirname "$0")/kakao-token-refresh.sh" > /dev/null 2>&1 || true
 
 if [ -f "$TOKEN_FILE" ]; then
     KAKAO_ACCESS_TOKEN=$(python3 -c "import json; print(json.load(open('$TOKEN_FILE'))['access_token'])" 2>/dev/null)

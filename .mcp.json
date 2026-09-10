@@ -9,7 +9,7 @@
         "start-mcp-server",
         "--context=claude-code",
         "--project",
-        "/Users/ramsbaby/jarvis"
+        "/Users/ramsbaby/.openclaw-data/jarvis"
       ],
       "env": {
         "ENABLE_TOOL_SEARCH": "true"

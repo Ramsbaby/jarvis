@@ -3,7 +3,7 @@
  * mistake-extractor.mjs — 오답노트 자동 추출기 (Compound Engineering Phase 2)
  *
  * 세션 요약 파일에서 오너의 지적/정정 패턴을 Haiku로 감지하여
- * ~/jarvis/runtime/wiki/meta/learned-mistakes.md 상단에 4필드 섹션으로 append.
+ * ~/.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md 상단에 4필드 섹션으로 append.
  *
  * 크론 스케줄: 매일 03:15 KST (session-summarizer 03:00 이후 / wiki-ingest 03:30 이전)
  *
@@ -18,7 +18,7 @@
  *   node mistake-extractor.mjs           # 실 추출
  *   node mistake-extractor.mjs --dry-run # 추출 후보만 출력, 파일 쓰기 없음
  *
- * Log: ~/jarvis/runtime/logs/mistake-extractor.log
+ * Log: ~/.openclaw-data/jarvis/runtime/logs/mistake-extractor.log
  */
 
 import {
@@ -345,7 +345,7 @@ function buildPrompt(sessionBodies) {
 - 오너가 대안을 제시하며 수정을 요구
 - Jarvis가 "죄송합니다 / 잘못 보고 / 확인 못했다"처럼 자체 정정한 경우
 - **Jarvis 자기검열 실패 사례**: "단언했/실측 없이/검증 전 OK 선언/추정을 사실처럼 보고" — Iron Law 6 (VERIFY BEFORE DECLARE) 위반
-- **SSoT 위반**: 기존 파일 미탐색 + 신규 중복 생성 ("~/.claude/commands/와 ~/jarvis/runtime/ # ALLOW-DOTJARVISskills/ 양쪽에 같은 이름")
+- **SSoT 위반**: 기존 파일 미탐색 + 신규 중복 생성 ("~/.claude/commands/와 ~/.openclaw-data/jarvis/runtime/ # ALLOW-DOTJARVISskills/ 양쪽에 같은 이름")
 - **자동화 파이프라인 마비 미인지**: circuit OPEN, 추출 0건, 24h 무감지 등 메타 시스템 결함을 Jarvis 본인이 놓친 경우
 - **할루시네이션 / 편향**: 파일 미열람 상태에서 코드 단언, 첫 응답 단언 편향, 가정을 사실처럼 진술
 
@@ -375,6 +375,25 @@ ${conjoined}
 }
 
 // ── JSON 응답 파싱 ───────────────────────────────────────────────────────────
+// 첫 '[' 부터 균형 잡힌 ']' 까지만 잘라낸다. 문자열 리터럴 안의 대괄호는 세지 않는다.
+// 2026-09-02: 모델이 `[]` 뒤에 설명 문장을 덧붙여 JSON.parse 가 68회 실패했다.
+// 실유실은 0건이었으나(전부 빈 배열), 배열이 비지 않은 날에는 통째로 유실되는 잠복 버그였다.
+function extractJsonArray(text) {
+  const start = text.indexOf('[');
+  if (start === -1) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < text.length; i++) {
+    const c = text[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '[') depth++;
+    else if (c === ']' && --depth === 0) return text.slice(start, i + 1);
+  }
+  return null;
+}
+
 function parseLLMResponse(text) {
   if (!text) return [];
   // ```json 펜스 제거
@@ -382,6 +401,12 @@ function parseLLMResponse(text) {
     .replace(/^```(?:json)?\s*/m, '')
     .replace(/```\s*$/m, '')
     .trim();
+  const sliced = extractJsonArray(cleaned);
+  if (sliced === null) {
+    log(`JSON 배열 없음 | 응답 앞부분: ${cleaned.slice(0, 200)}`);
+    return [];
+  }
+  cleaned = sliced;
   try {
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) return [];

@@ -12,8 +12,8 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
-INFRA_DIR="${HOME}/jarvis/infra"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+INFRA_DIR="${HOME}/.openclaw-data/jarvis/infra"
 LOG_DIR="${BOT_HOME}/logs"
 PILOT_LOG="${LOG_DIR}/pilot-test.log"
 

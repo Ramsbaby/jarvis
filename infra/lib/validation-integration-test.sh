@@ -24,8 +24,8 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # 경로
-JARVIS_LIB="${HOME}/jarvis/infra/lib"
-TEST_DIR="${HOME}/jarvis/test/validation-integration"
+JARVIS_LIB="${HOME}/.openclaw-data/jarvis/infra/lib"
+TEST_DIR="${HOME}/.openclaw-data/jarvis/test/validation-integration"
 FILE_VALIDATOR="${JARVIS_LIB}/file-validator.sh"
 POST_SAVE_GUARD="${JARVIS_LIB}/post-save-file-guard.sh"
 COMPLETION_GUARD="${JARVIS_LIB}/completion-file-validator-guard.sh"
@@ -251,7 +251,7 @@ test_validation_commands() {
 test_validation_ledger() {
   log_test INFO "Test 8" "Validation Ledger 존재성 확인"
 
-  local ledger="${HOME}/jarvis/logs/file-validation-ledger.jsonl"
+  local ledger="${HOME}/.openclaw-data/jarvis/logs/file-validation-ledger.jsonl"
   if [[ -f "$ledger" ]] || [[ ! -f "$ledger" ]]; then
     log_test PASS "Validation Ledger 경로 확인"
   else

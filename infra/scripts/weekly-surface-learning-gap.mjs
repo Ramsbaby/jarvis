@@ -128,4 +128,9 @@ if (NOTIFY && alerts.length > 0) {
   }
 }
 
-process.exit(alerts.length > 0 ? 1 : 0);
+// 2026-09-04: 경보 유무를 exit code 로 내지 않는다. 이 스크립트는 LaunchAgent(ai.jarvis.surface-learning-gap)
+//   전용이고 exit code 를 읽는 호출자가 없다 — launchd 에 남는 last_exit=1 을 tasks-integrity-audit 가
+//   매일 "LaunchAgent 실행 실패" 로 보고해 실제 고장과 구분이 안 됐다. 경보는 위 Discord 카드·로그가 전달한다.
+//   진짜 실패(원장 부재·예외)만 exit 1 이다.
+if (alerts.length > 0) console.log(`(경보 ${alerts.length}건 — 카드/로그로 전달, exit 0)`);
+process.exit(0);

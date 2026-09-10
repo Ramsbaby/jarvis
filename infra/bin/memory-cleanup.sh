@@ -6,7 +6,7 @@
 set -euo pipefail
 
 # Configuration
-RUNTIME_HOME="${HOME}/jarvis/runtime"
+RUNTIME_HOME="${HOME}/.openclaw-data/jarvis/runtime"
 RESULTS_DIR="${RUNTIME_HOME}/results"
 SESSIONS_FILE="${RUNTIME_HOME}/state/sessions.json"
 EVENTS_DIR="${RUNTIME_HOME}/state/events"
@@ -23,7 +23,7 @@ SENTINELS_CLEANED=0
 # Ensure directories exist
 mkdir -p "$RESULTS_DIR" "$EVENTS_DIR" "$ACTIVE_TASKS_DIR"
 
-# === 1. Clean up old files in ~/jarvis/runtime/results/ ===
+# === 1. Clean up old files in ~/.openclaw-data/jarvis/runtime/results/ ===
 if [[ -d "$RESULTS_DIR" ]]; then
     while IFS= read -r -d '' file; do
         rm -f "$file"
@@ -31,7 +31,7 @@ if [[ -d "$RESULTS_DIR" ]]; then
     done < <(find "$RESULTS_DIR" -type f -mtime +$STALE_DAYS -print0 2>/dev/null)
 fi
 
-# === 2. Clean up stale sessions in ~/jarvis/runtime/state/sessions.json ===
+# === 2. Clean up stale sessions in ~/.openclaw-data/jarvis/runtime/state/sessions.json ===
 if [[ -f "$SESSIONS_FILE" ]]; then
     CUTOFF_EPOCH=$(($(date +%s) - (STALE_DAYS * 86400)))
 
@@ -59,7 +59,7 @@ if [[ -f "$SESSIONS_FILE" ]]; then
     fi
 fi
 
-# === 3. Clean up old event files in ~/jarvis/runtime/state/events/ ===
+# === 3. Clean up old event files in ~/.openclaw-data/jarvis/runtime/state/events/ ===
 if [[ -d "$EVENTS_DIR" ]]; then
     while IFS= read -r -d '' file; do
         rm -f "$file"
@@ -67,7 +67,7 @@ if [[ -d "$EVENTS_DIR" ]]; then
     done < <(find "$EVENTS_DIR" -type f -name "*.json" -mtime +$STALE_DAYS -print0 2>/dev/null)
 fi
 
-# === 4. Clean up old sentinel files in ~/jarvis/runtime/state/active-tasks/ ===
+# === 4. Clean up old sentinel files in ~/.openclaw-data/jarvis/runtime/state/active-tasks/ ===
 # 2026-07-11 수정: (a) -mindepth 1 누락으로 루트 디렉토리 자신이 매치 → rm -f "is a directory"
 # 오류 → set -e로 매일 02:00 중단 (11일 연속). 내부 항목만 대상. 파일/디렉토리 모두 정리.
 # (b) ((x++))는 x=0일 때 종료코드 1 → set -e 중단 footgun → 안전한 대입식으로 교체.
@@ -85,10 +85,10 @@ cat << EOF
 
 | 항목 | 정리됨 |
 |------|--------|
-| **결과 파일** (~/jarvis/runtime/results) | $RESULTS_CLEANED |
+| **결과 파일** (~/.openclaw-data/jarvis/runtime/results) | $RESULTS_CLEANED |
 | **세션 항목** (sessions.json) | $SESSIONS_CLEANED |
-| **이벤트 파일** (~/jarvis/runtime/state/events) | $EVENTS_CLEANED |
-| **Sentinel 파일** (~/jarvis/runtime/state/active-tasks) | $SENTINELS_CLEANED |
+| **이벤트 파일** (~/.openclaw-data/jarvis/runtime/state/events) | $EVENTS_CLEANED |
+| **Sentinel 파일** (~/.openclaw-data/jarvis/runtime/state/active-tasks) | $SENTINELS_CLEANED |
 
 **총 정리된 항목**: $((RESULTS_CLEANED + SESSIONS_CLEANED + EVENTS_CLEANED + SENTINELS_CLEANED))개
 EOF

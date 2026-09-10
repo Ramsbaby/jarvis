@@ -2,7 +2,7 @@
 
 // [오픈클로 이식 2026-09-10] 판정 D — 정지.
 // 근거: 입력 소스 둘 다 정지(channel-feed 7/6, ralph-insights 8/1)로 감사창 14일보다 오래돼 항상 표본부족
-// 재개: rm ~/jarvis/runtime/state/stopped/interview-star-diversity-audit
+// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/interview-star-diversity-audit
 import { existsSync as __stopChk } from 'node:fs';
 import { homedir as __stopHome } from 'node:os';
 if (__stopChk(__stopHome() + '/jarvis/runtime/state/stopped/interview-star-diversity-audit')) {

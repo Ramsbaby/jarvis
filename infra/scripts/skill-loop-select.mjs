@@ -2,7 +2,7 @@
 // skill-loop-select.mjs — 스킬 자가 생성 루프 1~2단: 성공 세션 후보 선별
 // 1단 휴리스틱(비LLM) → 2단 LLM 재사용 가치 스코어링 → 임계치+상한 컷
 // Usage: node skill-loop-select.mjs [--hours 26] [--no-llm] [--cap 3] [--threshold 7] [--include-active]
-// 설계: ~/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 2~3)
+// 설계: ~/.openclaw-data/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 2~3)
 
 import { readFileSync, readdirSync, statSync, appendFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';

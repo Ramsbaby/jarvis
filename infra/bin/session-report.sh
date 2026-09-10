@@ -7,11 +7,11 @@
 #   - top 10 비싼 task / 모델별 분포 / 캐시 hit rate / 일별 추이
 #
 # 매주 일요일 23:50 cron 또는 수동 실행 (--days 30).
-# 결과: ~/jarvis/runtime/state/session-report-YYYYMMDD.html
+# 결과: ~/.openclaw-data/jarvis/runtime/state/session-report-YYYYMMDD.html
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LEDGER="${BOT_HOME}/state/token-ledger.jsonl"
 LOG_FILE="${BOT_HOME}/logs/session-report.log"
 DAYS="${SESSION_REPORT_DAYS:-7}"
@@ -134,7 +134,7 @@ echo "$DATA" | jq -r '.daily[] | "  <tr><td>\(.date)</td><td class=\"num\">\(.ru
 cat <<'HTML_FOOT'
 </table>
 
-<p class="meta">⚙️ 생성: <code>~/jarvis/infra/bin/session-report.sh</code> · 데이터: <code>~/jarvis/runtime/state/token-ledger.jsonl</code></p>
+<p class="meta">⚙️ 생성: <code>~/.openclaw-data/jarvis/infra/bin/session-report.sh</code> · 데이터: <code>~/.openclaw-data/jarvis/runtime/state/token-ledger.jsonl</code></p>
 <p class="meta">⚠️ 주의: cost_usd는 토큰×rate 추정값. Claude Max 정액제 실제 청구와 다를 수 있음.</p>
 
 </body></html>

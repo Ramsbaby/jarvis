@@ -5,15 +5,15 @@
 # 자가 회복(L1~L5)은 Phase 2에서 추가. 본 tick은 collect + alert까지만.
 #
 # 호출: ai.jarvis.supervisor LaunchAgent (*/5 * * * *)
-# state: ~/jarvis/runtime/state/supervisor-snapshot.json (delta 비교용)
-#        ~/jarvis/runtime/state/supervisor-tick-ledger.jsonl (30일 retention)
-# log:   ~/jarvis/runtime/logs/supervisor.log
+# state: ~/.openclaw-data/jarvis/runtime/state/supervisor-snapshot.json (delta 비교용)
+#        ~/.openclaw-data/jarvis/runtime/state/supervisor-tick-ledger.jsonl (30일 retention)
+# log:   ~/.openclaw-data/jarvis/runtime/logs/supervisor.log
 
 set -euo pipefail
 
 # ── 환경 ──────────────────────────────────────────────────────────
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 DOT_JARVIS="${HOME}/.jarvis"
 LOG="${BOT_HOME}/logs/supervisor.log"
 SNAPSHOT="${BOT_HOME}/state/supervisor-snapshot.json"
@@ -217,8 +217,14 @@ if [ "$NEED_ALERT" = "true" ]; then
     if node "$DOT_JARVIS/scripts/discord-visual.mjs" \
         --type system-doctor \
         --data "$(jq -cn --arg t "$TITLE" --argjson s "$SUMMARY" '{title:$t, summary:$s}')" \
-        --channel jarvis-system >/dev/null 2>&1; then
-        log "Discord 알림 송출 완료 (delta=$DELTA_COUNT, critical=${#CRITICAL[@]})"
+        --channel jarvis-system > /tmp/supervisor-visual.out 2>&1; then
+        # 2026-09-10 오픈클로 이식: 디스코드 비활성 시 discord-visual 은 exit 0 + SKIP 을 낸다.
+        # 출력을 안 보고 "송출 완료"로 적으면 감사에서 "아직 송출 중"으로 오독된다.
+        if grep -q '^SKIP:' /tmp/supervisor-visual.out 2>/dev/null; then
+            log "Discord 알림 억제됨 — 송출 비활성 (delta=$DELTA_COUNT, critical=${#CRITICAL[@]})"
+        else
+            log "Discord 알림 송출 완료 (delta=$DELTA_COUNT, critical=${#CRITICAL[@]})"
+        fi
     else
         log "Discord 알림 실패 (계속 진행)"
     fi

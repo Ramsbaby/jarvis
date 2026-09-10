@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 TASK_ID="${1:-}"
 RESULT_CONTENT="${2:-}"
 TRIGGERED_BY="${3:-bot-cron/complete}"
@@ -101,6 +101,13 @@ _log "INFO" "[$TASK_ID] 업로드 완료: $RESULT_FILE"
 # ── 레지스트리 갱신: task-store.mjs 통해 FSM 전이 ─────────────────────────
 
 _log "INFO" "[$TASK_ID] Step 3/3: 레지스트리 갱신 (FSM 상태 전이)"
+# 코더 세션(JARVIS_FSM_OWNER=coder)은 FSM 을 coder-functions.sh 가 소유한다 — 여기서 done 을 찍으면
+# 검증(verify-gate·Sprint Contract) 전에 done 이 되고, done 은 terminal 이라 검증 실패 후 재큐(done→queued)가
+# 거부된다. 2026-09-04 실측: jarvis-coder.log 에 done→queued 거부 30건 = 검증 실패가 done 으로 남은 건수.
+if [[ "${JARVIS_FSM_OWNER:-}" == "coder" ]]; then
+    _log "INFO" "[$TASK_ID] FSM 전이 생략 — 코더가 검증 후 done/queued/failed 를 결정한다 (JARVIS_FSM_OWNER=coder)"
+    exit 0
+fi
 
 # 3a. transition running → done (result 필드 포함)
 EXTRA_JSON=$(jq -n -c \
@@ -108,11 +115,25 @@ EXTRA_JSON=$(jq -n -c \
     --arg completionWorkflow "$0" \
     '{result: $result, completionWorkflowPath: $completionWorkflow}')
 
-if ! node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
-    transition "$TASK_ID" done "$TRIGGERED_BY" "$EXTRA_JSON" >/dev/null 2>&1; then
-    _log "ERROR" "[$TASK_ID] FSM 전이 실패 (running → done)"
-    # 레지스트리 갱신 실패 — 종료 코드 102로 표시 (최대 재시도 초과 시 failed)
-    exit 102
+# [2026-08-26] ask-claude.sh 는 "등록된 크론 태스크 실행" 외에 "단발 LLM 호출"로도 쓰인다
+#   (예: skill-loop-select.mjs 가 후보 점수를 매길 때 쓰는 skill-loop-score).
+#   그런 ID 는 tasks.json 에도 태스크 DB 에도 없으므로 FSM 전이 대상이 아닌데,
+#   종전에는 무조건 전이를 시도해 "task not found" → exit 102 → ask-claude exit 1 이 됐다.
+#   그 결과 skill-loop 는 LLM 응답을 정상으로 받고도 전부 실패로 처리해 3일 연속 무산출.
+#   판정을 둘로 나눈다 — tasks.json 에 있는데 DB 에 없으면 여전히 이상이므로 102 를 유지한다.
+_TRANSITION_ERR=""
+if ! _TRANSITION_ERR=$(node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+    transition "$TASK_ID" done "$TRIGGERED_BY" "$EXTRA_JSON" 2>&1 >/dev/null); then
+    if [[ "$_TRANSITION_ERR" == *"not found"* ]] \
+       && ! jq -e --arg id "$TASK_ID" '.tasks[]? | select(.id==$id)' \
+            "${BOT_HOME}/config/tasks.json" >/dev/null 2>&1; then
+        _log "INFO" "[$TASK_ID] tasks.json·레지스트리 양쪽에 없는 단발 호출 ID — FSM 전이 생략"
+    else
+        # 종전에는 사유를 통째로 버려(2>&1 →/dev/null) 원인 규명이 불가능했다. 남긴다.
+        _log "ERROR" "[$TASK_ID] FSM 전이 실패 (running → done): ${_TRANSITION_ERR:0:200}"
+        # 레지스트리 갱신 실패 — 종료 코드 102로 표시 (최대 재시도 초과 시 failed)
+        exit 102
+    fi
 fi
 
 _log "INFO" "[$TASK_ID] FSM 전이 완료: running → done"

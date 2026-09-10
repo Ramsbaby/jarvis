@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] P — 스케줄 등록 정합성 감사는 오픈클로가 대체. 자비스 크론이 비면 존재 이유도 소멸
-# 재개: rm ~/jarvis/runtime/state/stopped/cron-registration-gap-check
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/cron-registration-gap-check" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/cron-registration-gap-check
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/cron-registration-gap-check" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[cron-registration-gap-check] 중지 플래그 있음"
     exit 0
 fi
@@ -29,12 +29,12 @@ fi
 # 실행: 항상 exit 0 (감시 스크립트 자신이 죽어서 감시 공백을 만드는 사태 방지).
 #       공백 발견 시에만 discord_route info로 보고한다 (매주 소음 방지).
 #
-# crontab 등록: 0 6 * * 1 /bin/bash /Users/ramsbaby/jarvis/runtime/scripts/cron-registration-gap-check.sh >> /Users/ramsbaby/jarvis/runtime/logs/cron-registration-gap-check.log 2>&1
+# crontab 등록: 0 6 * * 1 /bin/bash /Users/ramsbaby/.openclaw-data/jarvis/runtime/scripts/cron-registration-gap-check.sh >> /Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/cron-registration-gap-check.log 2>&1
 
 set -o pipefail
 
 # JARVIS_HOME을 env에서 그대로 믿지 않는다: 이 셸 환경에 실측된 사례로,
-# JARVIS_HOME이 ~/.jarvis(=~/jarvis/runtime 심링크)로 오염되어 있으면
+# JARVIS_HOME이 ~/.jarvis(=~/.openclaw-data/jarvis/runtime 심링크)로 오염되어 있으면
 # "$JARVIS_HOME/infra/scripts"·"$JARVIS_HOME/runtime/scripts"가 각각
 # 존재하지 않는 경로/runtime/runtime 그림자 폴더로 풀려 tasks.json도
 # 그림자 사본(구버전)을 읽는 조용한 오탐이 난다 — compat.sh가 이미 경고한
@@ -42,7 +42,7 @@ set -o pipefail
 # 디스크 위치(심링크 관통 후 물리 경로)에서 두 단계 위를 저장소 루트로 삼는다.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P)"
 JARVIS_HOME="$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd -P)"
-[[ -z "$JARVIS_HOME" ]] && JARVIS_HOME="$HOME/jarvis"
+[[ -z "$JARVIS_HOME" ]] && JARVIS_HOME="$HOME/.openclaw-data/jarvis"
 BOT_HOME="${BOT_HOME:-$JARVIS_HOME/runtime}"
 TASKS_JSON="${BOT_HOME}/config/tasks.json"
 LOG_DIR="${BOT_HOME}/logs"

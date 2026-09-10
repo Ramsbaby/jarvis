@@ -10,7 +10,7 @@ set -euo pipefail
 THRESHOLD="${1:-90}"
 
 # df 명령어로 모든 마운트 포인트 확인 (header 제외)
-# 형식: /dev/xxx  123456  45678  77890  37% /mnt
+# POSIX 형식: /dev/xxx  123456  45678  77890  37%  /mnt
 
 output=""
 found_high_usage=false
@@ -19,11 +19,15 @@ found_high_usage=false
 while IFS= read -r line; do
     [[ -z "$line" ]] && continue
 
-    # 필드 분해: 1=filesystem, 2=blocks, 3=used, 4=avail, 5=percent, 6=mount
-    # 예: /dev/disk1s5  234567890  123456789  111111101  52% /
-    usage_percent=$(echo "$line" | awk '{print $(NF-1)}' | tr -d '%')
-    mount_point=$(echo "$line" | awk '{print $NF}')
+    # POSIX 형식: 1=filesystem, 2=blocks, 3=used, 4=avail, 5=capacity, 6=mount
     filesystem=$(echo "$line" | awk '{print $1}')
+    usage_percent=$(echo "$line" | awk '{print $5}' | tr -d '%')
+    mount_point=$(echo "$line" | awk '{print $6}')
+
+    # 특수 파일시스템 제외 (devfs, tmpfs, map 등)
+    if [[ "$filesystem" =~ ^(devfs|tmpfs|map|efivars)$ ]]; then
+        continue
+    fi
 
     # 숫자 검증 (percent가 정수인지 확인)
     if ! [[ "$usage_percent" =~ ^[0-9]+$ ]]; then
@@ -36,7 +40,7 @@ while IFS= read -r line; do
         output="${output}⚠️  ${filesystem} (${mount_point}): ${usage_percent}%
 "
     fi
-done < <(df -h | tail -n +2)
+done < <(df -P | tail -n +2)
 
 # 경고 있으면 출력, 없으면 조용히 성공
 if [[ "$found_high_usage" == "true" ]]; then

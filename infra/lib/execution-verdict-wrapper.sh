@@ -30,7 +30,7 @@ declare -r VERDICT_CIRCUIT_OPEN=99     # Circuit breaker open
 declare -r VERDICT_GENERIC_ERROR=1     # 일반 오류
 
 # Log file for verdict audit trail
-VERDICT_AUDIT="${BOT_HOME:-${HOME}/jarvis/runtime}/logs/execution-verdict-audit.log"
+VERDICT_AUDIT="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs/execution-verdict-audit.log"
 mkdir -p "$(dirname "$VERDICT_AUDIT")" 2>/dev/null || true
 
 _verdict_log() {

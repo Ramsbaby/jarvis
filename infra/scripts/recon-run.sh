@@ -8,7 +8,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
+export BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
 ASK_CLAUDE="$BOT_HOME/bin/ask-claude.sh"
 
@@ -65,7 +65,7 @@ AI/기술/시장/정책 분야의 중요 정보를 탐험하고 정리해서 주
 "$ASK_CLAUDE" \
     "recon-weekly" \
     "$PROMPT" \
-    "Read,Write,Bash,WebSearch,Glob,Grep" \
+    "Read,Write,Edit,Bash,WebSearch,Glob,Grep" \
     "900" \
     "3.00"
 

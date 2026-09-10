@@ -5,7 +5,7 @@ set -euo pipefail
 # cron: */5 * * * *
 # 25~35분 사이 시작 이벤트를 감지하여 Discord 알림 전송
 
-BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
 STATE_DIR="$BOT_HOME/state"
 ALERTED_FILE="$STATE_DIR/alerted-events.json"
 WEBHOOK_CONFIG="$BOT_HOME/config/monitoring.json"

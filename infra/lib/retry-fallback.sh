@@ -7,7 +7,7 @@
 #   - "선행 피드백 미적용으로 동일 오류 재발" 방지
 #
 # 사용:
-#   source ~/jarvis/infra/lib/retry-fallback.sh
+#   source ~/.openclaw-data/jarvis/infra/lib/retry-fallback.sh
 #   retry_with_fallback "$command" "$max_attempts" "$error_type" "$fallback_fn"
 #
 # 반환값:
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 # 재시도 통계 및 대안 제안 저장소
-_RETRY_STATE_DIR="${HOME}/jarvis/runtime/state/retry-fallback"
+_RETRY_STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/retry-fallback"
 _RETRY_LOG="${_RETRY_STATE_DIR}/retry-log.jsonl"
 _FALLBACK_CACHE="${_RETRY_STATE_DIR}/fallback-cache.json"
 

@@ -127,7 +127,7 @@ check_synchronization_rule() {
 
 # 규칙 4: 규칙 실행 여부 자동 기록
 record_lint_execution() {
-  local audit_log="$HOME/jarvis/runtime/state/lint-execution.jsonl"
+  local audit_log="$HOME/.openclaw-data/jarvis/runtime/state/lint-execution.jsonl"
   mkdir -p "$(dirname "$audit_log")"
 
   local timestamp=$(date -u +'%Y-%m-%dT%H:%M:%SZ')

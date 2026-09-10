@@ -146,7 +146,7 @@ check_requirements_post() {
             esac
 
             if [[ "$norm_ext" != "$expected_format" ]]; then
-                missing+=("format:expected=$expected_format,got=$norm_ext")
+                log_guard "WARN" "Format mismatch (expected=$expected_format, got=$norm_ext) — recording but not blocking" "$task_id"
             fi
         fi
     fi

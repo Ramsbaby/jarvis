@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# phase-d-code-rewrite.sh — 코드 내 ~/jarvis/runtime 하드코딩을 ~/jarvis/runtime으로
+# phase-d-code-rewrite.sh — 코드 내 ~/.openclaw-data/jarvis/runtime 하드코딩을 ~/.openclaw-data/jarvis/runtime으로
 # 일괄 치환. A2 Phase D 본작업.
 #
 # Usage:
@@ -9,11 +9,11 @@ set -euo pipefail
 #   bash phase-d-code-rewrite.sh --apply     # 실제 치환
 #
 # 치환 규칙:
-#   1. `$HOME/jarvis/runtime`       → `$HOME/jarvis/runtime`
-#   2. `${HOME}/jarvis/runtime`     → `${HOME}/jarvis/runtime`
+#   1. `$HOME/.openclaw-data/jarvis/runtime`       → `$HOME/.openclaw-data/jarvis/runtime`
+#   2. `${HOME}/.openclaw-data/jarvis/runtime`     → `${HOME}/.openclaw-data/jarvis/runtime`
 #   3. `homedir(), 'jarvis/runtime'`→ `homedir(), 'jarvis/runtime'`
-#   4. `~/jarvis/runtime/`          → `~/jarvis/runtime/`    (비쉘 문맥)
-#   5. `/Users/ramsbaby/jarvis/runtime/` → `/Users/ramsbaby/jarvis/runtime/`
+#   4. `~/.openclaw-data/jarvis/runtime/`          → `~/.openclaw-data/jarvis/runtime/`    (비쉘 문맥)
+#   5. `/Users/ramsbaby/.openclaw-data/jarvis/runtime/` → `/Users/ramsbaby/.openclaw-data/jarvis/runtime/`
 #
 # 제외:
 #   - 주석, docstring, markdown (*.md) 파일 — 설명 문구 보존
@@ -21,7 +21,7 @@ set -euo pipefail
 #   - 백업 디렉토리
 
 MODE="${1:---dry-run}"
-REPO_ROOT="/Users/ramsbaby/jarvis"
+REPO_ROOT="/Users/ramsbaby/.openclaw-data/jarvis"
 INVENTORY="$REPO_ROOT/runtime/state/phase-d-inventory.jsonl"
 LOG="$REPO_ROOT/runtime/logs/phase-d-rewrite.log"
 
@@ -85,12 +85,12 @@ case "$MODE" in
             orig=$(cat "$f")
             # sed 체인 (macOS BSD sed)
             new=$(printf '%s' "$orig" | sed \
-                -e 's|\$HOME/\.jarvis|$HOME/jarvis/runtime|g' \
-                -e 's|\${HOME}/\.jarvis|${HOME}/jarvis/runtime|g' \
+                -e 's|\$HOME/\.jarvis|$HOME/.openclaw-data/jarvis/runtime|g' \
+                -e 's|\${HOME}/\.jarvis|${HOME}/.openclaw-data/jarvis/runtime|g' \
                 -e "s|homedir(), *'\\.jarvis'|homedir(), 'jarvis/runtime'|g" \
                 -e 's|homedir(), *"\\.jarvis"|homedir(), "jarvis/runtime"|g' \
-                -e 's|~/\.jarvis/|~/jarvis/runtime/|g' \
-                -e 's|/Users/ramsbaby/\.jarvis/|/Users/ramsbaby/jarvis/runtime/|g')
+                -e 's|~/\.jarvis/|~/.openclaw-data/jarvis/runtime/|g' \
+                -e 's|/Users/ramsbaby/\.jarvis/|/Users/ramsbaby/.openclaw-data/jarvis/runtime/|g')
             if [[ "$orig" != "$new" ]]; then
                 c=$(diff <(echo "$orig") <(echo "$new") | grep -c '^[<>]' || true)
                 printf '%s' "$new" > "$f"

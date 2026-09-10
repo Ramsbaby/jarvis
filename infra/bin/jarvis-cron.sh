@@ -17,7 +17,7 @@ unset ANTHROPIC_API_KEY 2>/dev/null || true
 # See: ask-claude.sh:141 "Unsetting CLAUDECODE breaks OAuth authentication in cron environments"
 unset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
 
@@ -48,7 +48,7 @@ if [[ -f "${BOT_HOME}/lib/cron-helpers.sh" ]]; then
     source "${BOT_HOME}/lib/cron-helpers.sh"
 fi
 # egress 감사 라우터 — 모든 Discord 발송은 이 함수를 통해 중앙화
-source "${HOME}/jarvis/infra/lib/discord-route.sh" 2>/dev/null || true
+source "${HOME}/.openclaw-data/jarvis/infra/lib/discord-route.sh" 2>/dev/null || true
 # ADR-007: Plugin system — regenerate effective-tasks.json, then use it
 if [[ -x "${BOT_HOME}/bin/plugin-loader.sh" ]]; then
     "${BOT_HOME}/bin/plugin-loader.sh" 2>/dev/null || true
@@ -191,6 +191,7 @@ TASK_AUTHOR=$(echo "$TASK_CONFIG" | jq -r '.author // .id // empty')
 DISCORD_CHANNEL=$(echo "$TASK_CONFIG" | jq -r '.discordChannel // empty')
 REQUIRES_MARKET=$(echo "$TASK_CONFIG" | jq -r '.requiresMarket // false')
 ALLOW_EMPTY_RESULT=$(echo "$TASK_CONFIG" | jq -r '.allowEmptyResult // false')
+export ALLOW_EMPTY_RESULT
 SUCCESS_PATTERN=$(echo "$TASK_CONFIG" | jq -r '.successPattern // empty')
 SCRIPT=$(echo "$TASK_CONFIG" | jq -r '.script // empty')
 SCRIPT_ARGS=$(echo "$TASK_CONFIG" | jq -r '.scriptArgs // "daily"')

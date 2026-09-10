@@ -188,6 +188,27 @@ EOF
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed flow diagrams.
 
+### jarvis-coder 격리 실행 (git worktree, 2026-09-04 · SELF-HEAL-PLAN 1b)
+
+코더(`com.jarvis.dev-task-runner` → `infra/bin/jarvis-coder.sh`)는 **본체 `~/jarvis` 를 편집하지 않는다.**
+태스크마다 worktree 를 만들고 그 안에서 LLM 실행·스냅샷·롤백·문법 게이트·검증을 끝낸 뒤, 브랜치와 패치만 남긴다.
+(9/2 사고 — 코더가 본체를 편집하다 runtime 소실 — 의 구조적 봉쇄. 라이브러리 `infra/lib/coder-worktree.sh`)
+
+| 항목 | 값 |
+|---|---|
+| worktree 위치 | `${JARVIS_CODER_WT_ROOT:-~/jarvis-worktrees/coder}/<task>` — 실행 끝(done/failed/보류)에 항상 제거 |
+| 브랜치 | `coder/<task>` (본체 체크아웃 브랜치 기준, `JARVIS_CODER_BASE_BRANCH` 로 변경) — 실행 후에도 남는다 |
+| 패치 | `runtime/results/<task>/patch.diff` (본체 기준선 대비 브랜치 전체 diff) |
+| 공유 데이터 | worktree 의 `runtime/`·`infra/node_modules` 는 본체로 가는 심링크 (`info/exclude` 등록) |
+| 큐 결과 필드 | `branch` · `patch_file` · `merge_pending: true` |
+| 쓰기 경계 | `JARVIS_AGENT_WRITE_SCOPE=<worktree>` — 본체·`runtime/config`·`.git` 쓰기와 `git push` 는 훅이 차단 |
+| 끄기(옛 방식) | `JARVIS_CODER_WORKTREE=0` — 본체 직접 편집으로 복귀. LaunchAgent plist 환경변수 또는 `jarvis-coder.sh` 에서 |
+
+본체 반영은 사람이 한다: `git -C ~/jarvis diff main...coder/<task>` 로 검토 후 `git -C ~/jarvis merge --ff-only coder/<task>`
+(`infra/scripts/coder-merge.sh` 가 생기면 CEO 알림이 그 명령을 대신 안내한다 — 3b).
+worktree 를 만들지 못하면 코더 세션을 열지 않고 `worktree_unavailable` 사유로 보류한다(fail closed).
+테스트: `bash infra/scripts/test-coder-worktree.sh`.
+
 ---
 
 ## Log Locations
@@ -665,6 +686,23 @@ BOT_HOME=~/jarvis/runtime bash ~/jarvis/runtime/scripts/tasks-integrity-audit.sh
   수정 → audit 이 다음 실행 때 0 리포트.
 - plist 백업 디렉토리(`~/backup/jarvis-topology/`) 는 **복구용 원장**. 정리한 plist 는
   절대 즉시 삭제하지 말고 이 경로에 보관.
+
+### tasks.json 무결성·백업 (2026-09-04, SELF-HEAL-PLAN 2d)
+
+매일 10:07 `tasks-integrity-audit` 이 `tasks-json-integrity.sh` 를 불러 tasks.json 의 sha256·태스크 개수를
+원장(`runtime/ledger/tasks-integrity-audit.jsonl` 의 `integrity`)에 남기고, 직전 백업과 id·필드 단위로 비교한다.
+
+| 판정 | 조건 | 알림 |
+|---|---|---|
+| 🔴 critical | 파일 없음·파싱 실패·개수 ±5 이상·삭제 5개 이상 | jarvis-system 경보 (24h 스로틀 대상) |
+| 🟡 notice | 해시만 바뀜 — 추가/삭제/변경 id 와 바뀐 필드를 적음 | 일일 리포트에 포함 |
+| 🟢 ok | 직전 백업과 동일 | 일일 리포트에 포함 |
+
+- 백업: `~/backup/jarvis-topology/tasks-json/tasks-YYYYMMDD-HHMMSS-<sha8>.json` — 내용이 바뀐 실행에만 새로 쓰고, 14일 지난 것은 지우되 최신 1개는 항상 남긴다.
+- 옛 수동 백업(`runtime/config/tasks.json.bak-*`, 31개)은 같은 곳의 `legacy/` 로 이관했다. `runtime/config/` 에 `.bak` 을 새로 만들지 않는다.
+- 원인 단서: 직전 감사 이후 창 안의 코더 활동 줄 수·쓰기 차단(`runtime-guard.jsonl`) 건수를 같이 낸다. tasks.json 은 gitignore 라 커밋 단서는 없다.
+- 복원: 경보 본문의 `cp <백업> ~/jarvis/runtime/config/tasks.json` 을 그대로 실행한 뒤 `node infra/scripts/gen-tasks-index.mjs`.
+- 수동 실행: `bash ~/jarvis/infra/scripts/tasks-json-integrity.sh --text` / 테스트: `bash ~/jarvis/infra/scripts/test-tasks-json-integrity.sh`
 
 ## Orphan LaunchAgent 수동 해제 절차
 

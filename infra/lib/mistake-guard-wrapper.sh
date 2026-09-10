@@ -18,8 +18,8 @@
 set -euo pipefail
 
 # ─── 경로 상수 ───
-export JARVIS_HOME="${JARVIS_HOME:=${HOME}/jarvis}"
-export JARVIS_INFRA="${JARVIS_INFRA:=${HOME}/jarvis/infra}"
+export JARVIS_HOME="${JARVIS_HOME:=${HOME}/.openclaw-data/jarvis}"
+export JARVIS_INFRA="${JARVIS_INFRA:=${HOME}/.openclaw-data/jarvis/infra}"
 MEMORY_MANAGER="${JARVIS_INFRA}/lib/student-memory-manager.mjs"
 GUARD_CHECKER="${JARVIS_INFRA}/lib/mistake-guard-checker.mjs"
 RULES_FILE="${JARVIS_INFRA}/lib/mistake-guard-rules.md"

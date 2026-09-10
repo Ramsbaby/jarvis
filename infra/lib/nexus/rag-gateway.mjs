@@ -26,7 +26,7 @@ const _ollamaHydeClient = {
 };
 
 // ---------------------------------------------------------------------------
-// Access count tracking — ~/jarvis/runtime/rag/access-log.json
+// Access count tracking — ~/.openclaw-data/jarvis/runtime/rag/access-log.json
 // { "source:chunkIndex": { count: N, lastAccessed: ISO } }
 // ---------------------------------------------------------------------------
 const ACCESS_LOG_PATH = join(BOT_HOME, 'rag', 'access-log.json');

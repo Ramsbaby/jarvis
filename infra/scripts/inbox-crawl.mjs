@@ -25,7 +25,7 @@ const jsonOnly = process.argv.includes('--json-only');
 mkdirSync(RESULT_DIR, { recursive: true });
 
 // ─── 대상 사이트 (private/config 분리 — PII 격리) ──────────────────────────
-// SSoT: ~/jarvis/private/config/inbox-targets.json (gitignored)
+// SSoT: ~/.openclaw-data/jarvis/private/config/inbox-targets.json (gitignored)
 // 파일 없으면 크롤링 0건 graceful fallback — OSS 사용자는 본인 타겟을 여기에 정의
 const TARGETS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'inbox-targets.json');
 let SITES = [];

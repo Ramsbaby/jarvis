@@ -90,7 +90,7 @@ export async function deepseekChat(messages, opts = {}) {
   if (!apiKey) {
     throw new Error(
       'DEEPSEEK_API_KEY가 설정되지 않았습니다. ' +
-      '~/jarvis/runtime/runtime/discord/.env 에 DEEPSEEK_API_KEY=sk-... 를 추가하세요.'
+      '~/.openclaw-data/jarvis/runtime/runtime/discord/.env 에 DEEPSEEK_API_KEY=sk-... 를 추가하세요.'
     );
   }
 

@@ -31,7 +31,7 @@ import {
   buildPrinciplesSection, buildFormatCoreSection, buildFormatDetailSection, buildKarpathyChecklistSection,
   buildFormatSection, buildToolsSection, buildToolsCodeDetailSection,
   buildSafetySection, buildUserContextSection, isCareerChannel, isVisualChannel,
-  buildOwnerPreferencesSection, buildOwnerPersonaSection, buildDepthGuardSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
+  buildOwnerPreferencesSection, buildOwnerPersonaSection, buildDepthGuardSection, buildStanceGuardSection, buildOwnerVisualizationSection, buildFamilyBriefingContext,
   buildWikiContextSection, buildAngerCorrectionSection,
   buildHarnessAutoTriggerSection, buildFactsKeywordSection, buildEvidenceMandateSection,
   buildOwnerTimeContext, buildPreplyStudentSection,
@@ -341,7 +341,7 @@ export async function execRagAsync(query, opts = {}) {
 function _isSimulationTurn(userMsg) {
   if (!userMsg) return false;
   const text = userMsg.toLowerCase();
-  // 슬래시 커맨드 형태 — ~/jarvis/runtime/skills/<name>.md 파일 존재 여부로 판정.
+  // 슬래시 커맨드 형태 — ~/.openclaw-data/jarvis/runtime/skills/<name>.md 파일 존재 여부로 판정.
   // (claude-runner 상단의 fs/path/os 임포트를 공유)
   const slashMatch = userMsg.trim().match(/^\/([a-zA-Z0-9_-]+)/);
   if (slashMatch) {
@@ -870,7 +870,7 @@ export async function* createClaudeSession(prompt, {
   const _hasImageAttachment = attachments.some(a =>
     /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(a.safeName || a.localPath || ''));
   // [2026-06-11 v2] #jarvis-career 코딩테스트 모드 — env 게이트 → 상태 파일 토글 (재시작 불필요).
-  //   토글: bash ~/jarvis/infra/scripts/career-coding-mode.sh {coach|solve|off|status}
+  //   토글: bash ~/.openclaw-data/jarvis/infra/scripts/career-coding-mode.sh {coach|solve|off|status}
   //   solve = 자바 직접 풀이 (기존) · coach = 생성형AI 프롬프트 전략 코치 (AI 활용형 라이브코딩 대비) · off = 평소.
   //   공통(solve·coach): fresh 세션, Sonnet, RAG/피드 주입 끔 — 문제 간 오염·지연 차단.
   const _ccMode = channelId === '1471694919339868190' ? getCareerCodingMode() : 'off';
@@ -881,7 +881,10 @@ export async function* createClaudeSession(prompt, {
     //   → 빈/짧음 OR 일반 "이미지 분석" 프롬프트면 코딩 풀이 지시로 교체(6단계 형식 명시).
     const _p = String(prompt || '').trim();
     if (_careerCoding && (_p.length < 10 || _p.startsWith('🖼️') || /이미지\s*분석|analyz(e|ing)\s*image/i.test(_p))) {
-      prompt = _ccMode === 'coach'
+      prompt = _ccMode === 'dop'
+        // [2026-09-08] DOP 시험 모드: 캡션 없는 문제 사진이 "이미지 분석"으로 새지 않게 지시를 박는다.
+        ? '첨부했거나 위에 적은 AWS DOP-C02 연습문제의 정답만 출력하세요. 이미지를 "분석/묘사"하지 말고 시험 문제로 읽습니다. 출력은 `정답: B` 또는 `정답: A, C` 한 줄뿐 — 이유·해설·인사말 금지. 여러 문제면 `Q1: B` 형식으로 한 줄씩.'
+        : _ccMode === 'coach'
         ? '첨부했거나 위에 적은 코딩테스트/알고리즘 문제를 직접 끝까지 풀지 말고, 코치 가이드 형식(① 문제 해독 → ② 유형·함정 → ③ 복붙용 1차 프롬프트 → ④ 검증 프롬프트 → ⑤ 리스크·설명 멘트)으로 "생성형 AI에게 어떻게 시킬지"를 코치해주세요. 이미지를 그냥 "분석/묘사"하지 말고 반드시 문제로 읽으세요.'
         : _ccMode === 'deep'
           ? '첨부했거나 위에 적은 코딩테스트/알고리즘 문제를 자바(Java 15)로 확실하게 푸세요. 시간이 걸려도 정확성이 최우선입니다. 정밀 풀이 가이드를 따르세요: 접근법 후보 비교 → 구현 → 반드시 코드를 파일로 작성해 javac/java로 직접 컴파일·실행 → 예제 + 자가 생성 경계값·반례 테스트로 검증 → 전부 통과한 코드만 최종 제출. 검증 결과 로그를 응답에 포함하세요.'
@@ -892,7 +895,9 @@ export async function* createClaudeSession(prompt, {
     try {
       // 이미지 모드 채널별 분기: career → 코딩테스트(자바), 그 외 → SAP(AWS 시험)
       const _isCareerChannel = channelId === '1471694919339868190';
-      const _imgModeFile = _ccMode === 'coach'
+      const _imgModeFile = _ccMode === 'dop'
+        ? 'dop-mode.md'
+        : _ccMode === 'coach'
         ? 'coding-coach-mode.md'
         : _ccMode === 'deep'
           ? 'coding-deep-mode.md'
@@ -902,7 +907,9 @@ export async function* createClaudeSession(prompt, {
         const modeText = readFileSync(imgModePath, 'utf-8').trim();
         if (modeText) {
           // 가이드가 답변의 핵심이므로 score 9 명명 섹션으로 승격(예산 캡에서 드롭 방지).
-          const _override = _ccMode === 'coach'
+          const _override = _ccMode === 'dop'
+            ? '【⚠️ 현재 이 채널은 AWS DOP-C02 시험 모드입니다. 모든 입력(텍스트·이미지)을 DOP-C02 연습문제로 간주하고 **정답만** 출력하세요. 풀이과정·이유·해설·오답분석·인사말 전부 금지 — `정답: B` 또는 `정답: A, C` 한 줄로 끝냅니다. 커리어 상담·분석·시나리오는 하지 마세요.】\n\n'
+            : _ccMode === 'coach'
             ? '【⚠️ 현재 이 채널은 코딩테스트 "프롬프트 코치" 모드입니다. 모든 입력(텍스트·이미지)을 코딩테스트 문제로 간주하되, 문제를 직접 끝까지 풀지 말고 생성형 AI에게 시킬 프롬프트 전략을 코치하세요. 커리어 상담·분석·시나리오는 하지 마세요.】\n\n'
             : _ccMode === 'deep'
             ? '【⚠️ 현재 이 채널은 코딩테스트 "정밀 풀이" 모드입니다. 모든 입력(텍스트·이미지)을 코딩테스트 문제로 간주합니다. 시간 무관, 정확성 최우선 — 반드시 직접 컴파일·실행·반례 검증을 마친 코드만 제출하세요. 커리어 상담·분석·시나리오는 하지 마세요.】\n\n'
@@ -1000,7 +1007,7 @@ export async function* createClaudeSession(prompt, {
     : null;
 
   // ---------------------------------------------------------------------------
-  // 공통 스킬 주입 (~/jarvis/runtime/skills/) — CLI·Discord·Mac 앱이 SSoT로 공유
+  // 공통 스킬 주입 (~/.openclaw-data/jarvis/runtime/skills/) — CLI·Discord·Mac 앱이 SSoT로 공유
   // 주입 우선순위:
   //   1) 슬래시 커맨드 (`/skillname args`) — 명시적, 최우선
   //   2) 채널 매칭 (skill의 channels에 현재 채널 포함)
@@ -1101,6 +1108,10 @@ export async function* createClaudeSession(prompt, {
       // [2026-07-20] channelId 전달 → 일상/가족/튜터 채널은 모바일 간결 가드, 분석 채널은 깊이 가드.
       const depthGuardSection = buildDepthGuardSection({ botHome: BOT_HOME, channelId });
       if (depthGuardSection) systemParts.push('', depthGuardSection);
+      // [2026-07-30] 입장 유지 가드(stance-guard, score 9) — 반박에 근거 없이 답을 바꾸는 아첨 차단.
+      //   CLI 룰 실측: "완료 선언 검증" 64회 반복 vs "입장 유지" 0회 → 0겹 가드를 코드 레벨로 신설.
+      const stanceGuardSection = buildStanceGuardSection();
+      if (stanceGuardSection) systemParts.push('', stanceGuardSection);
     }
 
     // [2026-05-28] 감정 턴엔 도구 제약·시각화 정책 SKIP — 위로 응답엔 무관
@@ -1380,7 +1391,12 @@ export async function* createClaudeSession(prompt, {
   //   섞여 "틀린 문제를 푸는" 오염 방지. 같은 채널에 문제를 연달아 올려도 서로 영향 없음.
   // [2026-06-11 v2] coach 모드 보강: 면접관 꼬리질문 대응 — 이미지 첨부(=새 문제)만 fresh,
   //   텍스트(=직전 문제에 대한 후속/꼬리질문)는 세션을 이어 직전 맥락을 기억한다. solve는 기존대로 항상 fresh.
-  if (_careerCoding && (_ccMode === 'solve' || _hasImageAttachment)) sessionId = null;
+  // [2026-09-08] dop(시험 모드): 새 문제는 반드시 fresh — 직전 문제의 보기·정답이 섞이면
+  //   "앞 문제 답"을 그대로 내는 오염이 난다. 이미지 첨부 또는 80자 이상 본문 = 새 문제로 본다.
+  //   짧은 텍스트(예: "해설 좀")는 직전 문제 후속이므로 세션을 잇는다.
+  const _dopNewQuestion = _ccMode === 'dop'
+    && (_hasImageAttachment || String(prompt || '').trim().length >= 80);
+  if (_careerCoding && (_ccMode === 'solve' || _hasImageAttachment || _dopNewQuestion)) sessionId = null;
   const isResuming = !!sessionId;
   let effectivePrompt = prompt;
 
@@ -1410,9 +1426,10 @@ export async function* createClaudeSession(prompt, {
     // 낡은 가이드가 박제되는 문제 해결 (실측: 쉬운말 규칙 갱신이 이어지는 세션에 미반영 → "불변식" 노출).
     if (_careerCoding) {
       try {
-        const _gFile = _ccMode === 'coach' ? 'coding-coach-mode.md' : 'coding-test-mode.md';
+        const _gFile = _ccMode === 'dop' ? 'dop-mode.md'
+          : _ccMode === 'coach' ? 'coding-coach-mode.md' : 'coding-test-mode.md';
         const _g = readFileSync(join(BOT_HOME, 'context', _gFile), 'utf-8').trim();
-        if (_g) ctxParts.push(`[코딩테스트 모드 가이드 — 매 턴 최신본. 세션에 저장된 이전 가이드와 충돌하면 이것을 따르세요]\n${_g}`);
+        if (_g) ctxParts.push(`[${_ccMode === 'dop' ? 'DOP 시험' : '코딩테스트'} 모드 가이드 — 매 턴 최신본. 세션에 저장된 이전 가이드와 충돌하면 이것을 따르세요]\n${_g}`);
       } catch { /* 가이드 파일 없으면 세션 보존분 사용 */ }
     }
     // 사용량 현황은 80% 이상일 때만 주입 — 낮을 때 주입하면 Claude self-throttling 유발
@@ -1486,8 +1503,10 @@ export async function* createClaudeSession(prompt, {
     }
   }
   // [2026-06-07] 코딩테스트 모드는 Sonnet 단발 — opusplan(계획Opus+실행Sonnet 듀얼)의 계획 오버헤드 제거.
+  // [2026-09-08] dop(DOP-C02 시험): Professional 급 문항은 보기 4개가 전부 "동작은 하는" 답이고
+  //   한정자(LEAST overhead 등)로 갈린다 — 정답률이 곧 목적이라 power 를 쓴다. 출력은 한 줄뿐이라 비용도 작다.
   const model = _careerCoding
-    ? (_ccMode === 'deep' ? MODELS.power : MODELS.sonnet)
+    ? ((_ccMode === 'deep' || _ccMode === 'dop') ? MODELS.power : MODELS.sonnet)
     : (contextBudget === 'small' ? MODELS.fast : (channelModelKey ? MODELS[channelModelKey] : 'opusplan'));
 
   // 사고 2026-05-22 대응: 모델 결정 사후 추적 가능성 확보. 어느 응답이 어느 모델로 갔는지 ledger grep 1줄로 판별.
@@ -1788,7 +1807,9 @@ export async function* createClaudeSession(prompt, {
       queryOptions.allowedTools = ['Read'];
       // [2026-06-07] effort max→high: 코딩 정답성은 가이드 규칙이 잡으므로 max의 과한 추론시간 불필요.
       //   응답 지연(2분+) 완화.
-      queryOptions.effort = 'high';
+      // [2026-09-08] dop 은 예외로 max — 출력이 한 줄이라 지연이 곧 추론시간이고,
+      //   실제 시험도 문항당 2분 남짓이라 이 지연은 시험 환경과 어긋나지 않는다.
+      queryOptions.effort = _ccMode === 'dop' ? 'max' : 'high';
     }
   }
 
@@ -1801,7 +1822,7 @@ export async function* createClaudeSession(prompt, {
   }
   // [2026-05-28] Token Budget Hard Cap — 비대화 구조적 차단
   //   발화 카테고리 추론 → 모드별 budget 적용 → score 낮은 섹션 자동 drop
-  //   drop ledger: ~/jarvis/runtime/state/prompt-budget-drops.jsonl
+  //   drop ledger: ~/.openclaw-data/jarvis/runtime/state/prompt-budget-drops.jsonl
   // [2026-05-28 v2] budget mode를 embedding classifier 결과로 결정.
   //   _classifiedIntent는 위에서 이미 emotional/analytical/code/casual 중 하나로 분류됨.
   //   분석 채널(jarvis-career 등)은 분류 결과 override해서 analytical 강제 (도메인 가드).
@@ -1985,7 +2006,9 @@ ${sysPrompt}
           result: msg.result ?? '',
           session_id: msg.session_id ?? null,
           is_error: false,
-          cost_usd: msg.cost_usd ?? null,
+          // SDK result 메시지의 비용 필드는 total_cost_usd 다 (@anthropic-ai/claude-agent-sdk).
+          // cost_usd 만 읽던 탓에 bot-response-bus.jsonl 이 전량 0으로 기록됐다.
+          cost_usd: msg.total_cost_usd ?? msg.cost_usd ?? null,
           stop_reason: msg.stop_reason ?? null,
           // 토큰 사용량 포워딩 — handlers.js의 compaction trigger에서 사용
           usage: msg.usage ?? null,

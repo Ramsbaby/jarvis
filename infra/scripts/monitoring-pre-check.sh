@@ -13,8 +13,8 @@
 #
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-monitoring-pre-check(04:55)로 이관됐다.
 # 이 스크립트는 crontab 46행에서도 불리는데 crontab 쓰기가 이 환경에서 막혀 있어(rc=124 타임아웃)
-# 스크립트 층에 가드를 둬 이중 실행을 막는다. 재개: rm ~/jarvis/runtime/state/stopped/monitoring-pre-check
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/monitoring-pre-check" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 스크립트 층에 가드를 둬 이중 실행을 막는다. 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/monitoring-pre-check
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/monitoring-pre-check" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[monitoring-pre-check] 중지 플래그 있음 — 오픈클로 잡으로 이관됨 (state/stopped/monitoring-pre-check)"
     exit 0
 fi
@@ -88,9 +88,9 @@ log_check() {
 # 홈 디렉토리 설정
 JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
 JARVIS_INFRA="${JARVIS_HOME}/infra"
-# tasks.json 위치: ~/jarvis/runtime/config/tasks.json 또는 ~/.jarvis 근처
-if [[ -f "${HOME}/jarvis/runtime/config/tasks.json" ]]; then
-    TASKS_CONFIG="${HOME}/jarvis/runtime/config/tasks.json"
+# tasks.json 위치: ~/.openclaw-data/jarvis/runtime/config/tasks.json 또는 ~/.jarvis 근처
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/config/tasks.json" ]]; then
+    TASKS_CONFIG="${HOME}/.openclaw-data/jarvis/runtime/config/tasks.json"
 else
     TASKS_CONFIG="${JARVIS_HOME}/../jarvis/runtime/config/tasks.json"
 fi
@@ -117,23 +117,34 @@ else
     log_check "crontab.registry" "fail" "등록되지 않음 (또는 crontab 명령 불가)"
 fi
 
-# Crontab 내 모니터링 관련 태스크 확인
-if [[ "$crontab_exists" == "true" ]]; then
-    disk_alert_cron=$(crontab -l 2>/dev/null | grep -i "disk-alert" || true)
-    health_check_cron=$(crontab -l 2>/dev/null | grep -i "system-health\|health-check" || true)
-
-    if [[ -n "$disk_alert_cron" ]]; then
-        log_check "crontab.disk-alert" "ok" "등록됨: $disk_alert_cron"
-    else
-        log_check "crontab.disk-alert" "warn" "미등록"
-    fi
-
-    if [[ -n "$health_check_cron" ]]; then
-        log_check "crontab.health-check" "ok" "등록됨 (1개 이상)"
-    else
-        log_check "crontab.health-check" "warn" "미등록"
-    fi
+# 모니터링 태스크가 '어딘가에' 등록돼 있는지 확인한다.
+#
+# 2026-09-10 정정: 전에는 crontab 만 봤다. 회차 6 에서 crontab 을 55줄 → 1줄로 줄이고
+#   스케줄을 오픈클로 잡으로 옮기자, 살아 있는 `jarvis-system-health` 를 못 보고
+#   매 실행 "미등록" 경고 → rc=1 을 냈다. 한 층만 세면 그 층 밖은 영원히 안 보인다.
+#   그래서 crontab 과 오픈클로 잡을 **합집합**으로 판정한다.
+oc_jobs=""
+if [[ -x "$HOME/bin/openclaw" ]]; then
+    oc_jobs=$("$HOME/bin/openclaw" automations list 2>/dev/null || true)
 fi
+
+check_registered() {  # check_registered <검사이름> <grep 패턴>
+    local label="$1" pattern="$2" cron_hit="" oc_n=0
+    # 주석·빈 줄은 등록이 아니다. 이걸 안 걸러서 crontab 주석 한 줄을
+    #   "등록됨"으로 셌다(2026-09-10 실측 오탐).
+    cron_hit=$(crontab -l 2>/dev/null | grep -vE '^\s*(#|$)' | grep -iE "$pattern" || true)
+    oc_n=$(printf '%s\n' "$oc_jobs" | grep -icE "$pattern" || true)
+    if [[ -n "$cron_hit" ]]; then
+        log_check "$label" "ok" "crontab 등록됨: $(printf '%s' "$cron_hit" | head -1 | cut -c1-70)"
+    elif [[ "${oc_n:-0}" -gt 0 ]]; then
+        log_check "$label" "ok" "오픈클로 잡으로 등록됨 (${oc_n}건)"
+    else
+        log_check "$label" "warn" "두 층 어디에도 미등록 (crontab · 오픈클로 잡)"
+    fi
+}
+
+check_registered "monitor.disk-alert"   "disk-alert"
+check_registered "monitor.health-check" "system-health|health-check"
 
 echo ""
 
@@ -282,7 +293,7 @@ echo ""
 
 # 2026-09-10 오픈클로 이식: orchestrator 는 runtime/discord/lib/orchestrator.mjs 로 도는
 # 디스코드 계열 데몬이었고 그 디렉토리를 제거했다. 정지 플래그가 있으면 없는 게 정상이다.
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/orchestrator" ]]; then
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/orchestrator" ]]; then
     log_check "process.orchestrator" "ok" "의도적 정지 (state/stopped/orchestrator — 디스코드 제거로 실행 파일 소멸)"
     orchestrator_pid=""
 else
@@ -303,7 +314,7 @@ fi
 
 # 2026-09-10 오픈클로 이식: ai.jarvis.watchdog 은 디스코드 봇 전용 감시자였고 봇과 함께 정지했다.
 # 정지 플래그가 있으면 "없는 게 정상"이므로 경고를 내지 않는다. 플래그가 없는데 없으면 그건 진짜 이상이다.
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/watchdog" ]]; then
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/watchdog" ]]; then
     log_check "process.watchdog" "ok" "의도적 정지 (state/stopped/watchdog — 디스코드 봇 제거로 감시 대상 소멸)"
 else
     log_check "process.watchdog" "ok" "확인 중..."

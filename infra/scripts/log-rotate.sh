@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-log-rotate(03:15) 로 이관. OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/jarvis/runtime/state/stopped/log-rotate
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/log-rotate" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/log-rotate
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/log-rotate" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[log-rotate] 중지 플래그 있음"
     exit 0
 fi
@@ -26,7 +26,7 @@ set -euo pipefail
 #
 # Schedule: daily 03:05 (e2e 03:30 이전, gen-indexes 06:17 이전)
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LOG_DIR="${BOT_HOME}/logs"
 RETENTION_DAYS=7
 LOG="${LOG_DIR}/log-rotate.log"

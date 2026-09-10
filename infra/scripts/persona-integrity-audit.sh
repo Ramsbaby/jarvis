@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/infra}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/infra}"
 JARVIS_HOME="${HOME}/.jarvis"  # ALLOW-DOTJARVIS — 로그 디렉토리 잔존 (audit 출력 전용)
 AUDIT_LOG="${JARVIS_HOME}/logs/persona-audit.log"
 VERBOSE="${1:-}"

@@ -24,7 +24,7 @@ process.on('SIGPIPE', () => process.exit(0));
 process.stdout.on('error', (err) => { if (err.code === 'EPIPE') process.exit(0); });
 import { mkdirSync, appendFileSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { canTransition } from './task-fsm.mjs';
+import { canTransition, VALID_STATUSES } from './task-fsm.mjs';
 
 const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const DB_PATH   = join(BOT_HOME, 'state', 'tasks.db');
@@ -146,6 +146,25 @@ function flattenForExport(t) {
 export function getTask(id) {
   const row = getDb().prepare('SELECT * FROM tasks WHERE id=?').get(id);
   return row ? deserialize(row) : null;
+}
+
+/**
+ * 상태 전이 없이 meta 만 얕게 병합 (merged_at·merge_pending 같은 사후 표식용).
+ * transition() 은 FSM 규칙을 타므로 done 태스크에 표식을 남길 길이 없었다 — coder-merge.sh (3b) 가 쓴다.
+ * retries/priority/status 는 컬럼이므로 여기서 받지 않는다.
+ */
+export function patchMeta(id, patch = {}) {
+  const task = getTask(id);
+  if (!task) throw new Error(`task not found: ${id}`);
+  if (typeof patch !== 'object' || patch === null || Array.isArray(patch)) {
+    throw new Error('patchMeta: patch must be a plain object');
+  }
+  const { retries: _r, priority: _p, status: _s, ...metaPatch } = patch;
+  const newMeta = { ...task.meta, ...metaPatch };
+  const now = Date.now();
+  getDb().prepare('UPDATE tasks SET meta=?, updated_at=? WHERE id=?')
+    .run(JSON.stringify(newMeta), now, id);
+  return { ...task, meta: newMeta, updated_at: now };
 }
 
 /** 실행 가능 태스크 목록 (queued + depends done + retries < max) */
@@ -364,18 +383,28 @@ export function ensureCronTask(id, meta = {}) {
   }
 
   const task = deserialize(row);
+  // 근거는 매 감사마다 새로 온다 — 기존 행이어도 evidence 만은 갱신한다 (2a: 코더가 최신 근거를 본다)
+  if (meta.evidence && meta.evidence !== task.meta?.evidence) {
+    const refreshed = { ...task.meta, evidence: meta.evidence };
+    db.prepare('UPDATE tasks SET meta=? WHERE id=?').run(JSON.stringify(refreshed), id);
+    task.meta = refreshed;
+  }
   // failed/done/skipped → queued 리셋 (cron은 매 실행 시 새로 시작해야 함)
   // skipped 포함 이유: FSM 맵상 skipped→queued는 "CB 쿨다운 해제 후 재큐" 복구 경로.
   //   미포함 시 CB 쿨다운으로 한번 skipped된 cron 태스크가 영구 stuck → 이후 running/done 전이 전부 무효
   //   → 완료 워크플로(running→done) 실패로 결과 발송 차단. (2026-07-21 아내 일정 발송 중단 사고)
-  if (task.status === 'failed' || task.status === 'done' || task.status === 'skipped') {
+  // FSM 밖 상태(예: 직접 SQL 로 쓴 'completed')도 리셋 대상이다 — 그대로 두면 transition 이 전부 거부돼
+  //   그 태스크의 DB 기록이 영원히 멈춘다 (2026-09-04 실측: daily-summary·code-auditor 가 'completed' 로 얼어
+  //   실제 실패가 DB 에 남지 않았다). 복구 전이는 triggered_by 에 repair 를 남겨 감사가 구분하게 한다.
+  const invalidStatus = !VALID_STATUSES.includes(task.status);
+  if (task.status === 'failed' || task.status === 'done' || task.status === 'skipped' || invalidStatus) {
     db.exec('BEGIN');
     try {
       db.prepare('UPDATE tasks SET status=?, retries=?, updated_at=? WHERE id=?')
         .run('queued', 0, now, id);
       db.prepare(
         'INSERT INTO task_transitions (task_id, from_status, to_status, triggered_by, created_at) VALUES (?,?,?,?,?)'
-      ).run(id, task.status, 'queued', 'bot-cron/ensure', now);
+      ).run(id, task.status, 'queued', invalidStatus ? 'bot-cron/ensure-repair' : 'bot-cron/ensure', now);
       db.exec('COMMIT');
     } catch (e) {
       db.exec('ROLLBACK');
@@ -498,6 +527,18 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         process.stdout.write(JSON.stringify({ ok: true, status: result.status }) + '\n');
         break;
       }
+      // meta-patch: 상태는 그대로 두고 meta 키만 병합 (coder-merge.sh 가 merged_at 등을 남길 때)
+      // Usage: node task-store.mjs meta-patch <id> '<json>'
+      case 'meta-patch': {
+        const [id, json] = args;
+        if (!id || !json) { process.stderr.write('Usage: meta-patch <id> <json>\n'); process.exit(1); }
+        let patch;
+        try { patch = JSON.parse(json); }
+        catch (e) { process.stderr.write(`meta-patch: JSON parse error: ${e.message}\n`); process.exit(1); }
+        const t = patchMeta(id, patch);
+        process.stdout.write(JSON.stringify({ ok: true, id, meta: t.meta }) + '\n');
+        break;
+      }
       // force-done: FSM 규칙 무시하고 직접 done 상태로 설정 (completionCheck 이미 통과한 경우)
       // Usage: node task-store.mjs force-done <id>
       case 'force-done': {
@@ -613,14 +654,15 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         break;
       }
       // 임의 개선 태스크 큐 적재 (감사팀·인프라팀 → dev-runner 연결)
-      // Usage: node task-store.mjs enqueue --id <id> --title <title> --prompt <prompt> [--priority high|medium|low] [--source <src>] [--type <type>] [--post-title <원본포스트제목>]
+      // Usage: node task-store.mjs enqueue --id <id> --title <title> --prompt <prompt> [--priority high|medium|low] [--source <src>] [--type <type>] [--post-title <원본포스트제목>] [--evidence <근거>]
       // 동일 id가 queued/running이면 중복 적재 방지 (SKIP 반환)
+      // --evidence: 감사가 "무엇을 보고 고장이라 했나" (SELF-HEAL-PLAN 2a). 코더 프롬프트에 주입되고 오탐 판정의 근거가 된다.
       case 'enqueue': {
         const flagMap = {};
         for (let i = 0; i < args.length - 1; i++) {
           if (args[i].startsWith('--')) flagMap[args[i].slice(2)] = args[i + 1];
         }
-        const { id: eId, title, prompt: ePrompt, priority: ePrio = 'medium', source: eSrc = 'agent', type: eType = 'improvement', 'post-title': ePostTitle, timeout: eTimeout, maxBudget: eMaxBudget, allowedTools: eAllowedTools, 'batch-id': eBatchId } = flagMap;
+        const { id: eId, title, prompt: ePrompt, priority: ePrio = 'medium', source: eSrc = 'agent', type: eType = 'improvement', 'post-title': ePostTitle, timeout: eTimeout, maxBudget: eMaxBudget, allowedTools: eAllowedTools, 'batch-id': eBatchId, evidence: eEvidence } = flagMap;
         if (!eId || !title) { process.stderr.write('enqueue: --id and --title required\n'); process.exit(1); }
         const db = getDb();
         const existing = db.prepare("SELECT status FROM tasks WHERE id=?").get(eId);
@@ -638,6 +680,7 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         if (eMaxBudget) metaObj.maxBudget = eMaxBudget;
         if (eAllowedTools) metaObj.allowedTools = eAllowedTools;
         if (eBatchId)    metaObj.batch_id = eBatchId;   // meta에도 병기 (점진 이주)
+        if (eEvidence)   metaObj.evidence = String(eEvidence).slice(0, 2000);
         const meta = JSON.stringify(metaObj);
         // v2 (2026-04-22): batch_id, source를 컬럼에 기록 (UI GROUP BY용)
         db.prepare('INSERT OR REPLACE INTO tasks (id, status, priority, retries, depends, meta, updated_at, batch_id, source) VALUES (?,?,?,?,?,?,?,?,?)')
@@ -725,12 +768,15 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
       // Usage: node task-store.mjs ensure <id> <name> <source> <prompt> [allowedTools] [batch_id]
       // debug-cron-* 태스크는 코드 수정이 필요하므로 allowedTools 기본값 포함
       // v2 (2026-04-22): batch_id 6번째 선택 인자 추가 (UI 그룹핑용). 미전달 시 NULL.
+      // Usage: node task-store.mjs ensure <id> [name] [source] [prompt] [allowedTools] [batchId] [evidence]
       case 'ensure': {
-        const [id, name, source, prompt, allowedTools, batchId] = args;
+        // 빈 문자열 위치 인자는 "미지정" 이다 — 뒤 인자(evidence)만 주려고 "" 를 채우면 기본값이 살아야 한다
+        const [id, name, source, prompt, allowedTools, batchId, evidence] = args.map((v) => (v === '' ? undefined : v));
         const taskMeta = { name: name ?? id, source: source ?? 'bot-cron' };
         if (prompt)  taskMeta.prompt = prompt;
         taskMeta.allowedTools = allowedTools ?? 'Bash,Read,Write,Edit';
         if (batchId) taskMeta.batch_id = batchId;
+        if (evidence) taskMeta.evidence = String(evidence).slice(0, 2000);
         const result = ensureCronTask(id, taskMeta);
         process.stdout.write(JSON.stringify({ ok: true, ...result }) + '\n');
         break;

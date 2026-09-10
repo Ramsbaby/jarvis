@@ -1,7 +1,7 @@
 /**
  * channel-feed.js — 채널별 발신 메시지 피드
  *
- * 봇/크론/알람이 채널에 보낸 메시지를 ~/jarvis/runtime/state/channel-feed/{name}.jsonl에 기록.
+ * 봇/크론/알람이 채널에 보낸 메시지를 ~/.openclaw-data/jarvis/runtime/state/channel-feed/{name}.jsonl에 기록.
  * 사용자가 메시지를 보내면 claude-runner.js가 최근 N개를 시스템 프롬프트에 주입.
  * → "방금 크론이 보낸 알람이 뭐야?" 같은 질문에 재질문 없이 컨텍스트 보유.
  *

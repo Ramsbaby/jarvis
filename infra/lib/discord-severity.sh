@@ -6,7 +6,7 @@
 # 송출기를 새로 만들면 반드시 이 파일을 source하고 severity_color를 사용할 것.
 #
 # 사용:
-#   source ~/jarvis/infra/lib/discord-severity.sh
+#   source ~/.openclaw-data/jarvis/infra/lib/discord-severity.sh
 #   color=$(severity_color critical)   # Discord embed color 필드용 10진수
 
 severity_color() {

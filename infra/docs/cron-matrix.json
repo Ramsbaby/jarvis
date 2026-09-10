@@ -1,43 +1,30 @@
 {
-  "generatedAt": "2026-07-25T04:42:11.675Z",
-  "totalTasks": 136,
+  "generatedAt": "2026-09-10T11:57:36.455Z",
+  "totalTasks": 112,
   "source": "runtime/config/tasks.json",
   "modelDistribution": {
-    "claude-sonnet-5": 22,
-    "claude-haiku-4-5-20251001": 40,
-    "<default>": 72,
-    "claude-opus-5": 2
+    "claude-sonnet-5": 16,
+    "claude-haiku-4-5-20251001": 33,
+    "<default>": 63
   },
   "channelDistribution": {
     "jarvis": 5,
-    "jarvis-system": 41,
+    "jarvis-system": 42,
     "jarvis-market": 3,
-    "jarvis-ceo": 21,
-    "<none>": 45,
+    "jarvis-ceo": 13,
+    "<none>": 34,
     "jarvis-career": 1,
-    "jarvis-dev": 3,
-    "jarvis-alerts": 2,
+    "jarvis-alerts": 1,
     "jarvis-retro": 4,
     "jarvis-boram": 1,
-    "jarvis-blog": 4,
+    "jarvis-blog": 3,
     "jarvis-lite": 1,
     "jarvis-inbox": 1,
     "jarvis-interview": 2,
-    "jarvis-info": 1,
-    "jarvis-preply-tutor": 1
+    "jarvis-info": 1
   },
   "groups": {
     "daily": [
-      {
-        "id": "context-extractor",
-        "name": "context-extractor (launchd→tasks.json 이관 2026-04-16)",
-        "schedule": "0 1 * * *",
-        "model": "<default>",
-        "channel": "<none>",
-        "timeout": 300,
-        "maxBudget": "0.30",
-        "allowedTools": null
-      },
       {
         "id": "token-sync",
         "name": "토큰 동기화",
@@ -79,16 +66,6 @@
         "allowedTools": "Bash"
       },
       {
-        "id": "dev-event-watcher",
-        "name": "dev-event-watcher",
-        "schedule": "0 23 * * *",
-        "model": "<default>",
-        "channel": "<none>",
-        "timeout": null,
-        "maxBudget": "0.30",
-        "allowedTools": null
-      },
-      {
         "id": "rag-health",
         "name": "RAG 건강 체크",
         "schedule": "0 3 * * *",
@@ -117,16 +94,6 @@
         "timeout": 120,
         "maxBudget": "0.30",
         "allowedTools": "Bash"
-      },
-      {
-        "id": "jarvis-home-sync",
-        "name": "jarvis-home-sync (launchd→tasks.json 이관 2026-04-16)",
-        "schedule": "0 4 * * *",
-        "model": "<default>",
-        "channel": "<none>",
-        "timeout": 300,
-        "maxBudget": "0.30",
-        "allowedTools": null
       },
       {
         "id": "doc-supervisor",
@@ -329,14 +296,14 @@
         "allowedTools": null
       },
       {
-        "id": "geeknews-bench-crawl",
-        "name": "GeekNews 벤치마크 크롤",
-        "schedule": "30 10 * * *",
-        "model": "claude-haiku-4-5-20251001",
+        "id": "sensor-deadman-check",
+        "name": "감시자 생존 점검 (데드맨 스위치 — crontab 직행 센서의 침묵 감지)",
+        "schedule": "30 11 * * *",
+        "model": "<default>",
         "channel": "jarvis-system",
-        "timeout": 600,
-        "maxBudget": "1.00",
-        "allowedTools": null
+        "timeout": 120,
+        "maxBudget": "0",
+        "allowedTools": "Bash"
       },
       {
         "id": "bot-quality-check",
@@ -419,14 +386,14 @@
         "allowedTools": null
       },
       {
-        "id": "boram-daily-schedule",
-        "name": "보람 일정 브리핑 (비활성 — personal-schedule-daily로 대체됨)",
+        "id": "coder-review",
+        "name": "코더 브랜치 일일 리뷰 + 7일 만료",
         "schedule": "30 7 * * *",
         "model": "<default>",
-        "channel": "<none>",
-        "timeout": null,
-        "maxBudget": "0.30",
-        "allowedTools": null
+        "channel": "jarvis-system",
+        "timeout": 1500,
+        "maxBudget": "2.00",
+        "allowedTools": "Bash"
       },
       {
         "id": "morning-standup",
@@ -434,7 +401,7 @@
         "schedule": "30 7 * * *",
         "model": "claude-sonnet-5",
         "channel": "jarvis",
-        "timeout": 300,
+        "timeout": 600,
         "maxBudget": "1.00",
         "allowedTools": "Read,Bash,WebSearch"
       },
@@ -474,7 +441,7 @@
         "schedule": "45 2 * * *",
         "model": "claude-haiku-4-5-20251001",
         "channel": "jarvis-system",
-        "timeout": 180,
+        "timeout": 240,
         "maxBudget": "0.15",
         "allowedTools": [
           "Bash",
@@ -513,7 +480,7 @@
         "schedule": "5 23 * * *",
         "model": "claude-sonnet-5",
         "channel": "jarvis-ceo",
-        "timeout": 360,
+        "timeout": 1800,
         "maxBudget": "1.50",
         "allowedTools": "Bash,Read,Write"
       },
@@ -538,16 +505,6 @@
         "allowedTools": "Read,Bash,Write"
       },
       {
-        "id": "dev-event-bus",
-        "name": "dev-event-bus",
-        "schedule": "50 22 * * *",
-        "model": "<default>",
-        "channel": "<none>",
-        "timeout": null,
-        "maxBudget": "0.30",
-        "allowedTools": null
-      },
-      {
         "id": "skill-loop-nightly",
         "name": "스킬 자가 생성 루프 (야간 선별·추출)",
         "schedule": "50 3 * * *",
@@ -556,6 +513,16 @@
         "timeout": 900,
         "maxBudget": "1.00",
         "allowedTools": null
+      },
+      {
+        "id": "incident-ingest",
+        "name": "사고 원장 수집 (가드 차단·리뷰 reject·머지 차단·무결성 경보)",
+        "schedule": "50 7 * * *",
+        "model": "<default>",
+        "channel": "jarvis-system",
+        "timeout": 300,
+        "maxBudget": "0",
+        "allowedTools": "Bash"
       },
       {
         "id": "board-meeting-pm",
@@ -573,7 +540,7 @@
         "schedule": "55 22 * * *",
         "model": "<default>",
         "channel": "jarvis-system",
-        "timeout": 600,
+        "timeout": 900,
         "maxBudget": "0.30",
         "allowedTools": null
       },
@@ -609,16 +576,6 @@
       }
     ],
     "hourly": [
-      {
-        "id": "github-monitor",
-        "name": "GitHub 알림 모니터",
-        "schedule": "0 * * * *",
-        "model": "claude-haiku-4-5-20251001",
-        "channel": "jarvis-system",
-        "timeout": 720,
-        "maxBudget": "0.50",
-        "allowedTools": "Bash"
-      },
       {
         "id": "mistake-circuit-healthcheck",
         "name": "오답노트 추출기 회로 차단 감지",
@@ -672,14 +629,14 @@
     ],
     "weekly": [
       {
-        "id": "oss-docs",
-        "name": "OSS README 갱신 제안",
-        "schedule": "0 11 * * 3",
+        "id": "self-heal-weekly-retro",
+        "name": "주간 자기치유 회고 (지표 5개 + 미닫힘 사고 + 자동 머지 정책표 제안)",
+        "schedule": "0 12 * * 1",
         "model": "<default>",
-        "channel": "jarvis-blog",
-        "timeout": 600,
-        "maxBudget": "0.30",
-        "allowedTools": null
+        "channel": "jarvis-system",
+        "timeout": 180,
+        "maxBudget": "0",
+        "allowedTools": "Bash"
       },
       {
         "id": "oss-promo",
@@ -690,16 +647,6 @@
         "timeout": 600,
         "maxBudget": "0.30",
         "allowedTools": null
-      },
-      {
-        "id": "profile-weekly",
-        "name": "프로필 주간 리포트",
-        "schedule": "0 18 * * 5",
-        "model": "claude-sonnet-5",
-        "channel": "jarvis-dev",
-        "timeout": 300,
-        "maxBudget": "1.00",
-        "allowedTools": "Read,WebSearch,Bash,Write"
       },
       {
         "id": "age-mem-discard",
@@ -742,26 +689,6 @@
         "allowedTools": null
       },
       {
-        "id": "weekly-perf-agent",
-        "name": "주간 성과 분석 에이전트",
-        "schedule": "0 21 * * 0",
-        "model": "claude-sonnet-5",
-        "channel": "jarvis-system",
-        "timeout": 300,
-        "maxBudget": "1.00",
-        "allowedTools": "Bash"
-      },
-      {
-        "id": "rag-bench",
-        "name": "RAG 품질 측정",
-        "schedule": "0 3 * * 0",
-        "model": "<default>",
-        "channel": "<none>",
-        "timeout": 180,
-        "maxBudget": "0.30",
-        "allowedTools": null
-      },
-      {
         "id": "rag-stale-scan",
         "name": "RAG 스테일 청크 주간 스캔",
         "schedule": "0 3 * * 0",
@@ -770,16 +697,6 @@
         "timeout": 120,
         "maxBudget": "0.00",
         "allowedTools": "Bash"
-      },
-      {
-        "id": "gen-gotchas",
-        "name": "Gotchas 자동 승격",
-        "schedule": "0 3 * * 1",
-        "model": "<default>",
-        "channel": "<none>",
-        "timeout": 60,
-        "maxBudget": "0.30",
-        "allowedTools": null
       },
       {
         "id": "memory-expire",
@@ -817,9 +734,9 @@
         "schedule": "0 4 * * 1",
         "model": "claude-haiku-4-5-20251001",
         "channel": "jarvis-system",
-        "timeout": 180,
-        "maxBudget": "0.30",
-        "allowedTools": "Read,Bash"
+        "timeout": 420,
+        "maxBudget": "0.50",
+        "allowedTools": "Read,Bash,Write,Edit"
       },
       {
         "id": "weekly-dream-insight",
@@ -842,16 +759,6 @@
         "allowedTools": "Bash,Read"
       },
       {
-        "id": "brand-weekly",
-        "name": "브랜드팀 주간 보고 (Brand)",
-        "schedule": "0 8 * * 2",
-        "model": "claude-sonnet-5",
-        "channel": "jarvis-ceo",
-        "timeout": 300,
-        "maxBudget": "1.00",
-        "allowedTools": "Bash,WebSearch,Write"
-      },
-      {
         "id": "cost-monitor",
         "name": "비용 모니터링",
         "schedule": "0 9 * * 0",
@@ -872,16 +779,6 @@
         "allowedTools": "Bash"
       },
       {
-        "id": "geeknews-bench-report",
-        "name": "GeekNews 주간 벤치마크 리포트",
-        "schedule": "0 9 * * 1",
-        "model": "claude-haiku-4-5-20251001",
-        "channel": "jarvis-ceo",
-        "timeout": 120,
-        "maxBudget": "0.50",
-        "allowedTools": null
-      },
-      {
         "id": "interview-harness-audit",
         "name": "Interview Harness Audit (C1~C6)",
         "schedule": "0 9 * * 1",
@@ -900,16 +797,6 @@
         "timeout": 180,
         "maxBudget": "0.10",
         "allowedTools": "Bash"
-      },
-      {
-        "id": "jira-sync",
-        "name": "JIRA 이력 동기화",
-        "schedule": "0 9 * * 1",
-        "model": "<default>",
-        "channel": "<none>",
-        "timeout": 180,
-        "maxBudget": "0.30",
-        "allowedTools": null
       },
       {
         "id": "qa-consistency-audit",
@@ -988,7 +875,7 @@
         "model": "claude-sonnet-5",
         "channel": "jarvis-retro",
         "timeout": 300,
-        "maxBudget": "0.50",
+        "maxBudget": "2.50",
         "allowedTools": "Read,Edit,Write,Bash"
       },
       {
@@ -1032,16 +919,6 @@
         "allowedTools": null
       },
       {
-        "id": "weekly-kpi",
-        "name": "주간 KPI 리포트",
-        "schedule": "30 8 * * 1",
-        "model": "claude-sonnet-5",
-        "channel": "jarvis-ceo",
-        "timeout": 300,
-        "maxBudget": "1.00",
-        "allowedTools": "Bash,Read,Write"
-      },
-      {
         "id": "tune-task-params",
         "name": "tune-task-params (launchd→tasks.json 이관 2026-04-16)",
         "schedule": "35 8 * * 0",
@@ -1062,16 +939,6 @@
         "allowedTools": null
       },
       {
-        "id": "connections-weekly-insight",
-        "name": "Connections 주간 인사이트",
-        "schedule": "45 9 * * 1",
-        "model": "claude-opus-5",
-        "channel": "jarvis-ceo",
-        "timeout": 240,
-        "maxBudget": "0.80",
-        "allowedTools": "Bash,Read,Write"
-      },
-      {
         "id": "weekly-report",
         "name": "주간 리포트",
         "schedule": "5 20 * * 0",
@@ -1082,6 +949,16 @@
         "allowedTools": "Bash,Read,Write"
       },
       {
+        "id": "update-claude-md-meta",
+        "name": "CLAUDE.md 메타정보 검증 및 갱신",
+        "schedule": "5 5 * * 1",
+        "model": "claude-haiku-4-5-20251001",
+        "channel": "jarvis-system",
+        "timeout": 120,
+        "maxBudget": "0.10",
+        "allowedTools": null
+      },
+      {
         "id": "session-report",
         "name": "토큰 사용 분석 HTML 리포트 (주간)",
         "schedule": "50 23 * * 0",
@@ -1090,41 +967,10 @@
         "timeout": 120,
         "maxBudget": "0.00",
         "allowedTools": "Bash,Read"
-      },
-      {
-        "id": "weekly-roi",
-        "name": "주간 ROI 집계",
-        "schedule": "55 23 * * 0",
-        "model": "claude-haiku-4-5-20251001",
-        "channel": "jarvis-ceo",
-        "timeout": 300,
-        "maxBudget": "0.50",
-        "allowedTools": "Bash"
       }
     ],
-    "monthly": [
-      {
-        "id": "monthly-review",
-        "name": "월간 회고",
-        "schedule": "0 9 1 * *",
-        "model": "claude-opus-5",
-        "channel": "jarvis-ceo",
-        "timeout": 300,
-        "maxBudget": "1.00",
-        "allowedTools": "Bash,Read,Write"
-      }
-    ],
+    "monthly": [],
     "adhoc": [
-      {
-        "id": "auditor-cross-validator-runner",
-        "name": "Auditor 교차 검증 (Cross-Validation)",
-        "schedule": "(adhoc)",
-        "model": "<default>",
-        "channel": "<none>",
-        "timeout": 60,
-        "maxBudget": "0.00",
-        "allowedTools": "Bash"
-      },
       {
         "id": "bot-crash-classifier",
         "name": "봇 크래시 원인 분류 및 Discord 알림",
@@ -1136,26 +982,6 @@
         "allowedTools": "Bash"
       },
       {
-        "id": "cluster-guard-init-cl-1b6f71eed569a8b7",
-        "name": "오답승격 클러스터 가드 초기화 (cl-1b6f71eed569a8b7)",
-        "schedule": "(adhoc)",
-        "model": "claude-haiku-4-5-20251001",
-        "channel": "<none>",
-        "timeout": 60,
-        "maxBudget": "0.00",
-        "allowedTools": "Bash"
-      },
-      {
-        "id": "cluster-guard-response-validation-cl-fd25ae4c34818568",
-        "name": "오답승격 클러스터 응답 검증 가드 (cl-fd25ae4c34818568)",
-        "schedule": "(adhoc)",
-        "model": "claude-haiku-4-5-20251001",
-        "channel": "<none>",
-        "timeout": 60,
-        "maxBudget": "0.00",
-        "allowedTools": "Bash"
-      },
-      {
         "id": "cost-alert-handler",
         "name": "API 비용 초과 경보 처리",
         "schedule": "(adhoc)",
@@ -1164,36 +990,6 @@
         "timeout": 60,
         "maxBudget": "0.10",
         "allowedTools": "Read"
-      },
-      {
-        "id": "discord-mention-handler",
-        "name": "Discord 멘션 알림 처리",
-        "schedule": "(adhoc)",
-        "model": "claude-sonnet-5",
-        "channel": "jarvis-alerts",
-        "timeout": 120,
-        "maxBudget": "0.20",
-        "allowedTools": "Read"
-      },
-      {
-        "id": "env-restore-notifier",
-        "name": ".env 소멸 감지 알림",
-        "schedule": "(adhoc)",
-        "model": "claude-haiku-4-5-20251001",
-        "channel": "jarvis-system",
-        "timeout": 120,
-        "maxBudget": "0.10",
-        "allowedTools": "Bash"
-      },
-      {
-        "id": "github-pr-handler",
-        "name": "GitHub PR 오픈 즉시 처리",
-        "schedule": "(adhoc)",
-        "model": "claude-sonnet-5",
-        "channel": "jarvis-dev",
-        "timeout": 180,
-        "maxBudget": "0.50",
-        "allowedTools": "Read,WebSearch"
       },
       {
         "id": "log-cleanup",
@@ -1214,29 +1010,19 @@
         "timeout": 60,
         "maxBudget": "0.00",
         "allowedTools": "Bash"
-      },
-      {
-        "id": "post-fix-verification-runner",
-        "name": "/verify 자동 재검증 파이프라인",
-        "schedule": "(adhoc)",
-        "model": "<default>",
-        "channel": "<none>",
-        "timeout": 120,
-        "maxBudget": "0.00",
-        "allowedTools": "Bash"
-      },
-      {
-        "id": "youtube-bench",
-        "name": "YouTube 영상 → LLM Wiki 적재",
-        "schedule": "(adhoc)",
-        "model": "claude-haiku-4-5-20251001",
-        "channel": "jarvis-dev",
-        "timeout": 180,
-        "maxBudget": "0.50",
-        "allowedTools": null
       }
     ],
     "other": [
+      {
+        "id": "cron-completion-hook",
+        "name": "크론 태스크 완료 훅",
+        "schedule": "*/15 * * * *",
+        "model": "<default>",
+        "channel": "<none>",
+        "timeout": 30,
+        "maxBudget": "0.00",
+        "allowedTools": "Bash"
+      },
       {
         "id": "session-sync",
         "name": "세션 동기화",
@@ -1298,16 +1084,6 @@
         "allowedTools": null
       },
       {
-        "id": "board-conclude",
-        "name": "보드 토론 자동 결론",
-        "schedule": "*/5 * * * *",
-        "model": "<default>",
-        "channel": "jarvis-ceo",
-        "timeout": 300,
-        "maxBudget": "0.30",
-        "allowedTools": null
-      },
-      {
         "id": "calendar-alert",
         "name": "일정 선제 알림",
         "schedule": "*/5 * * * *",
@@ -1353,26 +1129,6 @@
         "schedule": "0 */6 * * *",
         "model": "<default>",
         "channel": "<none>",
-        "timeout": 120,
-        "maxBudget": "0.30",
-        "allowedTools": null
-      },
-      {
-        "id": "preply-boram-followup-20260715",
-        "name": "보람님 요약본 문법영어우선 스캔여부 팔로우업",
-        "schedule": "0 16 15 7 *",
-        "model": "<default>",
-        "channel": "jarvis-preply-tutor",
-        "timeout": 60,
-        "maxBudget": "0.10",
-        "allowedTools": null
-      },
-      {
-        "id": "board-topic-proposer",
-        "name": "보드 토론 주제 자동 제안",
-        "schedule": "0 8-21 * * *",
-        "model": "<default>",
-        "channel": "jarvis-ceo",
         "timeout": 120,
         "maxBudget": "0.30",
         "allowedTools": null

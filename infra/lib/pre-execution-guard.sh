@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 STATE_DIR="${BOT_HOME}/state"
 TASK_STATUS_DIR="${STATE_DIR}/task-status"
 TASK_LOCK_DIR="${STATE_DIR}/task-locks"

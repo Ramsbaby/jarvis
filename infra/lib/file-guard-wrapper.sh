@@ -9,7 +9,7 @@
 # 4. Validate Claude output against guard results
 #
 # Usage (as sourced library):
-#   source ~/jarvis/infra/lib/file-guard-wrapper.sh
+#   source ~/.openclaw-data/jarvis/infra/lib/file-guard-wrapper.sh
 #   guard_scan_prompt "$PROMPT" > guard_results.json
 #   guard_validate_response response.txt guard_results.json > validation.json
 #
@@ -19,8 +19,8 @@
 
 set -euo pipefail
 
-GUARD_SCRIPT="${GUARD_SCRIPT:-${JARVIS_HOME:-${HOME}/jarvis}/infra/bin/file-existence-guard.sh}"
-VALIDATOR_SCRIPT="${VALIDATOR_SCRIPT:-${JARVIS_HOME:-${HOME}/jarvis}/infra/bin/claude-assertion-validator.mjs}"
+GUARD_SCRIPT="${GUARD_SCRIPT:-${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis}/infra/bin/file-existence-guard.sh}"
+VALIDATOR_SCRIPT="${VALIDATOR_SCRIPT:-${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis}/infra/bin/claude-assertion-validator.mjs}"
 
 # === Guard Wrapper Functions ===
 
@@ -116,7 +116,7 @@ Environment:
   GUARD_SCRIPT        - Path to file-existence-guard.sh (auto-detected)
   VALIDATOR_SCRIPT    - Path to claude-assertion-validator.mjs (auto-detected)
   GUARD_STRICT_MODE   - Set to 1 to block responses with contradictions (default: 0)
-  JARVIS_HOME         - Jarvis home directory (default: \$HOME/jarvis)
+  JARVIS_HOME         - Jarvis home directory (default: \$HOME/.openclaw-data/jarvis)
 
 Examples:
   # Scan a prompt

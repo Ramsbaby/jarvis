@@ -18,7 +18,7 @@
 # Rollback:
 #   launchctl bootout gui/$UID ai.jarvis.oauth-rotation-verify-{1,2,3}
 #   rm ~/Library/LaunchAgents/ai.jarvis.oauth-rotation-verify-*.plist
-#   rm /Users/ramsbaby/jarvis/infra/scripts/oauth-rotation-verify.sh
+#   rm /Users/ramsbaby/.openclaw-data/jarvis/infra/scripts/oauth-rotation-verify.sh
 
 set -euo pipefail
 
@@ -35,10 +35,10 @@ BASELINE_REFRESH16="6ec86673ca90b8fc"
 BASELINE_LAST_INVALID_GRANT="2026-05-21T13:00:02Z"
 
 CRED_FILE="/Users/ramsbaby/.claude/.credentials.json"
-LEDGER="/Users/ramsbaby/jarvis/runtime/logs/oauth-rotation-verify-ledger.jsonl"
-PRE_CHECK_LOG="/Users/ramsbaby/jarvis/runtime/logs/pre-cron-auth-check.log"
-OAUTH_LOG="/Users/ramsbaby/jarvis/runtime/logs/oauth-refresh.log"
-ALERT_SH="/Users/ramsbaby/jarvis/infra/scripts/alert.sh"
+LEDGER="/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/oauth-rotation-verify-ledger.jsonl"
+PRE_CHECK_LOG="/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/pre-cron-auth-check.log"
+OAUTH_LOG="/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/oauth-refresh.log"
+ALERT_SH="/Users/ramsbaby/.openclaw-data/jarvis/infra/scripts/alert.sh"
 
 KST_NOW="$(TZ=Asia/Seoul date +%Y-%m-%dT%H:%M:%S%z)"
 UTC_NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

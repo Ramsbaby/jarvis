@@ -12,8 +12,8 @@
 //   ③ promoter run_metrics 최근 7일 (applied/escalated 추이)
 //   ④ 읽기 강제 훅 발동 수 (context-state-inject.jsonl)
 //
-// 실행: node ~/jarvis/infra/scripts/mistake-metrics-report.mjs
-// 기록: ~/jarvis/runtime/ledger/correction-metrics.jsonl (append — 회차 간 비교용)
+// 실행: node ~/.openclaw-data/jarvis/infra/scripts/mistake-metrics-report.mjs
+// 기록: ~/.openclaw-data/jarvis/runtime/ledger/correction-metrics.jsonl (append — 회차 간 비교용)
 // 크론 미등재 (CRON-INTRODUCTION-CHECKLIST 통과 전) — 온디맨드 실행.
 
 import { readFileSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';

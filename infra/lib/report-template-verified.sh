@@ -26,8 +26,8 @@
 set -o pipefail
 
 # 상수
-_VERIFY_STATE_DIR="${HOME}/jarvis/runtime/state/verified-reports"
-_VERIFY_LOG_DIR="${HOME}/jarvis/runtime/logs/verified-reports"
+_VERIFY_STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/verified-reports"
+_VERIFY_LOG_DIR="${HOME}/.openclaw-data/jarvis/runtime/logs/verified-reports"
 
 # 내부: 디렉토리 초기화
 _verify_init() {

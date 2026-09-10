@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # symlink-topology-audit.sh
 #
-# ~/jarvis/runtime 하위 토폴로지 정합성 감사 + 자동 복구.
+# ~/.openclaw-data/jarvis/runtime 하위 토폴로지 정합성 감사 + 자동 복구.
 #
 # Check:
-#   1. ~/jarvis/runtime/{infra,bin,lib,scripts} 가 심링크인가 (실제 디렉토리로 변했으면 파괴)
-#   2. 그 심링크들이 SSoT(~/jarvis/infra/*)를 가리키는가
-#   3. ~/jarvis/runtime 하위 다른 절대 심링크가 SSoT 외부를 가리키는가
+#   1. ~/.openclaw-data/jarvis/runtime/{infra,bin,lib,scripts} 가 심링크인가 (실제 디렉토리로 변했으면 파괴)
+#   2. 그 심링크들이 SSoT(~/.openclaw-data/jarvis/infra/*)를 가리키는가
+#   3. ~/.openclaw-data/jarvis/runtime 하위 다른 절대 심링크가 SSoT 외부를 가리키는가
 #   4. .bak-* / .ghost-* 잔해
 #
 # Auto-recovery: Check 1·2 위반은 즉시 자동 복구 (파일 백업 후 심링크 재생성).
@@ -17,11 +17,11 @@
 # 2026-04-16 2차 장애 이후 auto-recovery + 스로틀 추가.
 set -euo pipefail
 
-# 주의: DOT_JARVIS 라는 이름과 달리 값은 런타임 폴더(~/jarvis/runtime)다.
+# 주의: DOT_JARVIS 라는 이름과 달리 값은 런타임 폴더(~/.openclaw-data/jarvis/runtime)다.
 #   이 감사가 원래 지키는 대상은 runtime/{infra,bin,lib,scripts} 심링크이며 그 동작은 정상이다.
 #   (2026-07-25 확인 — 이름 때문에 "~/.jarvis 를 검사한다"고 오해하기 쉬우니 여기 명시)
-DOT_JARVIS="${HOME}/jarvis/runtime"
-SSOT="${HOME}/jarvis/infra"
+DOT_JARVIS="${HOME}/.openclaw-data/jarvis/runtime"
+SSOT="${HOME}/.openclaw-data/jarvis/infra"
 # 2026-07-25 추가: 옛 경로(~/.jarvis) 호환 심링크는 그동안 어떤 감사도 보지 않는
 #   사각지대였다. 그 사이 bin·scripts·config·discord 링크가 사라져, 이 경로를
 #   BOT_HOME 으로 주입받는 LaunchAgent 102개 중 다수가 조용히 실패했다
@@ -41,9 +41,9 @@ mkdir -p "$LEDGER_DIR" "$THROTTLE_DIR" "$BACKUP_DIR"
 # 2026-08-07 — "그림자 폴더 통합분"(2026-07-27 추가, COMPAT_HOME/{prompts,adr,watchdog,
 #   tmp,archive,teams,backups,work,docs,data,wiki,ledger,results,context,runtime,
 #   logs,inbox,state} + COMPAT_HOME/{config,discord})을 통째로 제거했다.
-#   COMPAT_HOME(~/.jarvis)이 DOT_JARVIS(~/jarvis/runtime)를 가리키는 심링크인 이상,
+#   COMPAT_HOME(~/.jarvis)이 DOT_JARVIS(~/.openclaw-data/jarvis/runtime)를 가리키는 심링크인 이상,
 #   "${COMPAT_HOME}/X" 는 항상 "${DOT_JARVIS}/X" 와 물리적으로 동일한 경로로 풀린다.
-#   그런데 이 블록의 expected_target 도 항상 "${HOME}/jarvis/runtime/X" — 즉 자기 자신.
+#   그런데 이 블록의 expected_target 도 항상 "${HOME}/.openclaw-data/jarvis/runtime/X" — 즉 자기 자신.
 #   COMPAT_HOME이 정상일 때조차 "X가 X를 가리키는 심링크인가"를 묻는 구조라 X가
 #   조금이라도 실디렉토리인 순간(늘 그렇다 — X는 runtime의 진짜 하위 데이터) 무조건
 #   "유령 디렉토리"로 오판해 정본 데이터를 스태시로 옮기고 자기참조 심링크로 덮어썼다.
@@ -93,8 +93,8 @@ alert_throttled() {
       return 0
     fi
   fi
-  if [[ -x "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" || -f "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" ]]; then
-    /opt/homebrew/bin/node "${HOME}/jarvis/runtime/scripts/discord-visual.mjs" \
+  if [[ -x "${HOME}/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" || -f "${HOME}/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" ]]; then
+    /opt/homebrew/bin/node "${HOME}/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" \
       --type stats \
       --data "{\"title\":\"${title}\",\"data\":{\"path\":\"${path}\",\"detail\":\"${detail}\",\"ledger\":\"${LEDGER}\"},\"timestamp\":\"${TS}\"}" \
       --channel jarvis-system 2>/dev/null || true
@@ -154,16 +154,27 @@ recover_link() {
     #   스태시 이동시키는 사고(2026-08-06)를 어떤 경로로든 재발시키지 않기 위함.
     local link_real
     link_real="$(cd -P "$link_path" 2>/dev/null && pwd || true)"
-    if [[ -n "$link_real" ]] && { [[ "$link_real" == "$DOT_JARVIS" ]] || [[ "$link_real" == "${HOME}/jarvis" ]]; }; then
+    if [[ -n "$link_real" ]] && { [[ "$link_real" == "$DOT_JARVIS" ]] || [[ "$link_real" == "${HOME}/.openclaw-data/jarvis" ]]; }; then
       emit "error" "ghost-dir-guard-blocked" "$link_path" "resolved=${link_real} — 정본 루트와 동일, 이동 거부"
       alert_throttled "ghost-dir-guard-blocked" "$link_path" "🔴 유령 디렉토리 복구 차단됨" "resolved=${link_real} 이 정본 루트와 동일 — 수동 확인 필요"
       return 1
     fi
-    # 실제 디렉토리로 변했음 → 백업 후 제거 + 심링크 재생성
+    # 2026-09-03 추가 — 3차 방어선. 내용물이 있는 실디렉토리는 자동으로 옮기지 않는다.
+    #   세 번의 파괴(08-06·08-07·08-23) 모두 "내용물이 있는 실디렉토리를 유령으로 오판해
+    #   스태시로 이동"이었고, 08-23 스태시분은 11일간 아무도 되돌리지 않아 크론 94%
+    #   실패·봇 다운·wiki-slots 무력화로 이어졌다. 자동 이동이 실제로 필요했던 비어있지
+    #   않은 디렉토리는 한 번도 없었다. 빈 디렉토리만 자동 교체하고, 내용물이 있으면
+    #   원장·알림만 남기고 사람이 결정한다. 우회는 JARVIS_TOPOLOGY_STASH_OK=1 명시 시에만.
+    local file_count
+    file_count=$(find "$link_path" -type f -o -type l 2>/dev/null | wc -l | tr -d ' ')
+    if (( file_count > 0 )) && [[ "${JARVIS_TOPOLOGY_STASH_OK:-0}" != "1" ]]; then
+      emit "error" "ghost-dir-nonempty-blocked" "$link_path" "files=${file_count} — 내용물 있는 실디렉토리, 자동 이동 거부 (수동: JARVIS_TOPOLOGY_STASH_OK=1)"
+      alert_throttled "ghost-dir-nonempty-blocked" "$link_path" "🔴 실디렉토리 자동 이동 차단" "files=${file_count} — 심링크여야 할 경로가 내용물 있는 실디렉토리. 데이터는 건드리지 않았다. 확인 후 JARVIS_TOPOLOGY_STASH_OK=1 로 재실행"
+      return 1
+    fi
+    # 비어있거나 명시 승인됨 → 백업 후 제거 + 심링크 재생성
     mv "$link_path" "$recovery_stash"
     ln -s "$expected_target" "$link_path"
-    local file_count
-    file_count=$(find "$recovery_stash" -maxdepth 3 | wc -l | tr -d ' ')
     emit "error" "recovered-ghost-dir" "$link_path" "stashed=${recovery_stash} files=${file_count}"
     alert_throttled "recovered-ghost-dir" "$link_path" "🚨 유령 디렉토리 자동 복구" "stashed at ${recovery_stash} (files: ${file_count})"
     return 1
@@ -181,19 +192,25 @@ recover_link() {
 }
 
 # 2026-08-07 추가 — COMPAT_HOME 드리프트 가드.
-#   COMPAT_HOME(~/.jarvis)이 DOT_JARVIS(~/jarvis/runtime)가 아닌 다른 곳(예: ~/jarvis
+#   COMPAT_HOME(~/.jarvis)이 DOT_JARVIS(~/.openclaw-data/jarvis/runtime)가 아닌 다른 곳(예: ~/.openclaw-data/jarvis
 #   레포 루트)을 가리키면, 아래 COMPAT_HOME 기반 항목들의 물리 경로가 정본 데이터
 #   디렉토리 자체로 풀려버린다. 그 상태에서 recover_link 의 "유령 디렉토리" 분기가
 #   돌면 실데이터를 스태시로 옮기고 자기참조 심링크를 만든다 — 2026-08-06 실제 발생,
-#   ~/jarvis/runtime 자체가 깨져 CLI auto-memory 가 전역 ELOOP 로 무너졌다.
+#   ~/.openclaw-data/jarvis/runtime 자체가 깨져 CLI auto-memory 가 전역 ELOOP 로 무너졌다.
 #   L50-55 주석이 DOT_JARVIS 쪽 자기참조는 미리 막았지만, COMPAT_HOME 쪽 드리프트는
 #   막지 못했다. 여기서 COMPAT_HOME 이 실제로 DOT_JARVIS 를 가리키는지 먼저 검증하고,
 #   아니면 COMPAT_HOME 기반 항목은 전부 건너뛴다(추측 복구보다 스킵이 안전하다).
 COMPAT_HOME_REAL="$(cd -P "$COMPAT_HOME" 2>/dev/null && pwd || true)"
-if [[ "$COMPAT_HOME_REAL" != "$DOT_JARVIS" ]]; then
+# 2026-09-10 정정: 기대값도 실경로로 풀어서 비교한다.
+#   전에는 해석된 경로(cd -P)를 리터럴 문자열($DOT_JARVIS)과 견줬다. 그 비교는
+#   ~/.openclaw-data/jarvis 가 심링크가 아닐 때만 맞다 — 오픈클로 이관으로 ~/.openclaw-data/jarvis 가 심링크가 되자
+#   물리적으로 동일한 디렉토리인데도 드리프트로 오판했다(실측 20:28).
+#   양쪽을 같은 방법으로 풀면 트리가 어디로 가든 이 검사는 계속 옳다.
+DOT_JARVIS_REAL="$(cd -P "$DOT_JARVIS" 2>/dev/null && pwd || echo "$DOT_JARVIS")"
+if [[ "$COMPAT_HOME_REAL" != "$DOT_JARVIS_REAL" ]]; then
   SKIP_COMPAT_CHECKS=1
-  emit "error" "compat-home-drift" "$COMPAT_HOME" "resolved=${COMPAT_HOME_REAL:-<unresolved>} expected=${DOT_JARVIS} — COMPAT_HOME 기반 심링크 검사 스킵"
-  alert_throttled "compat-home-drift" "$COMPAT_HOME" "🔴 COMPAT_HOME 드리프트 감지 — 심링크 자동복구 스킵" "resolved=${COMPAT_HOME_REAL:-<unresolved>} expected=${DOT_JARVIS}"
+  emit "error" "compat-home-drift" "$COMPAT_HOME" "resolved=${COMPAT_HOME_REAL:-<unresolved>} expected=${DOT_JARVIS_REAL} — COMPAT_HOME 기반 심링크 검사 스킵"
+  alert_throttled "compat-home-drift" "$COMPAT_HOME" "🔴 COMPAT_HOME 드리프트 감지 — 심링크 자동복구 스킵" "resolved=${COMPAT_HOME_REAL:-<unresolved>} expected=${DOT_JARVIS_REAL}"
 else
   SKIP_COMPAT_CHECKS=0
 fi
@@ -234,11 +251,17 @@ while IFS= read -r link; do
   if [[ "$target" != /* ]]; then continue; fi
   if [[ "$target" == "${DOT_JARVIS}"/* ]]; then continue; fi
   if [[ "$target" == "${SSOT}"* ]]; then continue; fi
-  if [[ "$target" == "${HOME}/jarvis"* ]]; then continue; fi
+  if [[ "$target" == "${HOME}/.openclaw-data/jarvis"* ]]; then continue; fi
   if [[ "$target" == "${HOME}/jarvis-board"* ]]; then continue; fi
   # 2026-07-25 주석 정정: ~/.jarvis 는 심링크가 아니라 독립 실제 폴더이며,
   #   그 아래 bin/lib/scripts/config/discord 만 정본을 가리키는 호환 링크다(위 EXPECTED 목록에서 관리).
   if [[ "$target" == "${HOME}/.jarvis"* ]]; then continue; fi  # ALLOW-DOTJARVIS (호환 계층 — 허용)
+  # 2026-09-10 오픈클로 이관: 정본이 자비스 밖으로 나갔다.
+  #   위키(슬롯)·원장·페르소나 설정은 이제 `~/.openclaw-data` 가 소유하고,
+  #   자비스 안의 옛 경로는 읽는 쪽을 깨지 않으려 남긴 호환 심링크다.
+  #   이 두 줄이 없으면 감사가 정상 이관을 10분마다 위반으로 신고한다(실측: violations=4, exit 1).
+  if [[ "$target" == "${HOME}/.openclaw-data"* ]]; then continue; fi  # ALLOW-OPENCLAW-DATA (이관 목적지)
+  if [[ "$target" == "${HOME}/.openclaw/"* ]]; then continue; fi      # ALLOW-OPENCLAW (워크스페이스·스크립트)
   emit "warn" "off-ssot-target" "$link" "target=${target}"
   alert_throttled "off-ssot-target" "$link" "⚠️ SSoT 외부 심링크" "target=${target}"
   violations=$((violations + 1))
@@ -249,6 +272,29 @@ while IFS= read -r stale; do
   emit "warn" "stale-backup" "$stale" "leftover backup dir — archive and remove"
   violations=$((violations + 1))
 done < <(find "$DOT_JARVIS" -maxdepth 2 -type d \( -name '*.bak-*' -o -name '*.ghost-*' -o -name '*.bak' \))
+
+# Check 4b: 실데이터 디렉토리 존재/비어있지 않음
+#   2026-09-03 신설. 계기 — 2026-09-02 23:15~23:22 사이 runtime/ 하위 전부(config·wiki·state·
+#   context·discord·logs + 코드 심링크 4개)가 사라졌다. 코드 심링크는 이 감사가 10분 안에
+#   되살렸지만 데이터 디렉토리는 아무도 보지 않아 11일간 크론 94% 실패·봇 다운·wiki-slots
+#   무력화가 이어졌다. 복구는 하지 않는다(어느 백업이 맞는지는 사람이 정한다) — 알림만 낸다.
+# [2026-09-10] 주인님 지시로 디스코드 전면 제거 — discord 를 감시 대상에서 뺀다
+DATA_DIRS=(config wiki state context logs)
+DATA_SENTINELS=("config/tasks.json")
+for d in "${DATA_DIRS[@]}"; do
+  if [[ ! -d "${DOT_JARVIS}/${d}" ]] || [[ -z "$(ls -A "${DOT_JARVIS}/${d}" 2>/dev/null)" ]]; then
+    emit "error" "data-dir-missing" "${DOT_JARVIS}/${d}" "실데이터 디렉토리가 없거나 비어 있음 — 백업(~/backup/jarvis-topology) 확인 후 수동 복원"
+    alert_throttled "data-dir-missing" "${DOT_JARVIS}/${d}" "🔴 runtime 데이터 디렉토리 소실" "${d}/ 이 없거나 비어 있음 — 크론·봇 전면 장애. ~/backup/jarvis-topology 에서 수동 복원 필요"
+    violations=$((violations + 1))
+  fi
+done
+for s in "${DATA_SENTINELS[@]}"; do
+  if [[ ! -e "${DOT_JARVIS}/${s}" ]]; then
+    emit "error" "data-sentinel-missing" "${DOT_JARVIS}/${s}" "핵심 파일 없음"
+    alert_throttled "data-sentinel-missing" "${DOT_JARVIS}/${s}" "🔴 runtime 핵심 파일 소실" "${s} 없음 — 해당 서브시스템 정지 상태"
+    violations=$((violations + 1))
+  fi
+done
 
 # Check 5: Claude Code auto memory 무결성
 #   2026-08-06 신설. 계기 — MEMORY.md 인덱스가 참조하는 41개 링크 중 20개가 죽어 있었고
@@ -280,7 +326,7 @@ done < <({
   find "${HOME}/.claude/projects" -maxdepth 2 -type d -name memory 2>/dev/null
   # 2026-08-06: autoMemoryDirectory 로 고정한 통합 경로. 크론·봇 세션이 매번 새 임시
   #   디렉터리에서 돌아 메모리가 일회용으로 흩어지던 것을 한 곳으로 모았다(파일 31개 분산 확인).
-  [[ -d "${HOME}/jarvis/runtime/claude-automemory" ]] && echo "${HOME}/jarvis/runtime/claude-automemory"
+  [[ -d "${HOME}/.openclaw-data/jarvis/runtime/claude-automemory" ]] && echo "${HOME}/.openclaw-data/jarvis/runtime/claude-automemory"
 } | sort -u)
 
 # Check 6: auto memory → RAG 다리의 정합성
@@ -288,7 +334,7 @@ done < <({
 #   SSoT 로 옮겨주는 훅(post-memory-sync.sh)은 옛 경로에 하드코딩돼 있어 조용히 죽었다.
 #   그 사이 기억 26개가 임시 프로젝트 디렉터리에 갇혀 RAG 에 한 번도 들어가지 못했다.
 #   Check 5 가 "링크가 성한가"를 본다면 여기는 "기억이 흐르는가"를 본다.
-AUTOMEM_CONTRACT="${HOME}/jarvis/dotfiles/claude/settings.memory.json"
+AUTOMEM_CONTRACT="${HOME}/.openclaw-data/jarvis/dotfiles/claude/settings.memory.json"
 CLAUDE_SETTINGS="${HOME}/.claude/settings.json"
 SYNC_HOOK="${HOME}/.claude/hooks/post-memory-sync.sh"
 
@@ -329,7 +375,21 @@ if [[ -f "$CLAUDE_SETTINGS" && -f "$AUTOMEM_CONTRACT" ]]; then
       # 핵심 — 훅이 실제로 이 경로를 감시하는가. 하드코딩 드리프트를 여기서 잡는다.
       #   --print-watched 는 부작용 없이 감시 대상만 출력하는 훅의 자기진단 창구다.
       if [[ -x "$SYNC_HOOK" ]]; then
-        if ! "$SYNC_HOOK" --print-watched 2>/dev/null | grep -qxF "$automem_dir"; then
+        # 2026-09-04: 출력을 먼저 변수에 받는다. `hook | grep -q` 는 grep 이 첫 줄에서 닫으면 훅이
+        #   SIGPIPE(141) 로 죽고 pipefail 이 그걸 실패로 읽어 '감시 안 함' 오탐을 냈다 — 감시 목록이
+        #   bot-work 프로젝트 memory 디렉터리까지 89줄로 늘어난 뒤부터 매 10분 exit 1 의 원인이었다.
+        watched_list=$("$SYNC_HOOK" --print-watched 2>/dev/null || true)
+        # 2026-09-10 정정: 문자열이 아니라 '같은 디렉토리인가'를 묻는다.
+        #   훅은 실경로를 찍고 설정은 리터럴 경로를 담는다. 오픈클로 이관으로
+        #   ~/.openclaw-data/jarvis 가 심링크가 되자 같은 디렉토리인데도 '감시 안 함'으로 오판했다(실측 20:28).
+        #   양쪽을 물리 경로로 정규화해 비교하면 트리가 어디로 가든 이 검사는 계속 옳다.
+        automem_real="$(cd -P "$automem_dir" 2>/dev/null && pwd || echo "$automem_dir")"
+        watched_real=""
+        while IFS= read -r w; do
+          [[ -z "$w" ]] && continue
+          watched_real+="$(cd -P "$w" 2>/dev/null && pwd || echo "$w")"$'\n'
+        done <<<"$watched_list"
+        if ! grep -qxF "$automem_real" <<<"$watched_real"; then
           emit "warn" "automem-hook-blind" "$SYNC_HOOK" "훅이 ${automem_dir} 를 감시하지 않음 — RAG 유입 중단"
           alert_throttled "automem-hook-blind" "$SYNC_HOOK" "🔴 auto memory 가 RAG 로 못 들어감" "훅이 경로를 못 봄"
           violations=$((violations + 1))

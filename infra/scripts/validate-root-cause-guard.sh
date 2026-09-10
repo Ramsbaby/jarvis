@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_CAUSE_VALIDATOR="${BOT_HOME}/lib/root-cause-validator.sh"
 
@@ -172,7 +172,7 @@ run_integration_tests() {
     cat > /tmp/test-integration.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 source "$BOT_HOME/lib/root-cause-validator.sh"
 validate_root_cause "bug-fix-test" "원인을 분석한 결과 메모리 누수입니다." ""
 echo "verdict=$ROOT_CAUSE_VERDICT blocked=$ROOT_CAUSE_BLOCKED"

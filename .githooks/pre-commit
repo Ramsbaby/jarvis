@@ -34,34 +34,10 @@ if [[ -f "$PERSONAL_BLOCKLIST" && "${JARVIS_PERSONAL_OK:-0}" != "1" ]]; then
   fi
 fi
 
-# ─── Topology Guard: ~/.jarvis/ 신규 유입 차단 ──────────────────────
-# SSoT: ~/jarvis/runtime/ (~/.jarvis 는 호환 심링크, 2026-10-17 만료 예정)
-TOPOLOGY_ALLOWLIST='^(infra/adr/|README\.(ko\.)?md$|infra/CLAUDE-SETUP-GUIDE\.md|infra/README-infra\.md|infra/\.env\.example|infra/lib/(compat|jarvis-paths)\.sh|infra/scripts/(upgrade-v2|migrate-to-runtime|symlink-topology-audit|backup-retention|board-watchdog|tasks-prompt-path-audit)\.(sh|mjs)|infra/scripts/A2-MIGRATION\.md|infra/docs/(A2-MIGRATION|API|CONFIG|EXAMPLES|INSTALL|INSTALL\.en|DEPENDENCY-ANALYSIS|ARCHITECTURE)\.md|infra/discord/lib/(orchestrator\.mjs|streaming\.js)|infra/templates/crontab\.example|infra/prompts/memory-expire\.md|rag/lib/rag-engine\.mjs|docs/promo/awesome-claude-code-submission\.md|\.claude/skills/onboarding/SKILL\.md|^discord/discord-bot\.js$|\.githooks/pre-commit$|dotfiles/)'
-
-topology_violations=""
-while IFS= read -r file; do
-  [[ -n "$file" ]] || continue
-  [[ -f "$ROOT/$file" ]] || continue
-  if echo "$file" | grep -qE "$TOPOLOGY_ALLOWLIST"; then continue; fi
-  # 신규로 추가된 라인(`+`로 시작, 헤더 `+++` 제외) 중 /.jarvis/ 포함하면서
-  # ALLOW-DOTJARVIS 마커가 없는 것
-  new_lines=$(git diff --cached -U0 -- "$file" 2>/dev/null | grep -E '^\+[^+]' | grep -E '/\.jarvis/' | grep -v 'ALLOW-DOTJARVIS' || true)
-  if [[ -n "$new_lines" ]]; then
-    topology_violations+="--- $file ---"$'\n'"$new_lines"$'\n'
-  fi
-done < <(git diff --cached --name-only --diff-filter=ACM)
-
-if [[ -n "$topology_violations" ]]; then
-  echo "🚨 Topology Guard: ~/.jarvis/ 절대경로 신규 유입 감지" >&2
-  echo "" >&2
-  echo "$topology_violations" >&2
-  echo "" >&2
-  echo "  해결 방법:" >&2
-  echo "    1. ~/.jarvis/ → ~/jarvis/runtime/ 로 변경 (SSoT 표기)" >&2
-  echo "    2. 의도적 잔존이면 라인 끝에 '# ALLOW-DOTJARVIS' 마커 추가" >&2
-  echo "    3. 호환 문서/마이그레이션 스크립트면 TOPOLOGY_ALLOWLIST 에 추가" >&2
-  exit 1
-fi
+# ─── Topology Guard: 2026-09-02 제거 (오너 지시) ──────────────────
+#   사유: ~/.jarvis/ 경로 규약은 컨벤션이지 안전장치가 아닌데 커밋을 막아
+#         기능 개선 속도를 떨어뜨렸다. 아래 Privacy/Personal 가드는 유지한다.
+#   복구: cp runtime/backups/pre-commit.bak-topology-removed-20260902-030546 .githooks/pre-commit
 
 # ─── Interview Bot SSoT Guard ────────────────────────────────────────────────
 # interview-harness-audit.mjs 가 staged 에 있는데 INTERVIEW-BOT.md 가 빠졌으면 경고.
@@ -114,3 +90,13 @@ if [ -n "${PRIVACY_BYPASS_REASON:-}" ]; then
 fi
 
 node "$ROOT/scripts/privacy/scan.mjs" --staged
+
+# ─── CLAUDE.md 줄 수 스테일 가드 (cl-ef335e743892c676) ────────────────────
+# staged CLAUDE.md에 stale 줄 수 항목이 있으면 경고 출력.
+# 우회: CLAUDE_MD_STALE_OK=1 git commit ...
+_GUARD_LIB="${HOME}/jarvis/infra/lib/cluster-guard-cl-ef335e743892c676.sh"
+if [[ -f "$_GUARD_LIB" ]]; then
+  # shellcheck disable=SC1090
+  source "$_GUARD_LIB" 2>/dev/null || true
+  pre_commit_claude_md_check || exit 1
+fi

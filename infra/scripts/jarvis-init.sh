@@ -10,12 +10,12 @@
 #
 # 사용법:
 #   JARVIS_HOME=/custom/path bash jarvis-init.sh
-#   bash ~/jarvis/runtime/scripts/jarvis-init.sh
+#   bash ~/.openclaw-data/jarvis/runtime/scripts/jarvis-init.sh
 
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis/runtime}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 
 ok()   { echo "  ✅  $*"; }
@@ -60,7 +60,9 @@ ok "logs/ state/ rag/ results/ config/ adr/ docs/ context/ 확인 완료"
 
 # ── 4. 실행 권한 일괄 설정 ───────────────────────────────────────────────────
 step "실행 권한 설정"
-find "${JARVIS_HOME}/scripts" "${JARVIS_HOME}/bin" -type f \
+# -L 필수: scripts/ bin/ 은 ~/.openclaw-data/jarvis/infra/ 로 가는 심볼릭 링크라
+# -L 없이는 find 가 들어가지 못해 0건 처리되고도 "완료"를 찍는다.
+find -L "${JARVIS_HOME}/scripts" "${JARVIS_HOME}/bin" -type f \
     \( -name "*.sh" -o -name "*.mjs" \) 2>/dev/null \
     -exec chmod +x {} \;
 ok "scripts/ bin/ 실행 권한 완료"

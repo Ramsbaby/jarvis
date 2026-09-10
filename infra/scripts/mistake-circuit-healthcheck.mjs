@@ -7,7 +7,7 @@
  *   오답노트 자동 추출이 18시간 마비된 사고 → 동일 패턴 재발 방지용 헬스체크.
  *
  * 동작:
- *   1. ~/jarvis/runtime/state/mistake-extractor-circuit.json 읽기
+ *   1. ~/.openclaw-data/jarvis/runtime/state/mistake-extractor-circuit.json 읽기
  *   2. state="open" 이면 다음을 확인
  *      - 마지막 알람 송출 시각 (ledger ~/.jarvis/ # ALLOW-DOTJARVISstate/mistake-circuit-alerts.jsonl)
  *      - rate limit: 동일 OPEN 상태 동안 6시간에 1회만 알람

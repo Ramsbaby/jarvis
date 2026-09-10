@@ -2,9 +2,9 @@
 # 당근페이 시나리오 ralph 10라운드 순차 오케스트레이터 (2026-07-05, 화상면접 D-1)
 # 단일 진입점(interview-ralph-start.sh) 반복. 수동핀(자기소개·지원동기)은 --exclude-pinned로 제외.
 set -uo pipefail
-LOG="$HOME/jarvis/runtime/logs/daangn-ralph-orchestrator.log"
-START="$HOME/jarvis/runtime/scripts/interview-ralph-start.sh"
-STOP="$HOME/jarvis/runtime/scripts/interview-ralph-stop.sh"
+LOG="$HOME/.openclaw-data/jarvis/runtime/logs/daangn-ralph-orchestrator.log"
+START="$HOME/.openclaw-data/jarvis/runtime/scripts/interview-ralph-start.sh"
+STOP="$HOME/.openclaw-data/jarvis/runtime/scripts/interview-ralph-stop.sh"
 ROUNDS="${1:-10}"
 
 echo "=== 당근 ralph ${ROUNDS}라운드 시작 $(date '+%Y-%m-%d %H:%M:%S') ===" > "$LOG"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-SKILLS_DIR="$HOME/jarvis/runtime/skills"
-LOG="$HOME/jarvis/runtime/logs/mistake-skill-effect-check.log"
+SKILLS_DIR="$HOME/.openclaw-data/jarvis/runtime/skills"
+LOG="$HOME/.openclaw-data/jarvis/runtime/logs/mistake-skill-effect-check.log"
 _log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"; }
 
 _log "=== mistake-skill 효과 측정 시작 ==="
@@ -17,8 +17,8 @@ _log "신규 자동 추출 스킬: ${NEW_SKILLS}개"
 _log "최근 5개: ${RECENT}"
 
 # Discord 알림
-if [ -f "$HOME/jarvis/runtime/scripts/discord-visual.mjs" ]; then
-    node "$HOME/jarvis/runtime/scripts/discord-visual.mjs" --type stats --data \
+if [ -f "$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" ]; then
+    node "$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs" --type stats --data \
         "$(jq -nc --arg ts "$(date '+%Y-%m-%d %H:%M KST')" --arg n "$NEW_SKILLS" --arg r "${RECENT:-없음}" \
             '{title:"🎯 자가발전 1주 효과 측정", data:{"신규 변환 스킬":$n,"최근 5개":$r,"다음 결정":"백필 진행 여부"}, timestamp:$ts}')" \
         --channel jarvis-system 2>&1 | tee -a "$LOG" || true

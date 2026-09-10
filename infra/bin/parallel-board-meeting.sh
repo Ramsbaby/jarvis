@@ -11,7 +11,7 @@ set -euo pipefail
 export HOME="${HOME:-$(eval echo ~$(whoami))}"
 export PATH="${PATH:-/usr/bin:/bin}:/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin"
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 BOARD_URL="${BOARD_URL:-http://localhost:3100}"
 AGENT_KEY="${AGENT_API_KEY:-jarvis-board-internal-2026}"
 LOGFILE="${BOT_HOME}/logs/board-meeting.log"

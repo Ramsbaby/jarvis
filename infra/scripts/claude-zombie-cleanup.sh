@@ -17,7 +17,12 @@
 
 set -euo pipefail
 
-LOG="${HOME}/jarvis/runtime/logs/claude-zombie-cleanup.log"
+# [2026-08-18 수정] launchd 는 PATH=/usr/bin:/bin:/usr/sbin:/sbin 최소값으로 실행한다.
+# node 는 /opt/homebrew/bin 에만 있어 webhook 조회에서 127(command not found) 로 죽었고,
+# set -e 때문에 그 뒤 좀비 정리 본체가 통째로 실행되지 않았다 (LastExitStatus=32512).
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+
+LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/claude-zombie-cleanup.log"
 mkdir -p "$(dirname "$LOG")"
 
 NOW=$(date '+%Y-%m-%d %H:%M:%S')
@@ -97,21 +102,41 @@ fi
 
 # serve 고아 Discord 알림 (실제 종료 시만 — info 레벨)
 if (( SERVE_KILLED > 0 )); then
-  WH_FILE="${HOME}/jarvis/runtime/config/monitoring.json"
+  WH_FILE="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
   if [[ -f "$WH_FILE" ]]; then
-    WH=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$WH_FILE','utf8')).webhooks?.['jarvis-system']||'')}catch{}" 2>/dev/null)
+    WH=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$WH_FILE','utf8')).webhooks?.['jarvis-system']||'')}catch{}" 2>/dev/null || true)
     [[ -n "$WH" ]] && curl -s -X POST -H 'Content-Type: application/json' \
       -d "{\"content\":\"🌉 **웹 브리지 고아 정리** — serve ${SERVE_KILLED}개 종료, 약 ${SERVE_FREED}MB 회수 (mid-turn 멈춤 재발 방지)\"}" \
       "$WH" >/dev/null 2>&1 || true
   fi
 fi
 
-# 활성 세션 PID (정리 대상에서 제외)
-ACTIVE_PID=""
-if [[ -f "${HOME}/jarvis/runtime/state/active-session" ]]; then
-  # active-session 파일에는 timestamp만 있음. 활성 세션 보호는 ppid 추적으로
-  ACTIVE_PID=$(pgrep -f "claude.*--allowedTools" | head -1 || echo "")
-fi
+# 활성 세션 보호 목록
+# [2026-08-18 전면 교체] 기존 보호는 두 겹으로 무효였다:
+#   ① state/active-session 파일이 존재하지 않아 if 블록 자체를 건너뛰었다.
+#   ② 설령 들어가도 pgrep -f "claude.*--allowedTools" 는 0건 — 실제 세션은
+#      "versions/<ver> --print --sdk-url ..." 형태로 뜬다. head -1 이라 다중 세션도 못 막았다.
+# 그 결과 Remote Control 대화 세션이 12시간 idle 이 되면 좀비로 오판되어 매일 살해됐다
+# (로그 근거: 08-11~08-17 사이 ZOMBIE 12건, rss 137~793MB = 세션 프로세스 크기).
+# 대화 세션은 응답을 기다리는 동안 CPU 0% 가 정상이다 — CPU 만으로 좀비를 판정할 수 없다.
+PROTECTED_PIDS=" "
+while IFS= read -r _rc; do
+  [[ -z "$_rc" ]] && continue
+  PROTECTED_PIDS+="$_rc "
+  while IFS= read -r _kid; do
+    [[ -n "$_kid" ]] && PROTECTED_PIDS+="$_kid "
+  done < <(pgrep -P "$_rc" 2>/dev/null || true)
+done < <(ps -eo pid,command | grep -E "claude (rc|remote-control)" | grep -v grep | awk '{print $1}' || true)
+# ↑ pgrep -f 는 macOS 에서 확장정규식 미지원 + "claude rc" 리터럴도 0건 매칭이라 사용 불가.
+#   ps + grep -E 로 교체 (검증: PID 4443 정상 탐지).
+
+# 터미널(TTY)에 붙어 있는 세션 = 주인님이 열어둔 대화창 → 보호
+while IFS= read -r _tp; do
+  [[ -n "$_tp" ]] && PROTECTED_PIDS+="$_tp "
+done < <(ps -eo pid,tty,command | grep -E "/.local/share/claude/versions/|/.local/bin/claude " \
+         | grep -v grep | awk '$2 != "??" {print $1}' || true)
+
+echo "[$NOW] 보호 PID:${PROTECTED_PIDS}(Remote Control 세션 + TTY 세션)" >> "$LOG"
 
 ZOMBIES=()
 TOTAL_FREED=0
@@ -124,17 +149,21 @@ while IFS= read -r line; do
   CPU=$(echo "$line" | awk '{print $3}')
   RSS_KB=$(echo "$line" | awk '{print $4}')
 
-  # 현재 활성 세션 보호
-  if [[ -n "$ACTIVE_PID" && "$PID" == "$ACTIVE_PID" ]]; then
+  # 현재 활성 세션 보호 (Remote Control 관리 세션 · TTY 부착 세션)
+  if [[ "$PROTECTED_PIDS" == *" $PID "* ]]; then
+    echo "[$NOW] SKIP PID=$PID (활성 세션 — 보호)" >> "$LOG"
     continue
   fi
 
   # uptime 12시간+ 판정 (etime 형식: DD-HH:MM:SS 또는 HH:MM:SS)
+  # [2026-08-11 수정] 10# 접두사 필수 — ps etime 의 시(hour)는 08·09 처럼 0 으로 시작한다.
+  # bash 산술은 0 으로 시작하는 값을 8진수로 읽어 08·09 에서 "value too great for base" 로 죽는다.
+  # 경과 8~9시간대 프로세스가 있을 때만 터지는 조건부 버그였다(exit 127 의 원인).
   if [[ "$ETIME" =~ ^([0-9]+)-([0-9]+):([0-9]+):([0-9]+)$ ]]; then
-    DAYS="${BASH_REMATCH[1]}"
-    HOURS=$((DAYS * 24 + BASH_REMATCH[2]))
+    DAYS=$((10#${BASH_REMATCH[1]}))
+    HOURS=$((DAYS * 24 + 10#${BASH_REMATCH[2]}))
   elif [[ "$ETIME" =~ ^([0-9]+):([0-9]+):([0-9]+)$ ]]; then
-    HOURS="${BASH_REMATCH[1]}"
+    HOURS=$((10#${BASH_REMATCH[1]}))
   else
     continue  # 12시간 미만은 정상
   fi
@@ -161,7 +190,7 @@ while IFS= read -r line; do
   ZOMBIES+=("$PID")
   TOTAL_FREED=$((TOTAL_FREED + RSS_KB / 1024))
   echo "[$NOW] ZOMBIE PID=$PID etime=$ETIME cpu=$CPU% rss=$((RSS_KB/1024))MB" >> "$LOG"
-done < <(ps -eo pid,etime,%cpu,rss,command | grep -E "ccd-cli|/.local/bin/claude " | grep -v grep)
+done < <(ps -eo pid,etime,%cpu,rss,command | grep -E "ccd-cli|/.local/bin/claude |/.local/share/claude/versions/" | grep -v grep)
 
 if (( ${#ZOMBIES[@]} == 0 )); then
   echo "[$NOW] ✅ 좀비 0건 — cleanup 불필요" >> "$LOG"
@@ -189,7 +218,7 @@ done
 echo "[$NOW] ✅ 정리 완료 — ${#ZOMBIES[@]}개 좀비, 약 ${TOTAL_FREED}MB 회수" >> "$LOG"
 
 # Discord 알림 (선택 — webhooks 설정 시)
-WEBHOOK_FILE="${HOME}/jarvis/runtime/config/monitoring.json"
+WEBHOOK_FILE="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
 if [[ -f "$WEBHOOK_FILE" ]]; then
   WEBHOOK=$(node -e "try { console.log(JSON.parse(require('fs').readFileSync('$WEBHOOK_FILE','utf-8')).webhooks?.['jarvis-system']||'') } catch{}" 2>/dev/null)
   if [[ -n "$WEBHOOK" ]]; then

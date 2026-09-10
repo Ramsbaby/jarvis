@@ -14,7 +14,7 @@ set -euo pipefail
 
 check_task_status() {
     local task_id="${1:?check_task_status: task_id required}"
-    local state_dir="${2:-${BOT_HOME:-${HOME}/jarvis/runtime}/state}"
+    local state_dir="${2:-${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/state}"
     local ttl_seconds="${3:-3600}"
 
     mkdir -p "$state_dir" 2>/dev/null || {
@@ -50,7 +50,7 @@ check_task_status() {
 record_task_status() {
     local task_id="${1:?record_task_status: task_id required}"
     local status="${2:?record_task_status: status required}"
-    local state_dir="${3:-${BOT_HOME:-${HOME}/jarvis/runtime}/state}"
+    local state_dir="${3:-${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/state}"
     local result_details="${4:-}"
 
     mkdir -p "$state_dir" 2>/dev/null || {
@@ -76,7 +76,7 @@ record_task_status() {
 
 get_task_status() {
     local task_id="${1:?get_task_status: task_id required}"
-    local state_dir="${2:-${BOT_HOME:-${HOME}/jarvis/runtime}/state}"
+    local state_dir="${2:-${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/state}"
     local field="${3:-status}"
 
     local state_file="$state_dir/${task_id}.state.json"
@@ -90,7 +90,7 @@ get_task_status() {
 
 clear_task_status() {
     local task_id="${1:?clear_task_status: task_id required}"
-    local state_dir="${2:-${BOT_HOME:-${HOME}/jarvis/runtime}/state}"
+    local state_dir="${2:-${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/state}"
 
     local state_file="$state_dir/${task_id}.state.json"
     rm -f "$state_file" 2>/dev/null || true
@@ -98,7 +98,7 @@ clear_task_status() {
 
 should_skip_task() {
     local task_id="${1:?should_skip_task: task_id required}"
-    local state_dir="${2:-${BOT_HOME:-${HOME}/jarvis/runtime}/state}"
+    local state_dir="${2:-${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/state}"
     local ttl_seconds="${3:-3600}"
     local skip_on_recent="${4:-true}"
 

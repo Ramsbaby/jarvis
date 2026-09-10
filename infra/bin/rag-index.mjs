@@ -1,1 +1,1 @@
-/Users/ramsbaby/jarvis/rag/bin/rag-index.mjs
+../../rag/bin/rag-index.mjs

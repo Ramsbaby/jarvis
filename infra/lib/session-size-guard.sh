@@ -16,8 +16,8 @@
 set -euo pipefail
 
 # 설정
-MEASURE_SCRIPT="${HOME}/jarvis/infra/bin/measure-session-size.sh"
-CACHE_DIR="${HOME}/jarvis/runtime/state/session-size-cache"
+MEASURE_SCRIPT="${HOME}/.openclaw-data/jarvis/infra/bin/measure-session-size.sh"
+CACHE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/session-size-cache"
 CACHE_TTL_SECONDS=300  # 5분 캐시
 
 # 캐시 디렉토리 초기화

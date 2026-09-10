@@ -16,8 +16,8 @@
  *
  * Phase 8 (선택): LLM 기반 모순 검출 (--deep 플래그)
  *
- * Log: ~/jarvis/runtime/logs/wiki-lint.log
- * Report: ~/jarvis/runtime/wiki/meta/lint-{date}.md
+ * Log: ~/.openclaw-data/jarvis/runtime/logs/wiki-lint.log
+ * Report: ~/.openclaw-data/jarvis/runtime/wiki/meta/lint-{date}.md
  */
 
 import {

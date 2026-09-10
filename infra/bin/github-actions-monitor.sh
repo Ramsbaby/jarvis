@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-STATE_DIR="${HOME}/jarvis/runtime/state"
+STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state"
 NOTIFIED="${STATE_DIR}/github-actions-notified.jsonl"
 mkdir -p "$STATE_DIR"
 touch "$NOTIFIED"
@@ -64,8 +64,8 @@ SUMMARY=$(jq -cn \
     healthy: ["gh run view <id> --log-failed 로 원인 확인",
               "수정 후 다음 push 때 재검사됩니다"]}')
 
-if [ -f "${HOME}/jarvis/infra/scripts/discord-visual.mjs" ]; then
-  node "${HOME}/jarvis/infra/scripts/discord-visual.mjs" \
+if [ -f "${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs" ]; then
+  node "${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs" \
     --type system-doctor \
     --data "$(jq -cn --arg title "CI 실패 감지 — $(TZ=Asia/Seoul date '+%m-%d %H:%M KST')" \
       --argjson summary "$SUMMARY" '{title:$title, summary:$summary}')" \

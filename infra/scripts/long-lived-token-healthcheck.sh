@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 CRED="${HOME}/.claude/.credentials.json"
 LEDGER="${BOT_HOME}/ledger/long-lived-token-healthcheck.jsonl"
 LOG="${BOT_HOME}/logs/long-lived-token-healthcheck.log"

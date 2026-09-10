@@ -9,7 +9,7 @@
 #   Claude 에이전트의 Bash/Edit tool 은 ~/.claude/ 를 센서티브 구역으로
 #   자동 차단. 따라서 이 최적화는 오너 터미널에서 직접 실행해야 함.
 #
-# 실행: bash ~/jarvis/runtime/scripts/install-skill-optimization.sh
+# 실행: bash ~/.openclaw-data/jarvis/runtime/scripts/install-skill-optimization.sh
 #
 # 멱등성: 여러 번 실행해도 결과 동일 (이미 이동된 파일/블록 감지 후 skip).
 # 안전성: 훅 수정 전 백업 자동 생성 (<file>.bak-<YYYYMMDDHHMMSS>).
@@ -23,7 +23,7 @@ CLAUDE_DIR="${HOME}/.claude"
 CMD_DIR="${CLAUDE_DIR}/commands"
 ARCHIVE_DIR="${CLAUDE_DIR}/commands-archive"
 HOOK_FILE="${CLAUDE_DIR}/hooks/sensor-prompt.sh"
-LEDGER_DIR="${HOME}/jarvis/runtime/state"
+LEDGER_DIR="${HOME}/.openclaw-data/jarvis/runtime/state"
 TS=$(date +%Y%m%d%H%M%S)
 
 # archive 대상: skill-creator (36% 부하) + all-time 0건 5개

@@ -1429,7 +1429,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
                 const { stdout, stderr } = await exec('bash', [`${home}/jarvis/runtime/scripts/interview-ralph-start.sh`, '--round', '9', '--limit', '24']).catch(e => ({ stdout: '', stderr: e.message || String(e) }));
                 const pidMatch = stdout.match(/PID\s+(\d+)/);
                 const pid = pidMatch ? pidMatch[1] : '?';
-                await message.reply(`🚀 **Ralph 시동 완료** — PID ${pid}, 라운드 9, 24문항 풀.\n• 진행: 약 50~70분 [검증 필요 — 실측 라운드별 분포 41~186초/문항]\n• 모니터: \`tail -f ~/jarvis/runtime/logs/interview-ralph-detached.log\`\n• 종료: 이 채널에 \`랄프 꺼\``);
+                await message.reply(`🚀 **Ralph 시동 완료** — PID ${pid}, 라운드 9, 24문항 풀.\n• 진행: 약 50~70분 [검증 필요 — 실측 라운드별 분포 41~186초/문항]\n• 모니터: \`tail -f ~/.openclaw-data/jarvis/runtime/logs/interview-ralph-detached.log\`\n• 종료: 이 채널에 \`랄프 꺼\``);
               }
             } else if (isRalphStop) {
               const { stdout } = await exec('bash', [`${home}/jarvis/runtime/scripts/interview-ralph-stop.sh`, '--disable']).catch(e => ({ stdout: e.message || String(e) }));
@@ -1666,7 +1666,7 @@ ${extracted}
       if (_cmdAuthorId && _cmdAuthorId === getOwnerDiscordId()) {
         const _cmd = parseCodingModeCommand(message._cleanContent ?? message.content);
         if (_cmd) {
-          const _labels = { coach: '🎯 프롬프트 코치', solve: '🧮 자바 직접 풀이 (빠름)', deep: '🔬 정밀 풀이 (Opus·자가검증·느림)', off: '💼 평소 커리어 채널' };
+          const _labels = { coach: '🎯 프롬프트 코치', solve: '🧮 자바 직접 풀이 (빠름)', deep: '🔬 정밀 풀이 (Opus·자가검증·느림)', dop: '📝 AWS DOP-C02 시험 (정답만)', off: '💼 평소 커리어 채널' };
           try {
             if (_cmd === 'status') {
               const _cur = getCareerCodingMode();
@@ -1693,7 +1693,8 @@ ${extracted}
     // [2026-06-11 v2] env → 상태 파일 토글 (career-coding-mode.sh).
     // solve만 버퍼링(완성 후 일괄 송출 — 코드블록 보호). coach는 실시간 스트리밍 —
     // 라이브 면접에서 "2분 내 출력이 흐르기 시작"이 코드펜스 미관보다 우선 (주인님 요구 2026-06-11).
-    if (effectiveChannelId === '1471694919339868190' && ['solve', 'deep'].includes(getCareerCodingMode())) {
+    // [2026-09-08] dop 도 버퍼링 — 답이 `정답: B` 한 줄이라 조각내 보내면 "정답:" 만 먼저 뜬다.
+    if (effectiveChannelId === '1471694919339868190' && ['solve', 'deep', 'dop'].includes(getCareerCodingMode())) {
       streamer.deferStreaming = true;
     }
     streamer.setContext(getContextualThinking(userPrompt, imageAttachments.length > 0));
@@ -2061,7 +2062,8 @@ ${extracted}
                 session_id: resultSessionId,
                 response_chars: respText.length,
                 response_full: respText,
-                cost_usd: event.cost_usd ?? 0,
+                // 생산자(claude-runner)가 이미 정규화하지만, 다른 생산자가 붙을 때를 대비한 방어
+                cost_usd: event.total_cost_usd ?? event.cost_usd ?? 0,
                 stop_reason: event.stop_reason ?? null,
                 is_error: event.is_error ?? false,
                 via_nexus_test: message._viaNexusTest === true,
@@ -2080,7 +2082,7 @@ ${extracted}
                 response_chars: 0,
                 response_full: '',
                 empty_response: true,
-                cost_usd: event.cost_usd ?? 0,
+                cost_usd: event.total_cost_usd ?? event.cost_usd ?? 0,
                 stop_reason: event.stop_reason ?? null,
                 is_error: event.is_error ?? false,
                 via_nexus_test: message._viaNexusTest === true,
@@ -2106,7 +2108,7 @@ ${extracted}
             log('warn', 'Response truncated by max-turns (continuations exhausted)', { threadId: thread.id, toolCount });
           }
 
-          const cost = event.cost_usd ?? null;
+          const cost = event.total_cost_usd ?? event.cost_usd ?? null;
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           // P2-1: 최종 토큰을 Status bar 에 반영 (input+output 합산 = 실제 처리량)
           const totalTok = (event.usage?.input_tokens ?? 0) + (event.usage?.output_tokens ?? 0);

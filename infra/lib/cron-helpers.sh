@@ -23,6 +23,12 @@ _CRON_HELPERS_LOADED=1
 
 _fsm_discord_alert() {
     local msg="$1"
+    # JARVIS_NO_EXTERNAL=1 (2026-09-04, 1d): 테스트·dry-run 은 파일에만 기록
+    if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
+        mkdir -p "${BOT_HOME}/logs" 2>/dev/null || true
+        printf '%s [NO_EXTERNAL] src=cron-helpers.sh:_fsm_discord_alert ch=jarvis-system len=%s\n' "$(date -u +%FT%TZ)" "${#msg}" >> "${BOT_HOME}/logs/no-external.log" 2>/dev/null || true
+        return 0
+    fi
     local webhook_url
     webhook_url=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' \
         "${BOT_HOME}/config/monitoring.json" 2>/dev/null || true)

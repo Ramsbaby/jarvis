@@ -5,7 +5,7 @@
  * compaction summary(자유 형식 마크다운)와 달리, 구조화된 JSON으로
  * 토픽/결정사항/미완료 태스크를 정확히 전달.
  *
- * 저장소: ~/jarvis/runtime/state/session-handoffs/{sessionKey}.json
+ * 저장소: ~/.openclaw-data/jarvis/runtime/state/session-handoffs/{sessionKey}.json
  *
  * 사용:
  *   saveHandoff(sessionKey, data)  — 세션 종료 시

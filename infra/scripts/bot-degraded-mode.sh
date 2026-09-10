@@ -3,8 +3,8 @@
 # [오픈클로 이식 2026-09-10] 정지. 복구 판정이 launchctl 의 ai.jarvis.discord-bot 존재에 달려 있는데(45-47행)
 # 그 봇을 제거해 영구 degraded(active:true) 상태가 됐다. 30분마다 L4 에스컬레이션이
 # ntfy.sh 로 실제 송출됐다 — ntfy_push(19-28행)가 .ntfy.topic 만 보고 .ntfy.enabled=false 를 무시한다.
-# 재개: rm ~/jarvis/runtime/state/stopped/bot-degraded-mode
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/bot-degraded-mode" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/bot-degraded-mode
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/bot-degraded-mode" ]]; then
     echo "[bot-degraded-mode] 중지 플래그 있음 — 감시 대상(디스코드 봇)이 제거됐다"
     exit 0
 fi
@@ -13,7 +13,7 @@ fi
 # 트리거: watchdog.sh가 연속 3회 재시작 실패 감지 시 호출
 set -euo pipefail
 
-JARVIS_DIR="$HOME/jarvis/runtime"
+JARVIS_DIR="$HOME/.openclaw-data/jarvis/runtime"
 source "${JARVIS_DIR}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; IS_LINUX=false
   case "$(uname -s)" in Darwin) IS_MACOS=true ;; Linux) IS_LINUX=true ;; esac

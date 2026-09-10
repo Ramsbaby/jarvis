@@ -13,7 +13,7 @@
 //   node student-memory-manager.mjs --action init-template --student-id <id>
 //
 // SSoT 경로:
-//   ~/jarvis/runtime/state/student-memory/{student-id}.json
+//   ~/.openclaw-data/jarvis/runtime/state/student-memory/{student-id}.json
 //
 // 스키마:
 //   {

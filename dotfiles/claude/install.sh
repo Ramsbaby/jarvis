@@ -48,9 +48,18 @@ print_ok "verify-harness.md"
 echo ""
 echo "🪝 Hooks 설치 중..."
 mkdir -p "$CLAUDE_DIR/hooks"
+# 2026-08-14: 존재 검사 추가. 이 루프는 --force 없이도 살아있는 훅을 무조건 덮어썼다.
+#   저장소 사본이 4월 29일자로 굳어 있어, 실행하면 위험 명령 차단 훅이
+#   9,602바이트 → 2,881바이트로 강등되며 worktree 보호가 사라진다.
+#   그런데 매 세션 주입되는 ~/CLAUDE.md 는 여전히 "차단은 훅에 있다"고 서술하므로,
+#   집행은 없어졌는데 텍스트만 남아 "훅이 막습니다"라고 확언하게 된다.
 for f in "$SCRIPT_DIR/hooks/"*.sh; do
   name=$(basename "$f")
   dest="$CLAUDE_DIR/hooks/$name"
+  if [ -f "$dest" ] && [ "${FORCE:-0}" != "1" ]; then
+    print_skip "$name (이미 존재 — 덮어쓰려면 FORCE=1)"
+    continue
+  fi
   cp "$f" "$dest"
   chmod +x "$dest"
   print_ok "$name"

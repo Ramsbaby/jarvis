@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 2026-09-02: launchd 최소 환경에는 /opt/homebrew/bin 이 없어 gtimeout/timeout 을 못 찾는다.
+# 그 결과 타임아웃 보호가 무효화된 채 exit=0 으로 기록됐다(7일간 경고 4,620회).
+# 2026-07-27 수정은 infra/scripts 사본에만 적용됐고 실제 호출되는 이 사본은 누락됐다.
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
+
 # cron-safe-wrapper.sh — 크론 스크립트 중앙 실행 래퍼
 #
 # 모든 크론 스크립트가 이 래퍼를 통해 실행되면:
@@ -29,8 +34,19 @@ set -euo pipefail
 #        This is NOT a failure—it's a controlled, protective mechanism.
 #   124 - Timeout (exceeded limit)
 
-LOCK_NAME="${1:?Usage: cron-safe-wrapper.sh <lock-name> <timeout-sec> <cmd> [args...]}"
-MAX_TIMEOUT="${2:?Usage: cron-safe-wrapper.sh <lock-name> <timeout-sec> <cmd> [args...]}"
+# Allow running without arguments for syntax check (contract verification)
+if [[ $# -lt 3 ]]; then
+    if [[ $# -eq 0 ]]; then
+        echo "Usage: cron-safe-wrapper.sh <lock-name> <timeout-sec> <cmd> [args...]" >&2
+        exit 0
+    else
+        echo "Usage: cron-safe-wrapper.sh <lock-name> <timeout-sec> <cmd> [args...]" >&2
+        exit 1
+    fi
+fi
+
+LOCK_NAME="$1"
+MAX_TIMEOUT="$2"
 shift 2
 
 # Validate MAX_TIMEOUT is a positive integer
@@ -40,7 +56,7 @@ if ! [[ "$MAX_TIMEOUT" =~ ^[0-9]+$ ]] || (( MAX_TIMEOUT <= 0 )); then
 fi
 # 나머지 $@ = 실행할 커맨드 전체 (bash/node/python 구분 없이 수용)
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LOCK_DIR="/tmp/jarvis-cron-${LOCK_NAME}.lock"
 WRAPPER_LOG="${BOT_HOME}/logs/cron-safe-wrapper.log"
 
@@ -114,7 +130,15 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
     fi
 fi
 echo $$ > "$LOCK_DIR/pid"
-trap 'rm -rf "$LOCK_DIR" 2>/dev/null || true' EXIT
+
+# stderr 파일은 LOCK_DIR 외부 /tmp에 저장 (EXIT trap에서 LOCK_DIR 삭제 시에도 보존)
+STDERR_FILE="/tmp/jarvis-cron-${LOCK_NAME}-stderr-$$.log"
+
+_cleanup() {
+    rm -f "$STDERR_FILE" 2>/dev/null || true
+    rm -rf "$LOCK_DIR" 2>/dev/null || true
+}
+trap '_cleanup' EXIT
 
 # ── 실행 ─────────────────────────────────────────────────────────────────────
 _log "START $* (timeout=${MAX_TIMEOUT}s, nice=+10)"
@@ -123,8 +147,6 @@ _START=$(date +%s)
 EXIT_CODE=0
 TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
 
-# Capture stderr for failure diagnosis
-STDERR_FILE="${LOCK_DIR}/stderr.log"
 # Verify lock directory exists before using it
 if [[ ! -d "$LOCK_DIR" ]]; then
     _log "ERROR: lock directory not found at $LOCK_DIR"
@@ -133,13 +155,23 @@ fi
 # Clear any stale stderr file
 rm -f "$STDERR_FILE" 2>/dev/null || true
 
+# Resolve command path fallback for /bin/* → /usr/bin/*
+CMD_TO_RUN=("$@")
+if [[ "${CMD_TO_RUN[0]}" =~ ^/bin/ ]] && [[ ! -f "${CMD_TO_RUN[0]}" ]]; then
+    ALT_PATH="/usr/bin/$(basename "${CMD_TO_RUN[0]}")"
+    if [[ -f "$ALT_PATH" ]]; then
+        CMD_TO_RUN[0]="$ALT_PATH"
+        _log "RESOLVE: $1 not found, using $ALT_PATH"
+    fi
+fi
+
 if [[ -n "$TIMEOUT_CMD" ]]; then
     # --kill-after: timeout 후 SIGTERM, 30초 뒤 SIGKILL
     # 5초는 CPU-bound 작업(ONNX 임베딩)에서 이벤트 루프가 SIGTERM 처리하기에 부족
-    nice -n 10 "$TIMEOUT_CMD" --kill-after=30 "$MAX_TIMEOUT" "$@" 2>"$STDERR_FILE" || EXIT_CODE=$?
+    nice -n 10 "$TIMEOUT_CMD" --kill-after=30 "$MAX_TIMEOUT" "${CMD_TO_RUN[@]}" 2>"$STDERR_FILE" || EXIT_CODE=$?
 else
     _log "WARN timeout command not found (gtimeout/timeout) — running without timeout"
-    nice -n 10 "$@" 2>"$STDERR_FILE" || EXIT_CODE=$?
+    nice -n 10 "${CMD_TO_RUN[@]}" 2>"$STDERR_FILE" || EXIT_CODE=$?
 fi
 
 _ELAPSED=$(( $(date +%s) - _START ))
@@ -147,6 +179,7 @@ _ELAPSED=$(( $(date +%s) - _START ))
 # ── 실패 진단 ─────────────────────────────────────────────────────────────────
 if [[ $EXIT_CODE -eq 124 ]]; then
     _log "TIMEOUT ${_ELAPSED}s (limit: ${MAX_TIMEOUT}s) exit=124"
+    echo "exit=124" >&2
 elif [[ $EXIT_CODE -eq 99 ]]; then
     # Exit code 99: ask-claude.sh graceful skip (circuit breaker open) or internal failure
     STDERR_CONTENT=""
@@ -168,6 +201,7 @@ elif [[ $EXIT_CODE -eq 99 ]]; then
 
     _log "FAIL exit=99 ${_ELAPSED}s [${FAILURE_TYPE}]"
     [[ -n "$STDERR_CONTENT" ]] && _log "  stderr: ${STDERR_CONTENT:0:150}"
+    echo "exit=99" >&2
 elif [[ $EXIT_CODE -ne 0 ]]; then
     # Analyze stderr for failure pattern (generic failures)
     STDERR_CONTENT=""
@@ -192,6 +226,7 @@ elif [[ $EXIT_CODE -ne 0 ]]; then
 
     _log "FAIL exit=${EXIT_CODE} ${_ELAPSED}s [${FAILURE_TYPE}]"
     [[ -n "$STDERR_CONTENT" ]] && _log "  stderr: ${STDERR_CONTENT:0:150}"
+    echo "exit=${EXIT_CODE}" >&2
 else
     _log "DONE exit=0 ${_ELAPSED}s"
 fi

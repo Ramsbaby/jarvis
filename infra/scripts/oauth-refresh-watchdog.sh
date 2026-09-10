@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 CRED="${HOME}/.claude/.credentials.json"
 LEDGER="${BOT_HOME}/ledger/oauth-refresh-ledger.jsonl"
 LOG="${BOT_HOME}/logs/oauth-refresh-watchdog.log"
@@ -45,7 +45,7 @@ except:
 # 최근 6h 내 success 여부 (2026-05-21: 2h→6h — 갱신 사이클 최대 5h이므로 2h window는 정상 사이클도 오발)
 RECENT_SUCCESS_COUNT=$(python3 << 'PYEOF'
 import json, time, os
-ledger = os.path.expanduser('~/jarvis/runtime/ledger/oauth-refresh-ledger.jsonl')
+ledger = os.path.expanduser('~/.openclaw-data/jarvis/runtime/ledger/oauth-refresh-ledger.jsonl')
 cutoff = time.time() - 6*3600
 count = 0
 try:

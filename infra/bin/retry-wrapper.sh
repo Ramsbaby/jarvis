@@ -4,24 +4,9 @@ export HOME="${HOME:-$(eval echo ~$(whoami))}"
 
 # --- PATH 강화 (cron 환경에서 경로 누락 방지) ---
 export PATH="${PATH:-/usr/bin:/bin}:/opt/homebrew/bin:/usr/local/bin:${HOME}/.local/bin"
-set -euo pipefail
 
-# retry-wrapper.sh - Retry wrapper with exponential backoff for ask-claude.sh
-# Usage: retry-wrapper.sh <task-id> <prompt> [allowed-tools] [timeout] [max-budget]
-
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
-source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
-  IS_MACOS=false; case "$(uname -s)" in Darwin) IS_MACOS=true ;; esac
-}
-source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
-RETRY_LOG="${BOT_HOME}/logs/retry.jsonl"
-
-# Load .env for BOARD_URL and AGENT_API_KEY
-if [[ -z "${BOARD_URL:-}" && -f "${JARVIS_HOME:-${HOME}/jarvis/runtime}/.env" ]]; then
-    set -a; source "${JARVIS_HOME:-${HOME}/jarvis/runtime}/.env" 2>/dev/null || true; set +a
-fi
-
-# --- Arguments ---
+# --- Arguments (set -u 이전에 먼저 파싱) ---
+# ⚠️ set -u 활성화 이전에 인자를 파싱해야 "unbound variable" 오류 방지
 TASK_ID="${1:?Usage: retry-wrapper.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET] [RETENTION]}"
 PROMPT="${2:?Usage: retry-wrapper.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET] [RETENTION]}"
 ALLOWED_TOOLS="${3:-Read}"
@@ -34,6 +19,24 @@ MAX_RETRIES="${8:-3}"
 BACKOFF_DELAYS=(5 10 20 40)
 # Rate limit 전용 exponential backoff (더 공격적: 60s, 300s, 900s, 1800s)
 RATE_LIMIT_DELAYS=(60 300 900 1800)
+
+# set -u 활성화 (인자 파싱 완료 후)
+set -euo pipefail
+
+# retry-wrapper.sh - Retry wrapper with exponential backoff for ask-claude.sh
+# Usage: retry-wrapper.sh <task-id> <prompt> [allowed-tools] [timeout] [max-budget]
+
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
+  IS_MACOS=false; case "$(uname -s)" in Darwin) IS_MACOS=true ;; esac
+}
+source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
+RETRY_LOG="${BOT_HOME}/logs/retry.jsonl"
+
+# Load .env for BOARD_URL and AGENT_API_KEY
+if [[ -z "${BOARD_URL:-}" && -f "${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/.env" ]]; then
+    set -a; source "${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/.env" 2>/dev/null || true; set +a
+fi
 
 mkdir -p "$(dirname "$RETRY_LOG")"
 
@@ -161,7 +164,9 @@ classify_error() {
 
     # [2] BUDGET_EXCEEDED - 비용 한도 초과 (Claude API)
     # 패턴: error_max_budget_usd, budget exceeded, max.budget, 예산 초과
-    elif grep -qiE "error_max_budget_usd|budget exceeded|max.budget|예산 초과|예산초과|budget.cap|cost.*exceed|charge limit|daily spend limit" "${check_files[@]}" 2>/dev/null; then echo "BUDGET_EXCEEDED"
+    # xtrace(`+ local … max_budget=`) 줄은 제외 — llm-gateway 의 set -x 잔재가 'max.budget' 에 걸려 evaluator_fail 을
+    # BUDGET_EXCEEDED 로 오분류했다(2026-09-04 12:21 daily-summary ×4). 변수명이 아니라 실제 초과 메시지만 본다.
+    elif grep -hv '^+ ' "${check_files[@]}" 2>/dev/null | grep -qiE "error_max_budget_usd|budget exceeded|max[ _-]budget[ _-](exceeded|reached|hit)|예산 초과|예산초과|budget.cap|cost.*exceed|charge limit|daily spend limit"; then echo "BUDGET_EXCEEDED"
 
     # [3] RATE_LIMITED - API rate limit (429 또는 명시적 rate_limit 메시지)
     elif grep -qiE "rate_limit|rate limit|error_rate_limit|RATE_LIMIT_ERROR|429|hit your limit|you've hit|usage limit|too many request|too.many.*request|request.limit|\[SUBTYPE\].*rate|quota.*exceeded" "${check_files[@]}" 2>/dev/null; then echo "RATE_LIMITED"
@@ -382,7 +387,12 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
             RESULT_HAS_ERROR=true
         fi
 
-        if [[ "$RESULT_LEN" -eq 0 ]]; then
+        if [[ "$RESULT_LEN" -eq 0 && "${ALLOW_EMPTY_RESULT:-false}" == "true" ]]; then
+            # tasks.json allowEmptyResult=true (bot-cron export) — "이상 없으면 출력 없음" 프롬프트의 빈 응답은 정상.
+            # 2026-09-03 daily-summary: 이 분기 없이 empty_output 재시도 4회 → FAILED:UNKNOWN → 코더 티켓.
+            printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"empty_output_allowed":true}\n' \
+                "$(date -u +%FT%TZ)" "$TASK_ID" "$attempt" >> "$RETRY_LOG"
+        elif [[ "$RESULT_LEN" -eq 0 ]]; then
             classification="retryable"
             printf '{"timestamp":"%s","task_id":"%s","attempt":%d,"quality_fail":"empty_output"}\n' \
                 "$(date -u +%FT%TZ)" "$TASK_ID" "$attempt" >> "$RETRY_LOG"
@@ -512,7 +522,7 @@ classify_failure() {
     fi
 
     # [2] BUDGET_EXCEEDED - API 비용 한도 초과
-    if grep -qiE "error_max_budget_usd|budget exceeded|max.budget|예산 초과|예산초과|budget.cap|cost.*exceed|charge limit" "${check_files[@]}" 2>/dev/null; then
+    if grep -hv '^+ ' "${check_files[@]}" 2>/dev/null | grep -qiE "error_max_budget_usd|budget exceeded|max[ _-]budget[ _-](exceeded|reached|hit)|예산 초과|예산초과|budget.cap|cost.*exceed|charge limit"; then
         echo "BUDGET_EXCEEDED"
         return 0
     fi

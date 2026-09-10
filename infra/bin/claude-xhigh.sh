@@ -29,7 +29,7 @@ fi
 
 # CLI version guard — v2.1.130+ required (xhigh introduction version).
 if command -v claude >/dev/null 2>&1; then
-  ver=$(claude --version 2>/dev/null | awk '{print $1}' | tr -d '.')
+  ver=$(claude --version 2>/dev/null | awk '{print $1}' | LC_ALL=C tr -d '.')
   # 2.1.130 = 21130 as an integer comparison.
   if [[ "${ver:-0}" -lt 21130 ]]; then
     echo "WARN: Claude Code v2.1.130+ required for --effort xhigh." >&2

@@ -24,8 +24,8 @@ set -euo pipefail
 # CONFIG
 # ============================================================================
 
-VALIDATOR_LOG="${HOME}/jarvis/logs/file-validator.log"
-VALIDATOR_STATE="${HOME}/jarvis/runtime/state/file-validation-state.json"
+VALIDATOR_LOG="${HOME}/.openclaw-data/jarvis/logs/file-validator.log"
+VALIDATOR_STATE="${HOME}/.openclaw-data/jarvis/runtime/state/file-validation-state.json"
 
 # Language thresholds
 MIN_KOREAN_RATIO=0.0      # Accept any Korean content (0% = no minimum)

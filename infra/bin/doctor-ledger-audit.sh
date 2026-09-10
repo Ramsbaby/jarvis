@@ -10,8 +10,8 @@
 
 set -euo pipefail
 
-LEDGER="${HOME}/jarvis/runtime/state/doctor-ledger.jsonl"
-REPORT_LOG="${HOME}/jarvis/runtime/logs/doctor-weekly-audit.log"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/state/doctor-ledger.jsonl"
+REPORT_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/doctor-weekly-audit.log"
 
 mkdir -p "$(dirname "$REPORT_LOG")"
 
@@ -85,8 +85,8 @@ DISCORD_SUMMARY=$(jq -cn \
     healthy: [("자동조치 " + $repairs + "건 수행")]
   }' 2>/dev/null)
 
-if command -v node >/dev/null 2>&1 && [ -f "${HOME}/jarvis/infra/scripts/discord-visual.mjs" ]; then
-  node "${HOME}/jarvis/infra/scripts/discord-visual.mjs" \
+if command -v node >/dev/null 2>&1 && [ -f "${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs" ]; then
+  node "${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs" \
     --type system-doctor \
     --data "$(jq -cn \
       --arg title "Jarvis Doctor Weekly — $(TZ=Asia/Seoul date '+%m-%d %H:%M KST')" \

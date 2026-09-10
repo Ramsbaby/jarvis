@@ -3,7 +3,7 @@
 # WebSearch 불필요. python3 + urllib만 사용.
 set -euo pipefail
 
-STOP_LOSS=47
+STOP_LOSS=37
 
 python3 - "$STOP_LOSS" << 'PYEOF'
 import urllib.request, json, sys

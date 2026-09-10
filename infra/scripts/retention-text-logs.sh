@@ -12,7 +12,7 @@
 set -uo pipefail
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 ARCHIVE_DIR="${BOT_HOME}/archive/text-logs"
 LOG="${BOT_HOME}/logs/retention-text-logs.log"
 

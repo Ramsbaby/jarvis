@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # [오픈클로 이식 2026-09-10] 감시 대상인 디스코드 봇을 제거했다. 3분마다 bot.crashed를 발행하며
 # bot-heal.sh까지 부르던 루프를 끊는다. 겸사 보던 디스크·LanceDB는 오픈클로 disk-alert·system-health가 본다.
-# 재개: rm ~/jarvis/runtime/state/stopped/watchdog
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/watchdog" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/watchdog
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/watchdog" ]]; then
     echo "[watchdog] 중지 플래그 있음 — 감시 대상(디스코드 봇)이 제거됐다 (state/stopped/watchdog)"
     exit 0
 fi
@@ -13,7 +13,7 @@ set -euo pipefail
 # KeepAlive launchd service with internal 180s loop. Monitors discord-bot, cleans stale claude -p.
 
 # --- Configuration ---
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 # Cross-platform compat
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
@@ -370,7 +370,7 @@ check_system_pressure() {
             log "SYSTEM PRESSURE DETECTED: $reason_str — triggering claude-zombie-cleanup"
 
             # 좀비 정리 자동 트리거
-            bash "$HOME/jarvis/runtime/scripts/claude-zombie-cleanup.sh" 2>&1 | tail -5 >> "$LOG_FILE"
+            bash "$HOME/.openclaw-data/jarvis/runtime/scripts/claude-zombie-cleanup.sh" 2>&1 | tail -5 >> "$LOG_FILE"
 
             # Discord 알림
             send_alert "[Watchdog] 🚨 Mac Mini 시스템 압박 — $reason_str. 좀비 자동 정리 트리거됨."

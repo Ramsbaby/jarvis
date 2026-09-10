@@ -24,7 +24,7 @@ const MONITORING_PATH = join(homedir(), 'jarvis/runtime/config/monitoring.json')
 const FACTS_PATH = join(homedir(), 'jarvis/runtime/wiki/career/_facts.md');
 
 // v3.1 (2026-04-27 주인님 승인 — Registry 패턴 도입):
-// 모든 LLM 주입 SSoT를 ~/jarvis/runtime/context/ssot-registry.json에서 읽어 자동 순회.
+// 모든 LLM 주입 SSoT를 ~/.openclaw-data/jarvis/runtime/context/ssot-registry.json에서 읽어 자동 순회.
 // 새 SSoT 추가 시 registry에 등록만 하면 자동 가드 적용.
 const SSOT_REGISTRY_PATH = join(homedir(), 'jarvis/runtime/context/ssot-registry.json');
 

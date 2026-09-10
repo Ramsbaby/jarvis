@@ -8,11 +8,11 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 LEDGER="$JARVIS_HOME/runtime/state/skill-extractor-ledger.jsonl"
 LOG_FILE="$JARVIS_HOME/runtime/logs/skill-dryrun-auto-activate.log"
 ACTIVATION_MARKER="$JARVIS_HOME/runtime/state/skill-extract-production-active"
-DISCORD_VISUAL="$HOME/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"

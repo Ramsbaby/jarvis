@@ -11,11 +11,11 @@
 #
 # Usage: orphan-plist-classifier.sh
 # 출력: Discord 리포트 텍스트 (stdout)
-# 산출물: ~/jarvis/runtime/ledger/orphan-plist-classifier.jsonl
+# 산출물: ~/.openclaw-data/jarvis/runtime/ledger/orphan-plist-classifier.jsonl
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LA_DIR="${HOME}/Library/LaunchAgents"
 EFF_TASKS="${BOT_HOME}/config/effective-tasks.json"
 [[ -f "$EFF_TASKS" ]] || EFF_TASKS="${BOT_HOME}/config/tasks.json"
@@ -96,4 +96,4 @@ if [[ ${#OTHER[@]} -gt 0 ]]; then
   echo ""
 fi
 
-echo "-# ledger: \`~/jarvis/runtime/ledger/orphan-plist-classifier.jsonl\` · ts: $TS_ISO"
+echo "-# ledger: \`~/.openclaw-data/jarvis/runtime/ledger/orphan-plist-classifier.jsonl\` · ts: $TS_ISO"

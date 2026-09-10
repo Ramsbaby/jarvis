@@ -5,11 +5,11 @@ set -euo pipefail
 # Usage: vault-sync.sh (crontab에서 6시간마다 실행)
 #
 # 미러링 매핑:
-#   ~/jarvis/runtime/rag/teams/reports/{team}-*.md  → ~/Jarvis-Vault/03-teams/{team}/
-#   ~/jarvis/runtime/docs/*.md                      → ~/Jarvis-Vault/06-knowledge/architecture/
-#   ~/jarvis/runtime/rag/teams/proposals-tracker.md → ~/Jarvis-Vault/03-teams/
+#   ~/.openclaw-data/jarvis/runtime/rag/teams/reports/{team}-*.md  → ~/Jarvis-Vault/03-teams/{team}/
+#   ~/.openclaw-data/jarvis/runtime/docs/*.md                      → ~/Jarvis-Vault/06-knowledge/architecture/
+#   ~/.openclaw-data/jarvis/runtime/rag/teams/proposals-tracker.md → ~/Jarvis-Vault/03-teams/
 
-BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
 VAULT_BASE="$HOME/Jarvis-Vault"
 MAX_REPORTS=7  # 각 팀 폴더에 최신 N개 보고서만 유지
 
@@ -378,7 +378,7 @@ INDEX_FILE="$VAULT_BASE/05-insights/_index.md"
 } > "$INDEX_FILE" 2>/dev/null && synced=$((synced + 1)) || true
 
 # --- Interview Ralph curated archive 미러링 (2026-04-26 v4.35 신설) ---
-# ralph runner가 ~/jarvis/runtime/wiki/05-career/interview-curated/에 누적하는 모범답안 + 라운드 요약을
+# ralph runner가 ~/.openclaw-data/jarvis/runtime/wiki/05-career/interview-curated/에 누적하는 모범답안 + 라운드 요약을
 # 안드로이드 옵시디언이 보는 ~/Jarvis-Vault/03-teams/career/interview-ralph/로 미러.
 RALPH_SRC="$BOT_HOME/wiki/05-career/interview-curated"
 RALPH_DEST="$VAULT_BASE/03-teams/career/interview-ralph"

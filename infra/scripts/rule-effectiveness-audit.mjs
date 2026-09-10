@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-rule-effectiveness-audit 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/jarvis/runtime/state/stopped/rule-effectiveness-audit
+// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/rule-effectiveness-audit
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
 if (__sc(__sh() + '/jarvis/runtime/state/stopped/rule-effectiveness-audit') && process.env.OPENCLAW_JOB !== '1') {
@@ -32,15 +32,15 @@ import { homedir } from 'node:os';
 import { dirname } from 'node:path';
 
 const HOME = homedir();
-const PROMOTER = `${HOME}/jarvis/runtime/ledger/promoter-ledger.jsonl`;
-const MISTAKES = `${HOME}/jarvis/runtime/state/mistake-ledger.jsonl`;
-const OUT_LEDGER = `${HOME}/jarvis/runtime/state/rule-effectiveness.jsonl`;
+const PROMOTER = `${HOME}/.openclaw-data/jarvis/runtime/ledger/promoter-ledger.jsonl`;
+const MISTAKES = `${HOME}/.openclaw-data/jarvis/runtime/state/mistake-ledger.jsonl`;
+const OUT_LEDGER = `${HOME}/.openclaw-data/jarvis/runtime/state/rule-effectiveness.jsonl`;
 // 게이트 제안 큐 (2026-07-13): 텍스트 룰이 무효(여전히 재발)인 오답을 "코드 게이트 필요"로 뽑아
 //   주인님 검토로 보낸다. promoter의 cluster_id 기반 escalation이 semantic drift로 0건 발동한 걸 대체.
 //   ⚠️ 자율 코드생성 안 함 — 제안만. 게이트 구현은 주인님 승인 후.
-const GATE_PROPOSALS = `${HOME}/jarvis/runtime/state/gate-proposals.jsonl`;
-const EMBED_CACHE = `${HOME}/jarvis/runtime/state/rule-eff-embed-cache.json`;
-const MONITORING = `${HOME}/jarvis/runtime/config/monitoring.json`;
+const GATE_PROPOSALS = `${HOME}/.openclaw-data/jarvis/runtime/state/gate-proposals.jsonl`;
+const EMBED_CACHE = `${HOME}/.openclaw-data/jarvis/runtime/state/rule-eff-embed-cache.json`;
+const MONITORING = `${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json`;
 
 const argv = process.argv.slice(2);
 const argVal = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };

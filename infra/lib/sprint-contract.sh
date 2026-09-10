@@ -279,7 +279,7 @@ sc_build_contract_prompt() {
     {
       "id": 1,
       "description": "검증 가능한 기준 설명",
-      "verifyCmd": "bash 명령어 (exit 0=통과, exit 1=실패). 자동 검증 불가 시 빈 문자열"
+      "verifyCmd": "bash 명령어 (exit 0=통과, exit 1=실패). 반드시 채울 것"
     }
   ]
 }
@@ -287,8 +287,9 @@ sc_build_contract_prompt() {
 
 ## 규칙
 - successCriteria는 1~5개, 구체적이고 검증 가능하게
-- verifyCmd: 파일 존재 확인(test -f), 프로세스 상태(pgrep), e2e 테스트(~/jarvis/runtime/scripts/e2e-test.sh), 문법 검사(bash -n, node --check) 등 활용
-- 자동 검증 불가한 기준은 verifyCmd를 빈 문자열("")로 설정
+- verifyCmd: 파일 존재 확인(test -f), 프로세스 상태(pgrep), e2e 테스트(~/.openclaw-data/jarvis/runtime/scripts/e2e-test.sh), 문법 검사(bash -n, node --check), 출력 대조(grep -q) 등 활용
+- verifyCmd 가 빈 기준은 자동 통과되지 않는다 — 태스크 전체가 '사람 검토 보류(failed)' 로 빠진다. 정말 사람만 판단할 수 있는 기준이 아니면 반드시 명령을 만들어라
+- verifyCmd 는 읽기 전용이어야 한다 — 파일을 만들거나 설정을 고치는 명령은 금지
 - maxIterations: 태스크 복잡도에 따라 2~5
 - JSON 블록만 출력하라. 설명/인사말 없이 \`\`\`json ... \`\`\` 블록만
 SCEOF

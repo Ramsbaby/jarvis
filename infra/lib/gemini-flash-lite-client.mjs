@@ -84,7 +84,7 @@ export async function flashLiteChat(messages, opts = {}) {
   if (!apiKey) {
     throw new Error(
       'GEMINI_API_KEY가 설정되지 않았습니다. ' +
-      '~/jarvis/runtime/runtime/discord/.env 에 GEMINI_API_KEY=... 를 추가하세요.'
+      '~/.openclaw-data/jarvis/runtime/runtime/discord/.env 에 GEMINI_API_KEY=... 를 추가하세요.'
     );
   }
 

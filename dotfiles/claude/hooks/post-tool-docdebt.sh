@@ -15,7 +15,22 @@ BOT_HOME="${HOME}/.jarvis"
 DOC_MAP="${BOT_HOME}/config/doc-map.json"
 DOC_DEBT="${BOT_HOME}/state/doc-debt.json"
 
-if [[ ! -f "$DOC_MAP" ]]; then exit 0; fi
+# doc-map 이 없거나 패턴이 0개면 이 훅은 아무 일도 하지 않는다.
+# 2026-05-01~08-25 doc-map.json 이 {"patterns":[]} 로 비어 있었고, 그 116일 동안
+# 세 층(부채 등록·종료 차단·doc-sync-auditor)이 전부 "pass" 를 찍으며 죽어 있었다.
+# 조용히 exit 0 하지 않고 흔적을 남긴다 — 침묵이 곧 무감지였다.
+if [[ ! -f "$DOC_MAP" ]]; then
+    echo "[$(date '+%F %T')] [docdebt] doc-map 없음: $DOC_MAP — 문서부채 추적 비활성" \
+        >> "${BOT_HOME}/logs/doc-debt.log" 2>/dev/null || true
+    exit 0
+fi
+
+_DM_PATTERNS=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1])).get("patterns",[])))' "$DOC_MAP" 2>/dev/null || echo 0)
+if [[ "${_DM_PATTERNS:-0}" -eq 0 ]]; then
+    echo "[$(date '+%F %T')] [docdebt] ⚠ doc-map 패턴 0개 — 문서부채가 영원히 0건이 된다: $DOC_MAP" \
+        >> "${BOT_HOME}/logs/doc-debt.log" 2>/dev/null || true
+    exit 0
+fi
 
 # doc-debt.json 없으면 세션 골격 생성 (atomic write)
 if [[ ! -f "$DOC_DEBT" ]]; then

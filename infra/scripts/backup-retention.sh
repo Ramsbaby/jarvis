@@ -9,7 +9,7 @@
 set -euo pipefail
 
 ROOT="${HOME}/backup/jarvis-topology"
-LEDGER="${HOME}/jarvis/runtime/state/backup-retention.jsonl"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/state/backup-retention.jsonl"
 TS="$(date +%Y-%m-%dT%H:%M:%S%z)"
 
 mkdir -p "$(dirname "$LEDGER")"

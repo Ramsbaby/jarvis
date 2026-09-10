@@ -209,7 +209,7 @@ needsReasoning==true → Claude Sonnet
 ### 4.2 대기 항목
 
 ⏳ GEMINI_API_KEY 환경변수 설정 필수
-  - ~/jarvis/runtime/runtime/discord/.env 에 추가
+  - ~/.openclaw-data/jarvis/runtime/runtime/discord/.env 에 추가
 
 ⏳ 실제 API 테스트
   - gemini-test.mjs test-large-doc (100K+ 토큰 처리)
@@ -225,7 +225,7 @@ needsReasoning==true → Claude Sonnet
 
 1. GEMINI_API_KEY 설정
    \`\`\`bash
-   echo "GEMINI_API_KEY=<your-key>" >> ~/jarvis/runtime/runtime/discord/.env
+   echo "GEMINI_API_KEY=<your-key>" >> ~/.openclaw-data/jarvis/runtime/runtime/discord/.env
    \`\`\`
 
 2. API 연동 테스트

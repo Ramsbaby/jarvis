@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰 사용 — llm-gateway.sh 패턴

@@ -9,8 +9,16 @@ set -euo pipefail
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Directories - use ~/.jarvis (preferred) instead of ~/jarvis/runtime
+# Directories - use ~/.jarvis (preferred) instead of ~/.openclaw-data/jarvis/runtime
 JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
+# 실제 코드가 있는 저장소 루트. JARVIS_HOME(~/.jarvis)은 런타임 루트이고
+# 그 아래 lib/bin/scripts 는 심볼릭 링크라 find 가 -L 없이는 들어가지 못한다.
+JARVIS_REPO="${JARVIS_REPO:-${HOME}/.openclaw-data/jarvis}"
+
+# 오늘 자정(로컬) 기준. GNU 전용인 -daystart 대신 BSD/GNU 양쪽이 지원하는 -newermt 를 쓴다.
+# -daystart 는 macOS /usr/bin/find 에서 "unknown primary" 로 죽고, 그 에러가
+# 2>/dev/null 에 삼켜져 "0건 변경" 으로 매일 성공 보고되던 원인이었다 (2026-08-25 수정).
+TODAY_MIDNIGHT="$(date +%Y-%m-%d)"
 STATE_DIR="${JARVIS_HOME}/state"
 DOCS_DIR="${JARVIS_HOME}/docs"
 RAG_DIR="${JARVIS_HOME}/rag"
@@ -101,10 +109,11 @@ verify_required_files() {
 # Get files changed today
 get_today_changed_files() {
     local search_dirs=(
-        "${JARVIS_HOME}/lib"
-        "${JARVIS_HOME}/bin"
-        "${JARVIS_HOME}/scripts"
-        "${JARVIS_HOME}/discord"
+        "${JARVIS_REPO}/infra/lib"
+        "${JARVIS_REPO}/infra/bin"
+        "${JARVIS_REPO}/infra/scripts"
+        "${JARVIS_REPO}/infra/discord"
+        "${JARVIS_REPO}/rag"
         "${JARVIS_HOME}/config"
     )
 
@@ -113,9 +122,9 @@ get_today_changed_files() {
         if [[ -d "$dir" ]]; then
             while IFS= read -r file; do
                 today_files+=("$file")
-            done < <(find "$dir" -not -path '*/node_modules/*' -not -path '*/logs/*' \
+            done < <(find -L "$dir" -not -path '*/node_modules/*' -not -path '*/logs/*' \
                 \( -name '*.mjs' -o -name '*.js' -o -name '*.sh' -o -name '*.json' \) \
-                -daystart -mtime -1 2>/dev/null || true)
+                -newermt "$TODAY_MIDNIGHT" 2>>"${LOG_DIR}/doc-sync-auditor.log" || true)
         fi
     done
 
@@ -125,6 +134,7 @@ get_today_changed_files() {
 # Get documentation files changed today
 get_today_changed_docs() {
     local search_dirs=(
+        "${JARVIS_REPO}/infra/docs"
         "${JARVIS_HOME}/docs"
         "${JARVIS_HOME}/context"
     )
@@ -134,7 +144,7 @@ get_today_changed_docs() {
         if [[ -d "$dir" ]]; then
             while IFS= read -r file; do
                 today_docs+=("$file")
-            done < <(find "$dir" -name '*.md' -daystart -mtime -1 2>/dev/null || true)
+            done < <(find -L "$dir" -name '*.md' -newermt "$TODAY_MIDNIGHT" 2>>"${LOG_DIR}/doc-sync-auditor.log" || true)
         fi
     done
 

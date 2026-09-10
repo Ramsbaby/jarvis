@@ -376,7 +376,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(`   fixture: ${insights.length} insights\n`);
 
   // 단순 fixture에는 답변 본문이 없으므로, sidecar md에서 답변 추출 시도
-  // sidecar 위치: ~/jarvis/runtime/wiki/05-career/interview-curated/<qid>.md
+  // sidecar 위치: ~/.openclaw-data/jarvis/runtime/wiki/05-career/interview-curated/<qid>.md
   const curatedDir = join(homedir(), 'jarvis/runtime/wiki/05-career/interview-curated');
   let totalAgreement = 0;
   let totalDeterministic = 0;

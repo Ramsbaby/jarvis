@@ -3,7 +3,7 @@
  * user-memory-monitor-scan.mjs — 전체 사용자 user-memory 오염 감지 스캐너
  *
  * 역할:
- *   - ~/jarvis/runtime/state/users/*.json 전수 순회
+ *   - ~/.openclaw-data/jarvis/runtime/state/users/*.json 전수 순회
  *   - MONITOR_SOFT_LIMITS(SSoT: user-memory.mjs)와 실측 facts 개수 비교
  *   - 경보 페이로드 생성 (JSON 단일 라인으로 stdout 출력)
  *

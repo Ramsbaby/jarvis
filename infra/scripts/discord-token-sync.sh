@@ -8,7 +8,7 @@ set -euo pipefail
 
 SCRIPT_NAME="sync-discord-token"
 NEW_TOKEN="${1:?사용법: $0 <새Discord봇토큰>}"
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 BOT_ENV="$BOT_HOME/discord/.env"
 LOG="$BOT_HOME/logs/sync-discord-token.log"
 

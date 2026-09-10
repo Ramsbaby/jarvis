@@ -26,9 +26,9 @@ set -euo pipefail
 # ============================================================================
 
 CLUSTER_ID="cl-dcd8ff3443b1f052"
-GUARD_LOG="${HOME}/jarvis/logs/cluster-guard-${CLUSTER_ID}.log"
-GUARD_REPORT_DIR="${HOME}/jarvis/runtime/reports/cluster-guard-${CLUSTER_ID}"
-FILE_VALIDATOR="${HOME}/jarvis/infra/lib/file-validator.sh"
+GUARD_LOG="${HOME}/.openclaw-data/jarvis/logs/cluster-guard-${CLUSTER_ID}.log"
+GUARD_REPORT_DIR="${HOME}/.openclaw-data/jarvis/runtime/reports/cluster-guard-${CLUSTER_ID}"
+FILE_VALIDATOR="${HOME}/.openclaw-data/jarvis/infra/lib/file-validator.sh"
 
 # ============================================================================
 # LOGGING

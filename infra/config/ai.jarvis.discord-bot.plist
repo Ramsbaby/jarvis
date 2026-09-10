@@ -5,7 +5,7 @@
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>BOT_HOME</key>
-		<string>/Users/ramsbaby/jarvis/runtime</string>
+		<string>/Users/ramsbaby/.openclaw-data/jarvis/runtime</string>
 		<key>HOME</key>
 		<string>/Users/ramsbaby</string>
 		<key>INTERVIEW_CHANNEL</key>
@@ -28,14 +28,14 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/bin/bash</string>
-		<string>/Users/ramsbaby/jarvis/runtime/scripts/bot-preflight.sh</string>
+		<string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/scripts/bot-preflight.sh</string>
 	</array>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Users/ramsbaby/jarvis/runtime/logs/discord-bot.err.log</string>
+	<string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/discord-bot.err.log</string>
 	<key>StandardOutPath</key>
-	<string>/Users/ramsbaby/jarvis/runtime/logs/discord-bot.out.log</string>
+	<string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/discord-bot.out.log</string>
 	<key>ThrottleInterval</key>
 	<integer>10</integer>
 	<key>WorkingDirectory</key>

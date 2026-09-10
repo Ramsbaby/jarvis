@@ -20,8 +20,8 @@
 # 출력: ledger jsonl + Discord 카드 + Discord critical (ratio > 10 or ghost > 0)
 set -euo pipefail
 
-LOG="${HOME}/jarvis/runtime/logs/learning-loop-audit.log"
-LEDGER="${HOME}/jarvis/runtime/ledger/learning-loop-audit.jsonl"
+LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/learning-loop-audit.log"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/learning-loop-audit.jsonl"
 
 mkdir -p "$(dirname "${LEDGER}")" "$(dirname "${LOG}")"
 
@@ -33,7 +33,7 @@ TODAY=$(TZ=Asia/Seoul date +%Y-%m-%d)
 log "=== learning-loop-audit 시작 (period=${WEEK_AGO}~${TODAY}) ==="
 
 # ─── 1) mistakes_added: 주간 신규 오답노트 ───
-MISTAKES_FILE="${HOME}/jarvis/runtime/wiki/meta/learned-mistakes.md"
+MISTAKES_FILE="${HOME}/.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md"
 mistakes_added=0
 if [[ -f "$MISTAKES_FILE" ]]; then
   # `## YYYY-MM-DD —` 형태에서 최근 7일 매칭
@@ -55,7 +55,7 @@ hooks_added=$(find "${HOME}/.claude/hooks" -name "*.sh" -type f -mtime -7 2>/dev
 ratio=$(awk -v m="$mistakes_added" -v h="$hooks_added" 'BEGIN { printf "%.2f", m / (h > 0 ? h : 1) }')
 
 # ─── 4) eureka_added: eureka.jsonl 7일 신규 라인 ───
-EUREKA_FILE="${HOME}/jarvis/runtime/wiki/meta/eureka.jsonl"
+EUREKA_FILE="${HOME}/.openclaw-data/jarvis/runtime/wiki/meta/eureka.jsonl"
 eureka_added=0
 if [[ -f "$EUREKA_FILE" ]]; then
   # ts 필드가 7일 이내인 라인 카운트
@@ -65,18 +65,18 @@ if [[ -f "$EUREKA_FILE" ]]; then
 fi
 
 # ─── 5) retros_added: wiki/retros/ 7일 신규 파일 ───
-retros_added=$(find "${HOME}/jarvis/runtime/wiki/retros" -name "*.md" -mtime -7 -type f 2>/dev/null | wc -l | tr -d ' ')
+retros_added=$(find "${HOME}/.openclaw-data/jarvis/runtime/wiki/retros" -name "*.md" -mtime -7 -type f 2>/dev/null | wc -l | tr -d ' ')
 
 # ─── 6) ghost_count: 최근 ghost-tool-detector 결과 ───
 ghost_count=0
-GHOST_LEDGER="${HOME}/jarvis/runtime/ledger/ghost-tool-detector.jsonl"
+GHOST_LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/ghost-tool-detector.jsonl"
 if [[ -f "$GHOST_LEDGER" ]]; then
   ghost_count=$(tail -1 "$GHOST_LEDGER" 2>/dev/null | jq -r '.detected // 0' 2>/dev/null || echo 0)
 fi
 
 # ─── 7) coverage_pct: 최근 rule-hook-coverage-audit 결과 ───
 coverage_pct="0.0"
-COV_LEDGER="${HOME}/jarvis/runtime/ledger/rule-hook-coverage-audit.jsonl"
+COV_LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/rule-hook-coverage-audit.jsonl"
 if [[ -f "$COV_LEDGER" ]]; then
   coverage_pct=$(tail -1 "$COV_LEDGER" 2>/dev/null | jq -r '.coverage_pct // 0.0' 2>/dev/null || echo "0.0")
 fi
@@ -115,7 +115,7 @@ jq -cn \
 log "ledger append 완료: ${LEDGER}"
 
 # ─── Discord 카드 송출 ───
-DISCORD_SCRIPT="${HOME}/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_SCRIPT="${HOME}/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 if [[ -f "$DISCORD_SCRIPT" ]]; then
   card_data=$(jq -cn \
     --arg title "Learning Loop — ${TODAY} 주간" \

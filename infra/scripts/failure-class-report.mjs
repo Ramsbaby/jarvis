@@ -5,10 +5,10 @@
 // retry-wrapper.sh 가 새로 기록하는 `failure_class` 필드를 조회하는 단일 창구.
 //
 // Usage:
-//   node ~/jarvis/infra/scripts/failure-class-report.mjs              # 최근 7일
-//   node ~/jarvis/infra/scripts/failure-class-report.mjs --days=1     # 최근 1일
-//   node ~/jarvis/infra/scripts/failure-class-report.mjs --days=30    # 최근 30일
-//   node ~/jarvis/infra/scripts/failure-class-report.mjs --task=<id>  # 단일 태스크
+//   node ~/.openclaw-data/jarvis/infra/scripts/failure-class-report.mjs              # 최근 7일
+//   node ~/.openclaw-data/jarvis/infra/scripts/failure-class-report.mjs --days=1     # 최근 1일
+//   node ~/.openclaw-data/jarvis/infra/scripts/failure-class-report.mjs --days=30    # 최근 30일
+//   node ~/.openclaw-data/jarvis/infra/scripts/failure-class-report.mjs --task=<id>  # 단일 태스크
 //
 // 출력: 텍스트 테이블 (stdout). Discord 알림 등 side effect 없음.
 
@@ -18,8 +18,8 @@ import readline from 'node:readline';
 
 const HOME = os.homedir();
 const RETRY_LOG_CANDIDATES = [
-  `${HOME}/jarvis/runtime/logs/retry.jsonl`,
-  `${HOME}/jarvis/runtime/logs/retry.jsonl`,
+  `${HOME}/.openclaw-data/jarvis/runtime/logs/retry.jsonl`,
+  `${HOME}/.openclaw-data/jarvis/runtime/logs/retry.jsonl`,
 ];
 
 function parseArgs() {

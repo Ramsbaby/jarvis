@@ -18,7 +18,7 @@ else
   exit 127
 fi
 
-BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
 MONITORING="$BOT_HOME/config/monitoring.json"
 
 # ── board URL (SSoT: monitoring.json > env > default localhost) ──

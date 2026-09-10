@@ -203,6 +203,11 @@
           "type": "boolean",
           "description": "true: 빈 결과도 성공으로 처리 (기본 false → 빈 결과 = 실패)"
         },
+        "emptyResultToken": {
+          "type": "string",
+          "minLength": 3,
+          "description": "LLM 태스크용 '보고할 것 없음' 표식. 출력이 이 토큰 한 줄뿐이면 빈 결과로 간주해 라우팅(discord/file)을 생략한다. claude CLI 는 빈 응답을 '[previous response had no visible output…]' 로 되묻기 때문에 '아무것도 출력하지 마라'는 프롬프트가 동작하지 않는다 — 대신 이 토큰을 내게 하라. allowEmptyResult 와 함께 쓴다."
+        },
         "successPattern": {
           "type": "string",
           "description": "출력에서 성공 판정에 사용할 정규식 또는 문자열"

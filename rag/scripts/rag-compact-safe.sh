@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10 · 회차5 2단계] 이관 완료 — crontab 경로를 막는다.
+# 오픈클로 jarvis-rag-compact-weekly(일 04:00)·jarvis-rag-compact-gate(매시)로 이관. 실행 검증 완료.
+# 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다. 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/rag-compact-safe
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/rag-compact-safe" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[rag-compact-safe] 중지 플래그 있음 — 오픈클로로 이관됨"
+    exit 0
+fi
+
 set -euo pipefail
 
 # [2026-07-09] LaunchAgent/cron 환경 PATH에 homebrew(node) 미포함 → 'node: command not found'(exit 127)로
@@ -56,11 +65,24 @@ _frag_count=0
 if [ -d "$_frag_data_dir" ]; then
   _frag_count=$(find "$_frag_data_dir" -maxdepth 1 -name '*.lance' 2>/dev/null | wc -l | tr -d ' ')
 fi
+# ── B안 (2026-08-05): 디스크 여유 게이트 ──
+# 사고: 조각 2,041 <= 5,000 이라 매시간 skip 하는 동안 디스크가 100%(여유 274MB)까지 찼다.
+# 그 상태에서 강제 압축을 걸었더니 optimize가 "No space left on device"로 실패했다 —
+# 압축은 조각을 새로 써야 해서 임시 공간이 필요하고, 꽉 찬 뒤에는 이미 늦는다.
+# 실측 회수량: 버전 4,329개 / 14.9GB. 이만한 누적이 조각 수 지표에는 전혀 안 잡혔다.
+# 조각 수는 '파편화'를 재고 디스크 여유는 '누적'을 잰다. 다른 축이라 둘 다 봐야 한다.
+DISK_FREE_GB_MIN="${RAG_DISK_FREE_GB_MIN:-20}"
+_free_gb=$(df -g "$RAG_HOME" 2>/dev/null | awk 'NR==2 {print $4}')
+_free_gb="${_free_gb:-999}"
+
 if [ "${_frag_count:-0}" -gt "$FRAGMENT_THRESHOLD" ]; then
   _bypass_cooldown=1
   echo "[$(ts)] [rag-compact] fragment ${_frag_count} > ${FRAGMENT_THRESHOLD} — 자동 압축 트리거" >> "$LOG"
+elif [ "${_free_gb}" -lt "$DISK_FREE_GB_MIN" ]; then
+  _bypass_cooldown=1
+  echo "[$(ts)] [rag-compact] 디스크 여유 ${_free_gb}GB < ${DISK_FREE_GB_MIN}GB — 압축 트리거(조각 ${_frag_count})" >> "$LOG"
 elif [ "${RAG_FRAGMENT_GATE_ONLY:-0}" = "1" ]; then
-  echo "[$(ts)] [rag-compact] gate-only: fragment ${_frag_count} <= ${FRAGMENT_THRESHOLD} — skip" >> "$LOG"
+  echo "[$(ts)] [rag-compact] gate-only: fragment ${_frag_count} <= ${FRAGMENT_THRESHOLD}, 여유 ${_free_gb}GB — skip" >> "$LOG"
   exit 0
 fi
 

@@ -11,8 +11,8 @@
 #      (=잔디 미반영), 유출 없이 실패만 한다.
 set -uo pipefail
 
-REPO="$HOME/jarvis"
-LOG="$HOME/jarvis/logs/jarvis-daily-commit.log"
+REPO="$HOME/.openclaw-data/jarvis"
+LOG="$HOME/.openclaw-data/jarvis/logs/jarvis-daily-commit.log"
 mkdir -p "$(dirname "$LOG")"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG"; }
 

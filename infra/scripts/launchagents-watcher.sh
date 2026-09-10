@@ -18,10 +18,10 @@
 set -euo pipefail
 
 LA_DIR="${HOME}/Library/LaunchAgents"
-LEDGER_DIR="${HOME}/jarvis/runtime/ledger"
+LEDGER_DIR="${HOME}/.openclaw-data/jarvis/runtime/ledger"
 LEDGER="${LEDGER_DIR}/launchagents-watcher.jsonl"
-EFF_TASKS="${HOME}/jarvis/runtime/config/effective-tasks.json"
-MONITORING="${HOME}/jarvis/runtime/config/monitoring.json"
+EFF_TASKS="${HOME}/.openclaw-data/jarvis/runtime/config/effective-tasks.json"
+MONITORING="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
 DEBOUNCE_SEC=3
 
 mkdir -p "$LEDGER_DIR"

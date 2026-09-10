@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] P — 캐시 상태 감시. 실작업(cleanup)은 jarvis-dup-request-cleanup 으로 이관됨
-# 재개: rm ~/jarvis/runtime/state/stopped/duplicate-request-cache-monitor
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/duplicate-request-cache-monitor" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/duplicate-request-cache-monitor
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/duplicate-request-cache-monitor" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[duplicate-request-cache-monitor] 중지 플래그 있음"
     exit 0
 fi
@@ -11,7 +11,7 @@ fi
 # 목적: 캐시 파일 크기, 라인 수, 만료율을 모니터링하고 통계 기록
 # 사용: bash duplicate-request-cache-monitor.sh [--alert-threshold-mb 10]
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 CACHE_FILE="${BOT_HOME}/state/duplicate-request-cache.jsonl"
 MONITOR_LOG="${BOT_HOME}/logs/duplicate-request-cache-monitor.log"
 ALERT_THRESHOLD_MB="${1:-10}"  # 기본값: 10MB 이상이면 경고

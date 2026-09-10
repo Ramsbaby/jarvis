@@ -9,8 +9,17 @@ source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || true
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 source "${BOT_HOME}/lib/sprint-contract.sh" 2>/dev/null || true
 source "${BOT_HOME}/lib/verify-gate.sh" 2>/dev/null || true
+source "${BOT_HOME}/lib/coder-worktree.sh" 2>/dev/null || true
 
 _TIMEOUT_CMD=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+
+# 코더가 git 스냅샷·diff·커밋·롤백을 하는 저장소 (SELF-HEAL-PLAN 1b, 2026-09-04).
+#   기본은 본체(BOT_HOME 이 든 저장소). worktree 모드(JARVIS_CODER_WORKTREE=1, 기본)에서는
+#   run_one_task/run_task_group 이 태스크마다 격리 worktree 를 만들어 CODER_REPO 를 그리로 바꾼다.
+#   9/2 사고 뒤 원칙: 코더는 본체를 읽기만 한다. 본체에 `snapshot:` 커밋도, 편집도 생기지 않는다.
+CODER_REPO="${BOT_HOME}"
+CODER_WT=""          # 활성 worktree 경로 (비어 있으면 옛 방식 = 본체 직접 편집)
+CODER_WT_TASK=""     # worktree 를 만든 태스크/그룹 이름
 
 DB_FILE="${BOT_HOME}/state/tasks.db"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
@@ -27,6 +36,11 @@ _coder_log() {
 # --- Discord 긴급 알림 ---
 _discord_alert() {
     local msg="$1"
+    # JARVIS_NO_EXTERNAL=1 (2026-09-04, 1d): 테스트·dry-run 은 파일에만 기록
+    if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
+        printf '%s [NO_EXTERNAL] src=coder-functions.sh:_discord_alert ch=jarvis-system len=%s\n' "$(date -u +%FT%TZ)" "${#msg}" >> "${BOT_HOME}/logs/no-external.log" 2>/dev/null || true
+        return 0
+    fi
     local monitoring_config="${BOT_HOME}/config/monitoring.json"
     local webhook_url
     webhook_url=$(jq -r '.webhooks["jarvis-system"] // .webhooks["jarvis"] // empty' "$monitoring_config" 2>/dev/null || true)
@@ -47,6 +61,10 @@ _discord_ceo_notify() {
         _coder_log "CEO_NOTIFY_SKIP(debug): ${msg:0:100}"
         return 0
     fi
+    if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
+        printf '%s [NO_EXTERNAL] src=coder-functions.sh:_discord_ceo_notify ch=jarvis-ceo len=%s\n' "$(date -u +%FT%TZ)" "${#msg}" >> "${BOT_HOME}/logs/no-external.log" 2>/dev/null || true
+        return 0
+    fi
     local monitoring_config="${BOT_HOME}/config/monitoring.json"
     local ceo_webhook
     ceo_webhook=$(jq -r '(.webhooks["jarvis-ceo"] // .webhooks["jarvis"] // empty)' "$monitoring_config" 2>/dev/null || true)
@@ -64,6 +82,12 @@ update_queue() {
     # extra JSON 전체를 파괴함 (2026-07-17 실측: {"k":1} → {"k":1}}) — 명시 분기로 교체
     local extra_json="${3:-}"
     if [[ -z "$extra_json" ]]; then extra_json='{}'; fi
+    # done 전이는 FSM 이 result 필드를 요구한다(RESULT_REQUIRED). 예전엔 ask-claude 의 완료 워크플로우가
+    # 검증 전에 먼저 done+result 를 찍어 이 요구를 우회했고, 그 탓에 검증 실패 재큐가 done→queued 로 거부됐다.
+    # 이제 워크플로우는 코더 태스크의 FSM 을 건드리지 않으므로(JARVIS_FSM_OWNER=coder) 여기서 result 를 채운다.
+    if [[ "$new_status" == "done" ]]; then
+        extra_json=$(jq -c 'if (.result // "") == "" then .result = (.result_summary // "jarvis-coder 완료") else . end' <<<"$extra_json" 2>/dev/null || echo "$extra_json")
+    fi
 
     local _uq_out
     _uq_out=$(${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" \
@@ -112,7 +136,7 @@ run_syntax_gate() {
     [[ -z "$snapshot_hash" ]] && return 0
 
     local changed_files errors=0 error_details=""
-    changed_files=$(git -C "$BOT_HOME" diff --name-only "$snapshot_hash" 2>/dev/null || true)
+    changed_files=$(git -C "$CODER_REPO" diff --name-only "$snapshot_hash" 2>/dev/null || true)
     [[ -z "$changed_files" ]] && return 0
 
     # eslint config 자동 생성 (없으면)
@@ -141,7 +165,7 @@ ESLINTEOF
 
     # 직접 문법 검증 수행
     while IFS= read -r f; do
-        local full_path="$BOT_HOME/$f"
+        local full_path="$CODER_REPO/$f"
         [[ -f "$full_path" ]] || continue
 
         local _out="" ext=""
@@ -206,6 +230,15 @@ run_completion_check() {
 
     local expanded="${check//\~/$HOME}"
 
+    # worktree 모드: 본체가 아니라 작업 사본을 검사한다 (경로 치환 + cd)
+    if [[ -n "$CODER_WT" ]]; then
+        _cc_out=$(coder_run_cmd "$CODER_WT" "$check" "$COMPLETION_CHECK_TIMEOUT" 2>&1) || {
+            _coder_log "completionCheck 실패 (worktree): exit=$?, cmd=${check:0:100}, output=${_cc_out:0:200}"
+            return 1
+        }
+        return 0
+    fi
+
     if [[ "$expanded" == /* && -x "$expanded" ]]; then
         if [[ -n "${_TIMEOUT_CMD}" ]]; then
             _cc_out=$(${_TIMEOUT_CMD} "$COMPLETION_CHECK_TIMEOUT" "$expanded" 2>&1) || {
@@ -244,7 +277,15 @@ rollback_snapshot() {
     fi
 
     local current_hash
-    current_hash=$(git -C "$BOT_HOME" rev-parse HEAD 2>/dev/null)
+    current_hash=$(git -C "$CODER_REPO" rev-parse HEAD 2>/dev/null)
+
+    # worktree 모드: 이 저장소엔 코더 세션뿐이다 — 타 세션 보호가 필요 없으니 커밋·미커밋·신규 파일까지 전부 되돌린다
+    if [[ -n "$CODER_WT" ]]; then
+        _coder_log "rollback(worktree): ${current_hash:0:8} → ${snap:0:8} (reset --hard + clean)"
+        git -C "$CODER_REPO" reset --hard "$snap" --quiet 2>/dev/null || { _coder_log "ERROR: worktree reset 실패"; return 1; }
+        git -C "$CODER_REPO" clean -fdq 2>/dev/null || true
+        return 0
+    fi
 
     if [[ "$current_hash" == "$snap" ]]; then
         _coder_log "rollback: HEAD가 snapshot과 동일, 변경 없음"
@@ -252,7 +293,7 @@ rollback_snapshot() {
     fi
 
     local human_commits
-    human_commits=$(git -C "$BOT_HOME" log --oneline "${snap}..HEAD" 2>/dev/null \
+    human_commits=$(git -C "$CODER_REPO" log --oneline "${snap}..HEAD" 2>/dev/null \
         | grep -cvE "^[0-9a-f]+ (snapshot:|jarvis-coder:)" || true)
     if (( human_commits > 0 )); then
         _coder_log "rollback 건너뜀: snapshot 이후 인간 커밋 ${human_commits}개 보호"
@@ -260,7 +301,7 @@ rollback_snapshot() {
     fi
 
     _coder_log "rollback: ${current_hash:0:8} → ${snap:0:8}"
-    git -C "$BOT_HOME" reset --hard "$snap" --quiet 2>/dev/null || {
+    git -C "$CODER_REPO" reset --hard "$snap" --quiet 2>/dev/null || {
         _coder_log "ERROR: git reset 실패, 수동 복구 필요"
         return 1
     }
@@ -271,6 +312,14 @@ rollback_snapshot() {
 # rollback + 지적사항(meta.verify_feedback) 저장 후 재큐잉, 재시도 소진 시 failed + 주인님 격상
 _handle_verify_gate_fail() {
     local task_id="$1" retries="$2" max_retries="$3" snapshot_hash="$4"
+    # 검증 '불가'(인프라 장애·파싱 실패·스냅샷 없음)는 불합격이 아니다 — 재시도를 태우지 않고 사람 검토 보류
+    if [[ "${VERIFY_GATE_VERDICT:-}" == UNAVAILABLE_* ]]; then
+        local _hold_patch
+        _hold_patch=$(_coder_preserve_patch "$task_id" "$snapshot_hash")
+        _coder_revert_tracked "$snapshot_hash"
+        _sc_hold_for_human "$task_id" "verify_gate_unavailable" "${VERIFY_GATE_FEEDBACK:-독립 검증 불가}" "$_hold_patch"
+        return 0
+    fi
     local new_retries=$(( retries + 1 ))
     _coder_log "VERIFY_GATE 불합격: ${task_id} (시도 ${new_retries}/${max_retries}) — ${VERIFY_GATE_FEEDBACK:0:200}"
     rollback_snapshot "$snapshot_hash"
@@ -279,14 +328,14 @@ _handle_verify_gate_fail() {
     # 신규 파일까지 삭제하므로 금지 (2026-07-17 리뷰 실증): mixed reset(스테이징 해제)
     # + 추적 파일만 원복(checkout -- .)으로 한정. 작업자가 만든 신규 파일은 untracked로
     # 잔존하며 다음 실행의 snapshot 커밋에 격리됨 (안전 > 정확성 — 잔존이 삭제보다 낫다)
-    if [[ -n "$snapshot_hash" && "$(git -C "$BOT_HOME" rev-parse HEAD 2>/dev/null)" == "$snapshot_hash" ]]; then
-        git -C "$BOT_HOME" reset -q "$snapshot_hash" 2>/dev/null || true
-        git -C "$BOT_HOME" checkout -q "$snapshot_hash" -- . 2>/dev/null || true
+    if [[ -n "$snapshot_hash" && "$(git -C "$CODER_REPO" rev-parse HEAD 2>/dev/null)" == "$snapshot_hash" ]]; then
+        git -C "$CODER_REPO" reset -q "$snapshot_hash" 2>/dev/null || true
+        git -C "$CODER_REPO" checkout -q "$snapshot_hash" -- . 2>/dev/null || true
     fi
     # 2026-07-27: 위 원복은 BOT_HOME 하위에만 닿는다는 사실이 실측으로 드러났다.
     #   ① BOT_HOME=~/.jarvis 는 git 저장소가 아니라 두 명령이 통째로 실패하고 `|| true`에 삼켜진다.
-    #   ② BOT_HOME=~/jarvis/runtime 이면 `-- .` 범위가 runtime 이하뿐이라, 실제 수정 대상인
-    #      ~/jarvis/infra/** 는 원복되지 않는다(runtime/infra 는 심볼릭 링크이며 git 추적 경로가 아님).
+    #   ② BOT_HOME=~/.openclaw-data/jarvis/runtime 이면 `-- .` 범위가 runtime 이하뿐이라, 실제 수정 대상인
+    #      ~/.openclaw-data/jarvis/infra/** 는 원복되지 않는다(runtime/infra 는 심볼릭 링크이며 git 추적 경로가 아님).
     #   그 결과 2026-07-27 오전 VERIFY_GATE 가 "검증 인프라 수정은 자동 승인 불가"로 정확히
     #   불합격시켰는데도 ask-claude.sh·cron-safe-wrapper.sh 등 4개 파일의 변경이 그대로 남았고,
     #   BOT_HOME 기본값을 정본에서 구경로로 되돌리는 역행이 저장소에 새겨졌다.
@@ -295,8 +344,8 @@ _handle_verify_gate_fail() {
     #   따라서 지금은 원복하지 않고 "보이게" 만든다. 선별 원복은 작업 전 dirty 목록을
     #   스냅샷에 함께 저장한 뒤 차집합만 되돌리는 방식으로 후속 도입한다.
     local _vg_root _vg_dirty
-    _vg_root=$(git -C "$BOT_HOME" rev-parse --show-toplevel 2>/dev/null || true)
-    [[ -z "$_vg_root" ]] && _vg_root=$(git -C "${JARVIS_HOME:-$HOME/jarvis}" rev-parse --show-toplevel 2>/dev/null || true)
+    _vg_root=$(git -C "$CODER_REPO" rev-parse --show-toplevel 2>/dev/null || true)
+    [[ -z "$_vg_root" ]] && _vg_root=$(git -C "${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}" rev-parse --show-toplevel 2>/dev/null || true)
     if [[ -n "$_vg_root" ]]; then
         _vg_dirty=$(git -C "$_vg_root" status --porcelain 2>/dev/null | awk '{print $NF}' | head -20)
         if [[ -n "$_vg_dirty" ]]; then
@@ -333,6 +382,124 @@ $(echo "$_vg_dirty" | head -12)
     fi
 }
 
+# --- 사람 검토 보류 (fail-closed, 2026-09-04) ---
+# 검증을 '할 수 없는' 경우(verifyCmd 없는 기준만 남음 · 검증 게이트 인프라 장애)는 불합격도 통과도 아니다.
+# 재시도 카운트를 태우지 않고: ① 작업물을 패치로 보존 → ② 추적 파일만 원복(신규 파일 잔존 —
+# _handle_verify_gate_fail 와 같은 원칙) → ③ failed(lastError=<reason_key>) + 주인님 알림.
+# failed 는 cron-failure-tracker 의 72h 쿨다운에 걸려 자동 재큐되지 않는다 — 사람이 패치를 보고 결정한다.
+#
+# _coder_preserve_patch <이름> <snapshot>  → stdout: 패치 파일 경로 (변경 없으면 빈 문자열)
+_coder_preserve_patch() {
+    local name="$1" snapshot_hash="${2:-}"
+    [[ -n "$snapshot_hash" ]] || { echo ""; return 0; }
+    local dir="${BOT_HOME}/state/dev-patches" file
+    mkdir -p "$dir" 2>/dev/null || true
+    file="${dir}/${name}-$(date +%Y%m%d-%H%M%S).patch"
+    git -C "$CODER_REPO" add -A --intent-to-add >/dev/null 2>&1 || true
+    git -C "$CODER_REPO" diff "$snapshot_hash" > "$file" 2>/dev/null || true
+    if [[ ! -s "$file" ]]; then rm -f "$file"; echo ""; return 0; fi
+    echo "$file"
+}
+# _coder_revert_tracked <snapshot> — 추적 파일만 원복 (reset --hard 금지: 타 프로세스 신규 파일 보호)
+#   worktree 모드에서는 원복 대신 브랜치에 WIP 커밋으로 남긴다 — 사람이 브랜치를 열어 보고 결정한다 (패치 파일과 병행)
+_coder_revert_tracked() {
+    local snapshot_hash="${1:-}"
+    [[ -n "$snapshot_hash" ]] || return 0
+    if [[ -n "$CODER_WT" ]]; then
+        git -C "$CODER_REPO" add -A >/dev/null 2>&1 || true
+        if ! git -C "$CODER_REPO" diff --cached --quiet 2>/dev/null; then
+            git -C "$CODER_REPO" commit -m "jarvis-coder: ${CODER_WT_TASK} WIP (사람 검토 보류)" --no-gpg-sign --quiet 2>/dev/null || true
+            _coder_log "WORKTREE: 보류 작업물을 브랜치 $(coder_worktree_branch "$CODER_WT_TASK") 에 WIP 커밋"
+        fi
+        return 0
+    fi
+    git -C "$CODER_REPO" reset -q "$snapshot_hash" 2>/dev/null || true
+    git -C "$CODER_REPO" checkout -q "$snapshot_hash" -- . 2>/dev/null || true
+    rollback_snapshot "$snapshot_hash"
+}
+# _sc_hold_for_human <task_id> <reason_key> <사람용 설명> [patch_file]
+_sc_hold_for_human() {
+    local task_id="$1" reason_key="$2" human_text="$3" patch_file="${4:-}"
+    _coder_log "HOLD_FOR_HUMAN: ${task_id} (${reason_key}) — ${human_text:0:200}${patch_file:+ | patch=${patch_file}}"
+    if type sc_exists &>/dev/null && sc_exists "$task_id" 2>/dev/null; then
+        sc_archive "$task_id" "needs_human" 2>/dev/null || true
+    fi
+    local _hold_extra
+    _hold_extra=$(jq -n \
+        --arg lastError "$reason_key" \
+        --arg result_summary "사람 검토 보류: ${human_text:0:300}" \
+        --arg verify_feedback "${human_text:0:800}" \
+        --arg patch_file "$patch_file" \
+        '{lastError:$lastError, result_summary:$result_summary, verify_feedback:$verify_feedback, patch_file:$patch_file, changed_files:[], execution_log:[]}')
+    update_queue "$task_id" "failed" "$_hold_extra"
+    # _discord_ceo_notify 는 debug-cron-* 를 무시한다 — 보류는 사람이 봐야 하므로 시스템 채널로 보낸다
+    _discord_alert "⏸️ **Jarvis Coder**: \`${task_id}\` 사람 검토 보류 (${reason_key})
+${human_text:0:300}
+${patch_file:+패치: \`${patch_file}\` — 적용: \`git -C ~/.openclaw-data/jarvis apply ${patch_file}\`}
+자동 재큐되지 않습니다. 확인 후 \`node runtime/lib/task-store.mjs transition ${task_id} queued\` 로 재개하십시오."
+}
+
+# --- worktree 격리 (SELF-HEAL-PLAN 1b, 2026-09-04) ---
+# _coder_wt_activate <task|group-id> — worktree 생성·재사용 후 CODER_REPO 를 그리로 바꾸고
+#   자식 세션(retry-wrapper → ask-claude → claude)에 경계를 준다:
+#     JARVIS_CODER_REPO        ask-claude 가 세션 cwd 로 쓴다 · verify-gate/verify-sprint-contract 가 diff·검증 대상으로 쓴다
+#     JARVIS_AGENT_WRITE_SCOPE 쓰기 경계 훅이 scope 모드로 전환 — 이 밖의 쓰기·본체 git 변조를 차단
+#   실패(return 1)면 호출자는 본체를 만지지 않고 사람 검토로 보류한다 (fail closed).
+_CODER_WT_SAVED_SCOPE=""
+_coder_wt_activate() {
+    local task="$1" wt
+    coder_worktree_enabled || return 0
+    type coder_worktree_ensure &>/dev/null || { _coder_log "WORKTREE: coder-worktree.sh 미로드"; return 1; }
+    wt=$(coder_worktree_ensure "$task") || return 1
+    [[ -n "$wt" && -d "$wt" ]] || return 1
+    CODER_WT="$wt"; CODER_WT_TASK="$task"; CODER_REPO="$wt"
+    _CODER_WT_SAVED_SCOPE="${JARVIS_AGENT_WRITE_SCOPE-__unset__}"
+    export JARVIS_CODER_REPO="$wt" JARVIS_AGENT_WRITE_SCOPE="$wt"
+    _coder_log "WORKTREE: 활성 ${wt} (브랜치 $(coder_worktree_branch "$task"), scope=${wt})"
+    return 0
+}
+# _coder_wt_deactivate — worktree 제거(브랜치 유지) + 본체 모드 복귀. run_one_task/run_task_group 끝에서 반드시 호출.
+_coder_wt_deactivate() {
+    [[ -n "$CODER_WT" ]] || return 0
+    coder_worktree_remove "$CODER_WT_TASK"
+    CODER_WT=""; CODER_WT_TASK=""; CODER_REPO="$BOT_HOME"
+    unset JARVIS_CODER_REPO
+    if [[ "$_CODER_WT_SAVED_SCOPE" == "__unset__" ]]; then unset JARVIS_AGENT_WRITE_SCOPE; else export JARVIS_AGENT_WRITE_SCOPE="$_CODER_WT_SAVED_SCOPE"; fi
+    _CODER_WT_SAVED_SCOPE=""
+}
+# _coder_wt_prompt_prefix <task> — 코더 세션에 작업 위치·규칙을 알린다 (프롬프트 앞에 붙임)
+_coder_wt_prompt_prefix() {
+    [[ -n "$CODER_WT" ]] || { echo ""; return 0; }
+    cat <<EOF
+[작업 디렉토리 — 반드시 지킬 것]
+현재 디렉토리 ${CODER_WT} 는 ~/.openclaw-data/jarvis 저장소의 격리 작업 사본(git worktree, 브랜치 $(coder_worktree_branch "$1"))이다.
+- 파일 편집은 이 디렉토리 안에서만 한다. 본체 ~/.openclaw-data/jarvis 는 읽기 전용이며 그쪽 쓰기·git 변조는 차단된다.
+- 본체 경로 ~/.openclaw-data/jarvis/infra/... 는 여기서 ${CODER_WT}/infra/... 다. 상대 경로(infra/..., runtime/...)를 쓰면 된다.
+- runtime/ 은 본체와 공유하는 데이터 심링크다 — 읽기만 한다. 설정·상태·원장은 수정하지 않는다.
+- git commit 은 해도 되고 안 해도 된다(완료 시 자동 커밋). push·branch 전환·worktree 조작은 금지.
+- 완료 후 사람이 브랜치를 검토해 본체에 반영한다. 본체에 이미 반영된 것처럼 보고하지 않는다.
+
+EOF
+}
+# _coder_wt_merge_hint <task> — 사람이 본체에 반영하는 명령 (coder-merge.sh 가 있으면 그것, 없으면 git 직접)
+_coder_wt_merge_hint() {
+    local b; b=$(coder_worktree_branch "$1")
+    if [[ -x "${BOT_HOME}/scripts/coder-merge.sh" ]]; then
+        echo "bash ~/.openclaw-data/jarvis/infra/scripts/coder-merge.sh $1"
+    else
+        echo "git -C ~/.openclaw-data/jarvis merge --ff-only ${b}   # 검토: git -C ~/.openclaw-data/jarvis diff main...${b}"
+    fi
+}
+# _coder_wt_done_extra <extra_json> [task] — done 전이 JSON 에 브랜치·패치 정보를 덧붙인다 (worktree 모드일 때만)
+_coder_wt_done_extra() {
+    local extra="$1" task="${2:-$CODER_WT_TASK}" patch=""
+    [[ -n "$CODER_WT" ]] || { echo "$extra"; return 0; }
+    patch=$(coder_worktree_export_patch "$task" "$CODER_WT" 2>/dev/null || echo "")
+    jq -c --arg b "$(coder_worktree_branch "$task")" --arg p "$patch" \
+        '. + {branch:$b, patch_file:$p, merge_pending:true} | .result_summary = ((.result_summary // "") + " → 브랜치 " + $b + " (본체 머지 대기)")' \
+        <<<"$extra" 2>/dev/null || echo "$extra"
+}
+
 # --- 태스크 선택 ---
 pick_next_task() {
     ${NODE_SQLITE} "${BOT_HOME}/lib/task-store.mjs" pick-and-lock 2>>"$DEV_LOG"
@@ -358,7 +525,14 @@ get_field() {
 # ============================================================
 # run_task_group — 그룹 태스크 일괄 실행 (하나의 Claude 세션)
 # ============================================================
+# 바깥 래퍼: 어떤 경로로 끝나든 worktree 를 정리하고 본체 모드로 돌아온다
 run_task_group() {
+    local _rtg_rc=0
+    _run_task_group_inner "$@" || _rtg_rc=$?
+    _coder_wt_deactivate
+    return $_rtg_rc
+}
+_run_task_group_inner() {
     local GROUP_JSON="$1"
     local TASK_IDS
     TASK_IDS=$(echo "$GROUP_JSON" | jq -r '.[]')
@@ -399,16 +573,25 @@ ${prompt}
     MAX_TIMEOUT=$(( (MAX_TIMEOUT * 3) / 2 ))
     [[ "$MAX_TIMEOUT" -lt 300 ]] && MAX_TIMEOUT=300
 
+    # worktree 격리 (1b) — 못 만들면 본체를 만지지 않고 전부 보류
+    if ! _coder_wt_activate "group-${FIRST_ID}"; then
+        for tid in "${ALL_IDS[@]}"; do
+            _sc_hold_for_human "$tid" "worktree_unavailable" "격리 작업 사본(git worktree)을 만들지 못했다 — 본체를 직접 편집하지 않는다 (그룹 group-${FIRST_ID})" ""
+        done
+        return 0
+    fi
+    COMBINED_PROMPT="$(_coder_wt_prompt_prefix "group-${FIRST_ID}")${COMBINED_PROMPT}"
+
     # git snapshot
     local _SNAPSHOT_HASH=""
-    if git -C "$BOT_HOME" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        git -C "$BOT_HOME" add -A >/dev/null 2>&1 || true
-        if git -C "$BOT_HOME" diff --cached --quiet 2>/dev/null; then
-            _SNAPSHOT_HASH=$(git -C "$BOT_HOME" rev-parse HEAD 2>/dev/null)
+    if git -C "$CODER_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git -C "$CODER_REPO" add -A >/dev/null 2>&1 || true
+        if git -C "$CODER_REPO" diff --cached --quiet 2>/dev/null; then
+            _SNAPSHOT_HASH=$(git -C "$CODER_REPO" rev-parse HEAD 2>/dev/null)
         else
-            git -C "$BOT_HOME" commit -m "snapshot: jarvis-coder group [${FIRST_ID}+${TASK_COUNT}]" \
+            git -C "$CODER_REPO" commit -m "snapshot: jarvis-coder group [${FIRST_ID}+${TASK_COUNT}]" \
                 --no-gpg-sign --quiet 2>/dev/null || true
-            _SNAPSHOT_HASH=$(git -C "$BOT_HOME" rev-parse HEAD 2>/dev/null)
+            _SNAPSHOT_HASH=$(git -C "$CODER_REPO" rev-parse HEAD 2>/dev/null)
         fi
     fi
 
@@ -481,12 +664,22 @@ ${_syntax_err:0:500}
     # Step 6.5: 독립 검증 게이트 (그룹) — 결합 diff를 그룹 프롬프트와 대조
     if type run_verify_gate &>/dev/null && \
        ! run_verify_gate "group-${FIRST_ID}" "그룹 태스크 ${TASK_COUNT}건" "$COMBINED_PROMPT" "$_SNAPSHOT_HASH"; then
+        # 검증 '불가' → 재시도를 태우지 않고 패치 보존 + 사람 검토 보류 (단일 경로와 동일 원칙)
+        if [[ "${VERIFY_GATE_VERDICT:-}" == UNAVAILABLE_* ]]; then
+            local _grp_hold_patch
+            _grp_hold_patch=$(_coder_preserve_patch "group-${FIRST_ID}" "$_SNAPSHOT_HASH")
+            _coder_revert_tracked "$_SNAPSHOT_HASH"
+            for tid in "${ALL_IDS[@]}"; do
+                _sc_hold_for_human "$tid" "verify_gate_unavailable" "${VERIFY_GATE_FEEDBACK:-독립 검증 불가} (그룹 group-${FIRST_ID})" "$_grp_hold_patch"
+            done
+            return 0
+        fi
         _coder_log "VERIFY_GATE 불합격 (그룹) → rollback + 재큐잉/실패"
         rollback_snapshot "$_SNAPSHOT_HASH"
         # HEAD==snapshot no-op 대비 미커밋 작업물 안전 원복 (단일 경로와 동일 — reset --hard 금지)
-        if [[ -n "$_SNAPSHOT_HASH" && "$(git -C "$BOT_HOME" rev-parse HEAD 2>/dev/null)" == "$_SNAPSHOT_HASH" ]]; then
-            git -C "$BOT_HOME" reset -q "$_SNAPSHOT_HASH" 2>/dev/null || true
-            git -C "$BOT_HOME" checkout -q "$_SNAPSHOT_HASH" -- . 2>/dev/null || true
+        if [[ -n "$_SNAPSHOT_HASH" && "$(git -C "$CODER_REPO" rev-parse HEAD 2>/dev/null)" == "$_SNAPSHOT_HASH" ]]; then
+            git -C "$CODER_REPO" reset -q "$_SNAPSHOT_HASH" 2>/dev/null || true
+            git -C "$CODER_REPO" checkout -q "$_SNAPSHOT_HASH" -- . 2>/dev/null || true
         fi
         local _vg_group_exhausted=false
         for tid in "${ALL_IDS[@]}"; do
@@ -516,21 +709,21 @@ ${_syntax_err:0:500}
 
     # 성공: commit 1회 + 전체 done
     if [[ -n "$_SNAPSHOT_HASH" ]]; then
-        git -C "$BOT_HOME" add -A >/dev/null 2>&1 || true
+        git -C "$CODER_REPO" add -A >/dev/null 2>&1 || true
         local _CHANGED_COUNT
-        _CHANGED_COUNT=$(git -C "$BOT_HOME" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+        _CHANGED_COUNT=$(git -C "$CODER_REPO" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
         if [[ "$_CHANGED_COUNT" != "0" ]]; then
             local names_str; names_str=$(printf '%s, ' "${ALL_NAMES[@]}")
-            git -C "$BOT_HOME" commit -m "jarvis-coder: 그룹 완료 [${names_str%, }] (${TASK_COUNT}건)" \
+            git -C "$CODER_REPO" commit -m "jarvis-coder: 그룹 완료 [${names_str%, }] (${TASK_COUNT}건)" \
                 --no-gpg-sign --quiet 2>/dev/null || true
         fi
     fi
 
     local _changed_files_json="[]" _exec_log_json="[]"
     if [[ -n "$_SNAPSHOT_HASH" ]]; then
-        _changed_files_json=$(git -C "$BOT_HOME" diff --name-only "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
+        _changed_files_json=$(git -C "$CODER_REPO" diff --name-only "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
             | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null || echo '[]')
-        _exec_log_json=$(git -C "$BOT_HOME" log --oneline "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
+        _exec_log_json=$(git -C "$CODER_REPO" log --oneline "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
             | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null || echo '[]')
     fi
 
@@ -542,18 +735,31 @@ ${_syntax_err:0:500}
             --argjson changed_files "$_changed_files_json" \
             --argjson execution_log "$_exec_log_json" \
             '{result_summary:$result_summary, changed_files:$changed_files, execution_log:$execution_log, verify_feedback:""}')
+        _done_extra=$(_coder_wt_done_extra "$_done_extra" "group-${FIRST_ID}")
         update_queue "$tid" "done" "$_done_extra"
     done
 
     _coder_log "그룹 완료: ${TASK_COUNT}건"
-    _discord_ceo_notify "✅ **Jarvis Coder**: 그룹 태스크 ${TASK_COUNT}건 완료"
+    if [[ -n "$CODER_WT" ]]; then
+        _discord_ceo_notify "✅ **Jarvis Coder**: 그룹 태스크 ${TASK_COUNT}건 완료 → 브랜치 \`$(coder_worktree_branch "group-${FIRST_ID}")\` (본체 머지 대기)
+반영: \`$(_coder_wt_merge_hint "group-${FIRST_ID}")\`"
+    else
+        _discord_ceo_notify "✅ **Jarvis Coder**: 그룹 태스크 ${TASK_COUNT}건 완료"
+    fi
     return 0
 }
 
 # ============================================================
 # run_one_task — 단일 태스크 실행 (전체 생명주기)
 # ============================================================
+# 바깥 래퍼: 어떤 경로로 끝나든 worktree 를 정리하고 본체 모드로 돌아온다
 run_one_task() {
+    local _rot_rc=0
+    _run_one_task_inner "$@" || _rot_rc=$?
+    _coder_wt_deactivate
+    return $_rot_rc
+}
+_run_one_task_inner() {
     local TASK_ID="$1"
     local TASK_NAME PROMPT COMPLETION_CHECK MAX_BUDGET TIMEOUT ALLOWED_TOOLS PATCH_ONLY RETRIES MAX_RETRIES
     TASK_NAME=$(get_field "$TASK_ID" "name")
@@ -587,6 +793,19 @@ ${VERIFY_FEEDBACK:0:800}
         _coder_log "VERIFY_GATE: 이전 불합격 피드백 주입 (task=${TASK_ID})"
     fi
 
+    # 감사 근거 주입 (SELF-HEAL-PLAN 2a) — 감사가 무엇을 보고 고장이라 했는지. 근거 없는 티켓에서 코더가 할 일을
+    # 지어낸 사고(2026-09-04 03:07 debug-cron-unknown → rm -rf $BOT_HOME 시도)의 구조적 봉쇄. 오탐이면 고치지 않는다.
+    local EVIDENCE
+    EVIDENCE=$(get_field "$TASK_ID" "evidence")
+    if [[ -n "$EVIDENCE" && "$EVIDENCE" != "null" ]]; then
+        PROMPT="${PROMPT}
+
+[감사 근거 — 무엇을 보고 고장이라 판단했나]
+${EVIDENCE:0:1500}
+이 근거를 먼저 재현하라. 근거가 실제 고장이 아니면(감사 오탐·이미 해소) 코드를 고치지 말고 결과 첫 줄에 '오탐: <이유>' 를 적고 끝내라."
+        _coder_log "EVIDENCE: 감사 근거 주입 (task=${TASK_ID}, ${#EVIDENCE}자)"
+    fi
+
     # Step 1: completionCheck 사전 판별
     if run_completion_check "$COMPLETION_CHECK"; then
         _coder_log "completionCheck 통과: ${TASK_ID} → 이미 완료됨"
@@ -607,16 +826,23 @@ ${VERIFY_FEEDBACK:0:800}
 
     _coder_log "completionCheck 미통과: ${TASK_ID} → claude -p 실행"
 
+    # Step 1.5: worktree 격리 (1b) — 못 만들면 본체를 만지지 않고 사람 검토 보류 (fail closed)
+    if ! _coder_wt_activate "$TASK_ID"; then
+        _sc_hold_for_human "$TASK_ID" "worktree_unavailable" "격리 작업 사본(git worktree)을 만들지 못했다 — 본체를 직접 편집하지 않는다. 로그: ${DEV_LOG}" ""
+        return 0
+    fi
+    PROMPT="$(_coder_wt_prompt_prefix "$TASK_ID")${PROMPT}"
+
     # Step 2: git snapshot
     local _SNAPSHOT_HASH=""
-    if git -C "$BOT_HOME" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        git -C "$BOT_HOME" add -A >/dev/null 2>&1 || true
-        if git -C "$BOT_HOME" diff --cached --quiet 2>/dev/null; then
-            _SNAPSHOT_HASH=$(git -C "$BOT_HOME" rev-parse HEAD 2>/dev/null)
+    if git -C "$CODER_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git -C "$CODER_REPO" add -A >/dev/null 2>&1 || true
+        if git -C "$CODER_REPO" diff --cached --quiet 2>/dev/null; then
+            _SNAPSHOT_HASH=$(git -C "$CODER_REPO" rev-parse HEAD 2>/dev/null)
         else
-            git -C "$BOT_HOME" commit -m "snapshot: jarvis-coder ${TASK_ID} 실행 전 ($(date '+%F %T'))" \
+            git -C "$CODER_REPO" commit -m "snapshot: jarvis-coder ${TASK_ID} 실행 전 ($(date '+%F %T'))" \
                 --no-gpg-sign --quiet 2>/dev/null || true
-            _SNAPSHOT_HASH=$(git -C "$BOT_HOME" rev-parse HEAD 2>/dev/null)
+            _SNAPSHOT_HASH=$(git -C "$CODER_REPO" rev-parse HEAD 2>/dev/null)
         fi
     fi
 
@@ -627,7 +853,9 @@ ${VERIFY_FEEDBACK:0:800}
     if [[ "$PATCH_ONLY" == "true" ]]; then
         PROMPT="${PROMPT}
 
-중요: 실제 파일을 수정하지 말 것. 패치 파일만 ~/jarvis/runtime/state/dev-patches/${TASK_ID}.patch 에 unified diff 형식으로 생성하라."
+중요: 실제 파일을 수정하지 말 것. 패치 파일만 ${BOT_HOME}/results/${TASK_ID}/${TASK_ID}.patch 에 unified diff 형식으로 생성하라."
+        # results/ 는 에이전트 쓰기 경계의 항상-허용 경로다. 옛 경로 state/dev-patches 는 보호 경로라 훅에 막힌다 (2026-09-04)
+        mkdir -p "${BOT_HOME}/results/${TASK_ID}" 2>/dev/null || true
     fi
 
     # Step 4.5: Sprint Contract — 성공 기준 협상
@@ -812,20 +1040,20 @@ ${_syntax_err:0:500}
             sc_archive "$TASK_ID" "completed"
 
             if [[ -n "$_SNAPSHOT_HASH" ]]; then
-                git -C "$BOT_HOME" add -A >/dev/null 2>&1 || true
+                git -C "$CODER_REPO" add -A >/dev/null 2>&1 || true
                 local _CHANGED_COUNT
-                _CHANGED_COUNT=$(git -C "$BOT_HOME" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+                _CHANGED_COUNT=$(git -C "$CODER_REPO" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
                 if [[ "$_CHANGED_COUNT" != "0" ]]; then
-                    git -C "$BOT_HOME" commit -m "jarvis-coder: ${TASK_ID} Sprint Contract 완료" \
+                    git -C "$CODER_REPO" commit -m "jarvis-coder: ${TASK_ID} Sprint Contract 완료" \
                         --no-gpg-sign --quiet 2>/dev/null || true
                 fi
             fi
 
             local _changed_files_json="[]" _exec_log_json="[]"
             if [[ -n "$_SNAPSHOT_HASH" ]]; then
-                _changed_files_json=$(git -C "$BOT_HOME" diff --name-only "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
+                _changed_files_json=$(git -C "$CODER_REPO" diff --name-only "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
                     | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null || echo '[]')
-                _exec_log_json=$(git -C "$BOT_HOME" log --oneline "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
+                _exec_log_json=$(git -C "$CODER_REPO" log --oneline "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
                     | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null || echo '[]')
             fi
 
@@ -835,13 +1063,37 @@ ${_syntax_err:0:500}
                 --argjson changed_files "$_changed_files_json" \
                 --argjson execution_log "$_exec_log_json" \
                 '{result_summary:$result_summary, changed_files:$changed_files, execution_log:$execution_log, verify_feedback:""}')
+            _sc_done_extra=$(_coder_wt_done_extra "$_sc_done_extra" "$TASK_ID")
             update_queue "$TASK_ID" "done" "$_sc_done_extra"
             _coder_log "완료: ${TASK_ID} (Sprint Contract)"
-            _discord_ceo_notify "✅ **Jarvis Coder**: \`${TASK_NAME}\` (\`${TASK_ID}\`) Sprint Contract 전체 검증 통과"
+            if [[ -n "$CODER_WT" ]]; then
+                _discord_ceo_notify "✅ **Jarvis Coder**: \`${TASK_NAME}\` (\`${TASK_ID}\`) Sprint Contract 전체 검증 통과 → 브랜치 \`$(coder_worktree_branch "$TASK_ID")\` (본체 머지 대기)
+반영: \`$(_coder_wt_merge_hint "$TASK_ID")\`"
+            else
+                _discord_ceo_notify "✅ **Jarvis Coder**: \`${TASK_NAME}\` (\`${TASK_ID}\`) Sprint Contract 전체 검증 통과"
+            fi
         else
             # 미검증 criteria 존재
             local _sc_iter_num
             _sc_iter_num=$(sc_current_iteration "$TASK_ID")
+
+            # 남은 미검증 기준이 전부 verifyCmd 없음 → 반복해도 검증될 수 없다.
+            # 2026-09-04 이전엔 verify-sprint-contract 가 이를 자동 통과시켰다(무검증 done).
+            # 이제는 패치 보존 → 원복 → 사람 검토 보류. 반복 회차를 태우지 않는다.
+            local _sc_unverified_json _sc_manual_only
+            _sc_unverified_json=$(sc_unverified_criteria "$TASK_ID")
+            _sc_manual_only=$(echo "$_sc_unverified_json" | jq -r \
+                'if length > 0 and all(.[]; (.verifyCmd // "") == "") then "true" else "false" end' 2>/dev/null || echo "false")
+            if [[ "$_sc_manual_only" == "true" ]]; then
+                local _sc_manual_desc _sc_hold_patch
+                _sc_manual_desc=$(echo "$_sc_unverified_json" | jq -r '.[] | "[\(.id)] \(.description)"' 2>/dev/null | head -5 | tr '\n' ' ')
+                _coder_log "SPRINT_CONTRACT: 미검증 기준이 전부 verifyCmd 없음 → 사람 검토 보류 (task=${TASK_ID}, iteration=${_sc_iter_num})"
+                _sc_hold_patch=$(_coder_preserve_patch "$TASK_ID" "$_SNAPSHOT_HASH")
+                _coder_revert_tracked "$_SNAPSHOT_HASH"
+                _sc_hold_for_human "$TASK_ID" "sprint_contract_needs_human" \
+                    "자동 검증 명령(verifyCmd)이 없는 성공 기준만 남음 — 사람이 판단해야 한다: ${_sc_manual_desc:0:400}" "$_sc_hold_patch"
+                return 0
+            fi
 
             if sc_check_exhausted "$TASK_ID"; then
                 # maxIterations 초과 → 실패
@@ -863,11 +1115,11 @@ ${_syntax_err:0:500}
 
                 # 코드 변경은 유지 (rollback 안 함) — 다음 iteration에서 이어서 작업
                 if [[ -n "$_SNAPSHOT_HASH" ]]; then
-                    git -C "$BOT_HOME" add -A >/dev/null 2>&1 || true
+                    git -C "$CODER_REPO" add -A >/dev/null 2>&1 || true
                     local _CHANGED_COUNT
-                    _CHANGED_COUNT=$(git -C "$BOT_HOME" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+                    _CHANGED_COUNT=$(git -C "$CODER_REPO" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
                     if [[ "$_CHANGED_COUNT" != "0" ]]; then
-                        git -C "$BOT_HOME" commit -m "jarvis-coder: ${TASK_ID} Sprint Contract iteration #${_sc_iter_num}" \
+                        git -C "$CODER_REPO" commit -m "jarvis-coder: ${TASK_ID} Sprint Contract iteration #${_sc_iter_num}" \
                             --no-gpg-sign --quiet 2>/dev/null || true
                     fi
                 fi
@@ -889,9 +1141,9 @@ ${_syntax_err:0:500}
 
     if [[ "$_CHECK_PASSED" == "true" ]]; then
         if [[ -n "$_SNAPSHOT_HASH" ]]; then
-            git -C "$BOT_HOME" add -A >/dev/null 2>&1 || true
+            git -C "$CODER_REPO" add -A >/dev/null 2>&1 || true
             local _CHANGED_COUNT
-            _CHANGED_COUNT=$(git -C "$BOT_HOME" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+            _CHANGED_COUNT=$(git -C "$CODER_REPO" diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
             if [[ "$_CHANGED_COUNT" == "0" ]]; then
                 _coder_log "WARN: 변경 파일 0건 — 유령 태스크 방지, failed 처리: ${TASK_ID}"
                 local NEW_RETRIES=$(( RETRIES + 1 ))
@@ -909,15 +1161,15 @@ ${_syntax_err:0:500}
                 _handle_verify_gate_fail "$TASK_ID" "$RETRIES" "$MAX_RETRIES" "$_SNAPSHOT_HASH"
                 return 0
             fi
-            git -C "$BOT_HOME" commit -m "jarvis-coder: ${TASK_ID} 완료 (자동)" \
+            git -C "$CODER_REPO" commit -m "jarvis-coder: ${TASK_ID} 완료 (자동)" \
                 --no-gpg-sign --quiet 2>/dev/null || true
         fi
         local _changed_files_json="[]" _exec_log_json="[]" _result_summary=""
         _result_summary="${TASK_NAME} 완료"
         if [[ -n "$_SNAPSHOT_HASH" ]]; then
-            _changed_files_json=$(git -C "$BOT_HOME" diff --name-only "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
+            _changed_files_json=$(git -C "$CODER_REPO" diff --name-only "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
                 | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null || echo '[]')
-            _exec_log_json=$(git -C "$BOT_HOME" log --oneline "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
+            _exec_log_json=$(git -C "$CODER_REPO" log --oneline "${_SNAPSHOT_HASH}..HEAD" 2>/dev/null \
                 | jq -R -s 'split("\n") | map(select(length > 0))' 2>/dev/null || echo '[]')
         fi
         local _done_extra
@@ -926,9 +1178,15 @@ ${_syntax_err:0:500}
             --argjson changed_files "$_changed_files_json" \
             --argjson execution_log "$_exec_log_json" \
             '{result_summary:$result_summary, changed_files:$changed_files, execution_log:$execution_log, verify_feedback:""}')
+        _done_extra=$(_coder_wt_done_extra "$_done_extra" "$TASK_ID")
         update_queue "$TASK_ID" "done" "$_done_extra"
         _coder_log "완료: ${TASK_ID}"
-        _discord_ceo_notify "✅ **Jarvis Coder**: \`${TASK_NAME}\` (\`${TASK_ID}\`) 완료"
+        if [[ -n "$CODER_WT" ]]; then
+            _discord_ceo_notify "✅ **Jarvis Coder**: \`${TASK_NAME}\` (\`${TASK_ID}\`) 완료 → 브랜치 \`$(coder_worktree_branch "$TASK_ID")\` (본체 머지 대기)
+반영: \`$(_coder_wt_merge_hint "$TASK_ID")\`"
+        else
+            _discord_ceo_notify "✅ **Jarvis Coder**: \`${TASK_NAME}\` (\`${TASK_ID}\`) 완료"
+        fi
     else
         local NEW_RETRIES=$(( RETRIES + 1 ))
         rollback_snapshot "$_SNAPSHOT_HASH"

@@ -2,7 +2,7 @@
 # context-loader.sh — Build system prompt from RAG, task context, context-bus, history, cross-team depends
 
 # --- Import runtime guards (Cluster cl-a1a431b0e672e736 defense) ---
-source "${HOME}/jarvis/infra/lib/guards.sh" 2>/dev/null || true
+source "${HOME}/.openclaw-data/jarvis/infra/lib/guards.sh" 2>/dev/null || true
 #
 # Context Assembly Pipeline — "안정 접두어 + 동적 접미어" 분리
 #
@@ -33,7 +33,7 @@ source "${HOME}/jarvis/infra/lib/guards.sh" 2>/dev/null || true
 #
 # "Session File" = Persistent disk storage (loaded once)
 #   - _capabilities.md, insight-report.md, etc. (SESSION FILES)
-#   - Stored in: ~/jarvis/runtime/docs/, ~/jarvis/runtime/context/
+#   - Stored in: ~/.openclaw-data/jarvis/runtime/docs/, ~/.openclaw-data/jarvis/runtime/context/
 #   - Lifetime: Persistent on disk
 #   - Cost: Disk space only
 #
@@ -155,6 +155,65 @@ ${rag_context}"
         if [[ -f "$context_bus" ]]; then
             _ctx_append "context-bus" "DYNAMIC" "## 📌 공용 게시판 (모든 팀 공유)
 $(cat "$context_bus")"
+        fi
+    fi
+
+    # --- [DYNAMIC] Data freshness table (Cluster cl-02f731ffc275d999 defense) ---
+    # 참조 데이터 age를 표로 첨부하여 AI가 stale 인용을 스스로 피하도록 유도.
+    # 실패해도 기존 컨텍스트 조립을 절대 파괴하지 않는다 (guard 부재 시 조용히 skip).
+    if [[ "$_ctx_mode" != "minimal" ]]; then
+        local _freshness_guard="${HOME}/.openclaw-data/jarvis/infra/lib/data-freshness-guard.sh"
+        if [[ -f "$_freshness_guard" ]]; then
+            local _freshness_table=""
+            # shellcheck disable=SC1090
+            _freshness_table="$( { source "$_freshness_guard" 2>/dev/null && annotate_context_with_timestamps 2>/dev/null; } || true )"
+            if [[ -n "$_freshness_table" ]]; then
+                _ctx_append "data-freshness" "DYNAMIC" "$_freshness_table"
+            fi
+        fi
+    fi
+
+    # --- [DYNAMIC] Stale rule detector (Cluster cl-00a1f0d4cb0a4200 defense) ---
+    # 상시 주입 규칙/메모리 파일의 신선도 검사. stale 발견 시 경고 테이블 주입.
+    # 실패해도 기존 컨텍스트 조립을 절대 파괴하지 않는다 (guard 부재 시 조용히 skip).
+    if [[ "$_ctx_mode" != "minimal" ]]; then
+        local _stale_guard="${HOME}/.openclaw-data/jarvis/infra/lib/stale-rule-detector.sh"
+        if [[ -f "$_stale_guard" ]]; then
+            local _stale_report=""
+            # shellcheck disable=SC1090
+            _stale_report="$( { source "$_stale_guard" 2>/dev/null && generate_rule_staleness_report 2>/dev/null; } || true )"
+            if [[ -n "$_stale_report" ]]; then
+                _ctx_append "rule-staleness" "DYNAMIC" "$_stale_report"
+            fi
+        fi
+    fi
+
+    # --- [DYNAMIC] Completion guidance banner (Cluster cl-00a1f0d4cb0a4200 defense) ---
+    # 완료 선언 규칙 배너: 세션 시작 시 한 번 표시하여 규칙 상기.
+    if [[ -z "${_COMPLETION_GUIDANCE_SHOWN:-}" ]]; then
+        local _completion_guard="${HOME}/.openclaw-data/jarvis/infra/lib/completion-evidence-checker.sh"
+        if [[ -f "$_completion_guard" ]]; then
+            # shellcheck disable=SC1090
+            local _guidance="$( { source "$_completion_guard" 2>/dev/null && generate_completion_guidance_banner 2>/dev/null; } || true )"
+            if [[ -n "$_guidance" ]]; then
+                _ctx_append "completion-guidance" "DYNAMIC" "$_guidance"
+                export _COMPLETION_GUIDANCE_SHOWN=1
+            fi
+        fi
+    fi
+
+    # --- [DYNAMIC] Irreversible bypass/block audit (Cluster cl-602875a5289bba26 defense) ---
+    # precheck-dangerous.sh가 차단하거나 우회 env var로 통과시킨 비가역 명령 이력을 노출한다.
+    # 최근 7일 이벤트 없으면 빈 문자열(호출자가 skip). 실패해도 기존 컨텍스트 조립을 파괴하지 않는다.
+    if [[ "$_ctx_mode" != "minimal" ]]; then
+        local _bypass_guard="${HOME}/.openclaw-data/jarvis/infra/lib/irreversible-bypass-guard.sh"
+        if [[ -f "$_bypass_guard" ]]; then
+            local _bypass_report=""
+            # shellcheck disable=SC1090
+            _bypass_report="$( { source "$_bypass_guard" 2>/dev/null && generate_bypass_audit_report 7 2>/dev/null; } || true )"
+            if [[ -n "$_bypass_report" ]]; then
+                _ctx_append "irreversible-bypass-audit" "DYNAMIC" "$_bypass_report"
+            fi
         fi
     fi
 

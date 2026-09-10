@@ -12,12 +12,12 @@
  *   수동: node wiki-reference-report.mjs [--dry-run]
  *
  * 입력
- *   - ~/jarvis/runtime/logs/wiki-inject.log
+ *   - ~/.openclaw-data/jarvis/runtime/logs/wiki-inject.log
  *     각 줄: {"ts","domain","chars","parts","mistakes"(2026-04-20 이후)}
  *
  * 출력
  *   - stdout: Discord 포맷 메시지 (bot-cron.sh → route-result.sh)
- *   - ~/jarvis/runtime/wiki/meta/metrics.jsonl append
+ *   - ~/.openclaw-data/jarvis/runtime/wiki/meta/metrics.jsonl append
  *     {"ts","type":"reference_report","week","wikiRefs","mistakeNoteRefs","domains":{...}}
  */
 

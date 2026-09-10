@@ -5,7 +5,7 @@
 // 사용:
 //   node ralph-snapshot-compare.mjs <snapshot-A-dir> <snapshot-B-dir>
 //   node ralph-snapshot-compare.mjs latest-r1-baseline-serial latest-r2-concurrency3-hybrid
-//     → ~/jarvis/runtime/state/snapshots/comparison-<A>-vs-<B>-<timestamp>.md 생성
+//     → ~/.openclaw-data/jarvis/runtime/state/snapshots/comparison-<A>-vs-<B>-<timestamp>.md 생성
 //
 // 비교 메트릭:
 //   - 평균 초/문항 (87.8 → ?)

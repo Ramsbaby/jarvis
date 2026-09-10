@@ -19,7 +19,7 @@
 #   Stage 5:  포기 → circuit-breaker 위임
 #
 # 개선사항 (2026-05-13):
-#   - Stage 1a oauth-refresh.sh 경로 실제 파일시스템에 symlink 생성 (~/jarvis/runtime/scripts/)
+#   - Stage 1a oauth-refresh.sh 경로 실제 파일시스템에 symlink 생성 (~/.openclaw-data/jarvis/runtime/scripts/)
 #   - Stage 1a 토큰 갱신 후 대기시간 2초 → 5초로 증가 (안정성)
 #
 # 환경변수:
@@ -27,11 +27,12 @@
 #   JARVIS_CONTEXT_MODE    — minimal | none (Stage 2, 4에서 설정)
 #
 # 통계:
-#   ~/jarvis/runtime/state/continue-sites-stats.json
+#   ~/.openclaw-data/jarvis/runtime/state/continue-sites-stats.json
 
-set -euo pipefail
+set -eo pipefail
+set +o pipefail  # stdout 닫힘으로 인한 SIGPIPE 방지 (명령 치환에서 cat 출력 시)
 
-_CS_STATS_FILE="${BOT_HOME:-${HOME}/jarvis/runtime}/state/continue-sites-stats.json"
+_CS_STATS_FILE="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/state/continue-sites-stats.json"
 _CS_STAGE_DELAY=5
 
 # --- 로그 헬퍼 ---
@@ -157,7 +158,7 @@ run_with_recovery() {
     local args=("$@")
 
     # PATH 강화 (cron 환경에서 경로 누락 방지 — bot-cron.sh 상속 보증)
-    export PATH="${BOT_HOME:-${HOME}/jarvis/runtime}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH:-/usr/bin:/bin}"
+    export PATH="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH:-/usr/bin:/bin}"
 
     # DEBUG: 받은 인자 로깅
     {
@@ -194,7 +195,9 @@ run_with_recovery() {
     _cs_log "$task_id" 1 "original_settings → RUNNING"
 
     exit_code=0
-    bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+    # 서브쉘 exit code를 안전하게 캡처 (||는 set -e와 상호작용할 수 있으므로 분리)
+    bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp"
+    exit_code=$?
 
     # Rate limit 감지 (early exit 전)
     if _detect_rate_limit "$result_tmp" || _detect_rate_limit "$stderr_tmp"; then
@@ -268,7 +271,9 @@ run_with_recovery() {
         _cs_log "$task_id" "1a" "oauth_refresh_retry → RUNNING"
 
         exit_code=0
-        bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+        # 서브쉘 exit code를 안전하게 캡처
+        bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp"
+        exit_code=$?
 
         if [[ $exit_code -eq 0 ]]; then
             _cs_log "$task_id" "1a" "oauth_refresh_retry → SUCCESS"
@@ -329,7 +334,9 @@ run_with_recovery() {
         _cs_log "$task_id" 2 "context_minimal (after rate_limit_wait) → RUNNING"
 
         exit_code=0
-        bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp" || exit_code=$?
+        # 서브쉘 exit code를 안전하게 캡처
+        bash "$cmd" "${args[@]}" > "$result_tmp" 2>"$stderr_tmp"
+        exit_code=$?
 
         if [[ $exit_code -eq 0 ]]; then
             _cs_log "$task_id" 2 "context_minimal → SUCCESS (after rate_limit_wait)"

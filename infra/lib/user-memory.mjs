@@ -1,7 +1,7 @@
 /**
  * UserMemory — per-user persistent long-term memory.
  * Stores facts, preferences, corrections per Discord userId.
- * File: ~/jarvis/runtime/state/users/{userId}.json
+ * File: ~/.openclaw-data/jarvis/runtime/state/users/{userId}.json
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';

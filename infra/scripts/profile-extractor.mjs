@@ -13,7 +13,7 @@
  *   Vault/05-topics/inbox-tracker.md       ← 누적 트래커
  *
  * 프롬프트 템플릿 (개인화):
- *   ~/jarvis/private/prompts/profile-extract.md (gitignored)
+ *   ~/.openclaw-data/jarvis/private/prompts/profile-extract.md (gitignored)
  *   - 파일 있으면 해당 내용으로 추출
  *   - 없으면 generic fallback 프롬프트 사용 (주요 주제 요약)
  */
@@ -111,7 +111,7 @@ function buildPrompt(blogContent) {
 대화에서 논의된 주요 주제들을 추출해 마크다운 형식으로 정리해줘.
 각 주제는 H2 헤더로. 핵심 3~5줄 요약. 원문 그대로 복붙 금지.
 
-사용자 정의 추출 항목은 ~/jarvis/private/prompts/profile-extract.md 파일로 설정 가능.
+사용자 정의 추출 항목은 ~/.openclaw-data/jarvis/private/prompts/profile-extract.md 파일로 설정 가능.
 
 ---
 ${blogContent}`;

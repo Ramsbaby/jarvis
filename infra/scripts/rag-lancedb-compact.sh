@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+# 2026-09-02: LanceDB 를 만지는 태스크 간 상호 배제.
+# 백업(매일 03:00)과 인덱싱(매시 :30)이 같은 디렉터리에서 겹쳐
+# tar 가 "File removed before we read it" 로 51회 실패했다.
+# 백업 대상과 인덱싱 대상은 같은 디렉터리다(inode 동일 확인).
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
+RAG_LOCK_DIR="/tmp/jarvis-rag-lancedb.lock.d"
+[ -f "$JARVIS_HOME/infra/lib/single-instance.sh" ] \
+  && . "$JARVIS_HOME/infra/lib/single-instance.sh" \
+  && single_instance "rag-lancedb" 7200
 # rag-lancedb-compact.sh — LanceDB 주간 컴팩트 + prune
 #
 # 배경 (2026-05-07 오답노트 등재):
@@ -13,7 +22,7 @@
 #   4. 결과 통계 출력 + lock 해제
 #
 # 호출처:
-#   ~/jarvis/runtime/config/tasks.json → id=rag-lancedb-compact, schedule="15 4 * * 0"
+#   ~/.openclaw-data/jarvis/runtime/config/tasks.json → id=rag-lancedb-compact, schedule="15 4 * * 0"
 #
 # 안전:
 #   - 실패해도 lock은 trap으로 반드시 해제
@@ -45,7 +54,8 @@ fi
 
 # 2. lock 잡기 + trap으로 반드시 해제
 echo "$$ rag-lancedb-compact-$(date +%s)" > "$LOCK"
-trap 'rm -f "$LOCK"' EXIT INT TERM
+# single_instance 의 EXIT trap 을 이 줄이 덮으므로 공유 락도 함께 해제한다(2026-09-02).
+trap 'rm -f "$LOCK"; [ -n "${RAG_LOCK_DIR:-}" ] && rm -r -f -- "$RAG_LOCK_DIR"' EXIT INT TERM
 
 # 3. 백업 (작은 메타만)
 BACKUP_DIR="${BACKUP_ROOT}/pre-compact-$(date +%Y%m%d-%H%M%S)"

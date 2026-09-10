@@ -115,13 +115,13 @@ _llm_py() {
 # kind: budget_exceeded | degraded_to_ollama
 _llm_alert_silent_failure() {
     local kind="$1" detail="$2"
-    local _ledger="${HOME}/jarvis/runtime/ledger/llm-degradation.jsonl"
+    local _ledger="${HOME}/.openclaw-data/jarvis/runtime/ledger/llm-degradation.jsonl"
     mkdir -p "$(dirname "$_ledger")" 2>/dev/null || true
     jq -cn --arg ts "$(date -u +%FT%TZ)" --arg kind "$kind" \
         --arg task "${TASK_ID:-unknown}" --arg model "${model:-auto}" --arg detail "$detail" \
         '{ts:$ts, kind:$kind, task:$task, model:$model, detail:$detail}' \
         >> "$_ledger" 2>/dev/null || true
-    bash "${HOME}/jarvis/infra/scripts/alert-send.sh" critical \
+    bash "${HOME}/.openclaw-data/jarvis/infra/scripts/alert-send.sh" critical \
         "⚠️ LLM 무성 실패 유성화: ${kind}" \
         "task=${TASK_ID:-unknown} model=${model:-auto} — ${detail}" \
         >/dev/null 2>&1 || true
@@ -145,6 +145,18 @@ _llm_claude_cli() {
         --mcp-config "${mcp_config:-${LLM_GATEWAY_BOT_HOME}/config/empty-mcp.json}"
     )
 
+    # --- runtime 데이터 루트 파괴 차단 훅 (2026-09-03, 9/2 runtime/ 소실 사고 후속) ---
+    # ~/.claude/settings.json 의 훅은 -p 세션에서 신뢰할 수 없다 — claude 2.1.257 은 그 파일에
+    # 훅 이벤트명을 키로 가진 임의 객체가 있으면 hooks 전체를 버린다(2026-09-03 캐너리로 확인).
+    # 배치 세션은 이 파일을 --settings 로 직접 주입해 사용자 설정과 무관하게 강제한다.
+    # 검증: rm -rf ~/.openclaw-data/jarvis/runtime/<child> 캐너리 → 차단 + state/runtime-guard.jsonl 기록.
+    local _batch_hooks="${LLM_GATEWAY_BOT_HOME}/config/claude-batch-hooks.json"
+    if [[ -f "$_batch_hooks" ]]; then
+        cmd+=(--settings "$_batch_hooks")
+    else
+        log_warn "배치 훅 파일 없음 — runtime 파괴 차단 훅 미적용: $_batch_hooks"
+    fi
+
     # --- Batch mode (JARVIS_BATCH_MODE=1) ---
     # 크론/배치 태스크 토큰 절감:
     #   --disable-slash-commands     : 스킬 정의를 시스템 프롬프트에서 제외
@@ -164,7 +176,9 @@ _llm_claude_cli() {
             # 증거: claude -p --exclude-dynamic-system-prompt-sections → "error: unknown option" (exit 0 + empty output)
             # 결과: false-success guard → claude_exit=1 → needs_tools=true → "no fallback" → system-health 연속 실패
             # 복구 조건: claude --help에서 이 플래그가 확인되면 그때 재추가
-            --setting-sources ""
+            # --setting-sources "" 제거 (2026-08-15): bash 배열 확장 시 빈 문자열이 제거되어
+            # claude가 --setting-sources --append-system-prompt로 오인 → 옵션 파싱 오류
+            # 해결: batch mode에서 기본 setting source 사용 (user, project, local)
         )
     fi
 
@@ -279,14 +293,14 @@ except:
 
                 if [[ "$_retry_success" != "true" ]]; then
                     log_error "AUTH_ERROR 3회 재시도 모두 실패 — critical alert 발송"
-                    bash "${HOME}/jarvis/infra/scripts/alert-send.sh" critical \
+                    bash "${HOME}/.openclaw-data/jarvis/infra/scripts/alert-send.sh" critical \
                         "🔑 claude 배치 인증 실패 (401 — 3회 재시도 후 실패)" \
                         "task=${TASK_ID:-unknown} model=${model:-auto} — 격리 토큰은 존재하나 API 거부. OAuth 토큰 폐기 또는 API 서비스 이슈 의심" \
                         >/dev/null 2>&1 || true
                 fi
             else
                 log_error "AUTH_ERROR 감지 — 격리 토큰 파일 누락 (메인 폴백 사용 중) — critical alert"
-                bash "${HOME}/jarvis/infra/scripts/alert-send.sh" critical \
+                bash "${HOME}/.openclaw-data/jarvis/infra/scripts/alert-send.sh" critical \
                     "🔑 claude 배치 인증 실패 (401 — 격리 토큰 누락)" \
                     "task=${TASK_ID:-unknown} model=${model:-auto} — 격리 토큰이 없어 메인 credentials.json 사용 (갱신 경쟁 위험)" \
                     >/dev/null 2>&1 || true

@@ -16,7 +16,7 @@ NAMES = {'시몬':['simon','simone'],'마르코':['marco'],'찰리':['charlie'],
          '보루이':['borui'],'엘리스':['elise'],'애니':['annie'],'안나':['anna'],'시르샤':['shirsha','sirsha']}
 
 token = None
-for l in open(os.path.expanduser('~/jarvis/runtime/discord/.env')):
+for l in open(os.path.expanduser('~/.openclaw-data/jarvis/runtime/discord/.env')):
     m = re.match(r'^DISCORD_TOKEN\s*=\s*(.+)$', l.strip())
     if m: token = m.group(1).strip().strip('"\''); break
 if not token: sys.exit('DISCORD_TOKEN 미발견')
@@ -32,7 +32,7 @@ for _ in range(PAGES):
             blobs.append(((m.get('content','')+' '+' '.join(a['filename'] for a in m['attachments'])).lower(), m['timestamp'][:16]))
     before = msgs[-1]['id']
 
-D = os.path.expanduser('~/jarvis/runtime/preply-materials')
+D = os.path.expanduser('~/.openclaw-data/jarvis/runtime/preply-materials')
 cutoff = time.time() - HOURS*3600
 groups = {}
 for f in os.listdir(D):

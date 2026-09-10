@@ -14,7 +14,7 @@
 #   3. 중복 제거 (동일 위반은 한 번만 기록)
 #
 # 사용법:
-#   source ~/jarvis/infra/lib/dev-queue-file-state-logger.sh
+#   source ~/.openclaw-data/jarvis/infra/lib/dev-queue-file-state-logger.sh
 #   log_file_state_violation_to_queue "response-id" "위반 설명" "심각도"
 #
 ################################################################################

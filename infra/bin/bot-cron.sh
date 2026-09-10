@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set +H  # 히스토리 전개 비활성화 — cron 환경에서 "!_gk" 등이 잘못 해석되는 것 방지
 
 # bot-cron.sh - Main cron entry point for AI tasks
 # Usage: bot-cron.sh TASK_ID
@@ -7,7 +8,8 @@ set -euo pipefail
 
 # === Cron environment setup ===
 export BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
-export PATH="${BOT_HOME}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
+# 2026-09-02: /sbin 누락으로 md5sum(/sbin/md5sum) 을 못 찾아 event-watcher 가 24회 실패했다.
+export PATH="${BOT_HOME}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"  # macOS default; Linux: /home/$(id -un)
 
 # Claude Max 구독 모드 전용 — API 키 불필요 (2026-03-17)
@@ -30,13 +32,18 @@ fi
 # Google Workspace 변수(비밀 아님: 계정 이메일·Tasks 리스트 ID)를 .env에서 명시 로드.
 # (2026-07-13 회귀 수정: 크론 env 상속이 끊겨 morning-standup의 gog 호출이
 #  'GOOGLE_ACCOUNT 미설정'으로 매일 실패. 전체 .env source는 시크릿 오염 위험 → 필요한 2개만 추출·export.)
-_JARVIS_ENV_FILE="${HOME}/jarvis/runtime/.env"
+_JARVIS_ENV_FILE="${HOME}/.openclaw-data/jarvis/runtime/.env"
 if [[ -r "$_JARVIS_ENV_FILE" ]]; then
-    for _gk in GOOGLE_ACCOUNT GOOGLE_TASKS_LIST_ID; do
-        if [[ -z "${!_gk:-}" ]]; then
-            _gv="$(grep -E "^${_gk}=" "$_JARVIS_ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"
-            _gv="${_gv%\"}"; _gv="${_gv#\"}"   # 양끝 따옴표 제거
-            if [[ -n "$_gv" ]]; then export "${_gk}=${_gv}"; fi
+    for _env_key in GOOGLE_ACCOUNT GOOGLE_TASKS_LIST_ID; do
+        # set -u 모드에서 안전한 간접변수 참조: declare -p 사용
+        _env_val_check=""
+        if declare -p "$_env_key" >/dev/null 2>&1; then
+            _env_val_check="$(eval "echo \"\$$_env_key\"")"
+        fi
+        if [[ -z "$_env_val_check" ]]; then
+            _env_val="$(grep -E "^${_env_key}=" "$_JARVIS_ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+            _env_val="${_env_val%\"}"; _env_val="${_env_val#\"}"   # 양끝 따옴표 제거
+            if [[ -n "$_env_val" ]]; then export "${_env_key}=${_env_val}"; fi
         fi
     done
 fi
@@ -49,7 +56,7 @@ fi
 export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
 
 BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
-INFRA_DIR="${HOME}/jarvis/infra"
+INFRA_DIR="${HOME}/.openclaw-data/jarvis/infra"
 # discord egress 중앙화 — 모든 Discord 발송은 discord_route_raw/discord_route를 통해야 함
 # shellcheck source=/dev/null
 source "${INFRA_DIR}/lib/discord-route.sh" 2>/dev/null || true
@@ -81,11 +88,18 @@ if [[ -x "${BOT_HOME}/bin/plugin-loader.sh" ]]; then
 fi
 if [[ -f "${BOT_HOME}/config/effective-tasks.json" ]]; then
     TASKS_FILE="${BOT_HOME}/config/effective-tasks.json"
-else
+elif [[ -f "${BOT_HOME}/config/tasks.json" ]]; then
     TASKS_FILE="${BOT_HOME}/config/tasks.json"
+else
+    echo "ERROR: No tasks.json or effective-tasks.json found at ${BOT_HOME}/config/" >&2
+    echo "  Checked paths:" >&2
+    echo "    - ${BOT_HOME}/config/effective-tasks.json" >&2
+    echo "    - ${BOT_HOME}/config/tasks.json" >&2
+    exit 1
 fi
 CRON_LOG="${BOT_HOME}/logs/cron.log"
 TASK_ID="${1:?Usage: bot-cron.sh TASK_ID}"
+export TASK_ID
 
 mkdir -p "$(dirname "$CRON_LOG")"
 
@@ -217,7 +231,7 @@ _jitter=0
 case "$TASK_ID" in
     # 기존: 9시대 동시 실행 분산
     infra-daily)      _jitter=120 ;;
-    cost-monitor)     _jitter=300 ;;
+    cost-monitor)     _jitter=30  ;;
     monthly-review)   _jitter=480 ;;
     brand-weekly)     _jitter=360 ;;
     measure-kpi)      _jitter=180 ;;
@@ -238,12 +252,73 @@ if [[ "$_jitter" -gt 0 ]]; then
 fi
 unset _jitter
 
-# --- Read task config from tasks.json ---
+# --- Read task config from tasks.json or SQLite (task-store) ---
 _PHASE="config-load"
-TASK_CONFIG=$(jq -r --arg id "$TASK_ID" '.tasks[] | select(.id == $id or ((.aliases // []) | index($id)) != null)' "$TASKS_FILE")
-if [[ -z "$TASK_CONFIG" || "$TASK_CONFIG" == "null" ]]; then
-    log "ERROR: Task '$TASK_ID' not found in tasks.json"
+# Validate JSON syntax before parsing
+if ! jq empty "$TASKS_FILE" >/dev/null 2>&1; then
+    log "ERROR: Invalid JSON in $TASKS_FILE — jq validation failed"
+    log "  File: $TASKS_FILE"
+    log "  Size: $(wc -c < "$TASKS_FILE" 2>/dev/null || echo 'unknown') bytes"
     exit 1
+fi
+
+# Validate .tasks array exists and is not empty
+_TASKS_COUNT=$(jq '.tasks | length' "$TASKS_FILE" 2>/dev/null || echo 0)
+if (( _TASKS_COUNT <= 0 )); then
+    log "ERROR: No tasks found in $TASKS_FILE (tasks array is empty or missing)"
+    log "  File: $TASKS_FILE"
+    exit 1
+fi
+
+TASK_CONFIG=$(jq -r --arg id "$TASK_ID" '.tasks[] | select(.id == $id or ((.aliases // []) | index($id)) != null)' "$TASKS_FILE" 2>/dev/null || echo "null")
+
+# tasks.json에 없으면 SQLite에서 찾기 (debug-cron-* 태스크용)
+if [[ -z "$TASK_CONFIG" || "$TASK_CONFIG" == "null" ]]; then
+    _TASK_STORE="${BOT_HOME}/lib/task-store.mjs"
+    if [[ -x "$(command -v node)" ]] && [[ -f "$_TASK_STORE" ]]; then
+        _TASK_OBJ=$(node "$_TASK_STORE" export 2>/dev/null | jq --arg id "$TASK_ID" '.tasks[] | select(.id == $id)' 2>/dev/null)
+        if [[ -n "$_TASK_OBJ" && "$_TASK_OBJ" != "null" && "$_TASK_OBJ" != "{}" ]]; then
+            TASK_CONFIG="$_TASK_OBJ"
+            log "Task config loaded from SQLite: $TASK_ID"
+        fi
+    fi
+fi
+
+# contract 태스크(-contract 접미사)는 동적으로 생성 (task-store에 없을 수 있음)
+if [[ -z "$TASK_CONFIG" || "$TASK_CONFIG" == "null" || "$TASK_CONFIG" == "{}" ]]; then
+    if [[ "$TASK_ID" == *"-contract" ]]; then
+        # 원본 태스크 ID 추출 (예: "debug-cron-weekly-dream-insight-contract" → "debug-cron-weekly-dream-insight")
+        ORIGINAL_TASK_ID="${TASK_ID%-contract}"
+        log "Contract task detected — loading original task config for: $ORIGINAL_TASK_ID"
+
+        # 원본 태스크 설정 로드
+        _ORIG_OBJ=$(jq -r --arg id "$ORIGINAL_TASK_ID" '.tasks[] | select(.id == $id or ((.aliases // []) | index($id)) != null)' "$TASKS_FILE" 2>/dev/null || echo "null")
+
+        if [[ -z "$_ORIG_OBJ" || "$_ORIG_OBJ" == "null" ]]; then
+            # tasks.json에 없으면 SQLite 시도
+            if [[ -x "$(command -v node)" ]] && [[ -f "$_TASK_STORE" ]]; then
+                _ORIG_OBJ=$(node "$_TASK_STORE" export 2>/dev/null | jq --arg id "$ORIGINAL_TASK_ID" '.tasks[] | select(.id == $id)' 2>/dev/null)
+            fi
+        fi
+
+        if [[ -n "$_ORIG_OBJ" && "$_ORIG_OBJ" != "null" && "$_ORIG_OBJ" != "{}" ]]; then
+            # contract 태스크는 원본 설정을 상속하되, allowedTools는 제한
+            TASK_CONFIG="$_ORIG_OBJ"
+            # Contract 프롬프트는 이후 PROMPT 로딩 단계에서 생성 (아래 참조)
+            _CONTRACT_MODE="true"
+            log "Contract task: will generate contract prompt for original task $ORIGINAL_TASK_ID"
+        else
+            log "ERROR: Original task '$ORIGINAL_TASK_ID' not found for contract '$TASK_ID'"
+            log "  Source file: $TASKS_FILE ($_TASKS_COUNT tasks available)"
+            exit 1
+        fi
+        unset _ORIG_OBJ _TASK_STORE ORIGINAL_TASK_ID
+    else
+        log "ERROR: Task '$TASK_ID' not found in tasks.json or SQLite"
+        log "  Source file: $TASKS_FILE ($_TASKS_COUNT tasks available)"
+        log "  Available task IDs: $(jq -r '.tasks[].id' "$TASKS_FILE" 2>/dev/null | head -10 | tr '\n' ',' | sed 's/,$//')"
+        exit 1
+    fi
 fi
 
 # disabled 태스크 조용히 건너뜀
@@ -260,20 +335,71 @@ if [[ "$(echo "$TASK_CONFIG" | jq -r 'if has("enabled") then .enabled else true 
     exit 0
 fi
 
-# Progressive Disclosure: prompt_file 필드가 있으면 파일에서 프롬프트 로드 (없으면 prompt 필드 폴백)
-PROMPT_FILE=$(echo "$TASK_CONFIG" | jq -r '.prompt_file // empty')
-if [[ -n "$PROMPT_FILE" ]]; then
-    _pf_path="${BOT_HOME}/prompts/${PROMPT_FILE}"
-    if [[ -f "$_pf_path" ]]; then
-        PROMPT=$(cat "$_pf_path")
-        log "Progressive Disclosure: 프롬프트 파일 로드 (${PROMPT_FILE}, $(wc -c < "$_pf_path" | tr -d ' ')bytes)"
+# Contract 프롬프트 생성 (contract 태스크인 경우)
+PROMPT_FILE=""  # 나중에 사용될 변수이므로 미리 초기화
+if [[ "${_CONTRACT_MODE:-}" == "true" ]]; then
+    # 원본 태스크의 프롬프트 로드
+    _ORIG_PROMPT_FILE=$(echo "$TASK_CONFIG" | jq -r '.prompt_file // empty')
+    _ORIG_PROMPT=""
+    if [[ -n "$_ORIG_PROMPT_FILE" ]]; then
+        _pf_path="${BOT_HOME}/prompts/${_ORIG_PROMPT_FILE}"
+        if [[ -f "$_pf_path" ]]; then
+            _ORIG_PROMPT=$(cat "$_pf_path")
+        else
+            _ORIG_PROMPT=$(echo "$TASK_CONFIG" | jq -r '.prompt // empty')
+        fi
     else
-        log "WARN: prompt_file '${PROMPT_FILE}' 없음 — prompt 필드로 폴백"
+        _ORIG_PROMPT=$(echo "$TASK_CONFIG" | jq -r '.prompt // empty')
+    fi
+
+    # Contract 프롬프트 생성 (직접 텍스트로 사용)
+    PROMPT="[Sprint Contract 생성 요청]
+
+아래 태스크의 성공 기준(Success Criteria)을 정의하라.
+
+## 태스크
+- 이름: ${TASK_ID%-contract}
+- 설명: ${_ORIG_PROMPT}
+
+## 출력 형식 (반드시 이 JSON만 출력, 다른 텍스트 없이):
+\`\`\`json
+{
+  \"objective\": \"1줄 요약\",
+  \"maxIterations\": 3,
+  \"successCriteria\": [
+    {
+      \"id\": 1,
+      \"description\": \"검증 가능한 기준 설명\",
+      \"verifyCmd\": \"bash 명령어 (exit 0=통과, exit 1=실패). 자동 검증 불가 시 빈 문자열\"
+    }
+  ]
+}
+\`\`\`
+
+## 규칙
+- successCriteria는 1~5개, 구체적이고 검증 가능하게
+- verifyCmd: 파일 존재 확인(test -f), 프로세스 상태(pgrep), 문법 검사(bash -n) 등 활용
+- 자동 검증 불가한 기준은 verifyCmd를 빈 문자열(\"\")로 설정
+- maxIterations: 태스크 복잡도에 따라 2~5
+- JSON 블록만 출력하라. 설명/인사말 없이 \`\`\`json ... \`\`\` 블록만"
+    log "Contract mode: contract 프롬프트 생성 (원본 태스크: ${TASK_ID%-contract})"
+    unset _CONTRACT_MODE _ORIG_PROMPT _ORIG_PROMPT_FILE _pf_path
+else
+    # 일반 태스크: 기존 로직
+    PROMPT_FILE=$(echo "$TASK_CONFIG" | jq -r '.prompt_file // empty')
+    if [[ -n "$PROMPT_FILE" ]]; then
+        _pf_path="${BOT_HOME}/prompts/${PROMPT_FILE}"
+        if [[ -f "$_pf_path" ]]; then
+            PROMPT=$(cat "$_pf_path")
+            log "Progressive Disclosure: 프롬프트 파일 로드 (${PROMPT_FILE}, $(wc -c < "$_pf_path" | tr -d ' ')bytes)"
+        else
+            log "WARN: prompt_file '${PROMPT_FILE}' 없음 — prompt 필드로 폴백"
+            PROMPT=$(echo "$TASK_CONFIG" | jq -r '.prompt // empty')
+        fi
+        unset _pf_path
+    else
         PROMPT=$(echo "$TASK_CONFIG" | jq -r '.prompt // empty')
     fi
-    unset _pf_path
-else
-    PROMPT=$(echo "$TASK_CONFIG" | jq -r '.prompt // empty')
 fi
 BYPASS_RAG=$(echo "$TASK_CONFIG" | jq -r '.bypassRag // false')
 CONTEXT_FILE_NAME=$(echo "$TASK_CONFIG" | jq -r '.contextFile // empty')
@@ -325,9 +451,19 @@ if [[ -n "$_INJECT_PREFIX" ]]; then
 fi
 unset _INJECT_PREFIX _alias _inject_path _inject_label
 
-# --- PROMPT에서 $BOT_HOME 변수 확장 ---
-# 프롬프트에서 $BOT_HOME 참조를 실제 경로로 교체
+# --- PROMPT에서 환경변수 확장 ---
+# 프롬프트에서 변수 참조를 실제 값으로 교체
 PROMPT="${PROMPT//\$BOT_HOME/$BOT_HOME}"
+PROMPT="${PROMPT//\$\{BOT_HOME\}/$BOT_HOME}"
+# Google Workspace 변수도 확장 (L35-46에서 export된 변수들)
+if [[ -n "${GOOGLE_ACCOUNT:-}" ]]; then
+    PROMPT="${PROMPT//\$GOOGLE_ACCOUNT/$GOOGLE_ACCOUNT}"
+    PROMPT="${PROMPT//\$\{GOOGLE_ACCOUNT\}/$GOOGLE_ACCOUNT}"
+fi
+if [[ -n "${GOOGLE_TASKS_LIST_ID:-}" ]]; then
+    PROMPT="${PROMPT//\$GOOGLE_TASKS_LIST_ID/$GOOGLE_TASKS_LIST_ID}"
+    PROMPT="${PROMPT//\$\{GOOGLE_TASKS_LIST_ID\}/$GOOGLE_TASKS_LIST_ID}"
+fi
 
 # --- 2026-05-12: Skill Synthesis PROMPT suffix 자동 주입 (위치 A) ---
 # skillSynthesis.enabled=true 태스크에 한해 PROMPT 끝에 SKILL_JSON 출력 지시를 동적 추가.
@@ -351,7 +487,12 @@ fi
 unset _sk_enabled_a
 
 _PHASE="param-load"
-ALLOWED_TOOLS=$(echo "$TASK_CONFIG" | jq -r '.allowedTools // "Read"')
+# contract 태스크는 Bash,Read로 제한 (verifyCmd 실행 + 파일 읽기만 필요)
+if [[ "$TASK_ID" == *"-contract" ]]; then
+    ALLOWED_TOOLS="Bash,Read"
+else
+    ALLOWED_TOOLS=$(echo "$TASK_CONFIG" | jq -r '.allowedTools // "Read"')
+fi
 TIMEOUT=$(echo "$TASK_CONFIG" | jq -r '.timeout // 180')
 MAX_BUDGET=$(echo "$TASK_CONFIG" | jq -r '.maxBudget // empty')
 # tasks.json retry.max → retry-wrapper.sh MAX_RETRIES (없으면 3 기본값)
@@ -385,7 +526,44 @@ export TASK_AUTHOR
 TASK_AUTHOR=$(echo "$TASK_CONFIG" | jq -r '.author // .id // empty')
 DISCORD_CHANNEL=$(echo "$TASK_CONFIG" | jq -r '.discordChannel // empty')
 REQUIRES_MARKET=$(echo "$TASK_CONFIG" | jq -r '.requiresMarket // false')
+
+# --- US Market holiday check (tasks with requiresMarket: true) ---
+_is_market_closed() {
+    # requiresMarket 태스크는 전부 미국 시장(TQQQ) 대상 → 뉴욕 시간 기준으로 판정한다.
+    # (KST 로 판정하면 토요일 새벽 KST = 금요일 오후 ET 정규장이 "주말" 로 오판된다)
+    local dow today
+    dow=$(TZ=America/New_York date +%w)         # 0=sunday, 6=saturday
+    today=$(TZ=America/New_York date +%Y-%m-%d)
+
+    if [[ "$dow" -eq 0 || "$dow" -eq 6 ]]; then
+        return 0  # market closed (weekend)
+    fi
+
+    # NYSE 휴장일 — 관측일(토→금, 일→월) 기준. 매년 12월에 다음 해분을 추가한다.
+    # 2026: 신정·MLK·대통령의날·성금요일·메모리얼·준틴스·독립기념일(7/4 토→7/3 금)·노동절·추수감사절·성탄
+    # 2027: 준틴스(6/19 토→6/18 금)·독립기념일(7/4 일→7/5 월)·성탄(12/25 토→12/24 금) 관측일 주의
+    local nyse_holidays="
+2026-01-01 2026-01-19 2026-02-16 2026-04-03 2026-05-25 2026-06-19 2026-07-03 2026-09-07 2026-11-26 2026-12-25
+2027-01-01 2027-01-18 2027-02-15 2027-03-26 2027-05-31 2027-06-18 2027-07-05 2027-09-06 2027-11-25 2027-12-24
+"
+    if [[ " ${nyse_holidays//$'\n'/ } " == *" ${today} "* ]]; then
+        return 0  # market closed (holiday)
+    fi
+
+    return 1  # market open
+}
+
+_MARKET_CLOSED="false"
+if _is_market_closed; then
+    _MARKET_CLOSED="true"
+fi
+
 ALLOW_EMPTY_RESULT=$(echo "$TASK_CONFIG" | jq -r '.allowEmptyResult // false')
+# ask-claude.sh 도 이 값을 본다 — export 없이는 빈 응답을 게이트웨이 층이 먼저 실패로 분류해
+# 아래 L1200대 "OK — no output" 분기에 도달하지 못한다 (2026-09-03 daily-summary 헛재시도 4회)
+export ALLOW_EMPTY_RESULT
+# LLM 태스크의 "보고할 것 없음" 표식 — claude CLI 가 빈 응답을 되묻기 때문에 빈 출력 대신 이 토큰을 내게 한다
+EMPTY_RESULT_TOKEN=$(echo "$TASK_CONFIG" | jq -r '.emptyResultToken // empty')
 SUCCESS_PATTERN=$(echo "$TASK_CONFIG" | jq -r '.successPattern // empty')
 SCRIPT=$(echo "$TASK_CONFIG" | jq -r '.script // empty')
 SCRIPT_ARGS=$(echo "$TASK_CONFIG" | jq -r '.scriptArgs // "daily"')
@@ -466,7 +644,7 @@ unset _cur_md5
 # ─────────────────────────────────────────────────────────────────────────────
 
 # --- Market holiday guard (tasks with requiresMarket: true) ---
-if [[ "$REQUIRES_MARKET" == "true" ]]; then
+if [[ "$REQUIRES_MARKET" == "true" && "$_MARKET_CLOSED" == "true" ]]; then
     log "SKIPPED — market closed today (holiday or weekend)"
     _TASK_DONE=true
     exit 0
@@ -657,14 +835,22 @@ else
     # Continue Sites: LLM 태스크에 다단계 복구 적용
     if [[ "$CONTINUE_SITES" != "false" ]] && type run_with_recovery &>/dev/null; then
         log "CONTINUE_SITES: enabled — 다단계 복구 모드"
-        RESULT=$(run_with_recovery "$TASK_ID" "$BOT_HOME/bin/retry-wrapper.sh" \
+        _RESULT_TMP="/tmp/bot-cron-result-${TASK_ID}-$$.txt"
+        (run_with_recovery "$TASK_ID" "$BOT_HOME/bin/retry-wrapper.sh" \
             "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" \
-            "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+            "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") > "$_RESULT_TMP" 2>&1
+        EXIT_CODE=$?
+        RESULT=$(cat "$_RESULT_TMP" 2>/dev/null || true)
+        rm -f "$_RESULT_TMP"
         if [[ $EXIT_CODE -ne 0 ]]; then
             log "RETRY_WRAPPER_EXIT: recovery mode failed with exit code $EXIT_CODE"
         fi
     else
-        RESULT=$("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") || EXIT_CODE=$?
+        _RESULT_TMP="/tmp/bot-cron-result-${TASK_ID}-$$.txt"
+        ("$BOT_HOME/bin/retry-wrapper.sh" "$TASK_ID" "$PROMPT" "$ALLOWED_TOOLS" "$TIMEOUT" "$MAX_BUDGET" "$RESULT_RETENTION" "$MODEL" "$TASK_MAX_RETRIES") > "$_RESULT_TMP" 2>&1
+        EXIT_CODE=$?
+        RESULT=$(cat "$_RESULT_TMP" 2>/dev/null || true)
+        rm -f "$_RESULT_TMP"
         if [[ $EXIT_CODE -ne 0 ]]; then
             log "RETRY_WRAPPER_EXIT: standard mode failed with exit code $EXIT_CODE"
         fi
@@ -759,7 +945,12 @@ unset _ACTUAL_DURATION
 # circuit breaker: 성공 시 초기화
 if [[ -f "$_CB_FILE" ]]; then rm -f "$_CB_FILE" 2>/dev/null || true; fi
 # FSM: running → done 전이
-_fsm_transition "$TASK_ID" "done"
+# result 는 필수다 — task-store 의 RESULT_REQUIRED 게이트(2026-07-22)가 result 없는 done 을 거부하는데
+# 이 호출은 `|| true` 로 삼켜져 script-path 태스크 전부가 running 에 남았고, 30분 뒤 stale-watcher 가
+# 성공한 태스크를 failed 로 찍어 Discord 경고까지 냈다 (2026-09-04 실측: 하루 93건, cron.log 는 전부 SUCCESS).
+# ask-claude 경로는 완료 워크플로우가 먼저 done 을 찍으므로 여기서는 done→done 거부가 정상이다.
+_fsm_transition "$TASK_ID" "done" \
+    "{\"result\":\"SUCCESS (duration=${_TASK_DURATION}s)\",\"exitCode\":0,\"durationSec\":${_TASK_DURATION:-0},\"lastError\":null}"
 _FSM_RUNNING=false
 
 # Phase 2-A 메타인지 절차적 자기 관찰 (옵트인: TASK_OBSERVE=1 or JARVIS_METACOG_OBSERVE=1)
@@ -906,7 +1097,7 @@ unset _sk_enabled_b
 # [B2] EUREKA_JSON 처리 (council-insight 하위 호환 — $RESULT 원본에서 직접 추출)
 if [[ "$TASK_ID" == "council-insight" ]] && command -v jq >/dev/null 2>&1 \
     && printf '%s' "$RESULT" | grep -q "^EUREKA_JSON:"; then
-    _eu_file="${HOME}/jarvis/runtime/wiki/meta/eureka.jsonl"
+    _eu_file="${HOME}/.openclaw-data/jarvis/runtime/wiki/meta/eureka.jsonl"
     mkdir -p "$(dirname "$_eu_file")"
     _eu_added=0
     while IFS= read -r _eu_line; do
@@ -1027,6 +1218,22 @@ if [[ "$TASK_ID" == *"-contract" ]]; then
     fi
 fi
 # ─────────────────────────────────────────────────────────────────────────────
+
+# --- emptyResultToken: 출력의 결론이 표식이면 "보고할 것 없음" → 빈 결과로 취급, 라우팅 생략 ---
+# 판정: 전체가 표식뿐 | 첫 줄이 표식 | 마지막 줄이 표식 (공백·백틱·별표는 벗겨 비교).
+# 모델이 CLI 되묻기 뒤 "확인 결과 정상… NO_ISSUES" 처럼 서술을 붙여도 결론이 표식이면 정상 0건이다
+# (2026-09-04 캐너리에서 확인). 원문은 ask-claude 결과 파일(runtime/results/<task>/)에 그대로 남는다.
+if [[ -n "$EMPTY_RESULT_TOKEN" && -n "$RESULT" ]]; then
+    _strip() { printf '%s' "$1" | tr -d '[:space:]`*'; }
+    _result_all=$(_strip "$RESULT")
+    _result_first=$(_strip "$(printf '%s\n' "$RESULT" | /usr/bin/grep -m1 -v '^[[:space:]]*$' || true)")
+    _result_last=$(_strip "$(printf '%s\n' "$RESULT" | /usr/bin/grep -v '^[[:space:]]*$' | tail -n1 || true)")
+    if [[ "$_result_all" == "$EMPTY_RESULT_TOKEN" || "$_result_first" == "$EMPTY_RESULT_TOKEN" || "$_result_last" == "$EMPTY_RESULT_TOKEN" ]]; then
+        log "OK — sentinel '${EMPTY_RESULT_TOKEN}' (emptyResultToken, condition not triggered, ${#RESULT} chars) → 라우팅 생략"
+        RESULT=""
+    fi
+    unset -f _strip; unset _result_all _result_first _result_last
+fi
 
 # --- Truncate result for non-Discord outputs (file, ntfy 등) ---
 # Discord는 route-result.sh 내 1990자 청킹이 처리하므로 pre-truncation 불필요.

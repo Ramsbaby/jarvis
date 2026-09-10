@@ -29,7 +29,7 @@
 set -euo pipefail
 
 CLUSTER_ID="cl-33ab3e59820bd8c8"
-JARVIS_HOME="${HOME}/jarvis"
+JARVIS_HOME="${HOME}/.openclaw-data/jarvis"
 LOG_FILE="${JARVIS_HOME}/runtime/logs/answer-english-hint-guard.jsonl"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 

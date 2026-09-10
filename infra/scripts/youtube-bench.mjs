@@ -17,10 +17,10 @@
  * Wiki 항목 형식:
  *   - [date] [source:youtube-bench] [제목]: [핵심 인사이트] (원문: url)
  *
- * Ledger: ~/jarvis/runtime/state/youtube-bench-ledger.jsonl
+ * Ledger: ~/.openclaw-data/jarvis/runtime/state/youtube-bench-ledger.jsonl
  *   — 처리된 videoId를 기록해 중복 적재 방지.
  *
- * Log: ~/jarvis/runtime/logs/youtube-bench.log
+ * Log: ~/.openclaw-data/jarvis/runtime/logs/youtube-bench.log
  */
 
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'node:fs';

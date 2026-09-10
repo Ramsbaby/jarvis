@@ -14,7 +14,7 @@
 #   bash cluster-guard-cl-0cece7e70f08a98f.sh status
 
 CLUSTER_ID="cl-0cece7e70f08a98f"
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis}"
 RUNTIME_HOME="${RUNTIME_HOME:-${JARVIS_HOME}/runtime}"
 STATE_DIR="${RUNTIME_HOME}/state/cluster-guards"
 RESULTS_DIR="${RUNTIME_HOME}/reports/cluster-guard-${CLUSTER_ID}"

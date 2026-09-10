@@ -5,7 +5,7 @@
  * openReadOnly()만 사용하므로 DB를 절대 생성하지 않음.
  * 상태 확인은 반드시 이 스크립트를 사용할 것 (RAGEngine().init() 직접 호출 금지).
  *
- * 사용법: node ~/jarvis/runtime/bin/rag-stats.mjs [--json]
+ * 사용법: node ~/.openclaw-data/jarvis/runtime/bin/rag-stats.mjs [--json]
  */
 
 import { join, dirname } from 'node:path';
@@ -67,7 +67,7 @@ async function main() {
   result.rebuilding = existsSync(SENTINEL);  // rag-rebuilding.json 존재 = 리빌드 진행 중
 
   if (AUTO_REDIRECTED) warn('BOT_HOME 미설정 — 저장소 런타임 DB로 자동 교정하여 보고: ' + DB_PATH);
-  else if (!ENV_SET)   warn('BOT_HOME 미설정 — XDG 폴백 경로 사용 중(비어있을 수 있음). 진짜 DB를 보려면: export BOT_HOME=~/jarvis/runtime');
+  else if (!ENV_SET)   warn('BOT_HOME 미설정 — XDG 폴백 경로 사용 중(비어있을 수 있음). 진짜 DB를 보려면: export BOT_HOME=~/.openclaw-data/jarvis/runtime');
   if (result.locked)     warn('write lock active: ' + LOCK_FILE);
   if (result.rebuilding) warn('rebuild in progress — sentinel present: ' + SENTINEL);
 

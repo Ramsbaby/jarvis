@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # semaphore.sh - mkdir-based slot locking with cross-process global counter
-# Usage: source ~/jarvis/runtime/bin/semaphore.sh
+# Usage: source ~/.openclaw-data/jarvis/runtime/bin/semaphore.sh
 
-BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
 LOCK_DIR="/tmp/claude-discord-locks"
 MAX_SLOTS=4
 MAX_GLOBAL=6

@@ -2,7 +2,7 @@
 /**
  * rag-dedup-paths.mjs — 심볼릭 링크 경로 형태 중복 제거 (2026-06-25 [H3])
  *
- * 문제: ~/.jarvis → ~/jarvis/runtime 심볼릭 링크 때문에 같은 물리 파일이
+ * 문제: ~/.jarvis → ~/.openclaw-data/jarvis/runtime 심볼릭 링크 때문에 같은 물리 파일이
  *   '.jarvis'형 경로와 'runtime'형 경로 두 source 로 각각 인덱싱됨.
  *   rag-repair.mjs 는 source 문자열 literal 비교라 이 중복을 못 잡는다.
  *
@@ -11,12 +11,12 @@
  *   soft-delete(deleted=true)라 compact 전까지 복구 가능 + 사전 백업 권장.
  *
  * Usage:
- *   BOT_HOME=$HOME/jarvis/runtime JARVIS_RAG_HOME=$HOME/jarvis/runtime/rag \
+ *   BOT_HOME=$HOME/.openclaw-data/jarvis/runtime JARVIS_RAG_HOME=$HOME/.openclaw-data/jarvis/runtime/rag \
  *     node rag-dedup-paths.mjs [--dry-run] [--compact]
  *   --dry-run  : 삭제 없이 현황만
  *   --compact  : soft-delete 후 물리 compact (비가역, 검증 후 사용)
  */
-import { readFileSync, writeFileSync, openSync, closeSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, openSync, closeSync, unlinkSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { LANCEDB_PATH, RAG_HOME, RAG_WRITE_LOCK } from '../lib/paths.mjs';
@@ -27,9 +27,35 @@ const DO_COMPACT = args.includes('--compact');
 const log = (...a) => console.log(`[rag-dedup-paths] ${a.join(' ')}`);
 
 // 하드코딩 user-path 금지 + 토폴로지 가드 준수: homedir() 기반 조합
-const JARVIS_LINK = join(homedir(), '.jarvis') + '/';
-const RUNTIME_REAL = join(homedir(), 'jarvis', 'runtime') + '/';
-const norm = (s) => (typeof s === 'string' ? s.replace(JARVIS_LINK, RUNTIME_REAL) : '');
+//
+// 2026-09-10 개정 — 별칭이 둘에서 셋으로 늘었다.
+//   오픈클로 이관으로 정본이 `~/.openclaw-data/jarvis/runtime` 이 되면서
+//   `~/.jarvis` · `~/jarvis/runtime`(호환 심링크) · 정본, 세 표기가 같은 파일을 가리킨다.
+//   전에는 `.jarvis` → `~/jarvis/runtime` 한 방향만 접었기 때문에, 이관 뒤에는
+//   호환 경로로 접어 놓고 정본형 사본을 중복으로 남기게 된다.
+//   그래서 문자열 치환 대신 realpath 로 접는다 — 별칭이 몇 개로 늘든 한 곳으로 모인다.
+const RUNTIME_REAL = (() => {
+  try { return realpathSync(join(homedir(), '.openclaw-data', 'jarvis', 'runtime')) + '/'; }
+  catch { return join(homedir(), '.openclaw-data', 'jarvis', 'runtime') + '/'; }
+})();
+const _normCache = new Map();
+const norm = (s) => {
+  if (typeof s !== 'string') return '';
+  const hit = _normCache.get(s);
+  if (hit !== undefined) return hit;
+  let out = s;
+  try {
+    // 파일이 남아 있으면 realpath 가 정답이다.
+    out = realpathSync(s);
+  } catch {
+    // 이미 지워진 파일은 realpath 가 안 된다 — 알려진 별칭 접두만 문자열로 접는다.
+    for (const alias of [join(homedir(), '.jarvis') + '/', join(homedir(), 'jarvis', 'runtime') + '/']) {
+      if (s.startsWith(alias)) { out = RUNTIME_REAL + s.slice(alias.length); break; }
+    }
+  }
+  _normCache.set(s, out);
+  return out;
+};
 
 // [2026-07-22] write.lock 획득 — 인덱서(rag-index)·compact와 동시쓰기 충돌 방지.
 //   배경: rag-system.md(RAG DB 2회 파기 이력) + 2026-07-22 dedup이 락 우회로 16:30 크론과 충돌한 사고.
@@ -83,16 +109,20 @@ async function main() {
   const grp = new Map();
   for (const r of rows) {
     const s = typeof r.source === 'string' ? r.source : '';
-    const k = norm(s) + '#' + Number(r.chunk_index);
+    const n = norm(s);
+    const k = n + '#' + Number(r.chunk_index);
     if (!grp.has(k)) grp.set(k, []);
-    grp.get(k).push({ id: r.id, isJarvis: s.includes(JARVIS_LINK) });
+    // 2026-09-10: 보존 기준을 '별칭 이름'이 아니라 '이미 정본형인가'로 바꿨다.
+    //   전에는 `.jarvis` 포함 여부만 봤는데, 별칭이 셋이 되면서 그 판정으로는
+    //   호환 경로(`~/jarvis/runtime/...`)형을 정본으로 오인해 남긴다.
+    grp.get(k).push({ id: r.id, isAlias: s !== n });
   }
 
-  // 각 그룹: runtime형(비-jarvis) 우선 보존, 나머지 soft-delete 대상
+  // 각 그룹: 정본형 1개 보존, 별칭형은 soft-delete 대상
   const toDelete = [];
   for (const [, arr] of grp) {
     if (arr.length <= 1) continue;
-    arr.sort((a, b) => (a.isJarvis ? 1 : 0) - (b.isJarvis ? 1 : 0)); // runtime형 먼저(보존)
+    arr.sort((a, b) => (a.isAlias ? 1 : 0) - (b.isAlias ? 1 : 0)); // 정본형 먼저(보존)
     for (const x of arr.slice(1)) toDelete.push(x.id);
   }
   log(`정규화 후 고유 청크 ${grp.size}, 제거 대상(중복) ${toDelete.length}`);

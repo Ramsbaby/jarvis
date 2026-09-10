@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-self-evolution-weekly(월 09:30) 로 이관. OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/jarvis/runtime/state/stopped/self-evolution-weekly
-if [[ -f "${HOME}/jarvis/runtime/state/stopped/self-evolution-weekly" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/self-evolution-weekly
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/self-evolution-weekly" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[self-evolution-weekly] 중지 플래그 있음"
     exit 0
 fi
@@ -19,13 +19,13 @@ fi
 #   ④ 랄프     : ralph-rounds.jsonl 최근 7일 라운드 수·문항당 평균 초·성공률 + 전주 평균 대비 추이
 #
 # 사용(cron):
-#   30 9 * * 1 BOT_HOME=$HOME/jarvis/runtime /bin/bash $HOME/jarvis/infra/scripts/self-evolution-weekly.sh \
-#     >> $HOME/jarvis/runtime/logs/self-evolution-weekly.log 2>&1
+#   30 9 * * 1 BOT_HOME=$HOME/.openclaw-data/jarvis/runtime /bin/bash $HOME/.openclaw-data/jarvis/infra/scripts/self-evolution-weekly.sh \
+#     >> $HOME/.openclaw-data/jarvis/runtime/logs/self-evolution-weekly.log 2>&1
 #
 # 정책: Discord 송출은 discord-route.sh(discord_route)만 사용 · 송출 실패해도 exit 0 · 시간 표기는 KST.
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
 RECUR_LOG="$BOT_HOME/logs/mistake-recurrence.log"
 RECUR_JSON="$BOT_HOME/state/mistake-recurrence.json"
 RALPH_FILE="$BOT_HOME/state/ralph-rounds.jsonl"
@@ -35,7 +35,7 @@ PROMOTER_CANDIDATES=("$BOT_HOME/state/promoter-ledger.jsonl" "$BOT_HOME/ledger/p
 
 # Discord 라우터 (severity → 채널 매핑 + 1h 중복 차단 내장)
 # shellcheck source=/dev/null
-source "$HOME/jarvis/infra/lib/discord-route.sh"
+source "$HOME/.openclaw-data/jarvis/infra/lib/discord-route.sh"
 
 log() { echo "[$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M:%S KST')] $*"; }
 

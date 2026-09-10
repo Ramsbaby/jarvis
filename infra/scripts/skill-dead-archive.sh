@@ -4,11 +4,11 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 SKILLS_DIR="$JARVIS_HOME/runtime/wiki/skills"
 LEDGER="$JARVIS_HOME/runtime/state/skill-matcher-ledger.jsonl"
 LOG_FILE="$JARVIS_HOME/runtime/logs/skill-dead-archive.log"
-DISCORD_VISUAL="$HOME/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
 DEAD_THRESHOLD_DAYS=56  # 8주
 
 mkdir -p "$(dirname "$LOG_FILE")"

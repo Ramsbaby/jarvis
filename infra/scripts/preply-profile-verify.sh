@@ -18,7 +18,7 @@ set -euo pipefail
 #   preply-profile-verify.sh report <레지스트리JSON>
 #      → 프로필 완성도 리포트 (어느 학생이 미확인 필드를 가졌는지).
 
-JARVIS="${HOME}/jarvis"
+JARVIS="${HOME}/.openclaw-data/jarvis"
 REGISTRY="${JARVIS}/runtime/config/preply-students.json"
 PROFILE_STATE="${JARVIS}/runtime/state/preply-profile-state.jsonl"
 

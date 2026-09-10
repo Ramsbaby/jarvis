@@ -36,7 +36,7 @@ set -uo pipefail
 # launchd 는 PATH=/usr/bin:/bin:/usr/sbin:/sbin 최소값으로 실행한다.
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
 NAME="automation-browser-cleanup"
 LOG_FILE="$JARVIS_HOME/runtime/logs/${NAME}.log"
 LEDGER="$JARVIS_HOME/runtime/state/${NAME}-ledger.jsonl"
@@ -51,7 +51,7 @@ IDLE_HOURS="${AUTOMATION_BROWSER_IDLE_HOURS:-6}"
 CPU_IDLE_PCT="${AUTOMATION_BROWSER_CPU_IDLE:-5}"
 MIN_RSS_MB="${AUTOMATION_BROWSER_MIN_RSS_MB:-300}"
 
-# jarvis 관리 프로필 경로 (~/.jarvis 는 ~/jarvis/runtime 심링크 — 같은 inode)
+# jarvis 관리 프로필 경로 (~/.jarvis 는 ~/.openclaw-data/jarvis/runtime 심링크 — 같은 inode)
 PROFILE_PATTERN="${AUTOMATION_BROWSER_PROFILE_PATTERN:-(\.jarvis/|jarvis/runtime/)}"
 
 _log "=== ${NAME} 시작 (DRYRUN=${DRYRUN} · 유휴≥${IDLE_HOURS}h · CPU<${CPU_IDLE_PCT}% · RSS≥${MIN_RSS_MB}MB) ==="

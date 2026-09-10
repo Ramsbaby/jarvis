@@ -124,6 +124,9 @@ rules:
       - "infra/docs/tasks-index.json"
       - "infra/docs/DISCORD-CHANNELS.md"
       - "infra/docs/discord-channels.json"
+      # 2026-09-10: INDEX.md 도 자동 생성 문서 색인이다. 실측 결과 이 파일의 매칭은
+      #   채널 식별자 jarvis-career 1건뿐이고 서사 어휘는 0건이다 — 위 카탈로그와 같은 성격.
+      - "infra/docs/INDEX.md"
       - "infra/adr/ADR-022-adaptive-model-cost-rebalance.md"
       - "infra/scripts/career-daily-report.mjs"
       - "infra/discord/test/**"

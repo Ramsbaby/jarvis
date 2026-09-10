@@ -19,7 +19,7 @@ source "${HOME}/.jarvis/lib/idempotency-middleware.sh" 2>/dev/null || {
 }
 
 # cl-faf6f4c1f94bd512: 백그라운드 작업 exit code 자동 기록 (bg_task_record_exit 활성화)
-_CL_FAF6_GUARD="${HOME}/jarvis/infra/lib/cluster-guard-cl-faf6f4c1f94bd512.sh"
+_CL_FAF6_GUARD="${HOME}/.openclaw-data/jarvis/infra/lib/cluster-guard-cl-faf6f4c1f94bd512.sh"
 if [[ -f "$_CL_FAF6_GUARD" ]]; then
     # shellcheck disable=SC1090
     source "$_CL_FAF6_GUARD" 2>/dev/null || true
@@ -27,12 +27,22 @@ fi
 unset _CL_FAF6_GUARD
 
 # cl-53499c7975efb1b0: 문서 내부 불일치 검증 가드 (숫자 교차검증)
-_CL_5349_GUARD="${HOME}/jarvis/infra/lib/cluster-guard-cl-53499c7975efb1b0.sh"
+_CL_5349_GUARD="${HOME}/.openclaw-data/jarvis/infra/lib/cluster-guard-cl-53499c7975efb1b0.sh"
 if [[ -f "$_CL_5349_GUARD" ]]; then
     # shellcheck disable=SC1090
     source "$_CL_5349_GUARD" 2>/dev/null || true
 fi
 unset _CL_5349_GUARD
+
+# cl-a405499fa67279d6: 정책-규칙 동기화 검사 (pre-execution-check)
+_CLA405_PRECHECK="${HOME}/.openclaw-data/jarvis/infra/lib/pre-execution-check.sh"
+if [[ -f "$_CLA405_PRECHECK" ]]; then
+    # shellcheck disable=SC1090
+    source "$_CLA405_PRECHECK" 2>/dev/null || true
+    # 세션 시작 시 한 번만 체크 (모든 ask_claude_safe 호출 전)
+    run_pre_execution_check >/dev/null 2>&1 || true
+fi
+unset _CLA405_PRECHECK
 
 # 메인 함수: 멱등성 체크를 포함한 ask-claude 호출
 ask_claude_safe() {

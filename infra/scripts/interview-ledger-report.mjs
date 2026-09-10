@@ -4,9 +4,9 @@
  * jarvis-interview 채널 ledger 자동 분석. 봇 재시작 후 자체 검증용.
  *
  * 사용:
- *   node ~/jarvis/infra/scripts/interview-ledger-report.mjs --since=last-restart
- *   node ~/jarvis/infra/scripts/interview-ledger-report.mjs --since=15m
- *   node ~/jarvis/infra/scripts/interview-ledger-report.mjs --since=2026-04-25T07:35:00Z
+ *   node ~/.openclaw-data/jarvis/infra/scripts/interview-ledger-report.mjs --since=last-restart
+ *   node ~/.openclaw-data/jarvis/infra/scripts/interview-ledger-report.mjs --since=15m
+ *   node ~/.openclaw-data/jarvis/infra/scripts/interview-ledger-report.mjs --since=2026-04-25T07:35:00Z
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';

@@ -6,7 +6,7 @@
  * 기존 7500+ 청크의 importance/entities/topics를 재계산·갱신.
  * table.update() 사용 → vector(임베딩) 완전히 건드리지 않음.
  *
- * 실행: node ~/jarvis/runtime/bin/enrich-migrate.mjs
+ * 실행: node ~/.openclaw-data/jarvis/runtime/bin/enrich-migrate.mjs
  */
 
 import { join } from 'node:path';

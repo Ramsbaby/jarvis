@@ -79,8 +79,8 @@ ALERT_MSG="🔴 **토큰 헬스체크 실패** ($(TZ=Asia/Seoul date '+%H:%M KST
 OAuth credentials.json 인증 실패. 즉시 조치: \`/login\` (Claude Code)"
 
 NOTIFY_OK=false
-if [[ -f "${HOME}/jarvis/runtime/lib/discord-notify-bash.sh" ]]; then
-    if source "${HOME}/jarvis/runtime/lib/discord-notify-bash.sh" 2>/dev/null \
+if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/lib/discord-notify-bash.sh" ]]; then
+    if source "${HOME}/.openclaw-data/jarvis/runtime/lib/discord-notify-bash.sh" 2>/dev/null \
        && discord_notify "jarvis-system" "$ALERT_MSG" 2>/dev/null; then
         NOTIFY_OK=true
     else

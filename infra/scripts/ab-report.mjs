@@ -3,8 +3,8 @@
  * ab-report.mjs — A/B 실험 ledger 리포트 조회 (P3-3)
  *
  * 사용법:
- *   node ~/jarvis/runtime/scripts/ab-report.mjs            # 전체 실험 리포트
- *   node ~/jarvis/runtime/scripts/ab-report.mjs throttle-v1 # 특정 실험만
+ *   node ~/.openclaw-data/jarvis/runtime/scripts/ab-report.mjs            # 전체 실험 리포트
+ *   node ~/.openclaw-data/jarvis/runtime/scripts/ab-report.mjs throttle-v1 # 특정 실험만
  *
  * 출력:
  *   실험별 variant 분산 + avg elapsedMs + count

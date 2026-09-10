@@ -5,12 +5,12 @@
  * LanceDB에서 enrichDocument가 추출한 entities/topics를 읽어
  * 엔티티 간 co-occurrence 관계 그래프를 빌드하고 저장.
  *
- * 출력: ~/jarvis/runtime/rag/entity-graph.json
+ * 출력: ~/.openclaw-data/jarvis/runtime/rag/entity-graph.json
  * 구조:
  *   nodes: { [entity]: { count, importance, topics, sources[] } }
  *   edges: { [e1|e2]: { weight, sources[] } }
  *
- * 실행: node ~/jarvis/runtime/bin/entity-graph.mjs
+ * 실행: node ~/.openclaw-data/jarvis/runtime/bin/entity-graph.mjs
  * 크론: 매일 새벽 03:45 (rag-index 30분 후)
  */
 

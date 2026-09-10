@@ -22,7 +22,7 @@ set -uo pipefail
 # 사용법 (훅이 내부 호출 — 사람이 직접 부를 일 없음):
 #   jarvis-vera-autosummon-runner.sh <SUMMON_ID> <SESSION_ID> <CLAIM> [CONTEXT]
 #
-# 원장: ~/jarvis/runtime/ledger/vera-auto.jsonl (append-only)
+# 원장: ~/.openclaw-data/jarvis/runtime/ledger/vera-auto.jsonl (append-only)
 #   {ts, event:"verdict", summon_id, session_id, verdict, exit_code, claim, evidence}
 # ==============================================================================
 
@@ -37,15 +37,28 @@ SESSION_ID="${2:?SESSION_ID required}"
 CLAIM="${3:?CLAIM required}"
 CONTEXT="${4:-}"
 
-VERA="${HOME}/jarvis/infra/scripts/jarvis-verify-independent.sh"
-LEDGER="${HOME}/jarvis/runtime/ledger/vera-auto.jsonl"
+VERA="${HOME}/.openclaw-data/jarvis/infra/scripts/jarvis-verify-independent.sh"
+LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/vera-auto.jsonl"
 STATE_DIR="${HOME}/.jarvis/state/vera-auto"
 LOCK="${STATE_DIR}/inflight-${SESSION_ID}.lock"
 
 mkdir -p "$STATE_DIR" "$(dirname "$LEDGER")" 2>/dev/null || true
 
+# ── 교차 동시성 슬롯 (2026-08-01 패닉 재발 방지) ────────────────────────────
+# stop-wiki-ingest / stop-mistake-extract / rag-index-safe와 전역 2슬롯 공유.
+# 슬롯 없으면 VERA 소환 자체를 건너뛴다 — WARN 모드라 놓쳐도 응답을 막지 않는다.
+SLOT_LIB="${HOME}/.claude/hooks/lib/heavy-hook-slot.sh"
+if [[ -f "$SLOT_LIB" ]]; then
+  # shellcheck source=/dev/null
+  source "$SLOT_LIB"
+  if ! heavy_slot_acquire "vera-autosummon"; then
+    rm -f "$LOCK" 2>/dev/null || true
+    exit 0
+  fi
+fi
+
 # 인플라이트 락 해제는 무슨 일이 있어도 (락이 남으면 세션 내 재소환 영구 차단됨)
-trap 'rm -f "$LOCK" 2>/dev/null || true' EXIT
+trap 'rm -f "$LOCK" 2>/dev/null || true; heavy_slot_release 2>/dev/null || true' EXIT
 
 # --- VERA 본체 소환 (격리 실측 검증) ---
 EXIT_CODE=0

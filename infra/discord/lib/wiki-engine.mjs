@@ -5,7 +5,7 @@
  * devming 원본 설계 + 전역 도메인 통합 (SSoT).
  *
  * 저장 구조:
- *   ~/jarvis/runtime/wiki/
+ *   ~/.openclaw-data/jarvis/runtime/wiki/
  *     schema.json              — 위키 스키마 (도메인 규칙)
  *     {domain}/
  *       _summary.md            — 야간 크론(wiki-ingest.mjs)이 합성하는 종합 요약
@@ -192,9 +192,45 @@ export function detectPageKey(text, schema = null) {
 }
 
 /**
+ * 같은 슬롯(key)에서 아직 살아 있는 사실을 찾는다.
+ *
+ * 왜 있나 (2026-08-05):
+ *   위키 11종 전체에서 superseded_by·valid_to 히트가 0건이었다. 날짜는 11,466줄에 있는데
+ *   "이 값이 죽었다"를 표시하는 신호가 코퍼스에 하나도 없다. 그래서 낡은 처우 금액과
+ *   새 금액이 검색에서 **동등하게** 나오고, 실제로 금전 오류를 3회 냈다.
+ *   실측: 폐기된 총보상 값이 185개 파일, 그 직전 값이 276개 파일에 산재.
+ *   랭킹 튜닝으로는 안 고쳐진다 — 자료구조가 supersession을 표현하지 못하는 스키마 버그다.
+ *
+ * 살아 있음의 정의: [key:X]가 있고 [invalid:...]가 없다.
+ */
+function findActiveByKey(content, key) {
+  if (!content || !key) return null;
+  const lines = content.split('\n');
+  const tag = `[key:${key}]`;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].includes(tag) && !lines[i].includes('[invalid:')) {
+      return { index: i, line: lines[i], lines };
+    }
+  }
+  return null;
+}
+
+/**
  * fact를 적절한 도메인의 _facts.md에 추가.
- * 3번째 인자는 백워드 호환: string이면 domainOverride, object면 { domainOverride, source }
+ * 3번째 인자는 백워드 호환: string이면 domainOverride, object면 { domainOverride, source, ... }
  * source는 기록 라인에 `[source:X]` 태그로 삽입됨. 기본값 'discord'.
+ *
+ * [2026-08-05] 시간 필드 3종 추가 — **opts.key를 준 경우에만 발동한다.**
+ *   key 없는 기존 호출 경로는 동작이 한 글자도 바뀌지 않는다(회귀 위험 0).
+ *   - opts.key         슬롯 이름. 틀리면 돈이 되는 값에만 붙인다(처우 금액·마감일·계좌).
+ *   - opts.supersedes  true면 같은 key의 기존 활성 사실을 [invalid:오늘]로 닫고 새 값을 적재.
+ *   같은 key에 활성 사실이 있는데 supersedes 없이 쓰면 **거부한다(throw).**
+ *   텍스트 룰이 7회 실패한 이유가 규칙을 아무도 집행하지 않아서였다. 코드가 막아야 한다.
+ *
+ * [2026-08-12] 출처 검증 가드 추가 — **opts.key를 준 경우 opts.doc이 필수다.**
+ *   - opts.doc        원본 문서 경로(상대경로·절대경로) 또는 URL. 기록 라인에 `[doc:X]` 태그로 삽입.
+ *   key가 있는데 doc 없으면 throw. 출처 없는 오퍼레터 정보 등재 방지.
+ *   doc이 경로(~/ 또는 /)라면 존재 여부도 검증. 없으면 warn 출력.
  * @returns {string} 추가된 도메인 키
  */
 export function addFactToWiki(_userId, fact, opts = null) {
@@ -218,23 +254,91 @@ export function addFactToWiki(_userId, fact, opts = null) {
 
   let domainOverride = null;
   let source = 'discord';
+  let key = null;
+  let supersedes = false;
+  let doc = null;
+  let evidenceAt = null;
   if (typeof opts === 'string') {
     domainOverride = opts;
   } else if (opts && typeof opts === 'object') {
     domainOverride = opts.domainOverride ?? null;
     if (typeof opts.source === 'string' && opts.source.length > 0) source = opts.source;
+    if (typeof opts.key === 'string' && opts.key.length > 0) key = opts.key.trim();
+    supersedes = opts.supersedes === true;
+    if (typeof opts.doc === 'string' && opts.doc.length > 0) doc = opts.doc.trim();
+    if (typeof opts.evidence_at === 'string' && opts.evidence_at.length > 0) evidenceAt = opts.evidence_at.trim();
+  }
+
+  // 🛡️ 출처 검증 가드 (2026-08-12 — 오답승격 cl-849f69b92fb47e49 해결)
+  // key(슬롯)가 있으면 doc(원본 출처)은 필수다. 출처 없는 오퍼레터·금전 정보 등재 방지.
+  if (key && !doc) {
+    throw new Error(
+      `[wiki] 슬롯 '${key}'의 원본 출처가 필요합니다.\n`
+      + `  opts.doc을 제공하십시오 (경로: ~/file.md 또는 /absolute/path, URL: https://...)\n`
+      + `  또는 opts.key를 제거하면 출처 없이 등재됩니다(권장하지 않음).\n`
+      + `  사실: ${fact.slice(0, 100)}`
+    );
+  }
+
+  // 🛡️ 실측 시점 추적 가드 (2026-08-19 — 오답승격 cl-0bf9522b938afa87 해결)
+  // key(슬롯)가 있으면 evidence_at(실제 측정 시점)도 필수다. 과거 기록값을 무검증 신뢰하는 것 방지.
+  if (key && !evidenceAt) {
+    throw new Error(
+      `[wiki] 슬롯 '${key}'의 실측 시점이 필요합니다.\n`
+      + `  opts.evidence_at를 제공하십시오 (YYYY-MM-DD 형식, 예: 2026-08-19)\n`
+      + `  이 날짜는 실제 측정·확인이 이루어진 시점입니다.\n`
+      + `  또는 opts.key를 제거하면 추적 없이 등재됩니다(권장하지 않음).\n`
+      + `  사실: ${fact.slice(0, 100)}`
+    );
+  }
+
+  // doc이 경로라면 존재 여부 검증 (warn 수준 — throw는 아님)
+  if (doc && (doc.startsWith('/') || doc.startsWith('~'))) {
+    const docResolved = doc.replace(/^~/, homedir());
+    if (!existsSync(docResolved)) {
+      console.warn(
+        `⚠️ [wiki] 슬롯 '${key}'의 원본 문서를 찾을 수 없습니다: ${doc}\n`
+        + `  (파일은 등재되지만, 조회 시 "원문 경로 깨짐" 경고가 표시됩니다. 파일을 확보한 후 doc:경로를 추가하십시오.)`
+      );
+    }
   }
 
   ensureInit();
   const schema = getSchema();
   const domain = domainOverride || detectPageKey(fact, schema);
-  const existing = getPage(null, domain) || '';
+  let existing = getPage(null, domain) || '';
   const timestamp = new Date().toISOString().slice(0, 10);
 
   // 중복 체크 (fact 문자열이 이미 기록되어 있으면 source 무관하게 skip — 첫 주입이 SSoT)
   if (existing.includes(fact.trim())) return domain;
 
-  const newEntry = `- [${timestamp}] [source:${source}] ${fact.trim()}\n`;
+  // ── 슬롯 게이트 (key를 준 경우에만) ──────────────────────────────────────
+  let contentAfterInvalidate = existing;
+  if (key) {
+    const active = findActiveByKey(existing, key);
+    if (active && !supersedes) {
+      throw new Error(
+        `[wiki] 슬롯 '${key}'에 이미 활성 사실이 있습니다. supersedes:true 없이 덮어쓸 수 없습니다.\n`
+        + `  기존: ${active.line.slice(0, 160)}\n`
+        + `  → 새 값이 옛 값을 대체하는 것이 맞으면 opts.supersedes=true 로 다시 호출하십시오.\n`
+        + `  → 둘 다 유효한 별개 사실이면 다른 key를 쓰십시오.`
+      );
+    }
+    if (active && supersedes) {
+      // 지우지 않는다. 닫기만 한다 — 과거 기록은 감사에 필요하고, 삭제는 되돌릴 수 없다.
+      active.lines[active.index] = active.line.replace(
+        /(\[source:[^\]]+\])/,
+        `$1 [invalid:${timestamp}]`
+      );
+      contentAfterInvalidate = active.lines.join('\n');
+    }
+  }
+
+  const keyTag = key ? ` [key:${key}]` : '';
+  const docTag = doc ? ` [doc:${doc}]` : '';
+  const evidenceTag = evidenceAt ? ` [evidence_at:${evidenceAt}]` : '';
+  const newEntry = `- [${timestamp}] [source:${source}]${keyTag}${docTag}${evidenceTag} ${fact.trim()}\n`;
+  existing = contentAfterInvalidate;
 
   if (!existing) {
     const domains = schema.domains || schema.pages || {};

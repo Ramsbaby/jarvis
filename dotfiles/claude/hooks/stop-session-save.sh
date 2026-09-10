@@ -29,14 +29,28 @@ PROJECT=$(basename "${CWD:-unknown}" | tr ' ' '-' | tr '/' '-')
 
 mkdir -p "${SESSIONS_DIR}/${PROJECT}"
 
-TS=$(date '+%Y-%m-%d-%H%M%S')
-OUT="${SESSIONS_DIR}/${PROJECT}/${TS}.md"
+# [2026-08-04] 세션당 파일 1개로 고정 — 매 턴 새 파일을 만들던 방식 폐기.
+#   종전에는 Stop 훅이 돌 때마다 "그 시점까지의 대화 전체"를 새 타임스탬프 파일로 저장했다.
+#   100턴 대화 → 파일 100개, 100번째가 앞 99개를 전부 포함 = 저장량이 제곱으로 증가.
+#   실측 2026-08-04: 11,244파일 / 718MB, 대부분이 서로의 부분집합.
+#   → 파일명에 세션 ID를 넣고 덮어쓴다. 소비처 3곳은 모두 mtime 기준이라 영향 없다.
+#     (wiki-ingest findLatestSession=mtime정렬 / stop-wiki-ingest=ls -t + 60초 age
+#      / context-extractor=파일명 date 접두사 → 접두사는 그대로 유지)
+SESSION_ID=$(basename "$TRANSCRIPT_PATH" .jsonl | tr -cd 'a-zA-Z0-9-' | cut -c1-8)
+if [[ -z "$SESSION_ID" ]]; then SESSION_ID="unknown"; fi
+OUT="${SESSIONS_DIR}/${PROJECT}/$(date '+%Y-%m-%d')-${SESSION_ID}.md"
+
+# 2,000자 초과 메시지 전문 보관소 (2026-08-04 신설)
+# 세션 .md는 RAG 인덱싱 효율상 2,000자에서 자르나, 원문은 여기에 온전히 남긴다.
+# 내용 해시를 파일명으로 쓰므로 스냅샷이 반복 저장돼도 중복이 쌓이지 않는다.
+RAW_DIR="${SESSIONS_DIR}-raw/${PROJECT}"
+mkdir -p "$RAW_DIR"
 
 # JSONL → 마크다운 변환 (human/assistant 텍스트만, tool use 제외)
-python3 - "$TRANSCRIPT_PATH" "$OUT" "$CWD" << 'PYEOF'
-import sys, json
+python3 - "$TRANSCRIPT_PATH" "$OUT" "$CWD" "$RAW_DIR" << 'PYEOF'
+import sys, json, os, hashlib
 
-transcript_path, out_path, cwd = sys.argv[1], sys.argv[2], sys.argv[3]
+transcript_path, out_path, cwd, raw_dir = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 
 messages = []
 try:
@@ -91,12 +105,31 @@ if len(messages) < 2:
 from datetime import datetime
 date_str = datetime.now().strftime('%Y-%m-%d %H:%M KST')
 
+LIMIT = 2000
+
+def stash(text):
+    """2,000자 초과 원문을 내용 해시 파일로 보관하고 파일명을 돌려준다."""
+    h = hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
+    fname = f"{h}.txt"
+    path = os.path.join(raw_dir, fname)
+    if not os.path.exists(path):
+        with open(path, 'w', encoding='utf-8') as rf:
+            rf.write(text)
+    return fname
+
 lines = [f"# Claude Code 세션 — {date_str}", f"\n> 프로젝트: {cwd}\n"]
 for role, text in messages:
     prefix = "**사용자**" if role == 'user' else "**Claude**"
-    # 너무 긴 메시지는 앞부분만 (RAG 인덱싱 효율)
-    truncated = text[:2000] + ('...(생략)' if len(text) > 2000 else '')
-    lines.append(f"\n{prefix}: {truncated}")
+    # 세션 .md는 2,000자에서 자르되, 원문은 -raw/ 에 남기고 경로를 적어둔다.
+    # (2026-08-04: 통화 녹취 19,803자 중 17,803자가 소실된 사고 재발 방지)
+    if len(text) > LIMIT:
+        try:
+            body = f"{text[:LIMIT]}\n\n…(전문 {len(text):,}자 → raw/{stash(text)})"
+        except Exception:
+            body = text[:LIMIT] + '...(생략)'
+    else:
+        body = text
+    lines.append(f"\n{prefix}: {body}")
 
 with open(out_path, 'w', encoding='utf-8') as f:
     f.write('\n'.join(lines))

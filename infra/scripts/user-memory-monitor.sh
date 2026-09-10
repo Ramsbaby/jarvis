@@ -11,10 +11,10 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-$HOME/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
 WEBHOOK_FILE="$BOT_HOME/config/monitoring.json"
 NODE="${NODE_BIN:-/opt/homebrew/bin/node}"
-SCAN_SCRIPT="$HOME/jarvis/infra/scripts/user-memory-monitor-scan.mjs"
+SCAN_SCRIPT="$HOME/.openclaw-data/jarvis/infra/scripts/user-memory-monitor-scan.mjs"
 
 # ── 전제 조건 체크 (조용한 실패 금지) ──────────────────────────────────────
 if [[ ! -x "$NODE" ]]; then
