@@ -30,7 +30,41 @@ catch (e) { console.error('ERROR: --data must be valid JSON:', e.message); proce
 const CONFIG_PATH = join(homedir(), 'jarvis/runtime', 'config', 'monitoring.json');
 const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
 const WEBHOOK_URL = config.webhooks?.[CHANNEL] ?? config.webhook?.url;
+// 2026-09-10 오픈클로 이식: 디스코드를 전면 제거했다. 웹훅이 "고장나서 없는 것"과 "일부러 없앤 것"을
+// 가르지 않으면 호출자마다 가짜 실패가 쌓인다. 비활성 표지가 있으면 조용히 성공으로 끝낸다.
+// 복구: monitoring.json 의 _webhook_disabled_20260910 을 webhook 으로 되돌린다.
+if (!WEBHOOK_URL && config._webhook_disabled_20260910) {
+  // 억제된 알림은 반드시 한 곳(no-external.log)에 남긴다. 안 남기면 감시 잡 35개의 산출물이
+  // 통째로 사라진다 — 오픈클로 jarvis-suppressed-digest 가 이 파일을 읽어 메인 세션에 배달한다.
+  let title = '';
+  try {
+    const parsed = JSON.parse(DATA_RAW || '{}');
+    title = parsed.title || parsed.message || '';
+  } catch { /* 제목 없는 페이로드는 type 만으로 식별한다 */ }
+  try {
+    const dir = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'logs');
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(join(dir, 'no-external.log'),
+      `${new Date().toISOString()} [NO_EXTERNAL] src=discord-visual.mjs ch=${CHANNEL} type=${TYPE} title=${title || '(제목없음)'} len=${DATA_RAW.length}\n`);
+  } catch { /* 기록 실패는 무시 — 억제 자체가 목적 */ }
+  // 문자열에 [NO_EXTERNAL] 을 유지한다 — test-no-external.sh 가 "외부로 안 나갔다"를 이 토큰으로 판정하고,
+  // 토큰을 빼면 억제 경로가 회귀 테스트에서 통째로 안 보인다.
+  console.log(`[NO_EXTERNAL] SKIP: 디스코드 송출은 2026-09-10 의도적으로 비활성화됐다 (channel='${CHANNEL}'). no-external.log 에 기록됨.`);
+  process.exit(0);
+}
 if (!WEBHOOK_URL) { console.error(`ERROR: No webhook for channel '${CHANNEL}'`); process.exit(1); }
+// JARVIS_NO_EXTERNAL=1 (2026-09-04, SELF-HEAL-PLAN 1d): 테스트·dry-run 은 외부로 나가지 않는다 — 파일 기록 후 종료.
+// 브라우저 렌더링 전에 끊어야 puppeteer 비용도 들지 않는다.
+if (process.env.JARVIS_NO_EXTERNAL === '1') {
+  try {
+    const dir = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'logs');
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(join(dir, 'no-external.log'),
+      `${new Date().toISOString()} [NO_EXTERNAL] src=discord-visual.mjs ch=${CHANNEL} type=${TYPE} len=${DATA_RAW.length}\n`);
+  } catch { /* 기록 실패는 무시 — 억제 자체가 목적 */ }
+  console.log(`[NO_EXTERNAL] discord-visual 송출 억제 (ch=${CHANNEL}, type=${TYPE})`);
+  process.exit(0);
+}
 // 미등록 채널명이 조용히 기본 웹훅으로 빠지던 결함 가시화 (2026-06-11) — 동작은 유지, 경고만 명시
 if (!config.webhooks?.[CHANNEL]) {
   console.error(`WARN: channel '${CHANNEL}' not in monitoring.json webhooks — falling back to default webhook`);

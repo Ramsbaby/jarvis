@@ -22,6 +22,17 @@ DISCORD_VISUAL="${HOME}/jarvis/infra/scripts/discord-visual.mjs"
 _CHANNEL_MAP_GUARD="${HOME}/jarvis/infra/guards/validate-channel-map.sh"
 _EGRESS_AUDIT_LOG="${HOME}/jarvis/runtime/logs/egress-audit.log"
 
+# JARVIS_NO_EXTERNAL=1 (2026-09-04, SELF-HEAL-PLAN 1d): 테스트·dry-run 은 외부로 나가지 않는다.
+# 9/4 tracker 테스트 쉼이 실제 채널로 송출된 사고 후속. 억제된 송출은 runtime/logs/no-external.log 에만 남긴다.
+# 사용: _no_external <src> <channel> <bytes> && return 0
+_no_external() {
+    [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]] || return 1
+    local log="${BOT_HOME:-${HOME}/jarvis/runtime}/logs/no-external.log"
+    mkdir -p "$(dirname "$log")" 2>/dev/null || true
+    printf '%s [NO_EXTERNAL] src=%s ch=%s len=%s\n' "$(date -u +%FT%TZ)" "$1" "$2" "$3" >> "$log" 2>/dev/null || true
+    return 0
+}
+
 # 감사 로그 기록 — 채널/bytes/caller를 append (실패해도 발송 차단 안 함)
 _egress_audit() {
     local channel="$1" bytes="$2" caller="${3:-unknown}"
@@ -98,8 +109,9 @@ discord_route_payload() {
         echo "[discord-route] 중복 차단 (쿨다운 내 동일 알림): ${ptitle:-payload}"
         return 0
     fi
+    _no_external "discord-route.sh:discord_route_payload" "$channel" "${#payload}" && return 0
     _egress_audit "$channel" "${#payload}" "${BASH_SOURCE[1]:-unknown}:${BASH_LINENO[0]:-0}"
-    local _node="${NODE_BIN}"
+    local _node="${NODE_BIN:-}"
     if [[ -z "$_node" ]]; then
         _node=$(command -v node 2>/dev/null) || _node="/opt/homebrew/bin/node"
     fi
@@ -120,6 +132,12 @@ discord_route_raw() {
 
     _channel_map_guard_check || return 1
 
+    # 2026-09-10: 의도적 침묵은 웹훅 조회보다 먼저 판정한다. 이 순서가 뒤집혀 있어
+    # 웹훅이 비면 아래 "webhook not found"로 먼저 빠져나가 원장(no-external.log)에 한 줄도 안 남았다
+    # — 형제 함수 discord_route·discord_route_payload 와 달리 이 함수만 기록이 누락됐다.
+    local caller="${BASH_SOURCE[1]:-unknown}:${BASH_LINENO[0]:-0}"
+    _no_external "discord-route.sh:discord_route_raw" "$channel_name" "${#content}" && return 0
+
     local webhook_url
     webhook_url=$(jq -r --arg ch "$channel_name" '.webhooks[$ch] // empty' "$monitoring" 2>/dev/null || true)
     if [[ -z "${webhook_url:-}" ]]; then
@@ -127,7 +145,6 @@ discord_route_raw() {
         return 1
     fi
 
-    local caller="${BASH_SOURCE[1]:-unknown}:${BASH_LINENO[0]:-0}"
     _egress_audit "$channel_name" "${#content}" "$caller"
 
     local payload
@@ -174,9 +191,10 @@ discord_route() {
     # [2026-07-22] 발송 원장: 순정 discord_route()가 egress 미기록이던 결함(Eureka 2026-07-15) 수리.
     #   일일 발송량 측정 근거 확보 — 기존 egress-audit.log 재사용(DRY, 신규 원장 미생성).
     local caller="${BASH_SOURCE[1]:-unknown}:${BASH_LINENO[0]:-0}"
+    _no_external "discord-route.sh:discord_route" "$channel" "${#payload}" && return 0
     _egress_audit "$channel" "${#payload}" "$caller"
 
-    local _node="${NODE_BIN}"
+    local _node="${NODE_BIN:-}"
     if [[ -z "$_node" ]]; then
         _node=$(command -v node 2>/dev/null) || _node="/opt/homebrew/bin/node"
     fi

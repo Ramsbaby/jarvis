@@ -17,6 +17,23 @@ send_discord() {
         webhook=$(jq -r ".webhooks[\"$webhook\"] // empty" "${BOT_HOME:-$HOME/jarvis/runtime}/config/monitoring.json" 2>/dev/null)
     fi
 
+    # 2026-09-10 오픈클로 이식: 디스코드를 전면 제거해 webhooks 가 비었다. 아래 "빈 웹훅이면 return 1" 이
+    # 억제 기록보다 앞서 있어, 웹훅이 비면 원장(no-external.log)에 한 줄도 안 남고 호출자는 실패만 받았다
+    # — discord_route_raw 와 똑같은 순서 결함이다. 의도적 침묵을 먼저 판정한다.
+    local _mon="${BOT_HOME:-$HOME/jarvis/runtime}/config/monitoring.json"
+    if [[ -z "$webhook" ]] && [[ "$(jq -r 'has("_webhook_disabled_20260910")' "$_mon" 2>/dev/null)" == "true" ]]; then
+        export JARVIS_NO_EXTERNAL=1
+    fi
+
+    # JARVIS_NO_EXTERNAL=1 (2026-09-04, 1d): 테스트·dry-run 은 파일에만 기록, 성공으로 간주
+    if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
+        mkdir -p "${BOT_HOME:-$HOME/jarvis/runtime}/logs" 2>/dev/null || true
+        printf '%s [NO_EXTERNAL] src=discord-notify-bash.sh:send_discord title=%s len=%s\n' "$(date -u +%FT%TZ)" \
+            "$(printf '%s' "${msg:0:90}" | tr '\n' ' ')" "${#msg}" \
+            >> "${BOT_HOME:-$HOME/jarvis/runtime}/logs/no-external.log" 2>/dev/null || true
+        return 0
+    fi
+
     [[ -z "$webhook" ]] && return 1
 
     local payload

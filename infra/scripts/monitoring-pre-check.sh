@@ -10,6 +10,14 @@
 # 3. LaunchAgent 프로세스 실행 상태 (PID 확인)
 # 4. 주요 모니터링 스크립트 파일 존재 여부
 # 5. 모니터링 도구의 의존성 파일 확인
+#
+# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-monitoring-pre-check(04:55)로 이관됐다.
+# 이 스크립트는 crontab 46행에서도 불리는데 crontab 쓰기가 이 환경에서 막혀 있어(rc=124 타임아웃)
+# 스크립트 층에 가드를 둬 이중 실행을 막는다. 재개: rm ~/jarvis/runtime/state/stopped/monitoring-pre-check
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/monitoring-pre-check" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[monitoring-pre-check] 중지 플래그 있음 — 오픈클로 잡으로 이관됨 (state/stopped/monitoring-pre-check)"
+    exit 0
+fi
 
 set -eo pipefail
 
@@ -148,15 +156,19 @@ fi
 echo ""
 
 # 핵심 모니터링 LaunchAgent 상태 확인
-declare -a CRITICAL_AGENTS=(
-    "ai.jarvis.orchestrator"
-    "ai.jarvis.watchdog"
-    "ai.jarvis.system-health"
-    "ai.jarvis.disk-alert"
-)
+# 2026-09-04: system-health·disk-alert 는 5월부터 com.jarvis.* (tasks.json → cron-sync 생성) 라벨이다.
+#   옛 ai.jarvis.* 라벨을 찾던 탓에 매일 "미등록" 2건이 났고, 아래 grep 도 `^-` 로 시작하는 줄만 봐서
+#   PID 가 있는(=실행 중인) 데몬을 미등록으로 찍었다. 2026-06-23 이후 4건 전부 오탐이었다.
+# 2026-09-10 오픈클로 이식: system-health·disk-alert 는 오픈클로 잡으로 이관됐고(launchd에 없는 게 정상),
+#   ai.jarvis.watchdog 은 감시 대상인 디스코드 봇이 제거돼 함께 정지했다. 셋을 남겨두면 매일 오탐 3건이 난다.
+#   기대 목록을 실제와 맞춘다. 오픈클로 쪽 발화 여부는 `openclaw cron list` 로 본다.
+#   orchestrator 도 runtime/discord/lib/ 에서 돌던 디스코드 계열이라 같이 정지했다(2026-09-10).
+#   결과적으로 이 목록은 비었다 — 자비스 쪽 "반드시 떠 있어야 하는 데몬"이 더는 없다는 뜻이다.
+#   자비스에 상주 데몬을 다시 두게 되면 여기에 라벨을 추가한다.
+declare -a CRITICAL_AGENTS=()
 
-for agent in "${CRITICAL_AGENTS[@]}"; do
-    agent_info=$(launchctl list 2>/dev/null | grep "^-.*$agent" || echo "")
+for agent in ${CRITICAL_AGENTS[@]+"${CRITICAL_AGENTS[@]}"}; do
+    agent_info=$(launchctl list 2>/dev/null | awk -F'\t' -v l="$agent" '$3==l' || echo "")
 
     if [[ -z "$agent_info" ]]; then
         # 등록되지 않음
@@ -166,8 +178,10 @@ for agent in "${CRITICAL_AGENTS[@]}"; do
         pid=$(echo "$agent_info" | awk '{print $1}')
         exit_code=$(echo "$agent_info" | awk '{print $2}')
 
-        if [[ "$pid" == "-" ]]; then
-            # 비활성 상태
+        if [[ "$pid" == "-" && "$exit_code" == "0" ]]; then
+            # 스케줄형(StartInterval/Calendar) 에이전트는 실행 사이에 PID 가 없는 게 정상 — 종료코드 0 이면 건강
+            log_check "launchd.$agent" "ok" "대기 중 (스케줄형, 마지막 종료코드 0)"
+        elif [[ "$pid" == "-" ]]; then
             log_check "launchd.$agent" "warn" "등록됨 (비활성, 마지막 종료코드: $exit_code)"
         else
             # 활성 상태
@@ -266,6 +280,12 @@ echo ""
 # 6. 프로세스 상태 확인
 # ============================================================================
 
+# 2026-09-10 오픈클로 이식: orchestrator 는 runtime/discord/lib/orchestrator.mjs 로 도는
+# 디스코드 계열 데몬이었고 그 디렉토리를 제거했다. 정지 플래그가 있으면 없는 게 정상이다.
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/orchestrator" ]]; then
+    log_check "process.orchestrator" "ok" "의도적 정지 (state/stopped/orchestrator — 디스코드 제거로 실행 파일 소멸)"
+    orchestrator_pid=""
+else
 log_check "process.orchestrator" "ok" "확인 중..."
 
 orchestrator_pid=$(launchctl list 2>/dev/null | grep "ai.jarvis.orchestrator" | awk '{print $1}' || echo "")
@@ -279,18 +299,25 @@ if [[ -n "$orchestrator_pid" && "$orchestrator_pid" != "-" ]]; then
 else
     log_check "process.orchestrator" "warn" "활성 PID 미확인"
 fi
+fi
 
-log_check "process.watchdog" "ok" "확인 중..."
-watchdog_pid=$(launchctl list 2>/dev/null | grep "ai.jarvis.watchdog" | awk '{print $1}' || echo "")
-if [[ -n "$watchdog_pid" && "$watchdog_pid" != "-" ]]; then
-    ps_check=$(ps -p "$watchdog_pid" 2>/dev/null || echo "")
-    if [[ -n "$ps_check" ]]; then
-        log_check "process.watchdog" "ok" "실행 중 (PID: $watchdog_pid)"
-    else
-        log_check "process.watchdog" "fail" "미실행 (PID: $watchdog_pid 없음)"
-    fi
+# 2026-09-10 오픈클로 이식: ai.jarvis.watchdog 은 디스코드 봇 전용 감시자였고 봇과 함께 정지했다.
+# 정지 플래그가 있으면 "없는 게 정상"이므로 경고를 내지 않는다. 플래그가 없는데 없으면 그건 진짜 이상이다.
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/watchdog" ]]; then
+    log_check "process.watchdog" "ok" "의도적 정지 (state/stopped/watchdog — 디스코드 봇 제거로 감시 대상 소멸)"
 else
-    log_check "process.watchdog" "warn" "활성 PID 미확인"
+    log_check "process.watchdog" "ok" "확인 중..."
+    watchdog_pid=$(launchctl list 2>/dev/null | grep "ai.jarvis.watchdog" | awk '{print $1}' || echo "")
+    if [[ -n "$watchdog_pid" && "$watchdog_pid" != "-" ]]; then
+        ps_check=$(ps -p "$watchdog_pid" 2>/dev/null || echo "")
+        if [[ -n "$ps_check" ]]; then
+            log_check "process.watchdog" "ok" "실행 중 (PID: $watchdog_pid)"
+        else
+            log_check "process.watchdog" "fail" "미실행 (PID: $watchdog_pid 없음)"
+        fi
+    else
+        log_check "process.watchdog" "warn" "활성 PID 미확인"
+    fi
 fi
 
 echo ""

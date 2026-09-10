@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-gen-inventory(04:30) 로 이관. OPENCLAW_JOB=1 로 통과한다.
+# 재개: rm ~/jarvis/runtime/state/stopped/gen-inventory
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/gen-inventory" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[gen-inventory] 중지 플래그 있음"
+    exit 0
+fi
+
 # Cross-platform compat
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
 set -euo pipefail

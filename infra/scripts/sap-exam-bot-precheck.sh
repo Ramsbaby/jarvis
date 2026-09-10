@@ -80,7 +80,7 @@ if [ -f "$CRED" ]; then
 fi
 
 # 5) 디스크·메모리
-DISK_USE=$(df -h / 2>/dev/null | awk 'NR==2{print $5}')
+DISK_USE=$(df -h "$([ -d /System/Volumes/Data ] && echo /System/Volumes/Data || echo /)" 2>/dev/null | awk 'NR==2{print $5}')
 MEM_FREE=$(vm_stat 2>/dev/null | awk '/Pages free/{gsub("\\.","",$3); printf "%.0f", $3*4096/1024/1024}')
 OK+=("디스크 사용 ${DISK_USE:-?} / 여유메모리 ${MEM_FREE:-?}MB")
 

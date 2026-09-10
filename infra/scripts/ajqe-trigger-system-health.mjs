@@ -1,4 +1,15 @@
 #!/usr/bin/env node
+
+// [오픈클로 이식 2026-09-10] 판정 P — 정지.
+// 근거: 신호 대부분(paused-crons-stale/cron-failure-spike/health-check-stale)이 "크론 상태 감시·실패 급증 감지"로 오픈클로 엔진 기본 제공 영역과 중복. 부속 기능 discord-bot-unhealthy→bot-preflight.sh 자동재시작(코드 231행)은 디스코드 봇 삭제로 이미 죽음.
+// 재개: rm ~/jarvis/runtime/state/stopped/ajqe-trigger-system-health
+import { existsSync as __sc } from 'node:fs';
+import { homedir as __sh } from 'node:os';
+if (__sc(__sh() + '/jarvis/runtime/state/stopped/ajqe-trigger-system-health')) {
+  console.log('[ajqe-trigger-system-health] 중지 플래그 있음 (판정 P)');
+  process.exit(0);
+}
+
 /**
  * ajqe-trigger-system-health.mjs v5.3 — Active Jarvis Question Engine: 시스템 자가치유 trigger
  *

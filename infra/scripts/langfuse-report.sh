@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 판정 D — 정지.
+# 근거: runtime/discord/.env 삭제로 LANGFUSE_PUBLIC_KEY 로드 불가 → langfuse-report.sh:44-47에서 즉시 exit 1. Langfuse 서버도 localhost:3200 무응답(curl 000 실측). langfuse-report.log 실측 8월 말부터 IndexError·Permission denied 연속 실
+# 재개: rm ~/jarvis/runtime/state/stopped/langfuse-report
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/langfuse-report" ]]; then
+    echo "[langfuse-report] 중지 플래그 있음 (판정 D)"
+    exit 0
+fi
+
 # langfuse-report.sh — Weekly LLM performance & cost report via Langfuse API
 #
 # Queries Langfuse for the past 7 days of trace/generation data,

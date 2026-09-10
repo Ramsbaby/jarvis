@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 판정 D — 정지.
+# 근거: 인자 없이 실행돼 TASK_FILTER=bot-cron 고정인데 cron.log에 [bot-cron] 태그가 0건 — 설계 결함으로 2026-03-31 이후 5개월간 무동작(산출물 3바이트)
+# 재개: rm ~/jarvis/runtime/state/stopped/cron-trend-analyzer
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/cron-trend-analyzer" ]]; then
+    echo "[cron-trend-analyzer] 중지 플래그 있음 (판정 D)"
+    exit 0
+fi
+
 # cron-trend-analyzer.sh — 크론 트렌드 분석 엔진
 #
 # 목적: 크론 태스크의 성공/실패 추세를 분석하고 장기 트렌드 제공

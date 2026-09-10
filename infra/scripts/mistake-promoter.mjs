@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+
+// [오픈클로 이식 2026-09-10] 오픈클로 jarvis-mistake-promoter 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
+// 재개: rm ~/jarvis/runtime/state/stopped/mistake-promoter
+import { existsSync as __sc } from 'node:fs';
+import { homedir as __sh } from 'node:os';
+if (__sc(__sh() + '/jarvis/runtime/state/stopped/mistake-promoter') && process.env.OPENCLAW_JOB !== '1') {
+  console.log('[mistake-promoter] 중지 플래그 있음 — 오픈클로로 이관됨');
+  process.exit(0);
+}
+
 // mistake-promoter.mjs — 오답 클러스터 자동 승격 엔진 (자율 증류 사다리)
 //
 // 매일 04:10 KST cron 실행 (재발 카운터 03:30 → 체크리스트 03:45 → 승격 04:10).
@@ -8,11 +18,15 @@
 //      — recurrence-audit.sh 가 매일 03:30 생성. 파일 부재 시 audit 1회 재실행으로 복구.
 //   ② 판정: llm-gateway.sh 경유 sonnet 1콜 — 클러스터별 {skip|tier_a|tier_b|tier_c}
 //      + tier_a 는 룰 블록 텍스트 생성 (쉬운말 · BLOCKING 톤 · 출처 클러스터 ID 명기)
-//   ③ tier_a 적용: 적용 전 haiku 시뮬 1콜 (룰 주입 시 교정 행동 YES/NO) —
-//      YES → ~/.claude/rules/jarvis-autolearn.md 에 블록 append (30개 초과 시 가장
-//      오래된 블록을 backups/autolearn-archive.md 로 이동) / NO → 보류 + retro 통보
+//   ③ tier_a 처리: 시뮬 전 근거 사전검사(mistake-ledger 실제 발생 행 ≥ 3, LLM 0콜) →
+//      haiku 시뮬 1콜 (룰 주입 시 교정 행동 YES/NO) —
+//      YES → **제안서** runtime/wiki/meta/rule-proposals.md 에 등재 (infra/lib/rule-proposals.mjs,
+//             근거 건수 첨부 · 같은 패턴은 병합) → 사람이 rule-proposal-ctl.mjs promote 로 승격
+//             (PROMOTER_WRITE_RULES=1 일 때만 옛 경로: jarvis-autolearn.md 직접 append)
+//      NO  → 보류 + retro 통보
 //   ④ tier_b → dev-queue(task-store.mjs enqueue) 제안 / tier_c → retro 통보 / 공통 info 통보
-//   ⑤ 멱등성: ledger/promoter-ledger.jsonl 에 클러스터 ID별 최종 처리 기록 — 재처리 금지
+//   ⑤ 멱등성: ledger/promoter-ledger.jsonl 에 클러스터 ID별 최종 처리 기록 — 재처리 금지.
+//      이미 처리된 클러스터가 다시 보이면 LLM 없이 해당 제안의 근거만 갱신(proposal_touch).
 //   ⑥ 비용 상한: LLM 최대 3콜/실행 (sonnet 판정 1 + haiku 시뮬 최대 2) — 초과 분기 없음
 //
 // 안전 원칙:
@@ -33,6 +47,10 @@ import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import {
+  upsertProposal, collectEvidence, loadState as loadProposals, findMatch as findProposalMatch,
+  MIN_EVIDENCE, MD_FILE as PROPOSALS_MD,
+} from '../lib/rule-proposals.mjs';
 
 // ─── 경로 상수 (하드코딩 금지 — 환경변수 우선) ───
 const HOME = homedir();
@@ -59,7 +77,9 @@ const REPORT_FRESH_HOURS = 26;           // 리포트 신선도 경고 임계 (0
 const MODEL_JUDGE = 'claude-sonnet-5';            // ② 판정용
 const MODEL_SIM = 'claude-haiku-4-5-20251001';      // ③ 시뮬용
 // 최종 상태 — 이 상태로 ledger 에 기록된 클러스터는 재처리 금지 (⑤ 멱등성)
-const FINAL_STATUSES = new Set(['applied', 'held_sim_no', 'proposed_dev_queue', 'proposed_retro', 'skip']);
+// 'proposed_rule' = tier_a 시뮬 통과 → 제안서 등재 (2026-09-05 부터 report_only 'applied' 를 대체).
+// 'held_insufficient_evidence' 는 일부러 최종이 아니다 — 근거가 쌓이면 다음 실행에서 다시 본다.
+const FINAL_STATUSES = new Set(['applied', 'proposed_rule', 'held_sim_no', 'proposed_dev_queue', 'proposed_retro', 'skip']);
 
 const DRY_RUN = process.argv.includes('--dry-run');
 let llmCalls = 0; // 실행당 LLM 호출 카운터
@@ -151,6 +171,9 @@ function loadProcessedIds() {
     try {
       const d = JSON.parse(line);
       if (d.type === 'cluster' && FINAL_STATUSES.has(d.status)) done.add(d.cluster_id);
+      // 'reprocess' 행 = 최종 상태 철회 (append-only 원장에서 되돌리는 유일한 방법).
+      // 예: 2026-09-05 이전 report_only 'applied' 는 룰 본문이 유실돼 제안서 경로로 재판정이 필요했다.
+      if (d.type === 'cluster' && d.status === 'reprocess') done.delete(d.cluster_id);
     } catch { /* 손상 라인 무시 */ }
   }
   return done;
@@ -337,17 +360,41 @@ function main() {
   const candidates = clusters.filter((c) => !processed.has(c.id));
   log(`클러스터 ${clusters.length}개 중 미처리 후보 ${candidates.length}개 (ledger 멱등 필터)`);
 
-  const counters = { applied: 0, held: 0, dev_queue: 0, retro: 0, skip: 0, deferred: 0, escalated: 0 };
+  const counters = { applied: 0, held: 0, dev_queue: 0, retro: 0, skip: 0, deferred: 0, escalated: 0, proposed: 0, touched: 0, insufficient: 0 };
+
+  // ─── 제안서 근거 갱신 (LLM 0콜) ───
+  // 이미 처리된 클러스터가 오늘도 top_clusters 에 있으면 = 그 패턴이 아직 살아 있다는 뜻.
+  // 멱등 필터에 걸려 LLM 은 다시 안 부르지만, 제안서의 근거 건수·마지막 발생은 갱신한다.
+  // (승격·기각 뒤 재발이면 recurrence_after_decision 가 올라간다 — "룰이 안 먹힌다" 신호)
+  const proposalsState = loadProposals();
+  for (const c of clusters.filter((x) => processed.has(x.id))) {
+    if (!findProposalMatch(proposalsState, c)) continue;
+    if (DRY_RUN) { log(`[DRY] 제안 근거 갱신 생략: ${c.id}`); continue; }
+    try {
+      const r = upsertProposal({ cluster_id: c.id, seed: c.seed, members: c.members, size: c.size });
+      ledgerAppend({ type: 'proposal_touch', cluster_id: c.id, proposal_id: r.id, action: r.action, evidence_count: r.evidence_count, proposal_status: r.status });
+      counters.touched += 1;
+      log(`제안 근거 갱신 (${r.action}): ${c.id} → ${r.id} 근거 ${r.evidence_count}건`);
+    } catch (e) { log(`WARN: 제안 근거 갱신 실패 ${c.id}: ${e.message}`); }
+  }
 
   // ─── 룰→훅 2차 승격 (2026-07-11 신설 · LLM 0콜 — 순수 데이터 검사) ───
   // 배경: tier_a 룰 적용 클러스터는 ledger 멱등성으로 영구 재처리 금지 → 룰이 안 먹혀서
   // 재발이 지속돼도(예: cl-73cdbbe 재발 91건) 아무도 격상하지 않는 구조 구멍.
   // 여기서 "룰 적용됨 + 여전히 top_clusters 재발 ≥ 임계" 를 감지해 결정적 가드(훅/코드)
   // 승격 후보로 플래그하고 retro 채널로 결재를 요청한다. 실행당 최대 3건 (통보 폭주 방지).
+  // "룰 적용됨" = ledger 'applied'(옛 직접 기재) 또는 제안서에서 사람이 promoted 한 경우.
+  // 제안서 pending 인 클러스터는 룰이 아직 안 들어갔으므로 여기서 세지 않는다.
   const statuses = loadLedgerStatuses();
+  const ruleLive = (c) => {
+    const st = statuses.get(c.id);
+    if (st && st.has('applied')) return true;
+    const m = findProposalMatch(proposalsState, c);
+    return !!(m && m.proposal.status === 'promoted');
+  };
   const escalations = clusters.filter((c) => {
     const st = statuses.get(c.id);
-    return st && st.has('applied') && !st.has('escalated_hook_candidate') && c.size >= ESCALATE_SIZE;
+    return st && !st.has('escalated_hook_candidate') && c.size >= ESCALATE_SIZE && ruleLive(c);
   }).slice(0, 3);
   for (const c of escalations) {
     ledgerAppend({
@@ -404,6 +451,15 @@ function main() {
         counters.held += 1;
         continue;
       }
+      // ③-0 근거 사전검사 (LLM 0콜) — mistake-ledger 에 실제 발생 행이 MIN_EVIDENCE 미만이면
+      //     시뮬 콜을 쓰지 않고 보류. 최종 상태가 아니므로 근거가 쌓이면 다음 실행에서 다시 본다.
+      const evidenceN = collectEvidence([cluster.seed, ...(cluster.members || [])]).length;
+      if (evidenceN < MIN_EVIDENCE) {
+        log(`근거 부족 — ${v.id} 실제 발생 ${evidenceN}건 < ${MIN_EVIDENCE} (제안서 미등재, 시뮬 생략)`);
+        ledgerAppend({ ...base, status: 'held_insufficient_evidence', evidence_count: evidenceN, rule_title: v.title || '' });
+        counters.insufficient += 1;
+        continue;
+      }
       // ③ 적용 전 시뮬 (haiku 1콜) — 교정 행동 미확인 시 적용 보류
       const sim = simulateRule(v.rule_block, v.scenario);
       if (!sim.pass) {
@@ -415,10 +471,32 @@ function main() {
         counters.held += 1;
         continue;
       }
+      // ③-1 제안서 등재 (기본 경로) — 룰 본문·시나리오·근거를 rule-proposals 에 남긴다.
+      //     룰 파일 직접 기재는 PROMOTER_WRITE_RULES=1 일 때만 (applyRuleBlock 내부 게이트).
       const res = applyRuleBlock(v.id, v.title || cluster.seed.slice(0, 30), v.rule_block, cluster);
-      ledgerAppend({ ...base, status: 'applied', sim: sim.raw, rule_title: v.title || '', apply_result: res });
+      let prop = { action: 'skipped', id: null, evidence_count: evidenceN };
+      try {
+        prop = upsertProposal({
+          cluster_id: v.id, seed: cluster.seed, members: cluster.members || [], size: cluster.size,
+          rule_title: v.title || '', rule_block: v.rule_block, scenario: v.scenario,
+          reason: v.reason || '', sim: sim.raw, judged_by: MODEL_JUDGE,
+        });
+      } catch (e) { log(`WARN: 제안서 등재 실패 ${v.id}: ${e.message}`); prop.action = `error: ${e.message}`; }
+      const status = res === 'applied' ? 'applied' : 'proposed_rule';
+      ledgerAppend({
+        ...base, status, sim: sim.raw, rule_title: v.title || '', rule_block: v.rule_block, scenario: v.scenario,
+        apply_result: res, proposal_id: prop.id, proposal_action: prop.action, evidence_count: prop.evidence_count,
+      });
       counters.applied += 1;
-      log(`tier_a 적용 완료 (${res}): ${v.id} → ${RULES_FILE}`);
+      if (prop.action === 'new') {
+        counters.proposed += 1;
+        notify('retro', `규칙 승격 제안 ${todayKST()} ${prop.id}`, {
+          제안: prop.id, 제목: v.title || cluster.seed, 근거: `${prop.evidence_count}건`, 클러스터: v.id,
+          승격: `node ~/jarvis/infra/scripts/rule-proposal-ctl.mjs promote ${prop.id} --to <규칙파일>`,
+          제안서: PROPOSALS_MD,
+        });
+      }
+      log(`tier_a 처리 완료 (${status}/${res}, 제안 ${prop.action} ${prop.id || '-'} 근거 ${prop.evidence_count}건): ${v.id}`);
     } else if (v.tier === 'tier_b') {
       const promptText = [
         '다음 반복 실수 클러스터에 대한 구조적 가드(코드/스크립트/자동 검사)를 설계·구현하라.',
@@ -459,11 +537,12 @@ function main() {
 
   // ④ 공통 info 통보 (제목에 날짜 포함 — discord-route 1h dedup 회피)
   notify('info', `오답 자동 승격 결과 ${todayKST()}`, {
-    후보: `${candidates.length}건`, 룰적용: `${counters.applied}건`, 보류: `${counters.held}건`,
+    후보: `${candidates.length}건`, 제안서등재: `${counters.proposed}건`, 근거갱신: `${counters.touched}건`,
+    근거부족: `${counters.insufficient}건`, 보류: `${counters.held}건`,
     개발큐: `${counters.dev_queue}건`, 회고: `${counters.retro}건`, 스킵: `${counters.skip}건`,
     LLM콜: `${llmCalls}회`,
   });
-  log(`완료 — applied=${counters.applied} held=${counters.held} dev_queue=${counters.dev_queue} retro=${counters.retro} skip=${counters.skip} deferred=${counters.deferred} llm_calls=${llmCalls}`);
+  log(`완료 — applied=${counters.applied} proposed=${counters.proposed} touched=${counters.touched} insufficient=${counters.insufficient} held=${counters.held} dev_queue=${counters.dev_queue} retro=${counters.retro} skip=${counters.skip} deferred=${counters.deferred} llm_calls=${llmCalls}`);
 }
 
 try {

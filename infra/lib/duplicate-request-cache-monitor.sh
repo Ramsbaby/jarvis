@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] P — 캐시 상태 감시. 실작업(cleanup)은 jarvis-dup-request-cleanup 으로 이관됨
+# 재개: rm ~/jarvis/runtime/state/stopped/duplicate-request-cache-monitor
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/duplicate-request-cache-monitor" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[duplicate-request-cache-monitor] 중지 플래그 있음"
+    exit 0
+fi
+
 # Duplicate Request Cache Monitor (Cluster cl-3d5ba801bdad1df9)
 # 목적: 캐시 파일 크기, 라인 수, 만료율을 모니터링하고 통계 기록
 # 사용: bash duplicate-request-cache-monitor.sh [--alert-threshold-mb 10]

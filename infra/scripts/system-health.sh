@@ -19,8 +19,13 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "${LOG}"; }
 
 # ── 1. 메트릭 수집 ────────────────────────────────────────────────────────────
 # 디스크 사용률
+# 2026-09-10 교정: `df /` 는 macOS 의 **봉인된 읽기전용 시스템 볼륨**을 읽는다(현재 65%).
+# 실제 데이터가 쌓이는 /System/Volumes/Data 는 96% 인데 그걸 놓쳐 위험을 계속 못 봤다.
+# 실 볼륨 전체를 훑되 시뮬레이터·AppTranslocation 마운트는 원래 꽉 찬 채 붙으므로 제외한다.
 if command -v df >/dev/null 2>&1; then
-    DISK_PCT=$(df / 2>/dev/null | awk 'NR==2{gsub(/%/,"",$5); print int($5)}' || echo "0")
+    DISK_PCT=$(df -P 2>/dev/null \
+        | awk 'NR>1 && $1 ~ /^\/dev\// && $6 !~ /CoreSimulator|AppTranslocation|\/Volumes\/com\.apple/ {gsub(/%/,"",$5); if (int($5)>m) m=int($5)} END{print (m==""?0:m)}' \
+        || echo "0")
 else
     DISK_PCT="0"
 fi
@@ -108,7 +113,12 @@ SEVERITY="ok"
 (( MEM_FREE_PCT < 10 ))   && ALERTS+=("🔴 메모리 여유 ${MEM_FREE_PCT}% (임계: 10%)") && SEVERITY="crit" || true
 (( MEM_FREE_PCT < 20 && MEM_FREE_PCT >= 10 )) && ALERTS+=("⚠️ 메모리 여유 ${MEM_FREE_PCT}%") && [[ "$SEVERITY" == "ok" ]] && SEVERITY="warn" || true
 (( CRON_FAILS >= 3 ))     && ALERTS+=("⚠️ 크론 최근 실패 ${CRON_FAILS}건") && [[ "$SEVERITY" == "ok" ]] && SEVERITY="warn" || true
-(( BOT_UP == 0 ))         && ALERTS+=("🔴 discord-bot 프로세스 없음") && SEVERITY="crit" || true
+# 2026-09-10 오픈클로 이식: 디스코드 봇을 의도적으로 제거했다. 이 줄이 남아 있으면 매시간
+# "🚨 시스템 위험 감지 — discord-bot 프로세스 없음"을 crit 으로 올려 디스크 같은 진짜 위험을 묻는다.
+# 정지 플래그가 있으면 "없는 게 정상"이고, 없는데 없으면 그때는 진짜 이상이다.
+if [[ ! -f "${HOME}/jarvis/runtime/state/stopped/discord-removed" ]]; then
+    (( BOT_UP == 0 ))     && ALERTS+=("🔴 discord-bot 프로세스 없음") && SEVERITY="crit" || true
+fi
 
 # ── 4. 정상이면 조용히 종료 ──────────────────────────────────────────────────
 if [[ "${#ALERTS[@]}" -eq 0 ]]; then
@@ -149,8 +159,10 @@ _alerts_text=$(printf "%s / " "${ALERTS[@]}" | sed 's/ \/ $//')
 
 if ! discord_route "$_severity_route" "$TITLE" "alerts=${_alerts_text},summary=${SUMMARY},timestamp=${TS}" 2>/dev/null; then
     log "WARN: Discord 라우팅 실패 (로컬 파일만 기록: ${TITLE})"
-else
-    log "Discord 알림 전송 완료: ${TITLE}"
+elif [[ -f "${HOME}/jarvis/runtime/state/stopped/discord-removed" ]]; then
+    # 2026-09-10: 억제된 것을 "전송 완료"라고 적으면 감사에서 "아직 송출 중"으로 오독된다.
+    # 실제 배달은 no-external.log → jarvis-suppressed-digest 가 맡는다.
+    log "알림 억제됨 — 송출 비활성, 다이제스트로 배달: ${TITLE}"
 fi
 
 # ── 6. cron-status.json 갱신 ──────────────────────────────────────────────

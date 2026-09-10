@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] P — 크론 상태 감시는 오픈클로 엔진이 기본 제공
+# 재개: rm ~/jarvis/runtime/state/stopped/cron-monitoring-orchestrator
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/cron-monitoring-orchestrator" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[cron-monitoring-orchestrator] 중지 플래그 있음"
+    exit 0
+fi
+
 # cron-monitoring-orchestrator.sh — Cron failure detection and monitoring orchestrator
 #
 # Handles two main command modes:

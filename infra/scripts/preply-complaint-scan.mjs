@@ -1,4 +1,15 @@
 #!/usr/bin/env node
+
+// [오픈클로 이식 2026-09-10] 판정 D — 정지.
+// 근거: discord.js Client 로 채널 메시지를 직접 fetch 하는 구조(24·85행) — 봇 제거로 입력원 소멸. 원장도 7/27 이후 정지
+// 재개: rm ~/jarvis/runtime/state/stopped/preply-complaint-scan
+import { existsSync as __stopChk } from 'node:fs';
+import { homedir as __stopHome } from 'node:os';
+if (__stopChk(__stopHome() + '/jarvis/runtime/state/stopped/preply-complaint-scan')) {
+  console.log('[preply-complaint-scan] 중지 플래그 있음 (판정 D)');
+  process.exit(0);
+}
+
 /**
  * preply-complaint-scan.mjs — 보람님 불만을 자동 감지·누적·"미커버 반복 불만" 리포트 (렌더 아이 3층: 자동학습 루프).
  *

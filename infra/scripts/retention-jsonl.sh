@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-retention-jsonl(04:00) 로 이관. OPENCLAW_JOB=1 로 통과한다.
+# 재개: rm ~/jarvis/runtime/state/stopped/retention-jsonl
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/retention-jsonl" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[retention-jsonl] 중지 플래그 있음"
+    exit 0
+fi
+
 # retention-jsonl.sh — JSONL 원장 무한 성장 방지
 #
 # 정책:

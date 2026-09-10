@@ -286,7 +286,7 @@ check_cli_tools() {
 # ── 8. 디스크 ────────────────────────────────────────────────────────────────
 check_disk() {
   local pct
-  pct=$(df / | awk 'NR==2 {gsub(/%/,"",$5); print $5+0}' 2>/dev/null || echo "0")
+  pct=$(df "$([ -d /System/Volumes/Data ] && echo /System/Volumes/Data || echo /)" | awk 'NR==2 {gsub(/%/,"",$5); print $5+0}' 2>/dev/null || echo "0")
   if [[ "$pct" -gt 90 ]]; then
     add_result "disk" "FAIL" "${pct}% 사용"
   elif [[ "$pct" -gt 80 ]]; then

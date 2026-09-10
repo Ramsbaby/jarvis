@@ -1,4 +1,15 @@
 #!/usr/bin/env node
+
+// [오픈클로 이식 2026-09-10] 판정 D — 정지.
+// 근거: 입력 소스 둘 다 정지(channel-feed 7/6, ralph-insights 8/1)로 감사창 14일보다 오래돼 항상 표본부족
+// 재개: rm ~/jarvis/runtime/state/stopped/interview-star-diversity-audit
+import { existsSync as __stopChk } from 'node:fs';
+import { homedir as __stopHome } from 'node:os';
+if (__stopChk(__stopHome() + '/jarvis/runtime/state/stopped/interview-star-diversity-audit')) {
+  console.log('[interview-star-diversity-audit] 중지 플래그 있음 (판정 D)');
+  process.exit(0);
+}
+
 // interview-star-diversity-audit.mjs — 면접봇 답변 STAR 분포·매몰 자율 감사
 //
 // Why 1줄: "어떤 질문이든 같은 STAR로 답하는 매몰"을 주인님이 실면접에서 처음 발견하는

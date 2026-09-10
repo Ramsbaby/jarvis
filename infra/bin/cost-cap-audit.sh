@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 판정 D — 정지.
+# 근거: 크론 산출물 소비처 없음 — 실효 가드는 pre-commit 훅이고 그 훅은 감사를 스스로 재실행한다
+# 재개: rm ~/jarvis/runtime/state/stopped/cost-cap-audit
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/cost-cap-audit" ]]; then
+    echo "[cost-cap-audit] 중지 플래그 있음 (판정 D)"
+    exit 0
+fi
+
 # cost-cap-audit.sh — tasks.json 비용 캡 일일 감사
 #
 # 목적: tasks.json의 모든 task가 적절한 maxBudget(비용 상한)을 갖는지 검사.

@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 판정 D — 정지.
+# 근거: 산출물 claim-correction-ledger.jsonl 을 읽는 곳이 자비스 전체에 0건 — 완전 고아
+# 재개: rm ~/jarvis/runtime/state/stopped/claim-correction-tracker
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/claim-correction-tracker" ]]; then
+    echo "[claim-correction-tracker] 중지 플래그 있음 (판정 D)"
+    exit 0
+fi
+
 set -uo pipefail
 
 # claim-correction-tracker.sh — 자비스 단정→주인님 교정 루프 측정 (2026-06-22 신설)

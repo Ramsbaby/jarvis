@@ -2,14 +2,23 @@
 // Privacy Guard Scanner — Phase 1
 //
 // Modes:
-//   --staged          git staged 파일만 스캔 (pre-commit)
-//   --diff=BASE..HEAD 두 ref 사이 변경 파일만 (CI)
-//   --all             tracked 전체 (감사)
+//   --staged             git staged 파일만 스캔 (pre-commit)
+//   --diff=BASE..HEAD    그 구간에서 변경된 파일의 **최종 상태**만 (CI)
+//   --history=BASE..HEAD 그 구간 커밋들이 **추가한 라인** 전체 (pre-push)
+//   --all                tracked 전체 (감사)
+//
+// 왜 --history 가 따로 있나 (2026-09-10):
+//   --diff 는 변경된 파일의 현재 내용만 읽는다. 한 커밋이 민감한 줄을 넣고 다음 커밋이
+//   그것을 지우면 최종 상태는 깨끗해서 통과한다 — 그러나 push 하면 그 줄은 커밋 diff 로
+//   그대로 공개된다. 실제 사례: 2d9647b 가 career-narratives 규칙에 걸리는 줄을 넣고
+//   0f2143b 가 뺐는데 --diff 스캔은 clean 을 냈다. 저장소가 PUBLIC 이면 이건 노출이다.
+//   정본을 고친 것과 히스토리를 고친 것은 다르다.
 //
 // 사용:
 //   node scripts/privacy/scan.mjs --staged
 //   node scripts/privacy/scan.mjs --all
 //   node scripts/privacy/scan.mjs --diff=origin/main..HEAD
+//   node scripts/privacy/scan.mjs --history=origin/main..HEAD
 //
 // 정책: 외부 의존 0. YAML은 sub-set 정규식 파서로 처리.
 // 종료코드: 위반 0 → exit 0, 1+ → exit 1.
@@ -202,9 +211,8 @@ function resolvePattern(rule) {
   return rule.pattern || null;
 }
 
-function scan(files, blocklist, mode) {
-  const violations = [];
-  const compiled = blocklist.rules
+function compileRules(blocklist) {
+  return blocklist.rules
     .map((r) => {
       const pattern = resolvePattern(r);
       if (!pattern) return null; // 패턴 미가용 → skip
@@ -215,6 +223,115 @@ function scan(files, blocklist, mode) {
       };
     })
     .filter(Boolean);
+}
+
+// 한 줄을 규칙에 걸어 위반을 만든다. 파일 스캔과 히스토리 스캔이 같은 판정을 쓰도록 공용화한다.
+function matchLine({ line, path, lineNo, compiled, blocklist, extra }) {
+  const found = [];
+  if (!line) return found;
+
+  // 인라인 예외 수집
+  const inlineAllow = new Set();
+  const inlineMatches = line.matchAll(/(?:#|\/\/)\s*privacy:allow\s+([a-z0-9,_-]+)/gi);
+  for (const m of inlineMatches) {
+    for (const id of m[1].split(",")) inlineAllow.add(id.trim());
+  }
+
+  for (const rule of compiled) {
+    if (inlineAllow.has(rule.id)) continue;
+    if (pathMatchesAny(path, rule.allow_paths)) continue;
+    const m = rule.re.exec(line);
+    if (!m) continue;
+    if (rule.contextRe.some((cr) => cr.test(line))) continue;
+
+    const preview = line.length > 80 ? line.slice(0, 77) + "..." : line;
+    found.push({
+      file: path,
+      line: lineNo,
+      ruleId: rule.id,
+      severity: rule.severity || "medium",
+      match: m[0],
+      preview: preview.trim(),
+      ...(extra || {}),
+    });
+  }
+  return found;
+}
+
+// 커밋들이 추가한 라인을 스캔한다. diff 헤더로 파일 경로를 추적해
+// globalIgnore·allow_paths 가 파일 스캔과 동일하게 적용되도록 한다.
+function scanHistory(range, blocklist) {
+  const compiled = compileRules(blocklist);
+  const violations = [];
+
+  let shas;
+  try {
+    shas = execSync(`git log --format=%H ${range}`, { encoding: "utf8" })
+      .split("\n").filter(Boolean);
+  } catch {
+    console.error(`❌ history 범위를 읽지 못했습니다: ${range}`);
+    process.exit(2);
+  }
+
+  for (const sha of shas) {
+    let diff;
+    try {
+      diff = execSync(
+        `git show ${sha} --format=%x00%h%x00%s --unified=0 --no-color`,
+        { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+      );
+    } catch { continue; }
+
+    let short = sha.slice(0, 7);
+    let subject = "";
+    let curPath = null;
+    let lineNo = 0;
+
+    for (const line of diff.split(/\r?\n/)) {
+      if (line.startsWith(" ")) {
+        const parts = line.split(" ");
+        short = parts[1] || short;
+        subject = parts[2] || "";
+        continue;
+      }
+      if (line.startsWith("+++ ")) {
+        const p = line.slice(4).trim();
+        curPath = p === "/dev/null" ? null : p.replace(/^b\//, "");
+        lineNo = 0;
+        continue;
+      }
+      if (line.startsWith("--- ") || line.startsWith("diff --git ")) continue;
+      if (line.startsWith("@@")) {
+        const m = /^@@ -\d+(?:,\d+)? \+(\d+)/.exec(line);
+        lineNo = m ? Number(m[1]) : 0;
+        continue;
+      }
+      if (!line.startsWith("+")) continue;
+
+      const added = line.slice(1);
+      lineNo += 1;
+      if (!curPath) continue;
+      if (pathMatchesAny(curPath, blocklist.globalIgnore)) continue;
+      if (isBinaryByExt(curPath)) continue;
+
+      violations.push(
+        ...matchLine({
+          line: added,
+          path: curPath,
+          lineNo,
+          compiled,
+          blocklist,
+          extra: { commit: short, subject },
+        }),
+      );
+    }
+  }
+  return violations;
+}
+
+function scan(files, blocklist, mode) {
+  const violations = [];
+  const compiled = compileRules(blocklist);
 
   for (const f of files) {
     if (pathMatchesAny(f, blocklist.globalIgnore)) continue;
@@ -224,34 +341,15 @@ function scan(files, blocklist, mode) {
 
     const lines = content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line) continue;
-
-      // 인라인 예외 수집
-      const inlineAllow = new Set();
-      const inlineMatches = line.matchAll(/(?:#|\/\/)\s*privacy:allow\s+([a-z0-9,_-]+)/gi);
-      for (const m of inlineMatches) {
-        for (const id of m[1].split(",")) inlineAllow.add(id.trim());
-      }
-
-      for (const rule of compiled) {
-        if (inlineAllow.has(rule.id)) continue;
-        if (pathMatchesAny(f, rule.allow_paths)) continue;
-        const m = rule.re.exec(line);
-        if (!m) continue;
-        // context_allow: 같은 라인에 허용 패턴이 있으면 skip
-        if (rule.contextRe.some((cr) => cr.test(line))) continue;
-
-        const preview = line.length > 80 ? line.slice(0, 77) + "..." : line;
-        violations.push({
-          file: f,
-          line: i + 1,
-          ruleId: rule.id,
-          severity: rule.severity || "medium",
-          match: m[0],
-          preview: preview.trim(),
-        });
-      }
+      violations.push(
+        ...matchLine({
+          line: lines[i],
+          path: f,
+          lineNo: i + 1,
+          compiled,
+          blocklist,
+        }),
+      );
     }
   }
   return violations;
@@ -267,6 +365,7 @@ function parseArgs(argv) {
     if (a === "--staged") mode = { kind: "staged" };
     else if (a === "--all") mode = { kind: "all" };
     else if (a.startsWith("--diff=")) mode = { kind: "diff", range: a.slice(7) };
+    else if (a.startsWith("--history=")) mode = { kind: "history", range: a.slice(10) };
     else if (a.startsWith("--min-severity=")) minSeverity = a.slice(15);
   }
   return mode ? { ...mode, minSeverity } : null;
@@ -275,7 +374,7 @@ function parseArgs(argv) {
 function main() {
   const mode = parseArgs(process.argv.slice(2));
   if (!mode) {
-    console.error("Usage: scan.mjs --staged | --all | --diff=BASE..HEAD [--min-severity=high]");
+    console.error("Usage: scan.mjs --staged | --all | --diff=BASE..HEAD | --history=BASE..HEAD [--min-severity=high]");
     process.exit(2);
   }
   if (!existsSync(BLOCKLIST)) {
@@ -289,11 +388,18 @@ function main() {
     process.exit(2);
   }
 
-  const files = getFiles(mode);
-  const violations = scan(files, blocklist, mode);
+  let files = [];
+  let violations;
+  if (mode.kind === "history") {
+    violations = scanHistory(mode.range, blocklist);
+  } else {
+    files = getFiles(mode);
+    violations = scan(files, blocklist, mode);
+  }
 
   if (violations.length === 0) {
-    console.log(`✅ Privacy scan clean (mode=${mode.kind}, files=${files.length}, rules=${blocklist.rules.length})`);
+    const scope = mode.kind === "history" ? `range=${mode.range}` : `files=${files.length}`;
+    console.log(`✅ Privacy scan clean (mode=${mode.kind}, ${scope}, rules=${blocklist.rules.length})`);
     process.exit(0);
   }
 

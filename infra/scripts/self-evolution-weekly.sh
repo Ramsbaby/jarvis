@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-self-evolution-weekly(월 09:30) 로 이관. OPENCLAW_JOB=1 로 통과한다.
+# 재개: rm ~/jarvis/runtime/state/stopped/self-evolution-weekly
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/self-evolution-weekly" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[self-evolution-weekly] 중지 플래그 있음"
+    exit 0
+fi
+
 # self-evolution-weekly.sh — 학습 루프 주간 자기평가 (자율 증류 사다리 관측 지표)
 #
 # 매주 월 09:30 KST cron 실행. 최근 7일의 학습 루프 핵심 수치 4종을 기계 집계만으로 모아

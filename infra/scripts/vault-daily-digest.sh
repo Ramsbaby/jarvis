@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-vault-daily-digest 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
+# 재개: rm ~/jarvis/runtime/state/stopped/vault-daily-digest
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/vault-daily-digest" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[vault-daily-digest] 중지 플래그 있음 — 오픈클로로 이관됨"
+    exit 0
+fi
+
 set -euo
 # pipefail 제거: SIGPIPE로 인한 조기 종료 방지
 # 파이프라인 내 일부 커맨드 실패 시 앞단 커맨드의 SIGPIPE를 무시

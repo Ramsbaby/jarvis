@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] jarvis-launchd-guardian(*/3) 으로 이관. OPENCLAW_JOB=1 로 통과한다.
+# crontab 6행이 남아 있으나 crontab 쓰기가 막혀(rc=124) 스크립트 층에서 이중 실행을 막는다.
+# 재개: rm ~/jarvis/runtime/state/stopped/launchd-guardian
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/launchd-guardian" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[launchd-guardian] 중지 플래그 있음 — 오픈클로로 이관됨"
+    exit 0
+fi
+
 set -euo pipefail
 
 # launchd-guardian.sh - Cron-based LaunchAgent watchdog (SPOF safety net)
@@ -20,17 +29,16 @@ UID_NUM=$(id -u)
 
 # KeepAlive services: must always have a running PID
 KEEPALIVE_SERVICES=(
-    "ai.jarvis.discord-bot"
-    "ai.jarvis.watchdog"
+    # "ai.jarvis.discord-bot"  # [오픈클로 이식 2026-09-10] 디스코드 제거로 감시 대상 소멸. 복구 시 주석 해제.
+    # "ai.jarvis.watchdog"     # [오픈클로 이식 2026-09-10] watchdog.sh는 디스코드 봇 전용 감시자다. 같이 정지.
     "ai.jarvis.cloudflared-tunnel"
     "ai.jarvis.board"
 )
 
 # StartInterval services: run periodically, PID=- between runs is normal
-INTERVAL_SERVICES=(
-    "ai.jarvis.symlink-audit"
-    "ai.jarvis.board-watchdog"
-)
+# 2026-09-10 오픈클로 이식: symlink-audit·board-watchdog 는 오픈클로 잡으로 옮기고 plist 를 격리했다.
+#   plist 파일이 없으면 check_loaded 가 즉시 return 하므로 되살리진 않지만, 목록을 실제와 맞춘다.
+INTERVAL_SERVICES=()
 
 PLIST_DIR="$HOME/Library/LaunchAgents"
 

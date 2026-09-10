@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# [오픈클로 이식 2026-09-10] 감시 대상인 디스코드 봇을 제거했다. 3분마다 bot.crashed를 발행하며
+# bot-heal.sh까지 부르던 루프를 끊는다. 겸사 보던 디스크·LanceDB는 오픈클로 disk-alert·system-health가 본다.
+# 재개: rm ~/jarvis/runtime/state/stopped/watchdog
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/watchdog" ]]; then
+    echo "[watchdog] 중지 플래그 있음 — 감시 대상(디스코드 봇)이 제거됐다 (state/stopped/watchdog)"
+    exit 0
+fi
+
 set -euo pipefail
 
 # watchdog.sh - Discord bot process monitor & self-healer
@@ -765,7 +773,7 @@ HEALTHEOF
     # v4.50: 디스크 사용률 감시 (85% 초과 시 Discord 경고 — 24시간 쿨다운)
     _disk_alert_cooldown="$BOT_HOME/state/disk-usage-alert-last.txt"
     _disk_cooldown_sec=86400  # 24시간 — 하루 1회 알림으로 제한
-    disk_pct=$(df -h / 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5+0}' || echo 0)
+    disk_pct=$(df -h "$([ -d /System/Volumes/Data ] && echo /System/Volumes/Data || echo /)" 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5+0}' || echo 0)
     if (( disk_pct >= 85 )); then
         _now_epoch=$(date +%s)
         _last_alert=$(cat "$_disk_alert_cooldown" 2>/dev/null || echo "0")

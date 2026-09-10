@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+
+// [오픈클로 이식 2026-09-10] 오픈클로 jarvis-dup-request-cleanup(매시) 로 이관. OPENCLAW_JOB=1 로 통과한다.
+// 재개: rm ~/jarvis/runtime/state/stopped/duplicate-request-guard
+import { existsSync as __sc } from 'node:fs';
+import { homedir as __sh } from 'node:os';
+if (__sc(__sh() + '/jarvis/runtime/state/stopped/duplicate-request-guard') && process.env.OPENCLAW_JOB !== '1') {
+  console.log('[duplicate-request-guard] 중지 플래그 있음 — 오픈클로로 이관됨');
+  process.exit(0);
+}
+
 /**
  * Duplicate Request Guard — 중복 요청 감지 미들웨어
  * 클러스터 cl-3d5ba801bdad1df9: 2분 내 동일 요청 반복 실행 방지

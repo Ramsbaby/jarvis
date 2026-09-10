@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-hook-canary-test 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
+# 재개: rm ~/jarvis/runtime/state/stopped/hook-canary-test
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/hook-canary-test" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[hook-canary-test] 중지 플래그 있음 — 오픈클로로 이관됨"
+    exit 0
+fi
+
 # hook-canary-test.sh — 독립 감사 관문(Stop 훅) 심장박동 검사
 #
 # Why 1줄: 관문의 "침묵"이 ① 고장(죽은 침묵)인지 ② 정상 통과(일하는 침묵)인지 외부에서

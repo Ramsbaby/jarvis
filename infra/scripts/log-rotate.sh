@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-log-rotate(03:15) 로 이관. OPENCLAW_JOB=1 로 통과한다.
+# 재개: rm ~/jarvis/runtime/state/stopped/log-rotate
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/log-rotate" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[log-rotate] 중지 플래그 있음"
+    exit 0
+fi
+
 set -euo pipefail
 
 # log-rotate.sh — 자비스 로그 로테이션

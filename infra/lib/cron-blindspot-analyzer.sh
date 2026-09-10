@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 판정 P — 정지.
+# 근거: "반복 실패 크론 감지"는 프롬프트 명시대로 오픈클로 실행이력·실패알림 엔진이 기본 대체하는 범주. 산출물도 1주 넘게 정체 + 소비자 없음.
+# 재개: rm ~/jarvis/runtime/state/stopped/cron-blindspot-analyzer
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/cron-blindspot-analyzer" ]]; then
+    echo "[cron-blindspot-analyzer] 중지 플래그 있음 (판정 P)"
+    exit 0
+fi
+
 # cron-blindspot-analyzer.sh — 크론 모니터링 맹점 분석
 #
 # 목적: 크론 시스템의 관찰되지 않는 맹점을 자동으로 감지하고 분석

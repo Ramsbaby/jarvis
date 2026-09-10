@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 판정 D — 정지.
+# 근거: BRAVE_API_KEY가 .env 어디에도 없어(0건) 모든 검색이 항상 실패 — 자격증명 미등록
+# 재개: rm ~/jarvis/runtime/state/stopped/brand-visibility-check
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/brand-visibility-check" ]]; then
+    echo "[brand-visibility-check] 중지 플래그 있음 (판정 D)"
+    exit 0
+fi
+
 # brand-visibility-check.sh - 브랜드 가시성 모니터링
 # 목적: GitHub 및 블로그 검색 순위 추적, 브랜드 노출도 모니터링
 # 스케줄: 6시간 주기 (crontab: 0 0,6,12,18 * * *)

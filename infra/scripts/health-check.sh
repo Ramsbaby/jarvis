@@ -62,7 +62,7 @@ else
 fi
 
 # 5. Disk space
-disk_pct=$(df -h / | awk 'NR==2 {print $5}' | tr -d '%')
+disk_pct=$(df -h "$([ -d /System/Volumes/Data ] && echo /System/Volumes/Data || echo /)" | awk 'NR==2 {print $5}' | tr -d '%')
 if [[ "$disk_pct" -gt 90 ]]; then
     check "disk" "fail" "${disk_pct}% used"
 elif [[ "$disk_pct" -gt 80 ]]; then
@@ -113,8 +113,8 @@ _write_health_json() {
 
     # --- system: disk ---
     local _disk_used_pct _disk_free_gb _inode_used_pct
-    _disk_used_pct=$(df / | awk 'NR==2 {gsub(/%/,"",$5); print $5+0}' 2>/dev/null || echo "0")
-    _disk_free_gb=$(df -k / | awk 'NR==2 {printf "%.1f", $4/1024/1024}' 2>/dev/null || echo "0")
+    _disk_used_pct=$(df "$([ -d /System/Volumes/Data ] && echo /System/Volumes/Data || echo /)" | awk 'NR==2 {gsub(/%/,"",$5); print $5+0}' 2>/dev/null || echo "0")
+    _disk_free_gb=$(df -k "$([ -d /System/Volumes/Data ] && echo /System/Volumes/Data || echo /)" | awk 'NR==2 {printf "%.1f", $4/1024/1024}' 2>/dev/null || echo "0")
     _inode_used_pct=$(df -i / | awk 'NR==2 {gsub(/%/,"",$5); print $5+0}' 2>/dev/null || echo "0")
 
     # --- system: memory (memory_pressure 기반 — macOS에서 free pages만 보면 실제 가용량을 과소평가) ---

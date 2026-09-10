@@ -33,19 +33,25 @@ log "=== automation-budget 시작 (period=${WEEK_AGO}~${TODAY}) ==="
 plists_files=$(find "${HOME}/Library/LaunchAgents" -maxdepth 1 -type f \
   \( -name "ai.jarvis.*.plist" -o -name "com.jarvis.*.plist" \) \
   -mtime -7 2>/dev/null)
-plists_added=$(echo "$plists_files" | grep -c '\.plist$' 2>/dev/null || echo 0)
+# 2026-09-10: grep -c 는 매치 0건이어도 "0"을 출력하고 exit 1 을 낸다.
+# `|| echo 0` 을 붙이면 0 이 두 번 찍혀 "0\n0" 이 되고 다음 산술식이 syntax error 로 죽는다.
+# 종료코드만 삼킨다.
+plists_added=$(echo "$plists_files" | grep -c '\.plist$' 2>/dev/null || true)
+plists_added=${plists_added:-0}
 
 # ─── 2) hooks_added ───
 hooks_files=$(find "${HOME}/.claude/hooks" -maxdepth 1 -type f \
   -name "*.sh" -mtime -7 2>/dev/null)
-hooks_added=$(echo "$hooks_files" | grep -c '\.sh$' 2>/dev/null || echo 0)
+hooks_added=$(echo "$hooks_files" | grep -c '\.sh$' 2>/dev/null || true)
+hooks_added=${hooks_added:-0}
 
 # ─── 3) scripts_added ───
 scripts_files=$(find \
   "${HOME}/jarvis/infra/scripts" \
   "${HOME}/jarvis/infra/bin" \
   -maxdepth 1 -type f -name "*.sh" -mtime -7 2>/dev/null)
-scripts_added=$(echo "$scripts_files" | grep -c '\.sh$' 2>/dev/null || echo 0)
+scripts_added=$(echo "$scripts_files" | grep -c '\.sh$' 2>/dev/null || true)
+scripts_added=${scripts_added:-0}
 
 total_added=$((plists_added + hooks_added + scripts_added))
 

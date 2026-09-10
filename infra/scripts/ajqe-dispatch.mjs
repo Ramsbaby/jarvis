@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+
+// [오픈클로 이식 2026-09-10] 오픈클로 jarvis-ajqe-dispatch 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
+// 재개: rm ~/jarvis/runtime/state/stopped/ajqe-dispatch
+import { existsSync as __sc } from 'node:fs';
+import { homedir as __sh } from 'node:os';
+if (__sc(__sh() + '/jarvis/runtime/state/stopped/ajqe-dispatch') && process.env.OPENCLAW_JOB !== '1') {
+  console.log('[ajqe-dispatch] 중지 플래그 있음 — 오픈클로로 이관됨');
+  process.exit(0);
+}
+
 /**
  * ajqe-dispatch.mjs — Active Jarvis Question Engine: 발송기
  *
@@ -324,7 +334,24 @@ async function main() {
     const channel = policy.domainChannel[q.domain] || 'jarvis';
     const webhook = loadWebhook(channel);
     if (!webhook) {
-      console.error(`❌ webhook 없음: channel=${channel} (q=${q.id}) — 건너뜀`);
+      // 2026-09-10 오픈클로 이식: 디스코드 전면 제거로 웹훅이 없다. 이 잡은 자체 fetch 를 쓰기 때문에
+      // alert-send·discord-visual 이 타는 no-external 브릿지를 안 탔고, 주인님께 물을 질문이
+      // 큐에 쌓이기만 하고 영영 안 닿았다. 억제 원장에 남겨 jarvis-suppressed-digest 가 배달하게 한다.
+      const cfg = loadJSON(MONITORING_PATH, {});
+      if (cfg._webhook_disabled_20260910 || cfg._webhooks_disabled_20260910) {
+        try {
+          const logDir = join(process.env.BOT_HOME || join(HOME, 'jarvis/runtime'), 'logs');
+          mkdirSync(logDir, { recursive: true });
+          // 원장은 한 줄 = 한 건이다. 질문 본문에 줄바꿈이 있어 그대로 넣으면 형식이 깨지고
+          // 다이제스트 파서가 뒤 줄들을 통째로 잃는다. 공백으로 눕혀서 넣는다.
+          const flat = String(q.questionText || q.id).replace(/\s+/g, ' ').trim().slice(0, 90);
+          appendFileSync(join(logDir, 'no-external.log'),
+            `${new Date().toISOString()} [NO_EXTERNAL] src=ajqe-dispatch.mjs ch=${channel} title=${flat} len=${String(q.questionText || '').length}\n`);
+          console.log(`[NO_EXTERNAL] 억제 기록: ${q.id} (ch=${channel}) — 다이제스트로 배달된다`);
+        } catch { /* 기록 실패는 무시 — 큐는 그대로 남아 다음 회차에 재시도된다 */ }
+      } else {
+        console.error(`❌ webhook 없음: channel=${channel} (q=${q.id}) — 건너뜀`);
+      }
       continue;
     }
 

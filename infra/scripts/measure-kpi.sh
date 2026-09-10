@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-measure-kpi 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
+# 재개: rm ~/jarvis/runtime/state/stopped/measure-kpi
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/measure-kpi" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[measure-kpi] 중지 플래그 있음 — 오픈클로로 이관됨"
+    exit 0
+fi
+
 set -euo pipefail
 
 # measure-kpi.sh - 자비스 컴퍼니 팀별 KPI 자동 측정

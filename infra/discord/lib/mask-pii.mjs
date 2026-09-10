@@ -39,6 +39,14 @@ const STATIC_PATTERNS = [
   { re: /sk-ant-[a-zA-Z0-9_-]{20,}/g, sub: () => 'sk-ant-***' },              // Anthropic 키
   { re: /sk-[a-zA-Z0-9]{20,}/g, sub: () => 'sk-***' },                        // 일반 시크릿
   { re: /gh[pousr]_[A-Za-z0-9]{20,}/g, sub: () => 'gh_***' },                 // GitHub 토큰
+  // 2026-09-10: 벤더 접두 키가 sk-/gh_ 만 잡혀 있어 Brave 키(BSA…)가 그대로 색인될 뻔했다.
+  // 대화가 10분마다 RAG 로 들어가므로 채팅에 붙여넣은 키는 여기서 막지 않으면 영구히 남는다.
+  { re: /\bBSA[A-Za-z0-9_-]{20,}/g, sub: () => 'BSA***' },                    // Brave Search API
+  { re: /\bAIza[A-Za-z0-9_-]{30,}/g, sub: () => 'AIza***' },                  // Google/Gemini
+  { re: /\bxai-[A-Za-z0-9]{20,}/g, sub: () => 'xai-***' },                    // xAI
+  { re: /\bpplx-[A-Za-z0-9]{20,}/g, sub: () => 'pplx-***' },                  // Perplexity
+  { re: /\btvly-[A-Za-z0-9]{20,}/g, sub: () => 'tvly-***' },                  // Tavily
+  { re: /\bfc-[A-Za-z0-9]{20,}/g, sub: () => 'fc-***' },                      // Firecrawl
   { re: /([\w.+-]+)@([\w-]+\.[\w.-]+)/g,                                       // 이메일(로컬부 마스킹, 도메인 보존)
     sub: (m, l, d) => (l.includes('*') ? m : `${l[0]}***@${d}`) },
   { re: /\b01\d-\d{3,4}-\d{4}\b/g, sub: () => '010-****-****' },              // 전화

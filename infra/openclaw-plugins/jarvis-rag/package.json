@@ -1,0 +1,16 @@
+{
+  "name": "jarvis-rag",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "자비스 RAG 아카이브를 오픈클로 메모리 코퍼스로 연결한다(흡수하지 않는다)",
+  "openclaw": {
+    "extensions": [
+      "./index.mjs"
+    ]
+  },
+  "main": "./index.mjs",
+  "dependencies": {
+    "typebox": "1.3.18"
+  }
+}

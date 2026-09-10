@@ -44,12 +44,16 @@ STATE_DIR="$BOT_HOME/state"
 # ══════════════════════════════════════════════════════
 # 1. 디스크 (macOS df: 512-byte blocks)
 # ══════════════════════════════════════════════════════
-DF_LINE=$(df / | tail -1)
+# 2026-09-10: `df /` 는 macOS 봉인 시스템 볼륨(~56%)을 재서 실제 데이터 볼륨(~94%)을 놓친다.
+#   infra-daily·system-health 에 이어 네 번째 같은 결함. 데이터 볼륨이 있으면 그쪽을 잰다.
+DISK_MOUNT="/"
+[[ -d /System/Volumes/Data ]] && DISK_MOUNT="/System/Volumes/Data"
+DF_LINE=$(df "$DISK_MOUNT" | tail -1)
 DISK_BLOCKS_TOTAL=$(echo "$DF_LINE" | awk '{print $2}')
 DISK_BLOCKS_AVAIL=$(echo "$DF_LINE" | awk '{print $4}')
 DISK_TOTAL_GB=$(awk "BEGIN {printf \"%.1f\", $DISK_BLOCKS_TOTAL / 2097152}")
 DISK_FREE_GB=$(awk "BEGIN {printf \"%.1f\", $DISK_BLOCKS_AVAIL / 2097152}")
-DISK_USED_PCT=$(df -h / | tail -1 | awk '{gsub(/%/,"",$5); print int($5)}')
+DISK_USED_PCT=$(df -h "$DISK_MOUNT" | tail -1 | awk '{gsub(/%/,"",$5); print int($5)}')
 
 # ══════════════════════════════════════════════════════
 # 1-b. 메모리 (macOS: sysctl + vm_stat)
@@ -255,7 +259,9 @@ process.stdout.write(JSON.stringify({
 # ══════════════════════════════════════════════════════
 # 7. LaunchAgent 상태 (launchctl list)
 # ══════════════════════════════════════════════════════
-SERVICES=("ai.jarvis.discord-bot" "ai.jarvis.orchestrator" "ai.jarvis.watchdog" "ai.jarvis.rag-watcher" "ai.jarvis.dashboard" "ai.jarvis.webhook-listener" "ai.jarvis.event-watcher" "ai.jarvis.dashboard-tunnel" "ai.jarvis.sync-system-metrics")
+# 2026-09-10 오픈클로 이식: 디스코드 계열 3종(discord-bot·orchestrator·watchdog)을 제거·정지했다.
+# 목록에 남기면 "없는 게 정상"인 서비스를 매번 미등록으로 집계한다. 복구 시 되돌린다.
+SERVICES=("ai.jarvis.rag-watcher" "ai.jarvis.dashboard" "ai.jarvis.webhook-listener" "ai.jarvis.event-watcher" "ai.jarvis.dashboard-tunnel" "ai.jarvis.sync-system-metrics")
 LAUNCHCTL_OUT=$(launchctl list 2>/dev/null || echo "")
 LAUNCH_AGENTS_JSON=$("$NODE_BIN" -e "
 const out = $(echo "$LAUNCHCTL_OUT" | "$NODE_BIN" -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>process.stdout.write(JSON.stringify(d)))");

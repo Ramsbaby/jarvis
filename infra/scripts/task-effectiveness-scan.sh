@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-task-effectiveness(07:00) 로 이관. OPENCLAW_JOB=1 로 통과한다.
+# 재개: rm ~/jarvis/runtime/state/stopped/task-effectiveness-scan
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/task-effectiveness-scan" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[task-effectiveness-scan] 중지 플래그 있음"
+    exit 0
+fi
+
 set -uo pipefail
 
 # task-effectiveness-scan.sh — 정의 태스크의 실제 실행 경로 통합 추적 (2026-06-22 신설)

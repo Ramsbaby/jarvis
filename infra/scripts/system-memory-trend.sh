@@ -14,6 +14,9 @@
 #       ~/jarvis/runtime/logs/system-memory-trend.log
 
 set -uo pipefail
+
+# 2026-09-02: launchd 최소 환경에 /opt/homebrew/bin 이 없어 node 를 못 찾았다(91·92행).
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${PATH:-}"
 # v4.45 hotfix: set -e 제거 — pipe SIGPIPE(141) 등 비치명 에러로 스크립트 전체 중단되는 사고 방지.
 # 개별 명령 실패는 || echo 0 / || true 로 안전 처리. 끝까지 실행되어 JSONL 적재 보장.
 

@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10 · 회차5 2단계] 이관 완료 — crontab 경로를 막는다.
+# 오픈클로 jarvis-rag-bug-detector(03:10)로 이관. 실행 검증 완료(1 issues found = 정상 신호).
+# 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다. 재개: rm ~/jarvis/runtime/state/stopped/rag-bug-detector
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/rag-bug-detector" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[rag-bug-detector] 중지 플래그 있음 — 오픈클로로 이관됨"
+    exit 0
+fi
+
 # RAG Bug Detector - DB 데이터 품질 자동 감지
 # 매일 03:10 실행. 수일간 발견 못한 버그를 자동 탐지.
 # 감지: (1) 소스 편향, (2) discord-history 미인덱싱, (3) index-state vs DB 불일치
@@ -7,7 +16,12 @@
 set -euo pipefail
 
 BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
-MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
+export BOT_HOME
+
+MONITORING_CONFIG="${MONITORING_CONFIG:-$BOT_HOME/config/monitoring.json}"
+if [[ ! -f "$MONITORING_CONFIG" ]]; then
+    MONITORING_CONFIG="/Users/ramsbaby/jarvis/runtime/config/monitoring.json"
+fi
 RAG_LOG="$BOT_HOME/logs/rag-index.log"
 INDEX_STATE="$BOT_HOME/rag/index-state.json"
 LANCEDB_PATH="$BOT_HOME/rag/lancedb"
@@ -27,7 +41,11 @@ if [[ ! -f "$MONITORING_CONFIG" ]]; then
 fi
 
 WEBHOOK="jarvis-system"
-source "${BOT_HOME}/lib/discord-notify-bash.sh"
+INFRA_HOME="${INFRA_HOME:-${HOME}/jarvis/infra}"
+source "${INFRA_HOME}/lib/discord-notify-bash.sh" || {
+    echo "ERROR: discord-notify-bash.sh not found at $INFRA_HOME/lib/" >&2
+    exit 1
+}
 
 # ============================================================================
 # 함수
@@ -71,7 +89,7 @@ report_lines+=("")
 report_lines+=("## 1. 소스 편향 감지")
 report_lines+=("")
 
-bias_result=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/.jarvis/discord/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
+bias_result=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/jarvis/rag/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
 const lancedb = (await import(process.env.LANCE_MOD)).default;
 (async () => {
     const db = await lancedb.connect(process.env.LANCEDB_DIR);
@@ -85,8 +103,8 @@ const lancedb = (await import(process.env.LANCE_MOD)).default;
     // Count by top-level path prefix
     const counts = {};
     rows.forEach(r => {
-        // Normalize: extract path up to 3rd level under home
-        const m = r.source.match(/^(\/Users\/[^/]+\/[^/]+\/[^/]+)\//);
+        // Normalize: 홈 아래 3단계, 단 jarvis/runtime 은 그 안이 전부라 한 단계 더 본다 (2026-09-10: 항상 100% 오탐 교정)
+        const m = r.source.match(/^(\/Users\/[^/]+\/jarvis\/runtime\/[^/]+)\//) || r.source.match(/^(\/Users\/[^/]+\/[^/]+\/[^/]+)\//);
         const key = m ? m[1] : r.source;
         counts[key] = (counts[key] || 0) + 1;
     });
@@ -94,9 +112,9 @@ const lancedb = (await import(process.env.LANCE_MOD)).default;
     const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
     sorted.forEach(([path, count]) => {
         const pct = Math.round(count * 100 / total);
-        if (pct >= 70) {
+        if (pct >= 90) {  // 2026-09-10: inbox(대화)가 구조적으로 78%라 70은 상시 오탐
             issues.push({path, count, pct, severity:'critical'});
-        } else if (pct >= 50) {
+        } else if (pct >= 85) {
             issues.push({path, count, pct, severity:'warning'});
         }
     });
@@ -155,7 +173,10 @@ report_lines+=("")
 today_file="$DISCORD_HISTORY_DIR/$TODAY.md"
 current_hour=$(date '+%H')
 
-if [[ ! -f "$today_file" ]]; then
+if [[ -f "$BOT_HOME/state/stopped/discord-removed" ]]; then
+    # 2026-09-10 디스코드 제거 — discord-history 는 더 이상 생성되지 않는다. 대화 유입은 inbox/claude-cli-* 로 대체됐다.
+    report_lines+=("- SKIP: 디스코드 제거(2026-09-10) — discord-history 검사 대상 없음")
+elif [[ ! -f "$today_file" ]]; then
     # 오전 10시 이전이면 아직 생성 안 됐을 수 있음
     if [[ "$current_hour" -ge 10 ]]; then
         report_lines+=("- WARN: 오늘의 discord-history 파일 없음: $today_file")
@@ -214,7 +235,7 @@ else
 fi
 
 # LanceDB 실제 행 수
-db_chunks=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/.jarvis/discord/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
+db_chunks=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/jarvis/rag/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
 const lancedb = (await import(process.env.LANCE_MOD)).default;
 (async () => {
     const db = await lancedb.connect(process.env.LANCEDB_DIR);
@@ -377,4 +398,14 @@ if [[ $alert_trigger -gt 0 ]]; then
         send_discord "$(echo -e "$message")"
         set_cooldown
     fi
+fi
+
+# Log to jarvis cron.log for monitoring
+CRON_LOG="${BOT_HOME}/../.jarvis/logs/cron.log"
+if [[ ! -f "$CRON_LOG" ]]; then
+    CRON_LOG="/Users/ramsbaby/.jarvis/logs/cron.log"
+fi
+if [[ -d "$(dirname "$CRON_LOG")" ]]; then
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    printf '[%s] [rag-bug-detector] SUCCESS\n' "$timestamp" >> "$CRON_LOG" 2>/dev/null || true
 fi

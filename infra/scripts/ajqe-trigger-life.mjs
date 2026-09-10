@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+
+// [오픈클로 이식 2026-09-10] 오픈클로 jarvis-ajqe-trigger-life(30분) 로 이관. OPENCLAW_JOB=1 로 통과한다.
+// 재개: rm ~/jarvis/runtime/state/stopped/ajqe-trigger-life
+import { existsSync as __sc } from 'node:fs';
+import { homedir as __sh } from 'node:os';
+if (__sc(__sh() + '/jarvis/runtime/state/stopped/ajqe-trigger-life') && process.env.OPENCLAW_JOB !== '1') {
+  console.log('[ajqe-trigger-life] 중지 플래그 있음 — 오픈클로로 이관됨');
+  process.exit(0);
+}
+
 /**
  * ajqe-trigger-life.mjs v5.4 — Active Jarvis Question Engine: 일상·일정 trigger
  *

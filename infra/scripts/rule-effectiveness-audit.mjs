@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+
+// [오픈클로 이식 2026-09-10] 오픈클로 jarvis-rule-effectiveness-audit 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
+// 재개: rm ~/jarvis/runtime/state/stopped/rule-effectiveness-audit
+import { existsSync as __sc } from 'node:fs';
+import { homedir as __sh } from 'node:os';
+if (__sc(__sh() + '/jarvis/runtime/state/stopped/rule-effectiveness-audit') && process.env.OPENCLAW_JOB !== '1') {
+  console.log('[rule-effectiveness-audit] 중지 플래그 있음 — 오픈클로로 이관됨');
+  process.exit(0);
+}
+
 /**
  * rule-effectiveness-audit.mjs — 자가개선 실측 지표: "승격된 룰이 실제로 그 오답을 줄였나?"
  *

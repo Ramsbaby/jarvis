@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+
+// [오픈클로 이식 2026-09-10] 오픈클로 jarvis-north-star-audit 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
+// 재개: rm ~/jarvis/runtime/state/stopped/north-star-audit
+import { existsSync as __sc } from 'node:fs';
+import { homedir as __sh } from 'node:os';
+if (__sc(__sh() + '/jarvis/runtime/state/stopped/north-star-audit') && process.env.OPENCLAW_JOB !== '1') {
+  console.log('[north-star-audit] 중지 플래그 있음 — 오픈클로로 이관됨');
+  process.exit(0);
+}
+
 // north-star-audit.mjs — 자비스 최종 목표(시간 해방·복리 학습·신뢰 자율) 정렬도 주간 채점기
 //
 // Why 1줄: 자비스가 최종 목표에서 이탈해도 아무도 모르는 사고를 막는다 (2026-06-12 주인님 승인).

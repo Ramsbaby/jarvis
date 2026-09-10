@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+# [오픈클로 이식 2026-09-10] jarvis-growth-monitor(08:30)로 이관됐다. 경고가 디스코드·ntfy로만 나가
+# 아무도 못 보던 것을 메인 세션 배달로 돌렸다. crontab 43행이 남아 있으나 쓰기가 막혀(rc=124)
+# 스크립트 층에서 이중 실행을 막는다. 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다.
+# 재개: rm ~/jarvis/runtime/state/stopped/growth-monitor
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/growth-monitor" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[growth-monitor] 중지 플래그 있음 — 오픈클로 잡으로 이관됨 (state/stopped/growth-monitor)"
+    exit 0
+fi
+
 set -euo pipefail
 
 # growth-monitor.sh — 자비스 전 영역 비대화 통합 감시 (2026-06-22 신설)

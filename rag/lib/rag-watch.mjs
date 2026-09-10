@@ -30,7 +30,11 @@ const DISCORD_HISTORY_PATH = join(BOT_HOME, 'context', 'discord-history');
 const INBOX_PATH           = join(BOT_HOME, 'inbox');
 const WIKI_PATH            = join(BOT_HOME, 'wiki');
 const EVENT_BUS_PATH       = join(STATE_DIR, 'events');
-const ENV_PATH             = join(BOT_HOME, 'discord', '.env');
+// 2026-09-10 오픈클로 이식: 디스코드 제거로 runtime/discord/.env 가 사라졌다.
+// RAG는 잔류 컴포넌트인데 키를 디스코드 하위에서 읽고 있어 같이 죽었다(exit 1 루프).
+// BOT_HOME/.env 를 먼저 보고, 옛 경로는 뒤에 남겨 하위호환만 유지한다.
+const ENV_PATH             = join(BOT_HOME, '.env');
+const ENV_PATH_LEGACY      = join(BOT_HOME, 'discord', '.env');
 
 // 큐 파일: rag-index.mjs가 읽어서 소비
 const QUEUE_FILE = join(STATE_DIR, 'rag-write-queue.jsonl');
@@ -55,9 +59,10 @@ function err(msg)  { console.error(`[${ts()}] [rag-watch] ERROR: ${msg}`); }
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 config({ path: ENV_PATH });
+if (!process.env.OPENAI_API_KEY) config({ path: ENV_PATH_LEGACY });
 
 if (!process.env.OPENAI_API_KEY) {
-  err(`OPENAI_API_KEY not set. Check ${ENV_PATH}`);
+  err(`OPENAI_API_KEY not set. Check ${ENV_PATH} (legacy: ${ENV_PATH_LEGACY})`);
   process.exit(1);
 }
 

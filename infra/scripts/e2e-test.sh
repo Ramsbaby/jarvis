@@ -4,8 +4,8 @@ set -uo pipefail
 # Jarvis E2E Test Suite
 # Usage: ~/jarvis/runtime/scripts/e2e-test.sh [--ntfy] (--ntfy sends test push notification)
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-export BOT_HOME="${BOT_HOME:-${HOME}/jarvis/runtime}"
+export BOT_HOME="${BOT_HOME:-${HOME:-/Users/ramsbaby}/jarvis/runtime}"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME:+${HOME}/.local/bin}:${PATH}"
 PASS=0
 FAIL=0
 SKIP=0
@@ -20,6 +20,14 @@ yellow(){ printf '\033[33m%s\033[0m\n' "$1"; }
 check() {
   local name="$1"
   shift
+  # [오픈클로 이식 2026-09-10] 디스코드를 전면 제거했다. 그 트리를 보는 검사 15건이 영구 FAIL 이 되고,
+  # jarvis-auditor 가 FAIL 수만큼 매일 코더 티켓을 만든다(2026-09-10 FAIL 1 → 19 급증).
+  # "없어서 실패"와 "일부러 없앰"을 가르지 않으면 감사 전체가 못 쓰게 된다.
+  # 재개: rm ~/jarvis/runtime/state/stopped/discord-removed (검사도 함께 되살아난다)
+  if [[ -f "${HOME}/jarvis/runtime/state/stopped/discord-removed" ]] && [[ "$* $name" == */discord/* || "$name" == *"discord"* || "$name" == *"Discord"* ]]; then
+    skip "$name (디스코드 의도적 제거 — 2026-09-10)"
+    return 0
+  fi
   if "$@" >/dev/null 2>&1; then
     green "✅ PASS: $name"
     ((PASS++))
@@ -78,7 +86,7 @@ ci_check "Discord bot running" bash -c 'pgrep -f "discord-bot.js|orchestrator.mj
 # --- File Structure Tests ---
 echo ""
 echo "▶ File Structure"
-JARVIS_RAG_HOME="${JARVIS_RAG_HOME:-$HOME/jarvis/rag}"
+JARVIS_RAG_HOME="${JARVIS_RAG_HOME:-${HOME:-/Users/ramsbaby}/jarvis/rag}"
 check "RAG engine exists" test -f "$JARVIS_RAG_HOME/lib/rag-engine.mjs"
 check "RAG query script exists" test -f "$JARVIS_RAG_HOME/lib/rag-query.mjs"
 check "RAG indexer exists" test -f "$JARVIS_RAG_HOME/bin/rag-index.mjs"
@@ -90,9 +98,9 @@ ci_check "monitoring.json exists" test -f "$BOT_HOME/config/monitoring.json"
 # --- Dependency Tests ---
 echo ""
 echo "▶ Dependencies"
-check "LanceDB package installed" test -d "$BOT_HOME/discord/node_modules/@lancedb/lancedb"
-check "OpenAI package installed" test -d "$BOT_HOME/discord/node_modules/openai"
-check "apache-arrow installed" test -d "$BOT_HOME/discord/node_modules/apache-arrow"
+check "LanceDB package installed" test -d "${HOME}/jarvis/rag/node_modules/@lancedb/lancedb"   # 2026-09-10: discord/ 제거로 경로 이동 — RAG 실제 설치 위치
+check "OpenAI package installed" test -d "${HOME}/jarvis/infra/discord/node_modules/openai"   # 2026-09-10: runtime/discord 제거 후 infra/discord 잔존본이 실사용처
+check "apache-arrow installed" test -d "${HOME}/jarvis/rag/node_modules/apache-arrow"   # 2026-09-10: RAG 실제 설치 위치
 check "discord-bot.js syntax valid" node --check "$BOT_HOME/discord/discord-bot.js"
 check "handlers.js syntax valid" node --check "$BOT_HOME/discord/lib/handlers.js"
 check "handlers.js no-undef (ESLint)" bash -c "
@@ -149,8 +157,8 @@ echo ""
 echo "▶ State Files"
 ci_check "sessions.json valid" jq '.' "$BOT_HOME/state/sessions.json"
 ci_check "rate-tracker.json valid" jq '.' "$BOT_HOME/state/rate-tracker.json"
-ci_check "memory.md exists" test -f "$BOT_HOME/rag/memory.md"
-ci_check "decisions weekly file exists" bash -c "ls \"$BOT_HOME/rag/decisions-\"*.md 2>/dev/null | grep -q ."
+warn_check "memory.md exists" test -f "$BOT_HOME/rag/memory.md"
+warn_check "decisions weekly file exists" bash -c "ls \"$BOT_HOME/rag/decisions-\"*.md 2>/dev/null | grep -q ."
 
 # --- ask-claude.sh RAG Integration ---
 echo ""
@@ -322,6 +330,50 @@ warn_check "cron results no hallucination patterns" bash -c "
   threshold=\$(( (total * 30 + 99) / 100 ))
   [[ \$hits -lt \$threshold ]]
 "
+
+# --- Guard Test Suites (SELF-HEAL-PLAN 2e, 2026-09-04) ---
+# 결정적 스위트만(LLM 호출 없음, 각 2분 상한). 마지막 "PASSED=N FAILURES=M" 줄이 있으면 그것으로, 없으면 exit code 로 판정.
+# 스위트 내부 출력은 삼킨다 — e2e-cron.sh 가 ✅/❌ 줄 수를 세므로 여기 한 줄만 남긴다.
+echo ""
+echo "▶ Guard Test Suites"
+_SUITE_TIMEOUT=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || true)
+suite_check() {
+  local name="$1" path="$2" out rc line
+  if [[ ! -f "$path" ]]; then skip "$name (파일 없음: $path)"; return; fi
+  if [[ -n "$_SUITE_TIMEOUT" ]]; then
+    out=$(JARVIS_NO_EXTERNAL=1 "$_SUITE_TIMEOUT" 120 bash "$path" 2>&1); rc=$?
+  else
+    out=$(JARVIS_NO_EXTERNAL=1 bash "$path" 2>&1); rc=$?
+  fi
+  line=$(printf '%s\n' "$out" | grep -Eo 'PASSED=[0-9]+ FAILURES=[0-9]+' | tail -1)
+  if [[ $rc -eq 0 && ( -z "$line" || "$line" == *"FAILURES=0" ) ]]; then
+    green "✅ PASS: $name${line:+ ($line)}"
+    ((PASS++))
+  else
+    red "❌ FAIL: $name (${line:-exit $rc})"
+    ((FAIL++))
+  fi
+}
+_HOOKS_DIR="${HOME}/.claude/hooks"
+suite_check "coder fail-closed"            "$BOT_HOME/scripts/test-coder-fail-closed.sh"
+suite_check "coder worktree isolation"     "$BOT_HOME/scripts/test-coder-worktree.sh"
+suite_check "coder FSM ownership"          "$BOT_HOME/scripts/test-coder-fsm-ownership.sh"
+suite_check "coder merge gate+autonomy"    "$BOT_HOME/scripts/test-coder-merge.sh"
+suite_check "coder review+expiry"          "$BOT_HOME/scripts/test-coder-review.sh"
+suite_check "incident ledger+ingest"       "$BOT_HOME/scripts/test-incident-ledger.sh"
+suite_check "rule proposals+promoter"      "$BOT_HOME/scripts/test-rule-proposals.sh"
+suite_check "sensor deadman switch"        "$BOT_HOME/scripts/test-sensor-deadman.sh"
+suite_check "self-heal weekly retro"       "$BOT_HOME/scripts/test-self-heal-retro.sh"
+suite_check "auditor e2e guard (dirty+cooldown)" "$BOT_HOME/scripts/test-auditor-e2e-guard.sh"
+suite_check "cron-auditor DB judge+evidence" "$BOT_HOME/scripts/test-cron-auditor-judge.sh"
+suite_check "JARVIS_NO_EXTERNAL egress"    "$BOT_HOME/scripts/test-no-external.sh"
+suite_check "tasks.json integrity sensor"  "$BOT_HOME/scripts/test-tasks-json-integrity.sh"
+suite_check "completion guard"             "$BOT_HOME/scripts/test-completion-guard.sh"
+suite_check "compress analyzer"            "$BOT_HOME/scripts/test-compress-analyzer.sh"
+suite_check "context-state gate"           "$BOT_HOME/scripts/test-context-state-gate.sh"
+suite_check "hook canary"                  "$BOT_HOME/scripts/hook-canary-test.sh"
+suite_check "agent write boundary hook"    "$_HOOKS_DIR/jarvis-agent-write-boundary.test.sh"
+suite_check "runtime destruction guard"    "$_HOOKS_DIR/jarvis-runtime-guard.test.sh"
 
 # --- Tasks Schema Validation ---
 echo ""

@@ -1,0 +1,40 @@
+{
+  "id": "jarvis-rag",
+  "name": "Jarvis RAG Corpus",
+  "description": "자비스 RAG 아카이브(LanceDB 134,055청크)를 memory_search 의 보조 코퍼스로 붙인다",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "scriptPath": {
+        "type": "string",
+        "description": "rag-corpus-query.mjs 절대경로. RAG 엔진을 게이트웨이 프로세스에 올리지 않고 별도 프로세스로 부른다 — LanceDB 네이티브 바인딩이 게이트웨이를 물고 늘어지지 않게."
+      },
+      "nodePath": {
+        "type": "string",
+        "description": "node 실행 파일 절대경로. 게이트웨이는 launchd의 좁은 PATH로 돌아 which node 를 믿을 수 없다."
+      },
+      "botHome": {
+        "type": "string",
+        "description": "BOT_HOME. 비면 rag/lib/paths.mjs 가 ~/.local/share/jarvis/rag(450행 잔재 DB)로 폴백해 조용히 무관한 결과를 낸다."
+      },
+      "timeoutMs": {
+        "type": "number",
+        "description": "조회 제한 시간(밀리초). 기본 20000. 메모리 검색 자체 상한은 15초다."
+      },
+      "maxResults": {
+        "type": "number",
+        "description": "기본 반환 개수. 기본 8."
+      }
+    }
+  },
+  "contracts": {
+    "tools": [
+      "rag_search",
+      "rag_get"
+    ]
+  }
+}

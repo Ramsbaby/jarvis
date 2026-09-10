@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10 · 회차5 2단계] 이관 완료 — crontab 경로를 막는다.
+# 오픈클로 jarvis-system-cleanup(03:50)으로 이관.
+# 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다. 재개: rm ~/jarvis/runtime/state/stopped/system-cleanup
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/system-cleanup" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+    echo "[system-cleanup] 중지 플래그 있음 — 오픈클로로 이관됨"
+    exit 0
+fi
+
 # Cross-platform compat
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
 # system-cleanup.sh — OS 재부팅 대신 경량 리소스 청소

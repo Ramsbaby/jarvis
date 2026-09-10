@@ -76,6 +76,15 @@ fi
 [[ "$QUIET" -eq 0 ]] && _log "INFO" "channel-map: $CHANNEL_MAP"
 [[ "$QUIET" -eq 0 ]] && _log "INFO" "monitoring:  $MONITORING"
 
+# 2026-09-10 오픈클로 이식: 디스코드를 전면 제거했다. 이 가드는 "웹훅 키가 없다"를 오설정으로 보고
+# exit 1 을 내는데, 지금은 없는 게 정상이다. 호출자(mistake-promoter 등)가 본작업을 끝내고도
+# 통보 실패만으로 exit 1 을 물려받는다 — "고장난 침묵"과 "의도한 침묵"을 가른다.
+# 복구: monitoring.json 의 _webhook_disabled_20260910 을 webhook 으로 되돌리면 이 분기도 자동 해제된다.
+if [[ "$(jq -r 'has("_webhook_disabled_20260910")' "$MONITORING" 2>/dev/null)" == "true" ]]; then
+    [[ "$QUIET" -eq 0 ]] && _log "OK" "디스코드 송출 의도적 비활성 — 채널맵 검증 생략 (2026-09-10)"
+    exit 0
+fi
+
 # ── [1] severity→channel 라우팅 검증 ────────────────────────────────────────
 # channel-map.json의 severity_to_channel이 discord-route.sh 하드코딩과 일치해야 함
 # (연관 배열 대신 함수로 구현 — bash 3.x 호환)

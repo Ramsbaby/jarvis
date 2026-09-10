@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+
+# [오픈클로 이식 2026-09-10] 판정 D — 정지.
+# 근거: 기대 표면이 "discord-bot"으로 하드코딩(57행)인데 봇이 제거돼 영구 missing — 같은 ALERT만 반복
+# 재개: rm ~/jarvis/runtime/state/stopped/audit-cross-surface-learning
+if [[ -f "${HOME}/jarvis/runtime/state/stopped/audit-cross-surface-learning" ]]; then
+    echo "[audit-cross-surface-learning] 중지 플래그 있음 (판정 D)"
+    exit 0
+fi
+
 # audit-cross-surface-learning.sh — Phase 0.5 재발 방지 가드레일
 #
 # Jarvis 뇌 공유 원칙의 진짜 지표: 교정/사실이 모든 활성 표면에서 균형 있게 쌓이는가.

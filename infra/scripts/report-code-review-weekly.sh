@@ -176,7 +176,7 @@ IS_MACOS=false
 if [[ "$(uname -s 2>/dev/null)" == "Darwin" ]]; then IS_MACOS=true; fi
 PROCS=$(${IS_MACOS} && launchctl list | grep jarvis | awk '{print "- " $3 ": " ($1 == "-" ? "⚪ 미실행" : "🟢 PID " $1) " (exit " $2 ")"}' || echo "N/A (non-macOS)")
 RAG_LAST=$(tail -1 "$BOT_HOME/logs/rag-index.log" 2>/dev/null || echo "로그 없음")
-DISK=$(df -h / | tail -1 | awk '{print $5 " 사용 (" $3 "/" $2 ")"}')
+DISK=$(df -h "$([ -d /System/Volumes/Data ] && echo /System/Volumes/Data || echo /)" | tail -1 | awk '{print $5 " 사용 (" $3 "/" $2 ")"}')
 CRON_COUNT=$(crontab -l 2>/dev/null | grep -v '^#\|^$' | wc -l | tr -d ' ')
 INCIDENTS=$(tail -20 "$BOT_HOME/rag/incidents.md" 2>/dev/null | grep '^\- \[' || echo "없음")
 

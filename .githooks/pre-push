@@ -67,6 +67,37 @@ if [ "$rc" -ne 0 ]; then
   fi
 fi
 
+# ── 1-b. Privacy Guard (히스토리) ─────────────────────────────────────
+# 왜 (2026-09-10): 위 검사는 변경 파일의 **최종 상태**만 본다. 한 커밋이 민감한 줄을
+# 넣고 다음 커밋이 지우면 통과하는데, push 하면 그 줄은 커밋 diff 로 그대로 공개된다.
+# 실증: 2d9647b 가 career-narratives 규칙에 걸리는 줄을 넣고 0f2143b 가 뺐는데 --diff 는 clean 을 냈다.
+# 이 저장소는 PUBLIC 이다. 정본을 고친 것과 히스토리를 고친 것은 다르다.
+if [ "$SCAN_MODE" != "--all" ]; then
+  HIST_MODE="--history=${REMOTE_SHA}..HEAD"
+  echo "🔍 pre-push Privacy Guard — 히스토리 ($RANGE_DESC)..." >&2
+  set +e
+  hist_out=$(node "$ROOT/scripts/privacy/scan.mjs" "$HIST_MODE" 2>&1)
+  hist_rc=$?
+  set -e
+
+  if [ "$hist_rc" -ne 0 ]; then
+    if [ -n "${PRIVACY_BYPASS_REASON:-}" ] && ! echo "$hist_out" | grep -qE '\[(critical|high)/'; then
+      echo "$hist_out" >&2
+      echo "⚠️  Privacy bypass — 히스토리 (medium/low only): $PRIVACY_BYPASS_REASON" >&2
+    else
+      echo "$hist_out" >&2
+      echo "" >&2
+      echo "🚫 push 차단 — 커밋 **히스토리**에 개인정보가 남아 있습니다." >&2
+      echo "   파일을 고쳐도 히스토리는 안 지워집니다. 해결:" >&2
+      echo "     1. git rebase -i 로 해당 커밋을 고치거나 squash" >&2
+      echo "     2. 위반 라인에 '# privacy:allow <rule-id>' 주석 후 히스토리 재작성" >&2
+      echo "     3. 저장소를 비공개로 전환" >&2
+      echo "     4. 긴급: PRE_PUSH_SKIP=1 git push ... (비권장 — PUBLIC 저장소입니다)" >&2
+      exit 1
+    fi
+  fi
+fi
+
 # ── 2. Syntax Check (infra/ JS/MJS) ───────────────────────────────────
 echo "🔍 pre-push Syntax Check (infra/ JS·MJS)..." >&2
 ERRORS=0
