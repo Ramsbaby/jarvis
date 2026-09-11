@@ -30,9 +30,9 @@ import sys
 import datetime
 
 HOME = os.path.expanduser("~")
-MISTAKE_LEDGER = os.path.join(HOME, "jarvis/runtime/state/mistake-ledger.jsonl")
-WARN_LEDGER = os.path.join(HOME, "jarvis/runtime/ledger/outfile-verify.jsonl")
-BASELINE_FILE = os.path.join(HOME, "jarvis/runtime/ledger/outfile-hook-holdout-baseline.json")
+MISTAKE_LEDGER = os.path.join(HOME, ".openclaw-data/jarvis/runtime/state/mistake-ledger.jsonl")
+WARN_LEDGER = os.path.join(HOME, ".openclaw-data/jarvis/runtime/ledger/outfile-verify.jsonl")
+BASELINE_FILE = os.path.join(HOME, ".openclaw-data/jarvis/runtime/ledger/outfile-hook-holdout-baseline.json")
 
 # ── FROZEN 측정 regex (baseline 과 D+14 가 반드시 동일해야 함) ────────────
 NARROW_RE = (

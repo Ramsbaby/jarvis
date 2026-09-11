@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { RAGEngine } from '../lib/rag-engine.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const DB_PATH  = join(BOT_HOME, 'rag', 'lancedb');
 const BATCH    = 300; // 한 번에 읽을 레코드 수
 

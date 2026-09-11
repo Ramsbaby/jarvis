@@ -66,7 +66,7 @@ const TRIGGER_RULES = [
       /채널.*어떻게/, /jarvis-interview/, /1497124568031301752/,
       /페르소나.*어떻게/, /답을\s*결정/,
     ],
-    harnessPath: join(homedir(), 'jarvis/infra/scripts/interview-mechanism-cross-check.sh'),
+    harnessPath: join(homedir(), '.openclaw-data/jarvis/infra/scripts/interview-mechanism-cross-check.sh'),
     label: '면접 채널 동작 원리 SSoT cross-check',
     timeoutMs: 8000,
   },

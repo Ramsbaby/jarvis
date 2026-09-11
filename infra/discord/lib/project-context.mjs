@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const HOME = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis', 'runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis', 'runtime');
 const PROJECTS_DIR = join(BOT_HOME, 'state', 'projects');
 const MAX_PROJECTS = 5;       // 사용자당 최대 활성 프로젝트 수
 const MAX_HISTORY  = 10;      // 프로젝트당 최대 이력 수

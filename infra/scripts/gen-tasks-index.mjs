@@ -22,7 +22,10 @@ import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 
 const HOME = os.homedir();
-const TASKS_JSON = path.join(HOME, 'jarvis/runtime/config/tasks.json');
+// [2026-09-11] HOME+'jarvis/...' 를 그대로 들고 있어 2026-09-10 이관 뒤 ENOTDIR 로 죽었다.
+const RUNTIME_HOME = process.env.BOT_HOME
+  || path.join(process.env.JARVIS_HOME || path.join(HOME, '.openclaw-data', 'jarvis'), 'runtime');
+const TASKS_JSON = path.join(RUNTIME_HOME, 'config/tasks.json');
 const VALIDATE_SCRIPT = path.resolve(new URL('.', import.meta.url).pathname, 'validate-tasks.mjs');
 
 // tasks.json Schema 검증 + addedAt 누락 자동 삽입 (--fix 모드)
@@ -32,7 +35,7 @@ try {
   console.error('[gen-tasks-index] validate-tasks 실패 — 인덱스 생성 중단');
   process.exit(1);
 }
-const LOGS_DIR = path.join(HOME, 'jarvis/runtime/logs');
+const LOGS_DIR = path.join(RUNTIME_HOME, 'logs');
 const OUT_DIR = path.resolve(new URL('.', import.meta.url).pathname, '../docs');
 const OUT_MD = path.join(OUT_DIR, 'TASKS-INDEX.md');
 const OUT_JSON = path.join(OUT_DIR, 'tasks-index.json');

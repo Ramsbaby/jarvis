@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || process.env.JARVIS_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || process.env.JARVIS_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const CONFIG_PATH = join(BOT_HOME, 'config', 'oss-targets.json');
 const LOG_PATH = join(BOT_HOME, 'logs', 'oss-manager.log');
 const STATE_PATH = join(BOT_HOME, 'state', 'oss-maintenance-state.json');

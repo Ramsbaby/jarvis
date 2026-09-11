@@ -13,7 +13,7 @@ import { homedir } from 'node:os';
 import puppeteer from 'puppeteer-core';
 import { discordSend } from '../lib/discord-notify.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const CRAWL_DIR = join(BOT_HOME, 'state', 'inbox');
 const LATEST = join(CRAWL_DIR, 'latest.json');
 const MATCHED = join(CRAWL_DIR, 'matched.json');
@@ -42,7 +42,7 @@ const NOTION_VERSION = '2022-06-28';
 // ── Private 설정 로드 (티어·Notion Page ID 등 민감 식별자) ────────────────
 // private/config/inbox-tiers.json은 gitignored — 기관 리터럴·Page ID는 이 파일에만 존재해야 함.
 // 파일 없거나 로드 실패 시: tier/role 가산점 0점, Notion 전송 스킵으로 graceful fallback.
-const INBOX_TIERS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'inbox-tiers.json');
+const INBOX_TIERS_PATH = join(homedir(), '.openclaw-data/jarvis', 'private', 'config', 'inbox-tiers.json');
 let INBOX_TIERS_CONFIG = { tiers: {}, tierBonus: {}, roleBonus: {}, notion: {} };
 try {
   if (existsSync(INBOX_TIERS_PATH)) {

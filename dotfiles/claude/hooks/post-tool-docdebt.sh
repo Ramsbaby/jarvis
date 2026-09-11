@@ -62,11 +62,11 @@ import json, sys, os, re, datetime, tempfile
 doc_map_path, debt_path, file_path, auto_gen_raw = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 auto_generated = set(auto_gen_raw.split(","))
 home = os.path.expanduser("~")
-jarvis_prefix = home + "/jarvis/"          # 마이그레이션 후 경로: ~/jarvis/
+jarvis_prefix = home + "/jarvis/"          # 마이그레이션 후 경로: ~/.openclaw-data/jarvis/
 jarvis_prefix_legacy = home + "/.jarvis/"  # 구형 경로 (하위호환)
 
-# Worktree 경로 정규화 — ~/jarvis/.claude/worktrees/<name>/infra/docs/X.md
-# 를 ~/jarvis/infra/docs/X.md 로 변환해 이후 로직이 main 체크아웃과 동일하게 처리.
+# Worktree 경로 정규화 — ~/.openclaw-data/jarvis/.claude/worktrees/<name>/infra/docs/X.md
+# 를 ~/.openclaw-data/jarvis/infra/docs/X.md 로 변환해 이후 로직이 main 체크아웃과 동일하게 처리.
 # 없으면 asymmetric 버그: 코드 편집은 debt 추가되는데 doc 편집은 해소 안 됨.
 _worktree_re = re.compile(r'^' + re.escape(jarvis_prefix) + r'\.claude/worktrees/[^/]+/(.*)$')
 _m = _worktree_re.match(file_path)
@@ -83,8 +83,8 @@ except Exception:
     sys.exit(0)
 
 # 문서 파일 편집 → 해당 debt 해소
-# ~/jarvis/infra/docs/X.md → rel = "docs/X.md"
-# ~/jarvis/docs/X.md      → rel = "docs/X.md"  (legacy 경로 하위호환)
+# ~/.openclaw-data/jarvis/infra/docs/X.md → rel = "docs/X.md"
+# ~/.openclaw-data/jarvis/docs/X.md      → rel = "docs/X.md"  (legacy 경로 하위호환)
 matched_prefix = None
 for pfx in (jarvis_prefix + "infra/", jarvis_prefix, jarvis_prefix_legacy):
     if file_path.startswith(pfx):

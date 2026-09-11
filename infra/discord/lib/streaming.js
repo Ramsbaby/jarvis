@@ -190,7 +190,7 @@ function convertTablesToList(text) {
 }
 
 // Active placeholder tracking — persisted for orphan cleanup on restart
-const PLACEHOLDER_STATE = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'state', 'active-placeholders.json');
+const PLACEHOLDER_STATE = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime'), 'state', 'active-placeholders.json');
 
 function _loadPlaceholders() {
   try { return JSON.parse(readFileSync(PLACEHOLDER_STATE, 'utf-8')); } catch { return []; }

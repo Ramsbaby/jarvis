@@ -31,7 +31,7 @@ function sanitizeUnicode(str) {
   });
 }
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const SESSION_SUMMARY_DIR = join(BOT_HOME, 'state', 'session-summaries');
 const USERS_DIR = join(BOT_HOME, 'state', 'users');
 const LOGS_DIR = join(BOT_HOME, 'logs');

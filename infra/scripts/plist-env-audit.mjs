@@ -29,7 +29,7 @@ const RULES = [
     plistFile: join(HOME, 'Library/LaunchAgents/ai.jarvis.discord-bot.plist'),
     envKey: 'INTERVIEW_CHANNEL',
     expectedSources: [
-      { file: join(HOME, 'jarvis/infra/discord/lib/interview-fast-path.js'), pattern: /CHANNEL_NAME\s*=\s*['"]([^'"]+)['"]/ },
+      { file: join(HOME, '.openclaw-data/jarvis/infra/discord/lib/interview-fast-path.js'), pattern: /CHANNEL_NAME\s*=\s*['"]([^'"]+)['"]/ },
       // 2026-07-25 제거: handlers.js 는 이 채널명을 코드에 박지 않고
       //   process.env.INTERVIEW_CHANNEL 로 읽는다(handlers.js 의 해당 상수 선언 참조).
       //   따라서 '코드에 박힌 값'과 비교하는 이 규칙은 성립하지 않았고,
@@ -41,7 +41,7 @@ const RULES = [
   {
     // R4: 채널 ID 정합성 — slash-proxy.js의 INTERVIEW_CHANNEL_ID와 plist LITE_CHANNEL_ID는 다른 채널이지만,
     // INTERVIEW_CHANNEL_ID 자체가 코드 내부에서 일관된지 검증.
-    plistFile: join(HOME, 'jarvis/infra/discord/lib/slash-proxy.js'),
+    plistFile: join(HOME, '.openclaw-data/jarvis/infra/discord/lib/slash-proxy.js'),
     envKey: 'INTERVIEW_CHANNEL_ID',
     customExtractor: (file) => {
       if (!existsSync(file)) return { found: false, value: null };
@@ -51,7 +51,7 @@ const RULES = [
     },
     expectedSources: [
       // personas.json에 같은 채널 ID 키로 페르소나 정의 존재해야 함
-      { file: join(HOME, 'jarvis/infra/discord/personas.json'), pattern: /"(149[0-9]{16})"\s*:/ },
+      { file: join(HOME, '.openclaw-data/jarvis/infra/discord/personas.json'), pattern: /"(149[0-9]{16})"\s*:/ },
     ],
   },
 ];
@@ -132,7 +132,7 @@ for (const v of violations) {
 }
 
 if (NOTIFY) {
-  const notifyScript = join(HOME, 'jarvis/infra/scripts/discord-visual.mjs');
+  const notifyScript = join(HOME, '.openclaw-data/jarvis/infra/scripts/discord-visual.mjs');
   if (existsSync(notifyScript)) {
     const data = JSON.stringify({
       title: '🚨 plist 환경변수 불일치 감지',

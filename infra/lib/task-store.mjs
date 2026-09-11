@@ -26,7 +26,7 @@ import { mkdirSync, appendFileSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { canTransition, VALID_STATUSES } from './task-fsm.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const DB_PATH   = join(BOT_HOME, 'state', 'tasks.db');
 
 let _db = null;
@@ -691,7 +691,7 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         // enqueue 성공 → jarvis-coder 이벤트 트리거 (bot-cron 태스크 제외)
         if (eSrc !== 'bot-cron') {
           try {
-            const emitScript = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'scripts', 'emit-event.sh');
+            const emitScript = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime'), 'scripts', 'emit-event.sh');
             // execFileSync 배열 인자 — 셸 미경유로 id 메타문자 주입 차단 (2026-07-17 리뷰 실증)
             execFileSync(emitScript, ['dev.task.queued', JSON.stringify({ id: eId })], { timeout: 5000, stdio: 'ignore' });
           } catch { /* 이벤트 발행 실패해도 enqueue 자체는 성공 */ }
@@ -748,7 +748,7 @@ if (process.argv[1]?.endsWith('task-store.mjs')) {
         // execFileSync 배열 인자(셸 미경유) + id 문자셋 검증 — 이중 주입 방어 (2026-07-17 리뷰 실증)
         if (/^[A-Za-z0-9._\-]+$/.test(prId)) {
           try {
-            const emitScript = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'scripts', 'emit-event.sh');
+            const emitScript = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime'), 'scripts', 'emit-event.sh');
             execFileSync(emitScript, ['dev.task.queued', JSON.stringify({ id: prId })], { timeout: 5000, stdio: 'ignore' });
           } catch { /* 이벤트 발행 실패해도 승격 자체는 성공 */ }
         }

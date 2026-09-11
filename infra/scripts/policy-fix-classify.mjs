@@ -20,9 +20,9 @@ import { join, basename } from 'node:path';
 
 const HOME = homedir();
 const LA_DIR = join(HOME, 'Library/LaunchAgents');
-const TASKS_JSON = join(HOME, 'jarvis/runtime/config/tasks.json');
-const CRON_MANAGER_JSON = join(HOME, 'jarvis/runtime/state/cron-manager.json');
-const MANIFEST = join(HOME, 'jarvis/runtime/state/policy-fix-manifest.csv');
+const TASKS_JSON = join(HOME, '.openclaw-data/jarvis/runtime/config/tasks.json');
+const CRON_MANAGER_JSON = join(HOME, '.openclaw-data/jarvis/runtime/state/cron-manager.json');
+const MANIFEST = join(HOME, '.openclaw-data/jarvis/runtime/state/policy-fix-manifest.csv');
 
 const SEVEN_DAYS_MS = 7 * 24 * 3600 * 1000;
 const NOW = Date.now();

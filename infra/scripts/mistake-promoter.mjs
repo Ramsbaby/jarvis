@@ -4,7 +4,10 @@
 // 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/mistake-promoter
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
-if (__sc(__sh() + '/jarvis/runtime/state/stopped/mistake-promoter') && process.env.OPENCLAW_JOB !== '1') {
+// [2026-09-11] 이 검사는 2026-09-10 이관 뒤 옛 경로를 보고 있어 플래그를 한 번도 못 찾았다(항상 통과).
+// 경로를 고치자 이번엔 샌드박스 테스트(BOT_HOME 을 /var/tmp 로 돌리는)까지 막혔다 —
+// 중지 플래그는 "이 runtime 이 멈췄는가"이므로 BOT_HOME 을 존중해야 한다.
+if (__sc((process.env.BOT_HOME || __sh() + '/.openclaw-data/jarvis/runtime') + '/state/stopped/mistake-promoter') && process.env.OPENCLAW_JOB !== '1') {
   console.log('[mistake-promoter] 중지 플래그 있음 — 오픈클로로 이관됨');
   process.exit(0);
 }
@@ -54,8 +57,12 @@ import {
 
 // ─── 경로 상수 (하드코딩 금지 — 환경변수 우선) ───
 const HOME = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis', 'runtime');
-const INFRA = process.env.JARVIS_INFRA_HOME || join(HOME, 'jarvis', 'infra');
+// [2026-09-11] INFRA 기본값이 옛 경로(~/.openclaw-data/jarvis/infra)였다. 잡은 BOT_HOME 만 넘겨주고
+// JARVIS_INFRA_HOME 은 안 넘겨서, llm-gateway.sh source 에서 "Not a directory" 로 죽었다
+// — 잡 jarvis-mistake-promoter 상시 실패의 원인.
+const JARVIS_HOME = process.env.JARVIS_HOME || join(HOME, '.openclaw-data', 'jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(JARVIS_HOME, 'runtime');
+const INFRA = process.env.JARVIS_INFRA_HOME || join(JARVIS_HOME, 'infra');
 const REPORT_FILE = join(BOT_HOME, 'state', 'mistake-recurrence.json');
 const AUDIT_SH = join(INFRA, 'scripts', 'mistake-recurrence-audit.sh');
 const LEDGER_FILE = join(BOT_HOME, 'ledger', 'promoter-ledger.jsonl');

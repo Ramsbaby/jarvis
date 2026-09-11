@@ -16,7 +16,7 @@ import { appendFileSync, readFileSync, writeFileSync, existsSync, mkdirSync } fr
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const FEED_DIR = join(homedir(), 'jarvis/runtime', 'state', 'channel-feed');
+const FEED_DIR = join(homedir(), '.openclaw-data/jarvis/runtime', 'state', 'channel-feed');
 const MAX_ENTRIES = 30;  // 채널별 최대 보관 줄 수 (롤링)
 const MAX_TEXT_LEN = 2000;
 

@@ -203,7 +203,7 @@ DISCORD_SUFFIX=""
 if [[ -n "$DISCORD_HISTORY_CONTEXT" ]]; then DISCORD_SUFFIX=" | ${DISCORD_HISTORY_CONTEXT}"; fi
 
 # Phase 0.5: 오너 교정(corrections) 로드 — Discord에서 쌓인 교정도 CLI 프롬프트에 반영
-# ~/.jarvis/bin → ~/jarvis/infra/bin 심링크
+# ~/.jarvis/bin → ~/.openclaw-data/jarvis/infra/bin 심링크
 CORRECTIONS_CONTEXT=""
 FEEDBACK_CLI="${HOME}/.jarvis/bin/feedback-loop-cli.mjs"
 if [[ -x "$FEEDBACK_CLI" ]]; then

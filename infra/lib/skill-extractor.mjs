@@ -17,7 +17,7 @@ import { homedir } from 'node:os';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { getTask } from './task-store.mjs';
 
-const MISTAKES_FILE = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'wiki', 'meta', 'learned-mistakes.md');
+const MISTAKES_FILE = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime'), 'wiki', 'meta', 'learned-mistakes.md');
 
 function normalizeForMatch(s) {
   return s.replace(/[^a-zA-Z0-9가-힣]/g, '').slice(0, 30);
@@ -45,7 +45,7 @@ function loadMistakeAsTask(taskId) {
 
 delete process.env.CLAUDECODE;
 
-const BOT_HOME    = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME    = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const SKILLS_DIR  = join(homedir(), '.jarvis', 'skills');
 const MODELS_FILE = join(BOT_HOME, 'config', 'models.json');
 const CLAUDE_BIN  = process.env.CLAUDE_BINARY || join(homedir(), '.local/bin/claude');

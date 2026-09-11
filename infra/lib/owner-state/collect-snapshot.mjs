@@ -11,7 +11,7 @@ import { weekdayKST, daysUntilKST, freshness, todayKST, addDays } from './fact-g
 import { loadOpenInsights } from './insight-store.mjs';
 
 const HOME = process.env.HOME;
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
 const OUT_DIR = join(BOT_HOME, 'state/owner-state');
 const KAKAO_CAL = '6ucgla9qclkiielcajug4j148446klr3@import.calendar.google.com';
 const GOOGLE_ACCOUNT = process.env.GOOGLE_ACCOUNT || ''; // 개인 이메일 하드코딩 제거 — runtime/.env의 GOOGLE_ACCOUNT 사용

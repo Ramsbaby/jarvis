@@ -10,13 +10,13 @@ import { join } from 'node:path';
 import os from 'node:os';
 
 const HOME = os.homedir();
-const DRAFTS = join(HOME, 'jarvis', 'runtime', 'state', 'skill-drafts');
-const LEDGER = join(HOME, 'jarvis', 'runtime', 'ledger', 'skill-loop.jsonl');
-const MODEL_POLICY = join(HOME, 'jarvis', 'runtime', 'context', 'model-policy.json');
-const ASK_CLAUDE = join(HOME, 'jarvis', 'infra', 'bin', 'ask-claude.sh');
+const DRAFTS = join(HOME, '.openclaw-data/jarvis', 'runtime', 'state', 'skill-drafts');
+const LEDGER = join(HOME, '.openclaw-data/jarvis', 'runtime', 'ledger', 'skill-loop.jsonl');
+const MODEL_POLICY = join(HOME, '.openclaw-data/jarvis', 'runtime', 'context', 'model-policy.json');
+const ASK_CLAUDE = join(HOME, '.openclaw-data/jarvis', 'infra', 'bin', 'ask-claude.sh');
 const VALIDATOR = join(HOME, '.claude', 'commands', 'skill-creator', 'scripts', 'quick_validate.py');
-const MISTAKES = join(HOME, 'jarvis', 'runtime', 'wiki', 'meta', 'learned-mistakes.md');
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis', 'runtime');
+const MISTAKES = join(HOME, '.openclaw-data/jarvis', 'runtime', 'wiki', 'meta', 'learned-mistakes.md');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis', 'runtime');
 const SKILL_DIRS = [join(HOME, '.claude', 'commands'), join(HOME, '.claude', 'skills')];
 
 const args = process.argv.slice(2);

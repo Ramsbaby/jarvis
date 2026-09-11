@@ -22,11 +22,11 @@ import { readAllMistakes } from '../lib/learned-mistakes.mjs'; // [2026-07-22] �
 import { homedir } from 'node:os';
 
 const HOME = homedir();
-const MISTAKES = join(HOME, 'jarvis/runtime/wiki/meta/learned-mistakes.md');
+const MISTAKES = join(HOME, '.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md');
 const AUTOLEARN = join(HOME, '.claude/rules/jarvis-autolearn.md');
-const PROMOTER_LEDGER = join(HOME, 'jarvis/runtime/ledger/promoter-ledger.jsonl');
-const INJECT_LOG = join(HOME, 'jarvis/runtime/logs/context-state-inject.jsonl');
-const OUT_LEDGER = join(HOME, 'jarvis/runtime/ledger/correction-metrics.jsonl');
+const PROMOTER_LEDGER = join(HOME, '.openclaw-data/jarvis/runtime/ledger/promoter-ledger.jsonl');
+const INJECT_LOG = join(HOME, '.openclaw-data/jarvis/runtime/logs/context-state-inject.jsonl');
+const OUT_LEDGER = join(HOME, '.openclaw-data/jarvis/runtime/ledger/correction-metrics.jsonl');
 
 function nowKST() {
   return new Date(Date.now() + 9 * 3600e3).toISOString().replace(/\.\d+Z$/, '+09:00');
@@ -108,6 +108,6 @@ if (report.promoter_7d) console.log(`③ promoter 최근 7일: 실행 ${report.p
 console.log(`④ 읽기 강제 훅 발동: 최근 7일 ${report.state_inject.last7d}회 (누적 ${report.state_inject.total}회)`);
 
 // 회차 기록 (비교용)
-mkdirSync(join(HOME, 'jarvis/runtime/ledger'), { recursive: true });
+mkdirSync(join(HOME, '.openclaw-data/jarvis/runtime/ledger'), { recursive: true });
 appendFileSync(OUT_LEDGER, JSON.stringify(report) + '\n', 'utf-8');
 console.log(`\n기록: ${OUT_LEDGER}`);

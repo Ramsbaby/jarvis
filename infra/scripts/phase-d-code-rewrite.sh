@@ -11,7 +11,7 @@ set -euo pipefail
 # 치환 규칙:
 #   1. `$HOME/.openclaw-data/jarvis/runtime`       → `$HOME/.openclaw-data/jarvis/runtime`
 #   2. `${HOME}/.openclaw-data/jarvis/runtime`     → `${HOME}/.openclaw-data/jarvis/runtime`
-#   3. `homedir(), 'jarvis/runtime'`→ `homedir(), 'jarvis/runtime'`
+#   3. `homedir(), '.openclaw-data/jarvis/runtime'`→ `homedir(), '.openclaw-data/jarvis/runtime'`
 #   4. `~/.openclaw-data/jarvis/runtime/`          → `~/.openclaw-data/jarvis/runtime/`    (비쉘 문맥)
 #   5. `/Users/ramsbaby/.openclaw-data/jarvis/runtime/` → `/Users/ramsbaby/.openclaw-data/jarvis/runtime/`
 #
@@ -87,8 +87,8 @@ case "$MODE" in
             new=$(printf '%s' "$orig" | sed \
                 -e 's|\$HOME/\.jarvis|$HOME/.openclaw-data/jarvis/runtime|g' \
                 -e 's|\${HOME}/\.jarvis|${HOME}/.openclaw-data/jarvis/runtime|g' \
-                -e "s|homedir(), *'\\.jarvis'|homedir(), 'jarvis/runtime'|g" \
-                -e 's|homedir(), *"\\.jarvis"|homedir(), "jarvis/runtime"|g' \
+                -e "s|homedir(), *'\\.jarvis'|homedir(), '.openclaw-data/jarvis/runtime'|g" \
+                -e 's|homedir(), *"\\.jarvis"|homedir(), ".openclaw-data/jarvis/runtime"|g' \
                 -e 's|~/\.jarvis/|~/.openclaw-data/jarvis/runtime/|g' \
                 -e 's|/Users/ramsbaby/\.jarvis/|/Users/ramsbaby/.openclaw-data/jarvis/runtime/|g')
             if [[ "$orig" != "$new" ]]; then

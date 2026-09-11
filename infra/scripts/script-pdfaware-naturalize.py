@@ -23,7 +23,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-env_path = Path.home() / 'jarvis/runtime/.env'
+env_path = Path.home() / '.openclaw-data/jarvis/runtime/.env'
 for line in env_path.read_text().splitlines():
     if line.startswith('OPENAI_API_KEY='):
         os.environ['OPENAI_API_KEY'] = line.split('=', 1)[1].strip().strip('"').strip("'")
@@ -32,7 +32,7 @@ from openai import OpenAI  # noqa: E402
 
 MODEL = 'gpt-5.5-pro'  # 최고 성능. Responses API 전용.
 PDF_DIR = Path('/tmp/script-pdf-pages')
-SCRIPT_MD = Path.home() / 'jarvis/runtime/career/samsung-cnt-2026-04-v3/20-presentation-script-v11.md'
+SCRIPT_MD = Path.home() / '.openclaw-data/jarvis/runtime/career/samsung-cnt-2026-04-v3/20-presentation-script-v11.md'
 
 SYSTEM_PROMPT = """당신은 면접 발표 스크립트 정합성·자연스러움 분석 전문가입니다.
 
@@ -189,7 +189,7 @@ def main():
     print(f'비용: 약 ${cost:.2f} (실제 청구는 OpenAI 대시보드 확인)')
 
     ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-    log_path = Path.home() / f'jarvis/runtime/state/script-pdfaware-log-{ts}.json'
+    log_path = Path.home() / f'.openclaw-data/jarvis/runtime/state/script-pdfaware-log-{ts}.json'
     log_path.write_text(json.dumps(results, ensure_ascii=False, indent=2))
     print(f'로그: {log_path}')
     return results, ts

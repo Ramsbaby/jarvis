@@ -28,7 +28,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const HOME = homedir();
-const TASKS_PATH = join(HOME, 'jarvis/runtime/config/tasks.json');
+const TASKS_PATH = join(HOME, '.openclaw-data/jarvis/runtime/config/tasks.json');
 const ARGS = process.argv.slice(2);
 const APPLY = ARGS.includes('--apply');
 const VERBOSE = ARGS.includes('-v');

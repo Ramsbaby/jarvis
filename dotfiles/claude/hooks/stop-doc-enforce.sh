@@ -63,7 +63,7 @@ cat >&2 <<MSG
 ${DEBT_MSG}
 
 지시:
-1. 위 문서(~/jarvis/infra/<doc_path>)를 순서대로 편집
+1. 위 문서(~/.openclaw-data/jarvis/infra/<doc_path>)를 순서대로 편집
 2. 이번 세션 코드 변경 내용을 관련 섹션에 반영
 3. 편집 저장 → debt 자동 해소 → Stop 재시도 시 통과
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

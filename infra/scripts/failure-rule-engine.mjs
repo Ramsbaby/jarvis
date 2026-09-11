@@ -20,7 +20,7 @@ import {
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const RULES_PATH = join(BOT_HOME, 'state', 'failure-rules.jsonl');
 const LOG_PATH = join(BOT_HOME, 'logs', 'failure-rules.log');
 

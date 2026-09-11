@@ -21,7 +21,7 @@ import {
   Routes,
 } from 'discord.js';
 import { config as loadEnv } from 'dotenv';
-loadEnv({ path: join(process.env.JARVIS_HOME || join(homedir(), 'jarvis'), 'runtime/discord/.env') });
+loadEnv({ path: join(process.env.JARVIS_HOME || join(homedir(), '.openclaw-data/jarvis'), 'runtime/discord/.env') });
 
 import { log, sendNtfy, getSessionHistoryFile } from './lib/claude-runner.js';
 import { SessionStore, RateTracker, Semaphore } from './lib/session.js';
@@ -39,7 +39,7 @@ import { closeRagEngine } from './lib/rag-helper.js';
 // ---------------------------------------------------------------------------
 
 const HOME = homedir();
-const BOT_HOME = join(process.env.BOT_HOME || join(HOME, 'jarvis/runtime'));
+const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime'));
 const SESSIONS_PATH = join(BOT_HOME, 'state', 'sessions.json');
 const RATE_TRACKER_PATH = join(BOT_HOME, 'state', 'rate-tracker.json');
 const MAX_CONCURRENT = 4;

@@ -21,7 +21,7 @@ import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { join, basename, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 
-const SNAP_ROOT = join(homedir(), 'jarvis/runtime/state/snapshots');
+const SNAP_ROOT = join(homedir(), '.openclaw-data/jarvis/runtime/state/snapshots');
 
 function resolveSnapPath(arg) {
   if (isAbsolute(arg)) return arg;

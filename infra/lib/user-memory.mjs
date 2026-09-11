@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const USERS_DIR = join(BOT_HOME, 'state', 'users');
 
 // 세션 메타·컴팩션 아티팩트·마크다운 조각 필터 — session-summarizer 등이 대화 요약본을

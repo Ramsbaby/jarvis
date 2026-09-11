@@ -64,7 +64,7 @@ cat << 'REMINDER_EOF'
 사고 사례 (2026-04-24):
 세션 재개 후 'No response requested' 오판으로 2턴 연속 침묵. 주인님이 직접 "내가 계속이라고 하면 말이 끊겼다는걸 인지못하나?" 지적 후에야 응답. 오답노트 등재 후에도 재발하여 이 BLOCKING hook으로 승격.
 
-관련 룰: ~/jarvis/runtime/wiki/meta/_facts.md (meta 도메인, 2026-04-24 등재)
+관련 룰: ~/.openclaw-data/jarvis/runtime/wiki/meta/_facts.md (meta 도메인, 2026-04-24 등재)
 REMINDER_EOF
 
 LOG_DIR="${HOME}/.jarvis/logs"

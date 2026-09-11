@@ -22,7 +22,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const SNAPSHOT_FILE = join(BOT_HOME, 'state', 'system-prompt-snapshot.md');
 
 const RAW = process.argv.includes('--raw');

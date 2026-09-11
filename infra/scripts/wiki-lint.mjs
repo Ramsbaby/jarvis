@@ -29,7 +29,7 @@ import { homedir } from 'node:os';
 import { getSchema, WIKI_ROOT } from '../discord/lib/wiki-engine.mjs';
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
-const BOT_HOME  = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME  = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const LOG_FILE  = join(BOT_HOME, 'logs', 'wiki-lint.log');
 const META_DIR  = join(WIKI_ROOT, 'meta');
 const INDEX_FILE = join(WIKI_ROOT, 'index.md');

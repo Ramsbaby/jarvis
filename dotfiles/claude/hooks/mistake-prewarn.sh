@@ -13,8 +13,8 @@
 
 set -uo pipefail
 
-MISTAKES_FILE="${HOME}/jarvis/runtime/wiki/meta/learned-mistakes.md"
-LOG_DIR="${HOME}/jarvis/runtime/logs"
+MISTAKES_FILE="${HOME}/.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md"
+LOG_DIR="${HOME}/.openclaw-data/jarvis/runtime/logs"
 LOG_FILE="$LOG_DIR/mistake-prewarn.jsonl"
 
 # 파일 없으면 조용히 종료
@@ -105,7 +105,7 @@ cat <<EOF
 
 $RELATED
 ---
-출처: ~/jarvis/runtime/wiki/meta/learned-mistakes.md (총 86건 중 상위 2건)
+출처: ~/.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md (총 86건 중 상위 2건)
 원칙: 동일 유형 실수 재발 시 구조적 가드가 없었다는 뜻. 이번 작업에서 위 '대응' 필드를 지키십시오.
 EOF
 

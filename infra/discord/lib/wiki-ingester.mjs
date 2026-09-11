@@ -24,7 +24,7 @@ import {
   getSchema, getWikiStats, WIKI_ROOT,
 } from './wiki-engine.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const CLAUDE_BINARY = process.env.CLAUDE_BINARY || join(homedir(), '.local/bin/claude');
 
 function log(level, msg, meta = {}) {

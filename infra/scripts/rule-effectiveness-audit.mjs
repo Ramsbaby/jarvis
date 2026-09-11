@@ -4,7 +4,7 @@
 // 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/rule-effectiveness-audit
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
-if (__sc(__sh() + '/jarvis/runtime/state/stopped/rule-effectiveness-audit') && process.env.OPENCLAW_JOB !== '1') {
+if (__sc(__sh() + '/.openclaw-data/jarvis/runtime/state/stopped/rule-effectiveness-audit') && process.env.OPENCLAW_JOB !== '1') {
   console.log('[rule-effectiveness-audit] 중지 플래그 있음 — 오픈클로로 이관됨');
   process.exit(0);
 }

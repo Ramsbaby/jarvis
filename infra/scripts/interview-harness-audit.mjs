@@ -42,16 +42,16 @@ const NOTIFY   = process.argv.includes('--notify');
 const FIX_MODE = process.argv.includes('--fix');
 
 const HOME     = homedir();
-const SCN_PATH = join(HOME, 'jarvis/runtime/state/scenarios/samsung-cnt.json');
-const INSIGHTS = join(HOME, 'jarvis/runtime/state/ralph-insights.jsonl');
-const FORBID   = join(HOME, 'jarvis/runtime/state/ralph-forbid-list.json');
-const ROUNDS   = join(HOME, 'jarvis/runtime/state/ralph-rounds.jsonl');
-const DOC_PATH = join(HOME, 'jarvis/infra/docs/INTERVIEW-BOT.md');
-const PROF_PATH = join(HOME, 'jarvis/runtime/context/interview-bot-profile.md');
+const SCN_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/scenarios/samsung-cnt.json');
+const INSIGHTS = join(HOME, '.openclaw-data/jarvis/runtime/state/ralph-insights.jsonl');
+const FORBID   = join(HOME, '.openclaw-data/jarvis/runtime/state/ralph-forbid-list.json');
+const ROUNDS   = join(HOME, '.openclaw-data/jarvis/runtime/state/ralph-rounds.jsonl');
+const DOC_PATH = join(HOME, '.openclaw-data/jarvis/infra/docs/INTERVIEW-BOT.md');
+const PROF_PATH = join(HOME, '.openclaw-data/jarvis/runtime/context/interview-bot-profile.md');
 // P5 fix: JSON.parse(URL문자열) → SyntaxError → null 버그 수정. 단순 문자열 추출로 변경.
 const WEBHOOK  = process.env.DISCORD_INTERVIEW_WEBHOOK ||
                  (() => { try {
-                   const line = readFileSync(join(HOME, 'jarvis/runtime/.env'), 'utf-8')
+                   const line = readFileSync(join(HOME, '.openclaw-data/jarvis/runtime/.env'), 'utf-8')
                      .split('\n').find(l => l.startsWith('DISCORD_WEBHOOK_INTERVIEW='));
                    return line ? line.split('=').slice(1).join('=').trim() : null;
                  } catch { return null; } })();
@@ -320,8 +320,8 @@ function checkC6() {
     const docVerMatch = docContent.match(/현재 버전:\s*(v[\d.]+)/);
     const docVer = docVerMatch ? docVerMatch[1] : null;
 
-    const runnerPath = join(homedir(), 'jarvis/infra/scripts/interview-ralph-runner.mjs');
-    const fastPath   = join(homedir(), 'jarvis/infra/discord/lib/interview-fast-path.js');
+    const runnerPath = join(homedir(), '.openclaw-data/jarvis/infra/scripts/interview-ralph-runner.mjs');
+    const fastPath   = join(homedir(), '.openclaw-data/jarvis/infra/discord/lib/interview-fast-path.js');
 
     // 버전 비교: parseFloat 금지 (v4.9 > v4.66 오판 발생).
     // "4.66" → [4, 66], "4.9" → [4, 9] 로 쪼개 정수 비교.
@@ -375,8 +375,8 @@ function checkC6() {
 function checkC7() {
   console.log('\n[C7] EvalContext SSoT 정합성 — answerGuide 전달 체인 (6-gate)');
 
-  const RUNNER_PATH   = join(HOME, 'jarvis/infra/scripts/interview-ralph-runner.mjs');
-  const VERIFIER_PATH = join(HOME, 'jarvis/infra/scripts/interview-verifier-server.mjs');
+  const RUNNER_PATH   = join(HOME, '.openclaw-data/jarvis/infra/scripts/interview-ralph-runner.mjs');
+  const VERIFIER_PATH = join(HOME, '.openclaw-data/jarvis/infra/scripts/interview-verifier-server.mjs');
 
   if (!existsSync(RUNNER_PATH)) {
     fail('C7', 'interview-ralph-runner.mjs 없음 — 감사 불가');
@@ -494,8 +494,8 @@ function checkC7() {
 function checkC8() {
   console.log('\n[C8] relevance 축 가드 — 동문서답 차단 (cl-1c2b189b1bc5dd3e)');
 
-  const VERIFIER_PATH = join(HOME, 'jarvis/infra/scripts/interview-verifier-server.mjs');
-  const SCORER_PATH   = join(HOME, 'jarvis/infra/scripts/interview-relevance-scorer.mjs');
+  const VERIFIER_PATH = join(HOME, '.openclaw-data/jarvis/infra/scripts/interview-verifier-server.mjs');
+  const SCORER_PATH   = join(HOME, '.openclaw-data/jarvis/infra/scripts/interview-relevance-scorer.mjs');
 
   // C8-a: relevance 독립 스코어링 모듈 존재 확인
   if (!existsSync(SCORER_PATH)) {

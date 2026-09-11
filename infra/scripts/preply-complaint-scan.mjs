@@ -5,7 +5,7 @@
 // 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/preply-complaint-scan
 import { existsSync as __stopChk } from 'node:fs';
 import { homedir as __stopHome } from 'node:os';
-if (__stopChk(__stopHome() + '/jarvis/runtime/state/stopped/preply-complaint-scan')) {
+if (__stopChk(__stopHome() + '/.openclaw-data/jarvis/runtime/state/stopped/preply-complaint-scan')) {
   console.log('[preply-complaint-scan] 중지 플래그 있음 (판정 D)');
   process.exit(0);
 }

@@ -81,7 +81,7 @@ if [ -n "${PRIVACY_BYPASS_REASON:-}" ]; then
     # medium/low 만 존재 — bypass 허용
     echo "$scan_out" >&2
     echo "⚠️  Privacy scan bypassed (medium/low only): $PRIVACY_BYPASS_REASON" >&2
-    # TODO Phase 3: ledger 기록 (~/jarvis/runtime/logs/privacy-bypass.jsonl)
+    # TODO Phase 3: ledger 기록 (~/.openclaw-data/jarvis/runtime/logs/privacy-bypass.jsonl)
     exit 0
   fi
   # 위반 없음에도 bypass 사용됨 — 경고만 하고 통과
@@ -94,7 +94,7 @@ node "$ROOT/scripts/privacy/scan.mjs" --staged
 # ─── CLAUDE.md 줄 수 스테일 가드 (cl-ef335e743892c676) ────────────────────
 # staged CLAUDE.md에 stale 줄 수 항목이 있으면 경고 출력.
 # 우회: CLAUDE_MD_STALE_OK=1 git commit ...
-_GUARD_LIB="${HOME}/jarvis/infra/lib/cluster-guard-cl-ef335e743892c676.sh"
+_GUARD_LIB="${HOME}/.openclaw-data/jarvis/infra/lib/cluster-guard-cl-ef335e743892c676.sh"
 if [[ -f "$_GUARD_LIB" ]]; then
   # shellcheck disable=SC1090
   source "$_GUARD_LIB" 2>/dev/null || true

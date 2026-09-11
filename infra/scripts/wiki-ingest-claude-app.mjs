@@ -32,7 +32,7 @@ import { spawnSync } from 'node:child_process';
 import { addFactToWiki } from '../discord/lib/wiki-engine.mjs';
 
 const HOME              = homedir();
-const BOT_HOME          = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
+const BOT_HOME          = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
 const DOWNLOADS_DIR     = process.env.CLAUDE_EXPORT_DIR || join(HOME, 'Downloads');
 const PROCESSED_DIR     = join(DOWNLOADS_DIR, 'claude-export-processed');
 const LOG_FILE          = join(BOT_HOME, 'logs', 'wiki-ingest-claude-app.log');

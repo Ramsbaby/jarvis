@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { discordSend } from '../lib/discord-notify.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 // 2026-04-23 경로 통일 — inbox-match.mjs / inbox-apply.mjs 와 SSoT 일치 ("state/inbox")
 // 기존 "state/inbox-crawl" 은 match 가 읽지 못해 3일 전 stale 파일 고정 사용 → 매일 같은 Notion 리포트 원인
 const RESULT_DIR = join(BOT_HOME, 'state', 'inbox');
@@ -27,7 +27,7 @@ mkdirSync(RESULT_DIR, { recursive: true });
 // ─── 대상 사이트 (private/config 분리 — PII 격리) ──────────────────────────
 // SSoT: ~/.openclaw-data/jarvis/private/config/inbox-targets.json (gitignored)
 // 파일 없으면 크롤링 0건 graceful fallback — OSS 사용자는 본인 타겟을 여기에 정의
-const TARGETS_PATH = join(homedir(), 'jarvis', 'private', 'config', 'inbox-targets.json');
+const TARGETS_PATH = join(homedir(), '.openclaw-data/jarvis', 'private', 'config', 'inbox-targets.json');
 let SITES = [];
 let GREETINGHR_SITES = [];
 let NINEHIRE_SITES = [];

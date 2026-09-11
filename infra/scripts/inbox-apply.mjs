@@ -18,7 +18,7 @@ import { homedir } from 'node:os';
 import { execSync, spawn } from 'node:child_process';
 import { discordSend } from '../lib/discord-notify.mjs';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const CONFIG_FILE = join(BOT_HOME, 'config', 'applicant.json');
 const CRAWL_DIR = join(BOT_HOME, 'state', 'inbox');
 const MATCHED_FILE = join(CRAWL_DIR, 'matched.json');

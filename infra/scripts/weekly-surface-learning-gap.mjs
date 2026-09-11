@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const LEDGER = join(BOT_HOME, 'state', 'mistake-ledger.jsonl');
 const NOTIFY = process.argv.includes('--notify');
 
@@ -104,7 +104,7 @@ console.log(report);
 
 if (NOTIFY && alerts.length > 0) {
   // Discord 알림 (jarvis-system 채널)
-  const notifyScript = join(homedir(), 'jarvis/infra/scripts/discord-visual.mjs');
+  const notifyScript = join(homedir(), '.openclaw-data/jarvis/infra/scripts/discord-visual.mjs');
   if (existsSync(notifyScript)) {
     try {
       const data = JSON.stringify({

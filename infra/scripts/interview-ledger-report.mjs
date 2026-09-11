@@ -12,8 +12,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const LEDGER = join(homedir(), 'jarvis/runtime/state/openai-ledger.jsonl');
-const BOT_LOG = join(homedir(), 'jarvis/runtime/logs/discord-bot.out.log');
+const LEDGER = join(homedir(), '.openclaw-data/jarvis/runtime/state/openai-ledger.jsonl');
+const BOT_LOG = join(homedir(), '.openclaw-data/jarvis/runtime/logs/discord-bot.out.log');
 
 const args = process.argv.slice(2);
 const sinceArg = (args.find(a => a.startsWith('--since=')) || '--since=last-restart').split('=')[1];

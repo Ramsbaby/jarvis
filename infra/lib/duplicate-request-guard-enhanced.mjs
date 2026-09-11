@@ -19,7 +19,7 @@ import crypto from 'crypto';
 
 const STATE_DIR = process.env.BOT_HOME
   ? path.join(process.env.BOT_HOME, 'state')
-  : path.join(process.env.HOME || '/tmp', 'jarvis/runtime/state');
+  : path.join(process.env.HOME || '/tmp', '.openclaw-data/jarvis/runtime/state');
 
 const CACHE_FILE = path.join(STATE_DIR, 'duplicate-request-cache.jsonl');
 const STATS_FILE = path.join(STATE_DIR, 'duplicate-request-stats.json');

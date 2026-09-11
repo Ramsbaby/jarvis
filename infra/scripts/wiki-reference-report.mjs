@@ -25,7 +25,7 @@ import { readFileSync, appendFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis', 'runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis', 'runtime');
 const LOG_PATH = join(BOT_HOME, 'logs', 'wiki-inject.log');
 const METRICS_PATH = join(BOT_HOME, 'wiki', 'meta', 'metrics.jsonl');
 const DRY_RUN = process.argv.includes('--dry-run');

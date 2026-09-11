@@ -30,10 +30,10 @@ import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
 const HOME = homedir();
-const CIRCUIT_FILE = join(HOME, 'jarvis/runtime/state/mistake-extractor-circuit.json');
+const CIRCUIT_FILE = join(HOME, '.openclaw-data/jarvis/runtime/state/mistake-extractor-circuit.json');
 const ALERT_LEDGER = join(HOME, '.jarvis/state/mistake-circuit-alerts.jsonl');
-const VISUAL_BIN = join(HOME, 'jarvis/infra/scripts/discord-visual.mjs');
-const LOG_FILE = join(HOME, 'jarvis/runtime/logs/mistake-circuit-healthcheck.log');
+const VISUAL_BIN = join(HOME, '.openclaw-data/jarvis/infra/scripts/discord-visual.mjs');
+const LOG_FILE = join(HOME, '.openclaw-data/jarvis/runtime/logs/mistake-circuit-healthcheck.log');
 
 const RATE_LIMIT_MS = 6 * 3600 * 1000; // 6시간
 const FORCE = process.argv.includes('--force');

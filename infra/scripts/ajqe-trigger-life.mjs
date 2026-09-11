@@ -4,7 +4,7 @@
 // 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/ajqe-trigger-life
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
-if (__sc(__sh() + '/jarvis/runtime/state/stopped/ajqe-trigger-life') && process.env.OPENCLAW_JOB !== '1') {
+if (__sc(__sh() + '/.openclaw-data/jarvis/runtime/state/stopped/ajqe-trigger-life') && process.env.OPENCLAW_JOB !== '1') {
   console.log('[ajqe-trigger-life] 중지 플래그 있음 — 오픈클로로 이관됨');
   process.exit(0);
 }
@@ -37,10 +37,10 @@ import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 
 const HOME = homedir();
-const QUEUE_PATH = join(HOME, 'jarvis/runtime/state/ajqe-question-queue.jsonl');
-const COOLDOWN_PATH = join(HOME, 'jarvis/runtime/state/ajqe-signal-cooldown.json');
-const CAREER_FACTS = join(HOME, 'jarvis/runtime/wiki/career/_facts.md');
-const ACTIVE_WORK = join(HOME, 'jarvis/runtime/state/active-work.json');
+const QUEUE_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-question-queue.jsonl');
+const COOLDOWN_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-signal-cooldown.json');
+const CAREER_FACTS = join(HOME, '.openclaw-data/jarvis/runtime/wiki/career/_facts.md');
+const ACTIVE_WORK = join(HOME, '.openclaw-data/jarvis/runtime/state/active-work.json');
 
 const args = new Set(process.argv.slice(2));
 const DRY_RUN = args.has('--dry-run');

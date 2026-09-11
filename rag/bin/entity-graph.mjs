@@ -19,7 +19,7 @@ import { homedir } from 'node:os';
 import { writeFileSync, readFileSync } from 'node:fs';
 import * as lancedb from '@lancedb/lancedb';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const DB_PATH   = join(BOT_HOME, 'rag', 'lancedb');
 const OUT_PATH  = join(BOT_HOME, 'rag', 'entity-graph.json');
 

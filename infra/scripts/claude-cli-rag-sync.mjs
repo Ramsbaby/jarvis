@@ -18,7 +18,7 @@ import { maskPII } from '../discord/lib/mask-pii.mjs';
 
 const HOME = homedir();
 const CLAUDE_PROJECTS = join(HOME, '.claude', 'projects');
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
 const INBOX = join(BOT_HOME, 'inbox');
 const STATE_FILE = join(BOT_HOME, 'state', 'cli-rag-sync.json');
 const DRY_RUN = process.argv.includes('--dry-run');

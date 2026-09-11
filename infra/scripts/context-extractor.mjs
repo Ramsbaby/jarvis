@@ -48,9 +48,9 @@ import { homedir } from 'node:os';
 const HOME         = homedir();
 const VAULT_DIR    = process.env.VAULT_DIR || join(HOME, 'vault');
 const DISCORD_DIR  = join(VAULT_DIR, '02-daily', 'discord');
-const SESSIONS_DIR = join(HOME, 'jarvis/runtime', 'context', 'claude-code-sessions');
-const OUTPUT_DIR   = join(HOME, 'jarvis/runtime', 'context', 'claude-memory');
-const BOT_HOME     = join(HOME, 'jarvis/runtime');
+const SESSIONS_DIR = join(HOME, '.openclaw-data/jarvis/runtime', 'context', 'claude-code-sessions');
+const OUTPUT_DIR   = join(HOME, '.openclaw-data/jarvis/runtime', 'context', 'claude-memory');
+const BOT_HOME     = join(HOME, '.openclaw-data/jarvis/runtime');
 const LOG_FILE     = join(BOT_HOME, 'logs', 'context-extractor.log');
 const MCP_CONFIG   = join(BOT_HOME, 'config', 'empty-mcp.json');
 

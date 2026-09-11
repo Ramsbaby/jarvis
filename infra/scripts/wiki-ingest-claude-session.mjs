@@ -59,7 +59,7 @@ import { addFactToWiki } from '../discord/lib/wiki-engine.mjs';
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
 const HOME         = homedir();
-const BOT_HOME     = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
+const BOT_HOME     = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
 const SESSIONS_DIR = join(BOT_HOME, 'context', 'claude-code-sessions');
 const LOG_FILE     = join(BOT_HOME, 'logs', 'wiki-ingest-claude.log');
 

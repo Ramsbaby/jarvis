@@ -39,8 +39,8 @@ function loadApiKey() {
 
   // 2순위: runtime/.env 파일
   const envPaths = [
-    join(homedir(), 'jarvis', 'runtime', 'discord', '.env'),
-    join(homedir(), 'jarvis', 'runtime', '.env'),
+    join(homedir(), '.openclaw-data/jarvis', 'runtime', 'discord', '.env'),
+    join(homedir(), '.openclaw-data/jarvis', 'runtime', '.env'),
     join(homedir(), '.jarvis', 'discord', '.env'),
   ];
   for (const p of envPaths) {

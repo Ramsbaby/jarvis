@@ -21,7 +21,7 @@ import { join, basename } from 'node:path';
 
 const HOME = homedir();
 const LA_DIR = join(HOME, 'Library/LaunchAgents');
-const TASKS_PATH = join(HOME, 'jarvis/runtime/config/tasks.json');
+const TASKS_PATH = join(HOME, '.openclaw-data/jarvis/runtime/config/tasks.json');
 
 function plistKeys(path) {
   // plutil로 JSON 변환 후 파싱

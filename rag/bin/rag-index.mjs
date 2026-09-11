@@ -329,7 +329,7 @@ async function saveState(state) {
         const existing = JSON.parse(existingRaw);
         const { existsSync, realpathSync } = await import('node:fs');
         // 2026-09-10 추가: '별칭 접기'는 정당한 축소다.
-        //   같은 실파일이 ~/.jarvis · ~/jarvis · 정본 경로로 각각 키를 갖고 있었다
+        //   같은 실파일이 ~/.jarvis · ~/.openclaw-data/jarvis · 정본 경로로 각각 키를 갖고 있었다
         //   (실측 8,779키 / 실파일 4,117 — 이관으로 BOT_HOME 문자열이 바뀔 때마다 한 벌씩 늘었다).
         //   realpath 로 접으면 옛 키는 사라지지만 그 파일은 정본 키로 살아 있다.
         //   realpath 를 안 보면 이 정상 정리를 사고로 오판해 state 가 영구 동결된다.
@@ -933,7 +933,7 @@ async function main() {
   // state 키가 '입력된 문자열 경로' 그대로였다. 그래서 BOT_HOME 문자열이 바뀌면
   // 같은 물리 파일이 새 키로 들어와 코퍼스 전량이 '신규'로 판정되고 재색인된다.
   // 실제로 그렇게 됐다 — 오픈클로 이관 당일 index-state 키 8,779개 중 실파일은 4,117개뿐이었고
-  // 별칭이 세 벌(`~/.jarvis` 4,090 · `~/jarvis` 4,072 · 정본 599)이었다.
+  // 별칭이 세 벌(`~/.jarvis` 4,090 · `~/.openclaw-data/jarvis` 4,072 · 정본 599)이었다.
   // realpath 로 한 번 접어두면 어느 별칭으로 들어와도 같은 항목을 가리키므로 재색인이 사라진다.
   // (심링크가 끊긴 경로는 realpath 가 실패하므로 원본 문자열을 그대로 둔다 — 조용한 유실 방지)
   {

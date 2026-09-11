@@ -17,7 +17,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from '
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const HANDOFF_DIR = join(BOT_HOME, 'state', 'session-handoffs');
 const MAX_HANDOFF_AGE_MS = 24 * 60 * 60_000; // 24시간 초과 핸드오프는 stale
 

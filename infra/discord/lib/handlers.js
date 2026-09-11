@@ -121,7 +121,7 @@ function _buildBatchContent(messages) {
 // Pending task state — timeout 발생 시 저장, "계속" 입력 시 재주입
 // ---------------------------------------------------------------------------
 
-const _BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const _BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const PENDING_TASKS_PATH = join(_BOT_HOME, 'state', 'pending-tasks.json');
 const _MODELS = JSON.parse(readFileSync(join(_BOT_HOME, 'config', 'models.json'), 'utf-8'));
 const PENDING_TASK_TTL_MS = 30 * 60 * 1000; // 30분
@@ -386,7 +386,7 @@ async function _autoYoutubeBench(prompt) {
   const { spawn } = await import('node:child_process');
   const { join } = await import('node:path');
   const { homedir } = await import('node:os');
-  const script = join(homedir(), 'jarvis/infra/scripts/youtube-bench.sh');
+  const script = join(homedir(), '.openclaw-data/jarvis/infra/scripts/youtube-bench.sh');
 
   for (const m of matches) {
     const url = m[0];

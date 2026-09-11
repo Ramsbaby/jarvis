@@ -20,9 +20,9 @@ import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 
 const HOME = homedir();
-const SENT_PATH = join(HOME, 'jarvis/runtime/state/ajqe-sent.jsonl');
-const ANSWERED_PATH = join(HOME, 'jarvis/runtime/state/ajqe-answered.jsonl');
-const ACTION_EXECUTOR = join(HOME, 'jarvis/infra/scripts/ajqe-action-executor.mjs');
+const SENT_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-sent.jsonl');
+const ANSWERED_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-answered.jsonl');
+const ACTION_EXECUTOR = join(HOME, '.openclaw-data/jarvis/infra/scripts/ajqe-action-executor.mjs');
 
 // 답변 키워드 → 액션 매핑 (대소문자 무시, 정규식)
 // 매칭 실패 = 액션 없음 (기존처럼 wiki 적재만)

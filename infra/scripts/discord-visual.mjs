@@ -27,7 +27,11 @@ try { DATA = JSON.parse(DATA_RAW); }
 catch (e) { console.error('ERROR: --data must be valid JSON:', e.message); process.exit(1); }
 
 // ── 웹훅 URL 로드 ─────────────────────────────────────────────────────────
-const CONFIG_PATH = join(homedir(), 'jarvis/runtime', 'config', 'monitoring.json');
+// [2026-09-11] 옛 경로(~/jarvis)를 그대로 들고 있어 2026-09-10 이관 뒤 ENOTDIR 로 죽었다.
+// BOT_HOME 을 먼저 존중하고, 없으면 정본 루트를 쓴다.
+const RUNTIME_HOME = process.env.BOT_HOME
+  || join(process.env.JARVIS_HOME || join(homedir(), '.openclaw-data', 'jarvis'), 'runtime');
+const CONFIG_PATH = join(RUNTIME_HOME, 'config', 'monitoring.json');
 const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
 const WEBHOOK_URL = config.webhooks?.[CHANNEL] ?? config.webhook?.url;
 // 2026-09-10 오픈클로 이식: 디스코드를 전면 제거했다. 웹훅이 "고장나서 없는 것"과 "일부러 없앤 것"을
@@ -42,7 +46,7 @@ if (!WEBHOOK_URL && config._webhook_disabled_20260910) {
     title = parsed.title || parsed.message || '';
   } catch { /* 제목 없는 페이로드는 type 만으로 식별한다 */ }
   try {
-    const dir = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'logs');
+    const dir = join(RUNTIME_HOME, 'logs');
     mkdirSync(dir, { recursive: true });
     appendFileSync(join(dir, 'no-external.log'),
       `${new Date().toISOString()} [NO_EXTERNAL] src=discord-visual.mjs ch=${CHANNEL} type=${TYPE} title=${title || '(제목없음)'} len=${DATA_RAW.length}\n`);
@@ -57,7 +61,7 @@ if (!WEBHOOK_URL) { console.error(`ERROR: No webhook for channel '${CHANNEL}'`);
 // 브라우저 렌더링 전에 끊어야 puppeteer 비용도 들지 않는다.
 if (process.env.JARVIS_NO_EXTERNAL === '1') {
   try {
-    const dir = join(process.env.BOT_HOME || join(homedir(), 'jarvis/runtime'), 'logs');
+    const dir = join(RUNTIME_HOME, 'logs');
     mkdirSync(dir, { recursive: true });
     appendFileSync(join(dir, 'no-external.log'),
       `${new Date().toISOString()} [NO_EXTERNAL] src=discord-visual.mjs ch=${CHANNEL} type=${TYPE} len=${DATA_RAW.length}\n`);
@@ -74,7 +78,7 @@ if (!config.webhooks?.[CHANNEL]) {
 // 모든 카드/폴백 송출 시도를 JSONL로 기록 — 채널별 송출량·실패율의 30일 추이 측정 기반.
 function auditLog(result) {
   try {
-    const dir = join(homedir(), 'jarvis/runtime', 'ledger');
+    const dir = join(RUNTIME_HOME, 'ledger');
     mkdirSync(dir, { recursive: true });
     const entry = {
       ts: new Date().toISOString(), source: 'discord-visual', type: TYPE,

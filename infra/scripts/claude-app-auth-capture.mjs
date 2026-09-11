@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 
 const HOME = homedir();
-const STATE_FILE = join(HOME, 'jarvis/runtime/state/claude-app-auth.json');
+const STATE_FILE = join(HOME, '.openclaw-data/jarvis/runtime/state/claude-app-auth.json');
 const POLL_INTERVAL_MS = 3000;
 const MAX_WAIT_MS = 10 * 60 * 1000; // 10분 한도
 

@@ -35,7 +35,7 @@ RESULT=$(node --input-type=module << 'NODEJS'
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const BOT_HOME = process.env.BOT_HOME || path.join(process.env.HOME, 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || path.join(process.env.HOME, '.openclaw-data/jarvis/runtime');
 const ACCESS_LOG_PATH = path.join(BOT_HOME, 'rag', 'access-log.json');
 const CUTOFF_MS = Date.now() - 30 * 24 * 3600 * 1000; // 30일
 

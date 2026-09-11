@@ -70,7 +70,7 @@ export function triggerDiscordMistakeExtract(sessionSummaryFilePath) {
       const NODE_BIN = process.execPath;
       const SCRIPT = join(BOT_HOME, '..', 'infra', 'scripts', 'mistake-extractor.mjs');
       // BOT_HOME 미설정 시 기본 경로 fallback
-      const scriptPath = existsSync(SCRIPT) ? SCRIPT : join(homedir(), 'jarvis/infra/scripts/mistake-extractor.mjs');
+      const scriptPath = existsSync(SCRIPT) ? SCRIPT : join(homedir(), '.openclaw-data/jarvis/infra/scripts/mistake-extractor.mjs');
       if (!existsSync(scriptPath)) {
         recordSilentError('claude-runner.mistake-extract', new Error(`script not found: ${scriptPath}`));
         return;
@@ -123,7 +123,7 @@ export function processFeedback(userId, text) {
 // ---------------------------------------------------------------------------
 
 const HOME = homedir();
-const BOT_HOME = join(process.env.BOT_HOME || join(HOME, 'jarvis/runtime'));
+const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime'));
 const MODELS = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'models.json'), 'utf-8'));
 const DISCORD_MCP_PATH = join(BOT_HOME, 'config', 'discord-mcp.json');
 const USER_PROFILE_PATH = join(BOT_HOME, 'context', 'user-profile.md');
@@ -482,7 +482,7 @@ const memoryHashCache = new Map();
 const _extractCooldown = new Map();
 
 // 감정 트리거 반복 카운터: 채널별 감정 발화 횟수 추적 (디스크 영속화 — 재시작 후에도 유지)
-const _EMOTION_COUNTS_FILE = join(homedir(), 'jarvis/runtime/state/emotion-trigger-counts.json');
+const _EMOTION_COUNTS_FILE = join(homedir(), '.openclaw-data/jarvis/runtime/state/emotion-trigger-counts.json');
 const _emotionTriggerCounts = (() => {
   const m = new Map();
   try {
@@ -495,7 +495,7 @@ const _emotionTriggerCounts = (() => {
 })();
 function _saveEmotionCounts() {
   try {
-    const dir = join(homedir(), 'jarvis/runtime/state');
+    const dir = join(homedir(), '.openclaw-data/jarvis/runtime/state');
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(_EMOTION_COUNTS_FILE, JSON.stringify(Object.fromEntries(_emotionTriggerCounts)));
   } catch { /* non-critical — 저장 실패해도 동작은 계속 */ }
@@ -1646,7 +1646,7 @@ export async function* createClaudeSession(prompt, {
               if (isMaterial && exists) {
                 log('warn', 'PreToolUse: 교재 통째 재작성(Write) 차단 → Edit 권고', { fp: fp.slice(-60) });
                 try {
-                  const ledgerDir = join(HOME, 'jarvis/runtime', 'state');
+                  const ledgerDir = join(HOME, '.openclaw-data/jarvis/runtime', 'state');
                   mkdirSync(ledgerDir, { recursive: true });
                   appendFileSync(join(ledgerDir, 'permission-denied.jsonl'),
                     JSON.stringify({ ts: new Date().toISOString(), source: 'discord-bot', tool: 'Write', blocked: 'preply-material-rewrite', fp: fp.slice(-80) }) + '\n');
@@ -1671,7 +1671,7 @@ export async function* createClaudeSession(prompt, {
                 tool: input.tool_name, blocked: String(blocked).slice(0, 160),
               });
               try {
-                const ledgerDir = join(HOME, 'jarvis/runtime', 'state');
+                const ledgerDir = join(HOME, '.openclaw-data/jarvis/runtime', 'state');
                 mkdirSync(ledgerDir, { recursive: true });
                 appendFileSync(
                   join(ledgerDir, 'permission-denied.jsonl'),
@@ -1711,7 +1711,7 @@ export async function* createClaudeSession(prompt, {
               ]);
               // 커밋(제출·결제·전송·삭제·로그인)류 라벨 — 클릭 대상 설명에 이 단어가 있으면 차단.
               const COMMIT_RE = /\b(submit|send|pay|buy|order|purchase|checkout|confirm|delete|remove|sign\s?in|log\s?in|register|apply now)\b|제출|보내기|결제|구매|주문|결정|확인|완료|삭제|신청|등록|로그인|동의/i;
-              const bLedgerDir = join(HOME, 'jarvis/runtime', 'ledger');
+              const bLedgerDir = join(HOME, '.openclaw-data/jarvis/runtime', 'ledger');
               const bLog = (row) => {
                 try {
                   mkdirSync(bLedgerDir, { recursive: true });
@@ -1730,7 +1730,7 @@ export async function* createClaudeSession(prompt, {
                 let host = '';
                 try { host = new URL(String(input.tool_input?.url || '')).hostname.toLowerCase(); } catch { /* 파싱 실패 = deny */ }
                 let allow = [];
-                try { allow = (JSON.parse(readFileSync(join(HOME, 'jarvis/runtime/config/browser-allowlist.json'), 'utf-8')).allowedHosts) || []; } catch { /* 파일 없음/깨짐 = deny-all */ }
+                try { allow = (JSON.parse(readFileSync(join(HOME, '.openclaw-data/jarvis/runtime/config/browser-allowlist.json'), 'utf-8')).allowedHosts) || []; } catch { /* 파일 없음/깨짐 = deny-all */ }
                 const ok = !!host && allow.some((h) => host === h || host.endsWith('.' + h));
                 bLog({ tool: toolShort, url: String(input.tool_input?.url || '').slice(0, 200), host, decision: ok ? 'allow' : 'deny' });
                 if (!ok) {

@@ -13,7 +13,7 @@ const { EmbedBuilder } = discordPkg;
 import { log } from './claude-runner.js';
 import { t } from './i18n.js';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const STATE_DIR = join(BOT_HOME, 'state');
 const STATE_FILE = join(STATE_DIR, 'error-tracker.json');
 const MAX_ERRORS = 50;

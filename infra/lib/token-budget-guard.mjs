@@ -30,7 +30,7 @@ import { readFileSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const LEDGER_PATH = join(BOT_HOME, 'state', 'token-ledger.jsonl');
 const GUARD_LOG_PATH = join(BOT_HOME, 'logs', 'token-budget-guard.log');
 

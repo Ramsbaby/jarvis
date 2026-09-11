@@ -18,8 +18,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const SCENARIOS_DIR = join(homedir(), 'jarvis/runtime/state/scenarios');
-const MONITORING_PATH = join(homedir(), 'jarvis/runtime/config/monitoring.json');
+const SCENARIOS_DIR = join(homedir(), '.openclaw-data/jarvis/runtime/state/scenarios');
+const MONITORING_PATH = join(homedir(), '.openclaw-data/jarvis/runtime/config/monitoring.json');
 
 // CLI 파라미터 파싱
 const NOTIFY = process.argv.includes('--notify');

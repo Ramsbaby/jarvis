@@ -10,13 +10,16 @@ import { join } from 'node:path';
 import os from 'node:os';
 
 const HOME = os.homedir();
+// [2026-09-11] HOME+'jarvis' 를 그대로 들고 있어 2026-09-10 이관 뒤 ENOTDIR 로 죽었다.
+// 잡 jarvis-skill-loop-nightly 상시 실패의 원인. 뿌리를 하나로 묶어 다시 갈라지지 않게 한다.
+const JARVIS_HOME = process.env.JARVIS_HOME || join(HOME, '.openclaw-data', 'jarvis');
+const BOT_HOME = process.env.BOT_HOME || join(JARVIS_HOME, 'runtime');
 const PROJECTS_DIR = join(HOME, '.claude', 'projects');
-const DISCORD_DIR = join(HOME, 'jarvis', 'runtime', 'context', 'discord-history');
-const DRAFTS_DIR = join(HOME, 'jarvis', 'runtime', 'state', 'skill-drafts');
-const LEDGER = join(HOME, 'jarvis', 'runtime', 'ledger', 'skill-loop.jsonl');
-const MODEL_POLICY = join(HOME, 'jarvis', 'runtime', 'context', 'model-policy.json');
-const ASK_CLAUDE = join(HOME, 'jarvis', 'infra', 'bin', 'ask-claude.sh');
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis', 'runtime');
+const DISCORD_DIR = join(BOT_HOME, 'context', 'discord-history');
+const DRAFTS_DIR = join(BOT_HOME, 'state', 'skill-drafts');
+const LEDGER = join(BOT_HOME, 'ledger', 'skill-loop.jsonl');
+const MODEL_POLICY = join(BOT_HOME, 'context', 'model-policy.json');
+const ASK_CLAUDE = join(JARVIS_HOME, 'infra', 'bin', 'ask-claude.sh');
 
 const args = process.argv.slice(2);
 const flag = (name, dflt) => {

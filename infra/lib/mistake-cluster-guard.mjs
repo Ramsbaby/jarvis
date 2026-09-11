@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, rea
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const STATE_DIR = join(BOT_HOME, 'state');
 const CLUSTER_GUARDS_DIR = join(STATE_DIR, 'cluster-guards');
 const METRICS_FILE = join(STATE_DIR, 'cluster-recurrence-metrics.jsonl');

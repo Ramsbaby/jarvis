@@ -30,7 +30,7 @@ const CORPUS = 'jarvis-rag';
 // 게이트웨이는 launchd 의 좁은 env 로 돌아 BOT_HOME 이 없을 수 있다 —
 // 그러면 조용히 빈 DB를 검색해 "결과는 나오는데 전부 무관"한 상태가 된다(2026-09-10 실측).
 // 그래서 상속 env 에 기대지 않고 여기서 못박는다.
-process.env.BOT_HOME ||= join(HOME, 'jarvis/runtime');
+process.env.BOT_HOME ||= join(HOME, '.openclaw-data/jarvis/runtime');
 process.env.JARVIS_RAG_HOME ||= join(process.env.BOT_HOME, 'rag');
 
 // 빈 DB를 조용히 검색하면 오답을 정답처럼 돌려준다. 최소 행수를 밑돌면 실패로 낸다.

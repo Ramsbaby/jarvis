@@ -28,8 +28,8 @@ import { homedir } from 'node:os';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis', 'runtime');
-const CONFIG_PATH = join(process.env.BOT_HOME || join(homedir(), 'jarvis', 'infra'), 'config', 'task-routing-config.json');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis', 'runtime');
+const CONFIG_PATH = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis', 'infra'), 'config', 'task-routing-config.json');
 
 // 비용 계산 (per 1M tokens)
 const COST_MODEL = {

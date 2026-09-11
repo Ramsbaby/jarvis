@@ -28,7 +28,7 @@ import { addFactToWiki } from '../discord/lib/wiki-engine.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HOME     = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
 
 const DISCORD_HISTORY_DIR = join(HOME, '.jarvis/context/discord-history');
 const WIKI_OWNER_FACTS    = join(HOME, '.jarvis/wiki/owner/_facts.md');

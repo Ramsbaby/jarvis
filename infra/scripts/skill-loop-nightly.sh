@@ -69,7 +69,7 @@ echo "✅ 배치 완료 — pending ${pending_count}건, 만료 처리 ${expired
 #   crash가 아니라 무산출이라 on_fail trap이 못 잡았다. 이 감시가 그 '눈'이 된다.
 DRY_STREAK="$(node -e '
 const fs=require("fs");
-const L=process.env.HOME+"/jarvis/runtime/ledger/skill-loop.jsonl";
+const L=process.env.HOME+"/.openclaw-data/jarvis/runtime/ledger/skill-loop.jsonl";
 let lines=[]; try{lines=fs.readFileSync(L,"utf8").trim().split("\n");}catch(e){console.log(0);process.exit(0);}
 const byDay={};
 for(const l of lines){try{const o=JSON.parse(l);const d=(o.ts||"").slice(0,10);const e=o.event;

@@ -20,7 +20,7 @@ import { homedir } from 'node:os';
 
 // ── Jarvis 통합 ────────────────────────────────────────────────────────────
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const TASK_STORE_PATH = join(BOT_HOME, 'infra/lib/task-store.mjs');
 
 // task-store 명령 실행 헬퍼

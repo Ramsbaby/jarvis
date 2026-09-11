@@ -117,7 +117,7 @@ node --experimental-sqlite --no-warnings -e "
 const {DatabaseSync} = require('node:sqlite');
 const fs = require('fs');
 const path = require('path');
-const BOT_HOME = process.env.BOT_HOME || process.env.JARVIS_HOME || require('os').homedir() + '/jarvis/runtime';
+const BOT_HOME = process.env.BOT_HOME || process.env.JARVIS_HOME || require('os').homedir() + '/.openclaw-data/jarvis/runtime';
 const DB_PATH = BOT_HOME + '/state/tasks.db';
 if (!fs.existsSync(DB_PATH)) { process.exit(0); }
 const db = new DatabaseSync(DB_PATH);

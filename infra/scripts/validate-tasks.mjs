@@ -25,9 +25,12 @@ const Ajv = (() => {
   try { return require('ajv'); } catch { return null; }
 })();
 
-const INFRA = join(homedir(), 'jarvis', 'infra');
+// [2026-09-11] homedir()+'jarvis' 를 그대로 들고 있어 2026-09-10 이관 뒤 ENOTDIR 로 죽었다.
+// 이게 죽으면 gen-tasks-index 가 통째로 중단된다 — 잡 jarvis-gen-indexes 상시 실패의 원인.
+const JARVIS_HOME = process.env.JARVIS_HOME || join(homedir(), '.openclaw-data', 'jarvis');
+const INFRA = join(JARVIS_HOME, 'infra');
 const SCHEMA_FILE = join(INFRA, 'config', 'tasks.schema.json');
-const TASKS_FILE = join(homedir(), 'jarvis/runtime', 'config', 'tasks.json');
+const TASKS_FILE = join(process.env.BOT_HOME || join(JARVIS_HOME, 'runtime'), 'config', 'tasks.json');
 
 function log(msg) { process.stderr.write(`[validate-tasks] ${msg}\n`); }
 

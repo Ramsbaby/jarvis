@@ -28,7 +28,7 @@ import {
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
 const HOME         = homedir();
-const BOT_HOME     = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
+const BOT_HOME     = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
 const LOG_FILE     = join(BOT_HOME, 'logs', 'wiki-ingest.log');
 const METRICS_FILE = join(WIKI_ROOT, 'meta', 'metrics.jsonl');
 const INDEX_FILE   = join(WIKI_ROOT, 'index.md');

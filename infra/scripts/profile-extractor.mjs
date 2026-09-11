@@ -28,11 +28,11 @@ const HOME          = homedir();
 const VAULT_DIR     = join(HOME, 'Jarvis-Vault');
 const DISCORD_DIR   = join(VAULT_DIR, '02-daily', 'discord');
 const TOPIC_DIR     = join(VAULT_DIR, '05-topics');
-const BOT_HOME      = join(HOME, 'jarvis/runtime');
+const BOT_HOME      = join(HOME, '.openclaw-data/jarvis/runtime');
 const LOG_FILE      = join(BOT_HOME, 'logs', 'profile-extractor.log');
 const TRACKER_FILE  = join(TOPIC_DIR, 'inbox-tracker.md');
 const MCP_CONFIG    = join(BOT_HOME, 'config', 'empty-mcp.json');
-const PROMPT_PATH   = join(HOME, 'jarvis', 'private', 'prompts', 'profile-extract.md');
+const PROMPT_PATH   = join(HOME, '.openclaw-data/jarvis', 'private', 'prompts', 'profile-extract.md');
 
 // OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰을 사용.
 // 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 — llm-gateway.sh와 동일 패턴.

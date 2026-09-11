@@ -8,13 +8,13 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 const run = promisify(execFile);
 
 const HOME = homedir();
-const DEFAULT_SCRIPT = join(HOME, "jarvis/rag/bin/rag-corpus-query.mjs");
+const DEFAULT_SCRIPT = join(HOME, ".openclaw-data/jarvis/rag/bin/rag-corpus-query.mjs");
 // 게이트웨이는 launchd 의 좁은 PATH 로 돈다 — `node` 를 이름으로 찾으면 못 찾거나
 // engines 밖 brew node 25 를 잡는다(2026-09-09 jarvis-slots 에서 실측). 절대경로로 고정한다.
 const DEFAULT_NODE = join(HOME, ".nvm/versions/node/v24.21.0/bin/node");
 // paths.mjs 가 BOT_HOME 없으면 ~/.local/share/jarvis/rag(450행 잔재 DB)로 폴백한다.
 // 그러면 검색은 "성공"하는데 결과가 전부 무관해진다 — 실패보다 나쁘다. 명시적으로 넘긴다.
-const DEFAULT_BOT_HOME = join(HOME, "jarvis/runtime");
+const DEFAULT_BOT_HOME = join(HOME, ".openclaw-data/jarvis/runtime");
 
 // TypeScript 가 아니라 순수 .mjs 인 이유(2026-09-10):
 //   `openclaw plugins install` 은 컴파일된 런타임 출력을 요구한다. .ts 로 두면 설치 기록이

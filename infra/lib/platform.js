@@ -17,7 +17,7 @@ export const IS_LINUX   = os.platform() === 'linux'
  * 3. %USERPROFILE%\.jarvis (Windows native)
  */
 export const JARVIS_HOME = process.env.JARVIS_HOME
-  ?? path.join(os.homedir(), 'jarvis/runtime')
+  ?? path.join(os.homedir(), '.openclaw-data/jarvis/runtime')
 
 export const LOGS_DIR    = path.join(JARVIS_HOME, 'logs')
 export const INBOX_DIR   = path.join(JARVIS_HOME, 'inbox')

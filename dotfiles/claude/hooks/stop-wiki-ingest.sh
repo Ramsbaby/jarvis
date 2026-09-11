@@ -17,7 +17,7 @@ set -euo pipefail
 
 LOG_DIR="${HOME}/.jarvis/logs"
 LOG="${LOG_DIR}/wiki-ingest-claude.log"
-SCRIPT="${HOME}/jarvis/infra/scripts/wiki-ingest-claude-session.mjs"
+SCRIPT="${HOME}/.openclaw-data/jarvis/infra/scripts/wiki-ingest-claude-session.mjs"
 SESSION_BASE="${HOME}/.jarvis/context/claude-code-sessions"
 
 mkdir -p "$LOG_DIR"

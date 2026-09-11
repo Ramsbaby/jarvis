@@ -24,7 +24,7 @@ import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
 const RESPONSE_LEDGER = join(BOT_HOME, 'ledger', 'bot-response-bus.jsonl');
 const ANGER_LEDGER = join(BOT_HOME, 'state', 'anger-signals.jsonl');
 const MODELS_FILE = join(BOT_HOME, 'config', 'models.json');
@@ -330,7 +330,7 @@ async function main() {
 
   // Discord 알림
   try {
-    const discordScript = join(homedir(), 'jarvis', 'runtime', 'scripts', 'discord-visual.mjs');
+    const discordScript = join(homedir(), '.openclaw-data/jarvis', 'runtime', 'scripts', 'discord-visual.mjs');
     if (existsSync(discordScript)) {
       const { spawn } = await import('node:child_process');
       const dataObj = {

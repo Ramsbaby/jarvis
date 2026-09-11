@@ -20,8 +20,8 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { request as httpRequest } from 'node:http';
 
-const SCENARIOS_DIR = join(homedir(), 'jarvis/runtime/state/scenarios');
-const USER_PROFILE_PATH = join(homedir(), 'jarvis/runtime/context/user-profile.md');
+const SCENARIOS_DIR = join(homedir(), '.openclaw-data/jarvis/runtime/state/scenarios');
+const USER_PROFILE_PATH = join(homedir(), '.openclaw-data/jarvis/runtime/context/user-profile.md');
 const COMPRESS_URL = process.env.INTERVIEW_COMPRESS_URL || 'http://127.0.0.1:7779/compress';
 const MAX_CHARS = 650;
 

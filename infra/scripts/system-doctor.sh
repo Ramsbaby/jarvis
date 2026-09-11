@@ -153,7 +153,7 @@ check_rag() {
   local node_script='
 const { createRequire } = await import("module");
 const require = createRequire("file:///");
-const BOT_HOME = process.env.BOT_HOME || (process.env.HOME + "/jarvis/runtime");
+const BOT_HOME = process.env.BOT_HOME || (process.env.HOME + "/.openclaw-data/jarvis/runtime");
 const ldb = require(BOT_HOME + "/discord/node_modules/@lancedb/lancedb/dist/index.js");
 const db = await ldb.connect(BOT_HOME + "/rag/lancedb");
 try {

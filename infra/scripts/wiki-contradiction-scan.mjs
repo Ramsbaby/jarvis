@@ -35,8 +35,8 @@ import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 
 const HOME = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis', 'runtime');
-const INFRA = join(HOME, 'jarvis', 'infra');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis', 'runtime');
+const INFRA = join(HOME, '.openclaw-data/jarvis', 'infra');
 
 const WIKI_ROOT = join(BOT_HOME, 'wiki');
 const FACTS_FILE = join(WIKI_ROOT, 'meta', '_facts.md');

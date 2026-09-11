@@ -40,7 +40,7 @@ const CONFIG = {
   },
   logFile: path.join(
     process.env.HOME || "/tmp",
-    "jarvis/runtime/logs/pilot-routing.jsonl"
+    ".openclaw-data/jarvis/runtime/logs/pilot-routing.jsonl"
   ),
 };
 

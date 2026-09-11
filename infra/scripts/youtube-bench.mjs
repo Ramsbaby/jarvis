@@ -33,7 +33,7 @@ import { discordSend } from '../lib/discord-notify.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HOME     = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
 
 const LEDGER_PATH  = join(BOT_HOME, 'state', 'youtube-bench-ledger.jsonl');
 const LOG_PATH     = join(BOT_HOME, 'logs',  'youtube-bench.log');

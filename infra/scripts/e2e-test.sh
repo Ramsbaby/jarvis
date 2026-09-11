@@ -4,7 +4,16 @@ set -uo pipefail
 # Jarvis E2E Test Suite
 # Usage: ~/.openclaw-data/jarvis/runtime/scripts/e2e-test.sh [--ntfy] (--ntfy sends test push notification)
 
-export BOT_HOME="${BOT_HOME:-${HOME:-/Users/ramsbaby}/jarvis/runtime}"
+# [2026-09-11] 기본값이 폐기된 옛 경로(~/jarvis)였다. 잡이 env 로 넘겨줄 때만 맞고
+# 사람이 직접 돌리면 통째로 엉뚱한 곳을 검사한다.
+#
+# JARVIS_HOME 은 믿지 않는다 — runtime/.env 가 이 값을 `~/.jarvis`(= runtime 심링크)로
+# 덮어쓴다. 그러면 트리 루트를 기대하는 검사가 runtime 을 보게 되고, 잡으로 돌릴 때만
+# RAG 3건이 실패했다(손으로 돌리면 통과). **루트는 이 파일의 위치로 정한다** —
+# 이 스크립트는 <root>/infra/scripts/ 에 있으므로 두 단계 위가 루트다. env 오염과 무관하다.
+_E2E_SELF="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+JARVIS_ROOT="$(cd -- "${_E2E_SELF}/../.." && pwd -P)"
+export BOT_HOME="${BOT_HOME:-${JARVIS_ROOT}/runtime}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME:+${HOME}/.local/bin}:${PATH}"
 PASS=0
 FAIL=0
@@ -86,7 +95,9 @@ ci_check "Discord bot running" bash -c 'pgrep -f "discord-bot.js|orchestrator.mj
 # --- File Structure Tests ---
 echo ""
 echo "▶ File Structure"
-JARVIS_RAG_HOME="${JARVIS_RAG_HOME:-${HOME:-/Users/ramsbaby}/jarvis/rag}"
+# [2026-09-11] 기본값이 폐기된 옛 경로였다 — 실물은 ${JARVIS_HOME}/rag 에 있고 RAG 는 정상 가동 중인데
+# 검사만 3건 영구 FAIL 이었다. BOT_HOME 과 같은 뿌리에서 유도해 다시 갈라지지 않게 한다.
+JARVIS_RAG_HOME="${JARVIS_RAG_HOME:-${JARVIS_ROOT}/rag}"
 check "RAG engine exists" test -f "$JARVIS_RAG_HOME/lib/rag-engine.mjs"
 check "RAG query script exists" test -f "$JARVIS_RAG_HOME/lib/rag-query.mjs"
 check "RAG indexer exists" test -f "$JARVIS_RAG_HOME/bin/rag-index.mjs"
@@ -176,14 +187,70 @@ check "/threads command" grep -q "'threads'" "$BOT_HOME/discord/discord-bot.js"
 check "/alert command" grep -q "'alert'" "$BOT_HOME/discord/discord-bot.js"
 
 # --- Cron Tests ---
+# [2026-09-11] crontab 만 보고 판정하던 검사 6건이 상시 FAIL 이었다.
+# 오픈클로 이관으로 crontab 이 55줄 → 1줄로 줄었고, 스케줄 정의는 오픈클로 잡으로 옮겨갔다.
+# 스케줄이 "등록돼 있는가"는 이제 두 층의 합집합이다. (2026-09-10 monitoring-pre-check 와 동일한 결함)
+# grep -q 는 쓰지 않는다 — 첫 매칭에 파이프를 닫아 앞 명령이 SIGPIPE 로 죽고
+# set -o pipefail 아래에서 거짓 실패가 된다. 출력을 변수로 받아 판정한다.
+_SCHED_INVENTORY=""
+_sched_load() {
+  local cron_part="" openclaw_part=""
+  cron_part="$(crontab -l 2>/dev/null | grep -v '^[[:space:]]*#')" || cron_part=""
+  if [[ -x "${HOME}/bin/openclaw" ]]; then
+    openclaw_part="$("${HOME}/bin/openclaw" cron list 2>/dev/null)" || openclaw_part=""
+  fi
+  _SCHED_INVENTORY="${cron_part}
+${openclaw_part}"
+}
+sched_has() {   # sched_has <확장정규식>
+  local n
+  n="$(printf '%s\n' "$_SCHED_INVENTORY" | grep -Ec -- "$1")" || n=0
+  [[ "${n:-0}" -gt 0 ]]
+}
+# tasks.json 에 그 id 가 있고 enabled:false 인가 = "일부러 껐다"
+_sched_disabled_on_purpose() {   # <task-id>
+  python3 - "$1" "${BOT_HOME}/config/tasks.json" <<'PY' 2>/dev/null
+import json, sys
+tid, path = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(open(path))
+except Exception:
+    sys.exit(1)
+ts = d.get("tasks", d) if isinstance(d, dict) else d
+if isinstance(ts, dict):
+    ts = list(ts.values())
+for t in ts:
+    if str(t.get("id", "")) == tid:
+        sys.exit(0 if t.get("enabled") is False else 1)
+sys.exit(1)
+PY
+}
+# 스케줄 검사는 3분기다 — 등록됨(PASS) · 일부러 껐음(SKIP) · 있어야 하는데 없음(FAIL).
+# 셋을 안 가르면 의도적 비활성이 매일 FAIL 로 쌓이고 jarvis-auditor 가 그 수만큼 티켓을 만든다
+# (2026-09-10 디스코드 제거 때 FAIL 1 → 19 로 터진 것과 같은 구조).
+check_sched() {   # check_sched <표시명> <확장정규식> [tasks.json id]
+  local name="$1" pattern="$2" tid="${3:-}"
+  if sched_has "$pattern"; then
+    green "✅ PASS: $name"; ((PASS++)); return 0
+  fi
+  if [[ -n "$tid" ]] && _sched_disabled_on_purpose "$tid"; then
+    skip "$name (tasks.json enabled:false — 의도적 비활성)"; return 0
+  fi
+  red "❌ FAIL: $name"; ((FAIL++)); return 1
+}
+_sched_load
+
 echo ""
-echo "▶ Cron Jobs"
-check "RAG indexer cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-index'"
-check "morning-standup cron exists" bash -c "crontab -l 2>/dev/null | grep -qE 'morning-standup|smart-standup'"
-check "e2e-cron.sh registered" bash -c "crontab -l 2>/dev/null | grep -q 'e2e-cron'"
-check "weekly-kpi cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'weekly-kpi'"
-check "security-scan cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'security-scan'"
-check "rag-health cron exists" bash -c "crontab -l 2>/dev/null | grep -q 'rag-health'"
+echo "▶ Cron Jobs (crontab ∪ 오픈클로 잡)"
+check_sched "RAG indexer cron exists" 'rag-index' 'rag-index'
+check_sched "morning-standup cron exists" 'morning-standup|smart-standup' 'morning-standup'
+check_sched "e2e-cron.sh registered" 'e2e-cron' 'e2e-cron'
+# [2026-09-11] weekly-kpi 는 라이브 tasks.json·crontab·오픈클로 잡 어디에도 없다.
+# 남은 흔적은 effective-tasks.json 백업(최신 2026-08-12)과 autonomy-levels.md 문서뿐이고,
+# 스크립트(measure-kpi.sh)만 살아 있다. 폐지 기록이 없어 "없앴다"고 단정하지 않고 WARN 으로 남긴다.
+warn_check "weekly-kpi cron exists" sched_has 'weekly-kpi'
+check_sched "security-scan cron exists" 'security-scan' 'security-scan'
+check_sched "rag-health cron exists" 'rag-health' 'rag-health'
 
 # --- Phase 3~5 Tasks ---
 echo ""

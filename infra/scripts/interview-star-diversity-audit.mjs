@@ -5,7 +5,7 @@
 // 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/interview-star-diversity-audit
 import { existsSync as __stopChk } from 'node:fs';
 import { homedir as __stopHome } from 'node:os';
-if (__stopChk(__stopHome() + '/jarvis/runtime/state/stopped/interview-star-diversity-audit')) {
+if (__stopChk(__stopHome() + '/.openclaw-data/jarvis/runtime/state/stopped/interview-star-diversity-audit')) {
   console.log('[interview-star-diversity-audit] 중지 플래그 있음 (판정 D)');
   process.exit(0);
 }
@@ -36,8 +36,8 @@ import { STAR_KEYWORDS, STAR13_META_RE, STAR13_ALLOWED_Q_RE } from '../discord/l
 
 const HOME = homedir();
 // 경로는 env로 덮어쓰기 가능 — 합성 픽스처로 V1~V2b 검증할 때 실제 코드 경로를 그대로 테스트하기 위함.
-const FEED = process.env.DIVERSITY_FEED || join(HOME, 'jarvis/runtime/state/channel-feed/jarvis-interview.jsonl');
-const SELF_LEDGER = process.env.DIVERSITY_LEDGER || join(HOME, 'jarvis/runtime/ledger/interview-diversity-audit.jsonl');
+const FEED = process.env.DIVERSITY_FEED || join(HOME, '.openclaw-data/jarvis/runtime/state/channel-feed/jarvis-interview.jsonl');
+const SELF_LEDGER = process.env.DIVERSITY_LEDGER || join(HOME, '.openclaw-data/jarvis/runtime/ledger/interview-diversity-audit.jsonl');
 const WINDOW_DAYS = 14;
 const DOMINANCE_THRESHOLD = 0.4;
 const MIN_SAMPLE = 5;
@@ -82,7 +82,7 @@ for (const r of recent) {
 }
 
 // v1.1 (수리 #3): 훈련(ralph) 답변 보조 분포 — 채널 피드에 안 쌓이는 훈련 매몰 사각 보완.
-const INSIGHTS = process.env.DIVERSITY_INSIGHTS || join(HOME, 'jarvis/runtime/state/ralph-insights.jsonl');
+const INSIGHTS = process.env.DIVERSITY_INSIGHTS || join(HOME, '.openclaw-data/jarvis/runtime/state/ralph-insights.jsonl');
 const ralphStarCount = {};
 let ralphTotal = 0;
 if (existsSync(INSIGHTS)) {
@@ -175,7 +175,7 @@ if (dryrun) console.log('   [DRYRUN — 경보·큐 등록 생략]');
 
 if (!dryrun && violations.length) {
   try {
-    execFileSync('node', [join(HOME, 'jarvis/infra/lib/task-store.mjs'), 'enqueue',
+    execFileSync('node', [join(HOME, '.openclaw-data/jarvis/infra/lib/task-store.mjs'), 'enqueue',
       '--id', `interview-diversity-fix-${new Date().toISOString().slice(0, 10)}`,
       '--title', '면접봇 STAR 분포 결함 자율 수리 제안',
       '--prompt', `interview-star-diversity-audit 적발: ${violations.join(' / ')} — interview-fast-path.js 게이트·회피블록·프로필 재료 점검 후 수리. 불변식 #13·#14 준수.`,
@@ -183,7 +183,7 @@ if (!dryrun && violations.length) {
   } catch (e) { console.error('dev-queue 등록 실패:', e.message); }
   try {
     const msg = `🚨 면접봇 STAR 분포 위반 감지\n${violations.join('\n')}\n→ dev-queue에 수리 제안 등록됨`;
-    execFileSync('bash', [join(HOME, 'jarvis/infra/scripts/alert-send.sh'), 'warning', 'jarvis-interview', '면접봇 분포 감사', msg.slice(0, 1400)], { timeout: 15000 });
+    execFileSync('bash', [join(HOME, '.openclaw-data/jarvis/infra/scripts/alert-send.sh'), 'warning', 'jarvis-interview', '면접봇 분포 감사', msg.slice(0, 1400)], { timeout: 15000 });
   } catch (e) { console.error('알림 전송 실패:', e.message); }
 }
 process.exit(0);

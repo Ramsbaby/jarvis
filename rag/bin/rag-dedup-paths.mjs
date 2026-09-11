@@ -30,8 +30,8 @@ const log = (...a) => console.log(`[rag-dedup-paths] ${a.join(' ')}`);
 //
 // 2026-09-10 개정 — 별칭이 둘에서 셋으로 늘었다.
 //   오픈클로 이관으로 정본이 `~/.openclaw-data/jarvis/runtime` 이 되면서
-//   `~/.jarvis` · `~/jarvis/runtime`(호환 심링크) · 정본, 세 표기가 같은 파일을 가리킨다.
-//   전에는 `.jarvis` → `~/jarvis/runtime` 한 방향만 접었기 때문에, 이관 뒤에는
+//   `~/.jarvis` · `~/.openclaw-data/jarvis/runtime`(호환 심링크) · 정본, 세 표기가 같은 파일을 가리킨다.
+//   전에는 `.jarvis` → `~/.openclaw-data/jarvis/runtime` 한 방향만 접었기 때문에, 이관 뒤에는
 //   호환 경로로 접어 놓고 정본형 사본을 중복으로 남기게 된다.
 //   그래서 문자열 치환 대신 realpath 로 접는다 — 별칭이 몇 개로 늘든 한 곳으로 모인다.
 const RUNTIME_REAL = (() => {
@@ -49,7 +49,7 @@ const norm = (s) => {
     out = realpathSync(s);
   } catch {
     // 이미 지워진 파일은 realpath 가 안 된다 — 알려진 별칭 접두만 문자열로 접는다.
-    for (const alias of [join(homedir(), '.jarvis') + '/', join(homedir(), 'jarvis', 'runtime') + '/']) {
+    for (const alias of [join(homedir(), '.jarvis') + '/', join(homedir(), '.openclaw-data/jarvis', 'runtime') + '/']) {
       if (s.startsWith(alias)) { out = RUNTIME_REAL + s.slice(alias.length); break; }
     }
   }
@@ -114,7 +114,7 @@ async function main() {
     if (!grp.has(k)) grp.set(k, []);
     // 2026-09-10: 보존 기준을 '별칭 이름'이 아니라 '이미 정본형인가'로 바꿨다.
     //   전에는 `.jarvis` 포함 여부만 봤는데, 별칭이 셋이 되면서 그 판정으로는
-    //   호환 경로(`~/jarvis/runtime/...`)형을 정본으로 오인해 남긴다.
+    //   호환 경로(`~/.openclaw-data/jarvis/runtime/...`)형을 정본으로 오인해 남긴다.
     grp.get(k).push({ id: r.id, isAlias: s !== n });
   }
 

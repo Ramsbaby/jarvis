@@ -32,7 +32,7 @@ import { spawnSync } from 'node:child_process';
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
 const HOME          = homedir();
-const BOT_HOME      = process.env.BOT_HOME || join(HOME, 'jarvis/runtime');
+const BOT_HOME      = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
 const LOG_FILE      = join(BOT_HOME, 'logs', 'mistake-extractor.log');
 const SUMMARIES_DIR = join(BOT_HOME, 'state', 'session-summaries');
 const MISTAKES_FILE = join(BOT_HOME, 'wiki', 'meta', 'learned-mistakes.md');
@@ -170,7 +170,7 @@ function withLock(lockPath, fn) {
 const BUDGET_DAILY_USD = Number(process.env.MISTAKE_EXTRACTOR_BUDGET || 0.50);
 function budgetCheck() {
   try {
-    const ledgerFile = join(homedir(), 'jarvis/runtime/state/token-ledger.jsonl');
+    const ledgerFile = join(homedir(), '.openclaw-data/jarvis/runtime/state/token-ledger.jsonl');
     if (!existsSync(ledgerFile)) return { allow: true, today: 0 };
     const today = kstNow().slice(0, 10); // YYYY-MM-DD (KST)
     const raw = readFileSync(ledgerFile, 'utf-8');
@@ -203,7 +203,7 @@ function budgetCheck() {
 // 2026-04-22 오답노트 등재: 단일 24h 쿨다운으로 자동 파이프라인이 24시간 멈춘 사고
 // → 백오프를 5min → 30min → 2h → 24h 4단계로 변경. 일시적 timeout 은 5분 후 회복 가능.
 // state: closed(정상) | open(차단) | half-open(쿨다운 후 1회 시도 허용 — 자동)
-const CIRCUIT_FILE = join(homedir(), 'jarvis/runtime/state/mistake-extractor-circuit.json');
+const CIRCUIT_FILE = join(homedir(), '.openclaw-data/jarvis/runtime/state/mistake-extractor-circuit.json');
 const CIRCUIT_FAIL_THRESHOLD = 3;
 // 실패 횟수별 쿨다운(ms) — 1·2회는 즉시 재시도, 3회=5min, 4회=30min, 5회=2h, 6회+=24h
 const CIRCUIT_BACKOFF_MS = [
