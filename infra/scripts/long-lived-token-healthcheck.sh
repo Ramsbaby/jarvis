@@ -83,6 +83,26 @@ _main_token_401() {
     rm -f "$resp"
     [[ "$http" == "401" ]]
 }
+# [2026-09-12] credentials.json 이 더 이상 정본이 아닐 수 있다.
+#   실측: claude CLI 가 macOS 키체인("Claude Code-credentials")으로 옮겨갔다.
+#   키체인 mdat = 2026-09-12 16:27 KST(오늘 갱신), credentials.json atime = 2026-09-09 18:52
+#   — 이 파일은 **사흘째 읽히지도 않는다.** 그런데 아래 블록은 이 파일의 expiresAt 을 근거로
+#   "메인 토큰 만료 후 N시간 미갱신"을 계속 경고한다. 갱신될 리가 없으므로 영구 오경보다.
+#   파일보다 키체인이 더 최근에 갱신됐으면 그 파일은 정본이 아니다 — 그 근거로는 말하지 않는다.
+_cred_is_live_store() {
+    local kc_raw kc_epoch file_epoch
+    kc_raw=$(security find-generic-password -s "Claude Code-credentials" 2>/dev/null \
+        | sed -nE 's/.*"mdat"<timedate>= "([0-9]{14})Z.*/\1/p' | head -1)
+    [[ -n "$kc_raw" ]] || return 0            # 키체인 항목이 없으면 파일이 정본이다
+    kc_epoch=$(python3 -c "import sys,datetime,calendar;print(calendar.timegm(datetime.datetime.strptime(sys.argv[1],'%Y%m%d%H%M%S').timetuple()))" "$kc_raw" 2>/dev/null) || return 0
+    file_epoch=$(stat -f %m "$CRED" 2>/dev/null || echo 0)
+    (( kc_epoch <= file_epoch ))
+}
+if ! _cred_is_live_store; then
+    log "ℹ️ credentials.json 은 정본이 아님(키체인이 더 최신) — 메인 토큰 만료 판정 생략"
+    MAIN_EXP_MS=0
+fi
+
 if (( MAIN_EXP_MS > 0 )); then
     MAIN_REMAIN=$(( (MAIN_EXP_MS - NOW_MS_CHK) / 1000 ))
     if (( MAIN_REMAIN > 300 )); then
@@ -159,6 +179,76 @@ fi
 ERR_TYPE=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('type','unknown'))" 2>/dev/null || echo "parse_error")
 log "❌ token UNHEALTHY (HTTP $HTTP_CODE, err=$ERR_TYPE)"
 printf '{"ts":"%s","result":"fail","http":%s,"err_type":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$HTTP_CODE" "$ERR_TYPE" >> "$LEDGER"
+# ↑ 이 원장 형식은 llm-gateway 가 폴백 판정에 읽는다. 형식을 바꾸면 폴백이 멈춘다.
+
+# ── [2026-09-12] 격리 토큰이 죽은 것과 배치 LLM 이 죽은 것은 다르다 ────────────
+# 이 검사기는 2026-05-20 부터 "격리 토큰 = 배치의 유일한 인증 경로"를 전제했다.
+# 그 전제가 깨졌다: 9/12 15:30 KST 부터 격리 토큰이 조직 정책(403
+# oauth_not_allowed_for_organization)으로 영구 거부되고, llm-gateway 는 claude-cli
+# 네이티브 인증으로 폴백해 **정상 응답을 내고 있다**.
+# 이 상태에서 계속 exit 1 을 내면 "고장났다"는 신호가 하루 48번 울리는데 실제로는 돌아간다 —
+# 진짜 고장이 왔을 때 그 신호가 묻힌다.
+#
+# 그래서 판정을 둘로 나눈다:
+#   격리 토큰 상태(위 원장) — 폴백 결정용. 계속 정확히 기록한다.
+#   **유효 경로 상태** — 이 잡의 성공/실패. 배치 LLM 이 실제로 답을 내는가.
+#
+# 유효 경로는 공짜로 판정한다. llm-gateway 가 성공할 때마다 llm-calls.jsonl 에 남기므로
+# 최근 성공이 있으면 그게 증거다. 증거가 없을 때만 실호출로 확인하되 6시간에 1회로 묶는다
+# (haiku 1콜이 시스템프롬프트 캐시 때문에 약 $0.05 — 30분 주기면 월 $70 대가 된다).
+_CALLS_LEDGER="${BOT_HOME}/ledger/llm-calls.jsonl"
+_EFFECTIVE_OK=""
+
+if [[ "$HTTP_CODE" == "401" || "$HTTP_CODE" == "403" ]]; then
+    # (1) 최근 24시간 안에 실제 성공이 있었나
+    if [[ -s "$_CALLS_LEDGER" ]] && python3 - "$_CALLS_LEDGER" <<'PY'
+import json, sys, datetime
+cut = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
+for line in open(sys.argv[1], encoding='utf-8'):
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        ts = json.loads(line).get('ts', '')
+        if datetime.datetime.fromisoformat(ts.replace('Z', '+00:00')) >= cut:
+            sys.exit(0)
+    except Exception:
+        continue
+sys.exit(1)
+PY
+    then
+        _EFFECTIVE_OK="recent_success"
+    else
+        # (2) 증거가 없다 — 6시간에 1회만 실호출로 확인한다
+        _PROBE_COOLDOWN="/tmp/jarvis-lltkn-effective-probe.cooldown"
+        _PROBE_NOW=$(date +%s)
+        _PROBE_LAST=$(cat "$_PROBE_COOLDOWN" 2>/dev/null || echo 0)
+        [[ "$_PROBE_LAST" =~ ^[0-9]+$ ]] || _PROBE_LAST=0
+        if (( _PROBE_NOW - _PROBE_LAST > 21600 )); then
+            echo "$_PROBE_NOW" > "$_PROBE_COOLDOWN"
+            log "유효 경로 증거 없음 — 네이티브 인증 실호출로 확인 (6h 1회)"
+            if (cd /tmp && timeout 120 env -u CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY= \
+                    claude -p "." --model claude-haiku-4-5-20251001 --output-format json \
+                    >/tmp/lltkn-eff.$$ 2>/dev/null); then
+                _EFFECTIVE_OK="probe_ok"
+            fi
+            rm -f /tmp/lltkn-eff.$$
+        else
+            # 쿨다운 중이라 확인하지 못한 것을 "정상"으로 읽지 않는다.
+            log "유효 경로 미확인 (실호출 쿨다운 중) — 직전 판정 유지"
+            _EFFECTIVE_OK="unverified_cooldown"
+        fi
+    fi
+fi
+
+if [[ -n "$_EFFECTIVE_OK" && "$_EFFECTIVE_OK" != "unverified_cooldown" ]]; then
+    log "🟡 격리 토큰 거부(HTTP $HTTP_CODE, $ERR_TYPE) — 그러나 배치 LLM 은 네이티브 인증으로 정상 (근거: $_EFFECTIVE_OK)"
+    log "   degraded 상태로 서비스 중. 복구: 개인 계정으로 \`claude setup-token\` 후 ~/.claude-bot/.long-lived-token 갱신"
+    printf '{"ts":"%s","result":"degraded_serving","http":%s,"err_type":"%s","evidence":"%s"}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$HTTP_CODE" "$ERR_TYPE" "$_EFFECTIVE_OK" \
+        >> "${BOT_HOME}/ledger/llm-effective-path.jsonl"
+    exit 0
+fi
 # 2026-05-30: 격리 토큰 죽음 → 생존 플래그 제거. 래퍼가 40분 내 메인 폴백으로 자동 전환(자가복구).
 if [[ "${_TOKEN_SRC:-}" == "isolated-bot" ]]; then rm -f "${HOME}/.claude-bot/.token-alive" 2>/dev/null || true; fi
 

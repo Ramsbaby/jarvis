@@ -368,8 +368,20 @@ except:
         if [[ "$_subtype" == "error_max_budget_usd" ]]; then
             log_error "예산 초과 감지 (error_max_budget_usd) — critical alert + ledger 유성화"
             _llm_alert_silent_failure "budget_exceeded" \
-                "claude -p 예산 캡 초과(error_max_budget_usd) — 응답이 예산오류로 반환됨(정상 답변 아님)"
+                "claude -p 예산 캡 초과(error_max_budget_usd) — 응답이 정상 답변이 아님"
         fi
+    fi
+
+    # [2026-09-12] 성공 기록. 지금까지 이 게이트웨이는 **실패만** 남겼다.
+    #   그래서 "배치 LLM 이 지금 되는가"를 알려면 돈을 내고 새로 한 번 불러 보는 수밖에 없었다
+    #   (haiku 1콜이 시스템프롬프트 캐시 생성 때문에 약 $0.05 — 30분 주기면 월 $70 대).
+    #   실제 잡의 성공이 곧 그 증거이므로, 그걸 적어 두면 헬스체크가 공짜로 판정할 수 있다.
+    #   어느 인증 경로로 성공했는지도 같이 남긴다 — degraded 로 도는 중인지 구별해야 한다.
+    if [[ $exit_code -eq 0 ]]; then
+        printf '{"ts":"%s","task":"%s","model":"%s","auth":"%s"}\n' \
+            "$(date -u +%FT%TZ)" "${TASK_ID:-unknown}" "${model:-auto}" \
+            "$( (( _iso_blocked )) && echo native_fallback || { [[ -n "$_token_to_use" ]] && echo isolated || echo native; } )" \
+            >> "${HOME}/.openclaw-data/jarvis/runtime/ledger/llm-calls.jsonl" 2>/dev/null || true
     fi
     return "$exit_code"
 }
