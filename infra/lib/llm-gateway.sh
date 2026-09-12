@@ -202,10 +202,50 @@ _llm_claude_cli() {
     # 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 단일 갱신 주체 — 배치가 만료 상태로 접근하면
     # refresh 경쟁/reuse-revoke의 트리거가 됨 (oauth-incident-ledger cli-login-session-expired-20260611).
     # CLAUDE_CODE_OAUTH_TOKEN이 이미 주입돼 있으면(bot-cron 경유) 그대로 존중.
-    local _run=(env ANTHROPIC_API_KEY= CLAUDECODE="${CLAUDECODE:-}")
+    # [2026-09-12] 격리 토큰이 **영구 거부**될 수 있다. 실제로 이날 15:30 KST 부터
+    #   HTTP 403 oauth_not_allowed_for_organization ("이 조직에서는 OAuth 인증이 허용되지 않습니다")
+    #   가 나기 시작했다. 만료가 아니라 조직 정책이므로 **같은 토큰으로 재시도해도 영원히 실패**한다.
+    #   기존 실패 경로는 같은 토큰으로 3회 재시도(15s)한 뒤 critical 알림만 냈다 — 자가치유가 아니다.
+    #   판정은 healthcheck 원장의 마지막 행을 쓴다. 매 호출마다 재검하지 않는다(호출 비용).
+    #   401 도 같이 본다 — 폐기된 토큰 역시 재시도로 살아나지 않는다.
+    _iso_token_blocked() {
+        local _led="${HOME}/.openclaw-data/jarvis/runtime/ledger/long-lived-token-healthcheck.jsonl"
+        [[ -s "$_led" ]] || return 1
+        python3 - "$_led" <<'PY'
+import json, sys
+last = None
+for line in open(sys.argv[1], encoding='utf-8'):
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        last = json.loads(line)
+    except Exception:
+        continue
+if not last:
+    sys.exit(1)
+blocked = last.get('result') == 'fail' and int(last.get('http') or 0) in (401, 403)
+sys.exit(0 if blocked else 1)
+PY
+    }
+
+    # OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude -p는 격리 장수명 토큰(setup-token, 1년)을 사용.
+    # 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 단일 갱신 주체 — 배치가 만료 상태로 접근하면
+    # refresh 경쟁/reuse-revoke의 트리거가 됨 (oauth-incident-ledger cli-login-session-expired-20260611).
+    # CLAUDE_CODE_OAUTH_TOKEN이 이미 주입돼 있으면(bot-cron 경유) 그대로 존중.
+    # `-u` 를 먼저 둔다 — 폴백 시 상속된 죽은 토큰이 남아 있으면 폴백이 무의미해진다.
+    local _run=(env -u CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY= CLAUDECODE="${CLAUDECODE:-}")
     local _iso_token_file="${HOME}/.claude-bot/.long-lived-token"
     local _token_to_use=""
-    if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+    local _iso_blocked=0
+    _iso_token_blocked && _iso_blocked=1
+    if (( _iso_blocked )); then
+        # 여기서 조용히 넘어가면 "왜 갑자기 네이티브 인증을 쓰는지" 아무도 모른다.
+        log_warn "격리 토큰이 API 에 거부됨(직전 healthcheck 401/403) — claude-cli 네이티브 인증으로 폴백 (degraded)"
+        printf '{"ts":"%s","event":"iso_token_blocked_fallback","task":"%s"}\n' \
+            "$(date -u +%FT%TZ)" "${TASK_ID:-unknown}" \
+            >> "${HOME}/.openclaw-data/jarvis/runtime/ledger/llm-degradation.jsonl" 2>/dev/null || true
+    elif [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
         _token_to_use="${CLAUDE_CODE_OAUTH_TOKEN}"
         _run+=(CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}")
     elif [[ -s "$_iso_token_file" ]]; then
@@ -260,8 +300,19 @@ except:
             # 2026-06-30: AUTH_ERROR 재시도 로직 강화
             # - 격리 토큰이 존재하고 유효하면 즉시 3회 재시도 (5s 간격)
             # - healthcheck 성공 여부와 무관하게 재시도 (토큰 자체는 유효)
+            # [2026-09-12] 단, **영구 거부는 재시도 대상이 아니다**. 조직 정책 차단
+            #   (403 oauth_not_allowed_for_organization)이나 폐기(401)는 5초 뒤에도 같다.
+            #   재시도하면 15초를 버리고 같은 실패를 3번 더 적을 뿐이다.
+            #   이 경우 위에서 이미 네이티브 인증으로 폴백했으므로, 여기 도달했다는 건
+            #   폴백까지 실패했다는 뜻이다 — 바로 알림으로 간다.
             local _iso_token_file="${HOME}/.claude-bot/.long-lived-token"
-            if [[ -s "$_iso_token_file" ]]; then
+            if (( _iso_blocked )); then
+                log_error "인증 실패 — 격리 토큰 차단 상태에서 네이티브 폴백도 실패. 재시도 생략."
+                bash "${HOME}/.openclaw-data/jarvis/infra/scripts/alert-send.sh" critical \
+                    "🔑 claude 배치 인증 실패 (격리 토큰 차단 + 네이티브 폴백 실패)" \
+                    "task=${TASK_ID:-unknown} model=${model:-auto} — 격리 토큰은 403/401 로 거부됐고 CLI 네이티브 인증도 실패. 사람이 로그인해야 합니다." \
+                    >/dev/null 2>&1 || true
+            elif [[ -s "$_iso_token_file" ]]; then
                 log_info "AUTH_ERROR 감지 — 격리 토큰 존재, 3회 재시도 시작"
                 local _retry_count=0
                 local _retry_max=3
