@@ -263,9 +263,7 @@ infra/discord/test/career-coding-mode.test.js
 infra/config/ssot-paths.json
 infra/config/ssot-conflict-patterns.json
 infra/scripts/format-preference-label.py
-infra/lib/cluster-guard-cl-1a81b2956a7f0cc9.sh
 infra/docs/JARVIS-QUALITY-FIX.md
 infra/docs/CAREER-CHANNEL-MODES.md
 infra/guards/CL-41697CE934383874-IMPLEMENTATION-SUMMARY.md
 infra/guards/CL-41697CE934383874-USAGE-GUIDE.md
-scripts/session-recall.sh
