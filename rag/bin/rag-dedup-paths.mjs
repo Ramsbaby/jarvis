@@ -50,7 +50,17 @@ const norm = (s) => {
     out = realpathSync(s);
   } catch {
     // 이미 지워진 파일은 realpath 가 안 된다 — 알려진 별칭 접두만 문자열로 접는다.
-    for (const alias of [join(homedir(), '.jarvis') + '/', join(homedir(), 'projects/jarvis', 'runtime') + '/']) {
+    // [회차8 2026-09-13] 죽은 경로 둘이 빠져 있었다. 실측 — 색인 11,419 중 7,468(65%)이
+    //   옛 경로이고 그중 4,072 가 `~/jarvis/runtime/`, 3,387 이 `~/.openclaw-data/jarvis/runtime/` 다.
+    //   두 자리 모두 지금은 **장벽 파일**이라 realpath 가 실패하고, 별칭 목록에 없으면
+    //   접히지 않아 같은 문서가 옛/새 경로로 두 번 검색된다(실측: rag_search 1·2위가 동일 문서).
+    //   DO-NOT-REWRITE: 아래는 *접어야 할 옛 경로 목록*이지 참조가 아니다. 일괄 치환 금지.
+    for (const alias of [
+      join(homedir(), ".jarvis") + "/",
+      join(homedir(), "projects/jarvis", "runtime") + "/",
+      join(homedir(), "jarvis", "runtime") + "/", //                  2026-09-10 폐기
+      join(homedir(), ".openclaw-data", "jarvis", "runtime") + "/", // 2026-09-12 폐기
+    ]) {
       if (s.startsWith(alias)) { out = RUNTIME_REAL + s.slice(alias.length); break; }
     }
   }
