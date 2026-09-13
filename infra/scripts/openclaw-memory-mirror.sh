@@ -33,6 +33,40 @@ fi
 # memory_get 도 "path must be a regular file" 로 거부한다(2026-09-09 실측).
 # -a 그대로 두면 원본의 심링크 5건이 검색에서 통째로 사라진다.
 CHANGED=$(rsync -aL --delete --itemize-changes --include='*.md' --exclude='*' "$SRC" "$DST" | grep -c '^[<>c]' || true)
+
+# --- 프로젝트별 오토메모리 미러 (2026-09-14 추가) -------------------------------
+# 클로드 코드가 2026-09-13 부터 auto memory 를 프로젝트별 경로에 쓴다:
+#   ~/.claude/projects/<슬러그>/memory/*.md
+# 위의 SSoT(runtime/claude-automemory)는 그 경로를 모르므로 신규 기억이 통째로
+# 색인 밖에 머물렀다(실측 2026-09-14: 신규 3건 미색인, memory_search 미검출).
+# 경로를 옮기지 않고 미러 대상만 넓힌다 — 클로드 코드 쪽 동작을 건드리지 않는 경로다.
+# /private/tmp 하위(봇 1회성 작업 디렉토리)는 제외한다. 영속 프로젝트만 담는다.
+PROJ_DST="$HOME/.openclaw/workspace/memory/imports/claude-code/claude-projects"
+mkdir -p "$PROJ_DST"
+for d in "$HOME"/.claude/projects/-Users-ramsbaby*/memory; do
+  [ -d "$d" ] || continue
+  # -type f 는 의도적이다(-L 로 펼치지 않는다). 심링크만 있는 프로젝트 memory 디렉토리는
+  # SSoT(runtime/context/claude-memory)를 가리키는 옛 배선이고 그 내용은 위 1단계에서 이미
+  # 담긴다. 펼치면 같은 기억이 두 벌 색인돼 검색 순위가 왜곡된다.
+  # 실측 2026-09-14: -Users-ramsbaby-jarvis 는 심링크 22 + RETIRED.txt — 건너뛰는 게 맞다.
+  count=$(find "$d" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+  [ "$count" -gt 0 ] || continue
+  slug=$(basename "$(dirname "$d")")
+  mkdir -p "$PROJ_DST/$slug"
+  c=$(rsync -aL --delete --itemize-changes --include='*.md' --exclude='*' "$d/" "$PROJ_DST/$slug/" | grep -c '^[<>c]' || true)
+  CHANGED=$((CHANGED + c))
+done
+# 사라진 프로젝트의 잔재 정리 — 원본이 없어진 슬러그 디렉토리는 지운다.
+for d in "$PROJ_DST"/*; do
+  [ -d "$d" ] || continue
+  slug=$(basename "$d")
+  if [ ! -d "$HOME/.claude/projects/$slug/memory" ]; then
+    rm -rf "$d"
+    CHANGED=$((CHANGED + 1))
+  fi
+done
+# -----------------------------------------------------------------------------
+
 if [ "$CHANGED" -gt 0 ]; then
   oc memory index --agent main >/dev/null 2>&1 && echo "MIRROR_UPDATED files=$CHANGED reindexed"
 else
