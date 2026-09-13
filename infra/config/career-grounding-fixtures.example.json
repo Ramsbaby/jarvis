@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "test-career-grounding-guard.sh 가 읽는 회귀 픽스처의 예시다.",
+    "실제 파일은 career-grounding-fixtures.json 이며 .gitignore 로 막혀 있다 —",
+    "본인 총보상·오퍼 금액이 들어가므로 공개 저장소에 올리지 않는다.",
+    "",
+    "아래 숫자는 전부 가짜다. 그대로 쓰면 케이스 1·2 는 의미가 없다:",
+    "  contradicts_ssot 는 당신의 SSoT(user-profile.md STATE 블록)와 **모순되어야** 차단(exit 2)이 나오고,",
+    "  matches_ssot 는 SSoT와 **일치해야** 통과가 나온다.",
+    "",
+    "쓰는 법: 이 파일을 career-grounding-fixtures.json 으로 복사한 뒤",
+    "본인 SSoT 기준으로 두 문장을 고쳐 쓴다. 파일이 없으면 테스트는",
+    "케이스 1·2 를 건너뛰고 케이스 3(수치 없는 턴)만 돌린다."
+  ],
+  "contradicts_ssot": {
+    "desc": "폐기된 총보상을 벤치마크로 인용 (노후 데이터 사고 재현)",
+    "text": "현 총보상 99,999,999원을 기준으로 보면 B사 오퍼 88,888,888원은 명백한 하락입니다. 1,111만원 손해입니다."
+  },
+  "matches_ssot": {
+    "desc": "현행 실질 총보상 기준 인용",
+    "text": "현 실질 총보상 9,999만 기준으로 B사 급여성 보상 8,888만은 소폭 하락입니다."
+  }
+}

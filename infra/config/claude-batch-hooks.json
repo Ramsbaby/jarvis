@@ -1,0 +1,32 @@
+{
+  "_comment": "llm-gateway.sh 가 모든 배치 `claude -p` 에 `--settings` 로 주입하는 훅. ~/.claude/settings.json 과 별개로 강제 적용된다. (1) jarvis-runtime-guard — 2026-09-02 runtime/ 소실 사고 이후 데이터 루트 파괴 차단, bypass JARVIS_RUNTIME_DESTRUCTIVE_OK=1. (2) jarvis-agent-write-boundary — 2026-09-04 코더가 tasks.json 을 7월 백업으로 덮어쓴 사고 이후 자율 에이전트(JARVIS_AGENT_ROLE 설정 세션만) 의 config/context/wiki/state/ledger·~/.claude·LaunchAgents·crontab·tasks.db 쓰기 차단, bypass JARVIS_AGENT_WRITE_OK=1. 역할 미설정(일반 크론 태스크) 은 (2) 가 즉시 통과한다. 각 훅 머리말 참조. 이 파일에는 표준 키만 둔다 — claude 2.1.257 은 비표준 최상위 키가 있으면 같은 파일의 hooks 전체를 버린다.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/jarvis-runtime-guard.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/jarvis-agent-write-boundary.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/jarvis-agent-write-boundary.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "_comment": "코더 자율성 정책표 (SELF-HEAL-PLAN 3c, 2026-09-04). coder-merge.sh 가 읽는다. 변경 파일을 class 로 분류하고, 그 class 의 '연속 사람 승인' 횟수가 auto_threshold 이상일 때만 3a 리뷰(verdict=merge)가 --auto 로 머지할 수 있다. 거절·폐기 1건이면 해당 class 카운터는 0 으로 돌아간다. 패턴은 bash glob — '*' 가 '/' 도 넘어간다(infra/lib/* 는 하위 전부). 분류는 order 순으로 첫 매치, 한 변경에 여러 class 가 섞이면 가장 엄격한(manual_forever > 큰 threshold) 쪽을 따른다.",
+  "version": 1,
+  "ledger": "ledger/coder-merge.jsonl",
+  "default_class": "scripts",
+  "order": ["manual_forever", "tests", "docs", "scripts"],
+  "classes": {
+    "manual_forever": {
+      "description": "영구 수동 — 등록 SSoT·훅·코더 자신·공용 bin/lib. 자동 머지 불가, 사람이 coder-merge.sh 를 직접 부른다.",
+      "auto_threshold": null,
+      "paths": [
+        "runtime/config/tasks.json",
+        "infra/config/tasks.schema.json",
+        "infra/config/coder-autonomy.json",
+        "infra/config/guard_config.json",
+        "infra/config/monitoring.json",
+        "infra/config/channel-map.json",
+        "infra/lib/*",
+        "infra/bin/*",
+        "infra/hooks/*",
+        "infra/guards/*",
+        "infra/launchagents/*",
+        "infra/launchd/*",
+        "*/hooks/*",
+        ".claude/*",
+        "*.plist",
+        "*.env",
+        "*/secrets/*"
+      ]
+    },
+    "tests": {
+      "description": "테스트 스크립트만 바뀐 변경. 실행 대상 코드를 건드리지 않으므로 낮은 문턱.",
+      "auto_threshold": 5,
+      "paths": ["infra/scripts/test-*.sh", "infra/scripts/*.test.sh", "infra/scripts/*.test.mjs"]
+    },
+    "docs": {
+      "description": "문서만 바뀐 변경.",
+      "auto_threshold": 3,
+      "paths": ["infra/docs/*", "*.md"]
+    },
+    "scripts": {
+      "description": "크론이 실제로 도는 스크립트·프롬프트·설정(위 목록 제외). 10회 연속 사람 승인 뒤 자동.",
+      "auto_threshold": 10,
+      "paths": ["infra/scripts/*", "infra/prompts/*", "infra/agents/*", "infra/templates/*", "infra/config/*"]
+    }
+  },
+  "gates": {
+    "syntax": "bash -n / node --check / jq empty / python3 -m py_compile — 변경 파일 전부",
+    "shellcheck": "설치돼 있으면 -S error 만 차단",
+    "related_tests": "변경 파일 basename 을 언급하는 infra/scripts/test-*.sh + 변경된 test-*.sh 자체",
+    "validate_tasks": "infra/scripts/validate-tasks.mjs (WARN 허용, ERROR 차단)",
+    "verify_gate": "runtime/ledger/verify-gate.jsonl 의 그 태스크 마지막 verdict 가 PASS 여야 함 (--skip-gate-check 로 우회, 원장에 남김)",
+    "fast_forward": "base 위로 rebase 후 --ff-only 만. 충돌·비FF 는 needs_human"
+  },
+  "expiry_days": 7
+}

@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "clusterId": "cl-41697ce934383874",
+  "description": "실행 불가능한 작업 유형 목록 — 이들 작업을 완료했다고 주장하면 자동 차단",
+  "impossibleTaskTypes": [
+    {
+      "pattern": "웹 폼|폼.*조작|form.*submit|submit.*버튼|입력.*클릭|사용자 폼",
+      "reason": "AI는 실제 웹 폼을 조작할 수 없음",
+      "category": "web-interaction",
+      "severity": "critical"
+    },
+    {
+      "pattern": "입력.*받|사용자.*입력|user.*input.*prompt|시스템.*읽음",
+      "reason": "실시간 사용자 입력을 받을 수 없음",
+      "category": "user-interaction",
+      "severity": "critical"
+    },
+    {
+      "pattern": "실시간.*모니터링|live.*monitor|streaming.*data",
+      "reason": "실시간 데이터 스트림을 지속적으로 모니터할 수 없음",
+      "category": "realtime-monitoring",
+      "severity": "high"
+    },
+    {
+      "pattern": "외부.*API|API.*호출|curl.*Authorization|API.*secret|Authorization.*Bearer",
+      "reason": "보안 credentials를 포함한 API 호출은 선언만 가능, 실제 실행 불가",
+      "category": "sensitive-operation",
+      "severity": "critical"
+    },
+    {
+      "pattern": "사용자.*계정.*변경|password.*reset|권한.*부여",
+      "reason": "사용자 계정/권한 변경은 실행 불가능",
+      "category": "account-operation",
+      "severity": "critical"
+    },
+    {
+      "pattern": "데이터베이스.*직접.*쓰기|INSERT|UPDATE|DELETE",
+      "reason": "프로덕션 데이터베이스에 직접 쓰기는 실행 불가능",
+      "category": "data-mutation",
+      "severity": "critical"
+    },
+    {
+      "pattern": "브라우저.*오픈|browser.*launch|웹.*조작",
+      "reason": "브라우저를 실제로 열거나 조작할 수 없음",
+      "category": "browser-control",
+      "severity": "high"
+    },
+    {
+      "pattern": "메일.*발송|email.*send|SMS.*전송",
+      "reason": "실제 메일/SMS 발송은 별도 인증 필요",
+      "category": "notification",
+      "severity": "high"
+    }
+  ],
+  "completionDeclarationRules": {
+    "mustVerifyBefore": [
+      "실제 파일 생성 여부 (파일 시스템)",
+      "HTTP 상태 코드 확인 (200/201 등)",
+      "산출물 크기 > 0 바이트",
+      "응답 텍스트 길이 > 최소 기준",
+      "연관 기능 일관성 (예: 설명 추가 후 인터랙티브 기능)"
+    ],
+    "forbiddenPhrases": [
+      "완료했습니다",
+      "완료되었습니다",
+      "완료 선언",
+      "작업 완료"
+    ]
+  }
+}

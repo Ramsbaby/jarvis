@@ -239,3 +239,33 @@ docs/plan/
 infra/scripts/security-scan.sh
 infra/scripts/preply-today.sh
 infra/scripts/token-sync.sh
+
+# [회차8 2026-09-13] 저장소 밖(런타임)을 가리키는 절대 심링크 — 클론한 사람에겐 없는 경로다.
+#   상대경로로 바꿔도 대상이 저장소 밖이라 링크가 아니라 추적을 끊는 것이 답이다(2026-09-10 교훈).
+/adr
+/archive
+/prompts
+/watchdog
+
+# 백업·아카이브·바이너리 잔재
+*.retired
+*.bak-*
+*.premigrate-*
+infra/lib/task-store.db
+infra/preply-engine.zip
+
+# 커리어 픽스처 — 프라이버시 훅이 개인용으로 판정(2026-09-13). 공개 저장소에 올리지 않는다.
+infra/discord/test/career-coding-mode.test.js
+
+# [회차8 2026-09-13] 프라이버시 스캐너가 지적한 파일 — 공개 저장소에 올리지 않는다.
+#   절대 홈경로 · 깃허브 사용자명 · 개인 이력 서술이 들어 있다.
+#   우회(privacy:allow · PRIVACY_BYPASS_REASON)하지 않는다 — 스캐너 판정이 맞다.
+infra/config/ssot-paths.json
+infra/config/ssot-conflict-patterns.json
+infra/scripts/format-preference-label.py
+infra/lib/cluster-guard-cl-1a81b2956a7f0cc9.sh
+infra/docs/JARVIS-QUALITY-FIX.md
+infra/docs/CAREER-CHANNEL-MODES.md
+infra/guards/CL-41697CE934383874-IMPLEMENTATION-SUMMARY.md
+infra/guards/CL-41697CE934383874-USAGE-GUIDE.md
+scripts/session-recall.sh
