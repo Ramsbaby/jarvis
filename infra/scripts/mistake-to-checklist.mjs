@@ -24,7 +24,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readAllMistakes } from '../lib/learned-mistakes.mjs'; // [2026-07-22] 본체+아카이브 통합 조회
 
-const BOT_HOME = process.env.BOT_HOME || `${process.env.HOME}/jarvis/runtime`;
+// 기본값은 정본 런타임이다. 2026-09-11~12 에 이 자리가 `~/jarvis/runtime`(폐기 경로)
+// 이라 BOT_HOME 이 비면 죽은 트리로 산출물을 쓴 전력이 있다.
+const BOT_HOME = process.env.BOT_HOME || `${process.env.HOME}/.openclaw-data/runtime`;
 const MISTAKES = `${BOT_HOME}/wiki/meta/learned-mistakes.md`;
 const OUT_DIR = `${BOT_HOME}/wiki/meta/checklists`;
 const LOG = `${BOT_HOME}/logs/mistake-to-checklist.log`;

@@ -29,12 +29,14 @@ import {
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { collectSessionSources, excerptForPrompt } from '../lib/session-source.mjs';
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
 const HOME          = homedir();
 const BOT_HOME      = process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime');
 const LOG_FILE      = join(BOT_HOME, 'logs', 'mistake-extractor.log');
-const SUMMARIES_DIR = join(BOT_HOME, 'state', 'session-summaries');
+// 입력 소스는 session-source.mjs 가 해석한다 (CLI 인박스 + 레거시 디스코드 요약).
+// 2026-09-13: 디스코드 봇 정지로 session-summaries 가 말라붙어 4일간 추출 0건이었다.
 const MISTAKES_FILE = join(BOT_HOME, 'wiki', 'meta', 'learned-mistakes.md');
 const STATE_FILE    = join(BOT_HOME, 'state', 'mistake-extractor-state.json');
 
@@ -52,8 +54,12 @@ function isolatedClaudeEnv() {
   }
   return env;
 }
-const MAX_FILES_PER_RUN = 5;     // 세션 파일 상한
+// 세션 파일 상한. 디스코드 요약 시절엔 하루 몇 건이라 5로 충분했지만,
+// CLI 인박스는 하루 20~30건이 들어온다. 5로 두면 매일 대부분을 건너뛴다.
+const MAX_FILES_PER_RUN = Number(process.env.MISTAKE_EXTRACTOR_MAX_FILES || 10);
 const MAX_MISTAKES_PER_RUN = 5;  // 추출 건 상한
+// 파일당 프롬프트 투입 상한. 5파일 × 12,000자 ≈ 20k 토큰 ≈ $0.016 — 일일 예산 $0.50 대비 3%.
+const MAX_CHARS_PER_FILE = Number(process.env.MISTAKE_EXTRACTOR_MAX_CHARS || 12000);
 // Discord turn은 짧으므로 cutoff 완화 (Harness P0 verify R6 지적).
 // CLI Stop 훅 / batch는 기존 300 유지, Discord turn만 100으로 완화.
 const MIN_FILE_BYTES   = process.env.DISCORD_TURN_SOURCE === '1' ? 100 : 300;
@@ -277,21 +283,38 @@ function saveState(state) {
 
 // ── 세션 파일 수집 ───────────────────────────────────────────────────────────
 function collectSessionFiles(sinceMs) {
-  if (!existsSync(SUMMARIES_DIR)) return [];
-  const entries = readdirSync(SUMMARIES_DIR);
-  const targets = [];
-  for (const name of entries) {
-    if (!name.endsWith('.md') || name.endsWith('.bak')) continue;
-    const fpath = join(SUMMARIES_DIR, name);
-    try {
-      const st = statSync(fpath);
-      if (st.mtimeMs <= sinceMs) continue;
-      if (st.size < MIN_FILE_BYTES) continue;
-      targets.push({ path: fpath, mtime: st.mtimeMs, size: st.size });
-    } catch { /* ignore */ }
+  return collectSessionSources({
+    botHome: BOT_HOME,
+    sinceMs,
+    maxFiles: MAX_FILES_PER_RUN,
+    minBytes: MIN_FILE_BYTES,
+    // ownerIds 는 일부러 비운다 — 빈 화이트리스트를 전량 차단으로 쓰지 않는다.
+    // (insight-extractor 가 그 함정으로 조용히 0건을 내고 있었다)
+  });
+}
+
+// ── 입력 생산자 생존 확인 ─────────────────────────────────────────────────────
+// "추출할 게 없다"에는 두 가지가 있다:
+//   ① 대화는 있었는데 지적할 실수가 없었다      → 정상
+//   ② 대화 기록 자체가 안 들어오고 있다          → 파이프라인 고장
+// 과거엔 둘을 구분하지 않아 ②가 4일간 ①의 얼굴을 하고 지나갔다.
+// 판정 기준: 최근 24시간 안에 갱신된 입력 파일이 한 건이라도 있는가.
+function probeInputProducer() {
+  const dayAgo = Date.now() - 24 * 3600_000;
+  const fresh = collectSessionSources({ botHome: BOT_HOME, sinceMs: dayAgo, minBytes: 1 });
+  if (fresh.length > 0) {
+    return {
+      starved: false,
+      detail: `최근 24h 입력 ${fresh.length}건 존재(이번 창에서는 신규 없음)`,
+    };
   }
-  targets.sort((a, b) => b.mtime - a.mtime);
-  return targets.slice(0, MAX_FILES_PER_RUN);
+  const all = collectSessionSources({ botHome: BOT_HOME, minBytes: 1 });
+  const newest = all.length ? new Date(all[0].mtime).toISOString() : '없음';
+  return {
+    starved: true,
+    detail: `최근 24h 신규 입력 0건 (전체 ${all.length}건, 최신 ${newest}). `
+          + 'jarvis-cli-rag-sync 잡과 inbox/ 를 확인할 것',
+  };
 }
 
 // ── 기존 오답노트 패턴 수집 (중복 감지용) ────────────────────────────────────
@@ -329,15 +352,20 @@ function similarity(a, b) {
 }
 
 // ── Haiku 프롬프트 빌드 ──────────────────────────────────────────────────────
+// sessionBodies: [{label, body}] — body 는 excerptForPrompt 로 이미 줄여 둔 상태다.
+// 여기서 다시 자르지 않는다. 과거 통짜 slice(0,6000) 이 CLI 인박스(최대 160KB)의
+// 앞 4%만 남겨 정작 대화 후반의 지적을 통째로 버렸다.
 function buildPrompt(sessionBodies) {
   const conjoined = sessionBodies
-    .map((b, i) => `### 세션 ${i + 1}\n${b.slice(0, 6000)}`)
+    .map((b, i) => `### 세션 ${i + 1} — ${b.label}\n${b.body}`)
     .join('\n\n');
 
   // 오너 이름은 OSS 누출 방지 위해 env 로 주입 (blocklist rule: korean-owner-name).
   const ownerName = process.env.OWNER_NAME || 'Owner';
 
-  return `다음은 AI 집사(Jarvis)와 오너(${ownerName} 대표)의 최근 Discord 대화 세션 요약입니다.
+  return `다음은 AI 집사(Jarvis)와 오너(${ownerName} 대표)의 최근 대화 기록입니다.
+표면이 둘 섞여 있습니다 — Claude CLI 원본 대화(\`## **[사용자]**\` / \`## **[Jarvis CLI]**\` 형식)와
+레거시 Discord 세션 요약(\`[시각] User:\` / \`[시각] Jarvis:\` 형식). 둘 다 같은 기준으로 보세요.
 오너가 **Jarvis의 응답·판단·조치를 지적/정정**한 부분만 JSON 배열로 추출하세요.
 
 ## 추출 대상 (반드시 포함)
@@ -635,19 +663,31 @@ async function main() {
       console.log('🤖 오답노트 자동 추출 — 세션 분량 부족');
       return;
     }
-    sessionFiles = [{ path: SINGLE_FILE, mtime: st.mtimeMs, size: st.size }];
+    sessionFiles = [{ path: SINGLE_FILE, mtime: st.mtimeMs, size: st.size, label: SINGLE_FILE }];
     log(`--file 단일 파일 모드: ${SINGLE_FILE}`);
   } else {
     sessionFiles = collectSessionFiles(sinceMs);
   }
   if (sessionFiles.length === 0) {
-    log('신규 세션 요약 없음 — 종료');
-    console.log('🤖 오답노트 자동 추출 — 신규 세션 요약 없음');
+    // 입력 0건은 정상 종료가 아니라 **입력 고갈 경보**다.
+    // 2026-09-09~13: 디스코드 봇 정지로 입력이 마른 채 rc=0 "없음"만 4일간 찍혀
+    // 아무도 눈치채지 못했다. 생산자가 살아 있는지를 함께 재서 구분한다.
+    const producer = probeInputProducer();
+    log(`신규 세션 없음 — ${producer.detail}`);
+    if (producer.starved) {
+      console.log(`🚨 오답노트 자동 추출 — 입력 고갈: ${producer.detail}`);
+      process.exit(1);   // failureAlert 가 물도록 실패로 끝낸다
+    }
+    console.log('🤖 오답노트 자동 추출 — 신규 세션 없음 (입력 경로는 정상)');
     return;
   }
   log(`대상 세션 파일 ${sessionFiles.length}개 (최신 ${new Date(sessionFiles[0].mtime).toISOString()})`);
+  for (const f of sessionFiles) log(`  - [${f.kind || 'single'}] ${f.label || f.path} (${f.size}B)`);
 
-  const bodies = sessionFiles.map(f => readFileSync(f.path, 'utf-8'));
+  const bodies = sessionFiles.map(f => ({
+    label: f.label || f.path,
+    body: excerptForPrompt(readFileSync(f.path, 'utf-8'), MAX_CHARS_PER_FILE),
+  }));
   const prompt = buildPrompt(bodies);
   log(`Haiku 호출 (프롬프트 ${prompt.length}자)`);
 

@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { addTask } from './task-store.mjs';
+import { collectSessionSources } from './session-source.mjs';
 
 // nested session guard bypass
 delete process.env.CLAUDECODE;
@@ -87,33 +88,27 @@ function saveState(state) {
 }
 function getTodayStr() { return new Date().toISOString().slice(0, 10); }
 
-// ── Owner userId 목록 (세션 파일 필터링용) ────────────────────────────────
-// 파일명 패턴: {channelId}-{userId}.md
-// 다른 사용자 세션이 오염되지 않도록 owner userId만 포함
+// ── Owner userId 목록 (레거시 Discord 요약 필터용) ────────────────────────
+// 디스코드 세션 요약 파일명은 `{channelId}-{userId}.md` 라 다른 사용자 세션이
+// 섞일 수 있었다. Claude CLI 인박스는 주인님 전용이라 이 필터가 필요 없다.
+//
+// 2026-09-13 발견: 이 목록이 **비면 필터가 전량 차단으로 동작**했다
+// ([].includes(x) 는 항상 false). 2026-09-10 이관에서 잡 env 의 OWNER_USER_IDS
+// 가 유실되면서, 입력이 있어도 0건이 나오는 두 번째 고장이 겹쳐 있었다.
+// 이제 비어 있으면 "필터 없음"으로 읽는다 — 안전한 기본값은 통과다.
 const OWNER_USER_IDS = (process.env.OWNER_USER_IDS || process.env.OWNER_DISCORD_ID || '').split(',').filter(Boolean);
 
-// ── N일 이내 세션 요약 파일 수집 (채널별 메타데이터 포함) ─────��───────────
+// ── N일 이내 세션 파일 수집 (채널별 메타데이터 포함) ──────────────────────
+// 입력 소스 해석은 session-source.mjs 가 맡는다 (CLI 인박스 + 레거시 Discord 요약).
 function getRecentSummaryFiles(days) {
   try {
     const cutoff = Date.now() - days * 86400_000;
-    return readdirSync(SESSION_SUMMARY_DIR)
-      .filter(f => f.endsWith('.md') && !f.endsWith('.bak'))
-      .filter(f => {
-        // {channelId}-{userId}.md 패턴에서 userId 추출하여 owner만 통과
-        const parts = f.replace('.md', '').split('-');
-        const userId = parts[parts.length - 1];
-        return OWNER_USER_IDS.includes(userId);
-      })
-      .map(f => {
-        const fp = join(SESSION_SUMMARY_DIR, f);
-        const parts = f.replace('.md', '').split('-');
-        const channelId = parts.slice(0, -1).join('-');
-        return { file: fp, channelId, name: f };
-      })
-      .filter(({ file: fp }) => {
-        try { return statSync(fp).mtimeMs >= cutoff; }
-        catch { return false; }
-      });
+    return collectSessionSources({
+      botHome: BOT_HOME,
+      sinceMs: cutoff,
+      minBytes: 300,
+      ownerIds: OWNER_USER_IDS,
+    }).map(s => ({ file: s.path, channelId: s.channelId, name: s.label, kind: s.kind }));
   } catch (err) {
     log('warn', `세션 파일 수집 실패: ${err.message}`);
     return [];
@@ -601,10 +596,15 @@ async function main() {
   // 세션 요약 파일 수집
   const files = getRecentSummaryFiles(daysArg);
   if (files.length === 0) {
-    log('warn', `최근 ${daysArg}일 세션 요약 파일 없음`);
-    return;
+    // 입력 0건은 조용히 끝낼 일이 아니다 — 2026-09-09~13 에 이 경로가 rc=0 warn 으로
+    // 4일간 지나가면서 인사이트 생산이 멈춘 걸 아무도 못 봤다. 실패로 끝내 알림을 물린다.
+    const all = collectSessionSources({ botHome: BOT_HOME, minBytes: 1 });
+    const newest = all.length ? new Date(all[0].mtime).toISOString() : '없음';
+    log('error', `최근 ${daysArg}일 세션 파일 0건 — 입력 고갈 의심 `
+      + `(전체 ${all.length}건, 최신 ${newest}). jarvis-cli-rag-sync 와 inbox/ 확인 필요`);
+    process.exit(1);
   }
-  log('info', `세션 파일 ${files.length}개 로드`);
+  log('info', `세션 파일 ${files.length}개 로드 (${files.filter(f => f.kind === 'cli-inbox').length}건 CLI 인박스)`);
 
   // 파일 내용 합산 — 채널별 그룹핑 (최대 100KB 제한)
   const byChannel = new Map();
