@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import os from 'node:os';
 
 const HOME = os.homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'projects/jarvis', 'runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data', 'runtime');
 const DRAFTS = join(BOT_HOME, 'state', 'skill-drafts');
 const DECISIONS = join(DRAFTS, 'decisions');
 const NOTIFIED = join(DRAFTS, 'notified.json');

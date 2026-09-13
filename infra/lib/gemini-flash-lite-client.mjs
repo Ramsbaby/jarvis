@@ -42,8 +42,8 @@ const PRICE_OUTPUT = 0.30  / 1_000_000;  // $0.30/1M tokens
 function loadApiKey() {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
   const envPaths = [
-    join(homedir(), 'projects/jarvis', 'runtime', 'discord', '.env'),
-    join(homedir(), 'projects/jarvis', 'runtime', '.env'),
+    join(homedir(), '.openclaw-data', 'runtime', 'discord', '.env'),
+    join(homedir(), '.openclaw-data', 'runtime', '.env'),
     join(homedir(), '.jarvis', 'discord', '.env'),
   ];
   for (const p of envPaths) {

@@ -11,9 +11,9 @@ import { join } from 'node:path';
 import os from 'node:os';
 
 const HOME = os.homedir();
-const DRAFTS = join(HOME, 'projects/jarvis', 'runtime', 'state', 'skill-drafts');
+const DRAFTS = join(HOME, '.openclaw-data', 'runtime', 'state', 'skill-drafts');
 const DECISIONS = join(DRAFTS, 'decisions');
-const LEDGER = join(HOME, 'projects/jarvis', 'runtime', 'ledger', 'skill-loop.jsonl');
+const LEDGER = join(HOME, '.openclaw-data', 'runtime', 'ledger', 'skill-loop.jsonl');
 const VALIDATOR = join(HOME, '.claude', 'commands', 'skill-creator', 'scripts', 'quick_validate.py');
 const INSTALL_BASE = join(HOME, '.claude', 'skills');
 

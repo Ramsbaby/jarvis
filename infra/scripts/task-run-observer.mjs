@@ -32,7 +32,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const HOME = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'projects/jarvis', 'runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data', 'runtime');
 const TASK_OBSERVATIONS = join(BOT_HOME, 'ledger', 'task-observations.jsonl');
 const SKILL_LOOP_LEDGER = join(BOT_HOME, 'ledger', 'skill-loop.jsonl');
 const DRAFTS = join(BOT_HOME, 'state', 'skill-drafts');

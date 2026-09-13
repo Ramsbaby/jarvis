@@ -28,7 +28,7 @@ import { homedir } from 'node:os';
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'projects/jarvis', 'runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data', 'runtime');
 const CONFIG_PATH = join(process.env.BOT_HOME || join(homedir(), 'projects/jarvis', 'infra'), 'config', 'task-routing-config.json');
 
 // 비용 계산 (per 1M tokens)

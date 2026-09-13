@@ -38,7 +38,7 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
 const HOME = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, 'projects/jarvis', 'runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data', 'runtime');
 const MEMORY_DIR = join(BOT_HOME, 'state', 'student-memory');
 
 function nowKST() {

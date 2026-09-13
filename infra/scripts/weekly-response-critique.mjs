@@ -330,7 +330,7 @@ async function main() {
 
   // Discord 알림
   try {
-    const discordScript = join(homedir(), 'projects/jarvis', 'runtime', 'scripts', 'discord-visual.mjs');
+    const discordScript = join(homedir(), '.openclaw-data', 'runtime', 'scripts', 'discord-visual.mjs');
     if (existsSync(discordScript)) {
       const { spawn } = await import('node:child_process');
       const dataObj = {
