@@ -104,6 +104,26 @@ get_emoji() {
     esac
 }
 
+# 긴급 경보 우회 전달 (2026-09-13 신설)
+#   옛 디스코드 웹훅은 2026-09-10 에 의도적으로 비웠고 되살리지 않는다.
+#   대신 오픈클로 게이트웨이가 실제로 쓰는 채널로 보낸다 — 이쪽은 지금도 살아 있다.
+#   성공하면 0, 어떤 이유로든 못 보내면 1 을 돌려 호출자가 기존 억제 경로로 넘어가게 한다.
+#   (여기서 실패해도 알림이 사라지지 않는다. 억제 로그와 orchestrator 요약이 받는다.)
+_urgent_bypass_send() {
+    local title="$1" body="$2" ch cli
+    cli="${OPENCLAW_BIN:-$HOME/bin/openclaw}"
+    [[ -x "$cli" ]] || return 1
+    # 채널 ID 는 공개 저장소에 박지 않는다 — 설정에서 읽는다.
+    ch=$(jq -r '.l3_channel_id // empty' "$MONITORING_CONFIG" 2>/dev/null)
+    [[ -n "$ch" ]] || return 1
+    local text
+    text=$(printf '🚨 **%s**\n\n%s\n\n_긴급 경보 — 나머지 알림은 orchestrator 요약으로 나갑니다._' \
+        "$title" "${body:0:1500}")
+    timeout 45 "$cli" message send --channel discord --target "channel:${ch}" \
+        --message "$text" >/dev/null 2>&1 || return 1
+    return 0
+}
+
 # 메인 알림 전송
 send_alert() {
     local level="${1:-warning}"
@@ -157,6 +177,18 @@ send_alert() {
     # Webhook 전송 — JARVIS_NO_EXTERNAL=1 (2026-09-04, 1d) 이면 파일 기록만 하고 성공으로 간주
     local http_code rc=0
     if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
+        # [2026-09-13] 긴급(critical)만 살아있는 경로로 즉시 내보낸다 — 주인님 결정.
+        #   옛 웹훅은 9/10 에 비웠고 되살리지 않는다. 대신 오픈클로가 실제로 쓰는 디스코드
+        #   채널로 보낸다. 채널 ID 는 공개 저장소에 박지 않고 monitoring.json 에서 읽는다.
+        #   경고·정보는 그대로 억제되어 orchestrator 요약으로만 나간다(하루 3회).
+        #   실측 근거: discord-send-audit.jsonl 828건 중 9/12 이후 critical 은 1건뿐이라
+        #   이 우회가 알림 폭주를 만들지 않는다.
+        if [[ "$level" == "critical" ]] && _urgent_bypass_send "$title" "$message"; then
+            _send_audit_log "$level" "$channel" "$title" "sent:urgent-bypass"
+            echo "Alert sent (urgent bypass): $title"
+            set_last_alert "$message_hash"
+            return 0
+        fi
         mkdir -p "${BOT_HOME:-${HOME}/.openclaw-data/runtime}/logs" 2>/dev/null || true
         printf '%s [NO_EXTERNAL] src=alert-send.sh ch=%s title=%s len=%s\n' "$(date -u +%FT%TZ)" "$channel" "${title:0:60}" "${#embed_json}" \
             >> "${BOT_HOME:-${HOME}/.openclaw-data/runtime}/logs/no-external.log" 2>/dev/null || true
