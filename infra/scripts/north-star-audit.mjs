@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-north-star-audit 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/north-star-audit
+// 재개: rm ~/.openclaw-data/runtime/state/stopped/north-star-audit
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
-if (__sc(__sh() + '/.openclaw-data/jarvis/runtime/state/stopped/north-star-audit') && process.env.OPENCLAW_JOB !== '1') {
+if (__sc(__sh() + '/.openclaw-data/runtime/state/stopped/north-star-audit') && process.env.OPENCLAW_JOB !== '1') {
   console.log('[north-star-audit] 중지 플래그 있음 — 오픈클로로 이관됨');
   process.exit(0);
 }
@@ -27,7 +27,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const HOME = homedir();
-const LEDGER = join(HOME, '.openclaw-data/jarvis/runtime/ledger');
+const LEDGER = join(HOME, '.openclaw-data/runtime/ledger');
 const SELF_LEDGER = join(LEDGER, 'north-star-audit.jsonl');
 const WINDOW_MS = 7 * 24 * 3600 * 1000;
 const now = Date.now();
@@ -54,7 +54,7 @@ const pm = readJsonl(join(LEDGER, 'promoter-ledger.jsonl')).filter(e => e.type =
 const cand = pm.reduce((a, e) => a + (e.candidates || 0), 0);
 const acted = pm.reduce((a, e) => a + (e.applied || 0) + (e.dev_queue || 0), 0);
 let recurrences = 0;
-const lmPath = join(HOME, '.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md');
+const lmPath = join(HOME, '.openclaw-data/runtime/wiki/meta/learned-mistakes.md');
 if (existsSync(lmPath)) {
   const cutoff = new Date(since).toISOString().slice(0, 10);
   for (const line of readFileSync(lmPath, 'utf8').split('\n')) {
@@ -66,7 +66,7 @@ const learnScore = Math.max(0, Math.round(100 * (cand ? Math.min(1, acted / cand
 
 // ── 축 3: 시간 해방 (좀비 크론 + 수동 개입) ──────────────────
 let zombies = 0;
-const cronLog = join(HOME, '.openclaw-data/jarvis/runtime/logs/cron.log');
+const cronLog = join(HOME, '.openclaw-data/runtime/logs/cron.log');
 if (existsSync(cronLog)) {
   const cutoff = new Date(since).toISOString().slice(0, 10);
   const failCounts = {};
@@ -76,7 +76,7 @@ if (existsSync(cronLog)) {
   }
   zombies = Object.values(failCounts).filter(c => c >= 3).length;
 }
-const interventions = readJsonl(join(HOME, '.openclaw-data/jarvis/runtime/logs/oauth-incident-ledger.jsonl')).filter(e => inWindow(e.ts)).length;
+const interventions = readJsonl(join(HOME, '.openclaw-data/runtime/logs/oauth-incident-ledger.jsonl')).filter(e => inWindow(e.ts)).length;
 const timeScore = Math.max(0, 100 - 15 * zombies - 20 * interventions);
 
 // ── 종합 + 추세 ──────────────────────────────────────────────
@@ -106,7 +106,7 @@ console.log(`   🧭 종합 ${overall}점 ${trend}${dryrun ? ' [DRYRUN — Disco
 
 if (!dryrun) {
   try {
-    execFileSync(process.execPath, [join(HOME, '.openclaw-data/jarvis/infra/scripts/discord-visual.mjs'),
+    execFileSync(process.execPath, [join(HOME, 'projects/jarvis/infra/scripts/discord-visual.mjs'),
       '--type', 'stats',
       '--data', JSON.stringify({
         title: `🧭 북극성 정렬 ${overall}점 (${trend})`,

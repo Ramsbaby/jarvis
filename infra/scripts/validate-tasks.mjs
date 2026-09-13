@@ -3,8 +3,8 @@
  * validate-tasks.mjs — tasks.json JSON Schema 검증
  *
  * Usage:
- *   node ~/.openclaw-data/jarvis/infra/scripts/validate-tasks.mjs
- *   node ~/.openclaw-data/jarvis/infra/scripts/validate-tasks.mjs --fix   # (향후: auto-fix 가능한 오류 수정)
+ *   node ~/projects/jarvis/infra/scripts/validate-tasks.mjs
+ *   node ~/projects/jarvis/infra/scripts/validate-tasks.mjs --fix   # (향후: auto-fix 가능한 오류 수정)
  *
  * 종료 코드:
  *   0 — 검증 통과
@@ -27,10 +27,13 @@ const Ajv = (() => {
 
 // [2026-09-11] homedir()+'jarvis' 를 그대로 들고 있어 2026-09-10 이관 뒤 ENOTDIR 로 죽었다.
 // 이게 죽으면 gen-tasks-index 가 통째로 중단된다 — 잡 jarvis-gen-indexes 상시 실패의 원인.
-const JARVIS_HOME = process.env.JARVIS_HOME || join(homedir(), '.openclaw-data', 'jarvis');
+// [회차8 2026-09-12] 이관 뒤 기본값이 죽은 경로였다 — env 없이 돌면 ENOTDIR 로 죽는다.
+//   저장소에는 더 이상 runtime 이 없다(그 자리는 장벽 파일). 런타임 정본은 ~/.openclaw-data/runtime.
+const JARVIS_HOME = process.env.JARVIS_HOME || join(homedir(), 'projects', 'jarvis');
 const INFRA = join(JARVIS_HOME, 'infra');
 const SCHEMA_FILE = join(INFRA, 'config', 'tasks.schema.json');
-const TASKS_FILE = join(process.env.BOT_HOME || join(JARVIS_HOME, 'runtime'), 'config', 'tasks.json');
+// [회차8 2026-09-12] BOT_HOME 폴백이 JARVIS_HOME/runtime 이었다 — 그 자리는 장벽 파일이다.
+const TASKS_FILE = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data', 'runtime'), 'config', 'tasks.json');
 
 function log(msg) { process.stderr.write(`[validate-tasks] ${msg}\n`); }
 
@@ -147,7 +150,7 @@ if (missingAddedAt.length > 0) {
 // 양쪽 등록 = 중복 실행 위험. 기본 WARN-only, JARVIS_VALIDATE_STRICT=1로 reject 전환.
 // 사고 사례: 2026-05-07 24건 crontab 중복 실행 → fail_24h 226건 본진. 5/7 적용 후
 // 5/8 새벽 다른 세션 작업으로 코드 사라짐 → 재구현.
-// 참조: ~/.openclaw-data/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md 4-A·4-B
+// 참조: ~/projects/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md 4-A·4-B
 //
 // 예외 카테고리(SSoT 등재 — verify B2 fix): meta-audit / system-monitor /
 // retention/archive / bot-runner는 plist 직접 작성 OK이므로 위반에서 제외.
@@ -213,7 +216,7 @@ if (violations.length > 0) {
     log(`  · ${id} → ${sources.join(', ')}`);
   }
   log(`  해결: crontab에서 제거 후 tasks.json만 유지.`);
-  log(`  참조: ~/.openclaw-data/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md`);
+  log(`  참조: ~/projects/jarvis/infra/docs/CRON-ORCHESTRATION-SSOT.md`);
   if (STRICT) {
     log(`  STRICT 모드 — exit 1 (JARVIS_VALIDATE_STRICT=1)`);
     process.exit(1);

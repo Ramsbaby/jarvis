@@ -2,10 +2,10 @@
 
 // [오픈클로 이식 2026-09-10] 판정 P — 정지.
 // 근거: 신호 대부분(paused-crons-stale/cron-failure-spike/health-check-stale)이 "크론 상태 감시·실패 급증 감지"로 오픈클로 엔진 기본 제공 영역과 중복. 부속 기능 discord-bot-unhealthy→bot-preflight.sh 자동재시작(코드 231행)은 디스코드 봇 삭제로 이미 죽음.
-// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/ajqe-trigger-system-health
+// 재개: rm ~/.openclaw-data/runtime/state/stopped/ajqe-trigger-system-health
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
-if (__sc(__sh() + '/.openclaw-data/jarvis/runtime/state/stopped/ajqe-trigger-system-health')) {
+if (__sc(__sh() + '/.openclaw-data/runtime/state/stopped/ajqe-trigger-system-health')) {
   console.log('[ajqe-trigger-system-health] 중지 플래그 있음 (판정 P)');
   process.exit(0);
 }
@@ -35,15 +35,15 @@ import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 
 const HOME = homedir();
-const QUEUE_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-question-queue.jsonl');
-const HEALTH_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/health.json');
-const CRON_STATUS_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/cron-status.json');
-const CRON_DAILY_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/cron-master-daily.jsonl');
+const QUEUE_PATH = join(HOME, '.openclaw-data/runtime/state/ajqe-question-queue.jsonl');
+const HEALTH_PATH = join(HOME, '.openclaw-data/runtime/state/health.json');
+const CRON_STATUS_PATH = join(HOME, '.openclaw-data/runtime/state/cron-status.json');
+const CRON_DAILY_PATH = join(HOME, '.openclaw-data/runtime/state/cron-master-daily.jsonl');
 const EFFECTIVE_TASKS_PATH = join(HOME, '.jarvis/config/effective-tasks.json');
-const ACTIONS_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-actions.jsonl');
-const COOLDOWN_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-signal-cooldown.json');
-const BACKUP_DIR = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-backups');
-const LOGS_DIR = join(HOME, '.openclaw-data/jarvis/runtime/logs');
+const ACTIONS_PATH = join(HOME, '.openclaw-data/runtime/state/ajqe-actions.jsonl');
+const COOLDOWN_PATH = join(HOME, '.openclaw-data/runtime/state/ajqe-signal-cooldown.json');
+const BACKUP_DIR = join(HOME, '.openclaw-data/runtime/state/ajqe-backups');
+const LOGS_DIR = join(HOME, '.openclaw-data/runtime/logs');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const TODAY = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -239,7 +239,7 @@ function checkSystemHealth() {
       }));
     } else {
       try {
-        execSync('bash ~/.openclaw-data/jarvis/infra/scripts/bot-preflight.sh', { stdio: 'pipe' });
+        execSync('bash ~/projects/jarvis/infra/scripts/bot-preflight.sh', { stdio: 'pipe' });
         recordAction({ action: 'auto-bot-restart', signal: 'discord-bot-unhealthy' });
         questions.push(makeReport({
           id: `health-discord-${TODAY}`, signal: 'discord-bot-unhealthy',

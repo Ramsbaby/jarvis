@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 ALERT_STATE_DIR="$BOT_HOME/state"
 LAST_ALERT_FILE="$ALERT_STATE_DIR/last-alert"
@@ -87,7 +87,7 @@ _send_audit_log() {
 }
 
 # Discord Embed 색상 — 단일 정의(discord-severity.sh) 위임 (2026-06-11 중앙화)
-source "$HOME/.openclaw-data/jarvis/infra/lib/discord-severity.sh"
+source "$HOME/projects/jarvis/infra/lib/discord-severity.sh"
 get_color() {
     severity_color "$1"
 }
@@ -157,9 +157,9 @@ send_alert() {
     # Webhook 전송 — JARVIS_NO_EXTERNAL=1 (2026-09-04, 1d) 이면 파일 기록만 하고 성공으로 간주
     local http_code rc=0
     if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
-        mkdir -p "${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs" 2>/dev/null || true
+        mkdir -p "${BOT_HOME:-${HOME}/.openclaw-data/runtime}/logs" 2>/dev/null || true
         printf '%s [NO_EXTERNAL] src=alert-send.sh ch=%s title=%s len=%s\n' "$(date -u +%FT%TZ)" "$channel" "${title:0:60}" "${#embed_json}" \
-            >> "${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs/no-external.log" 2>/dev/null || true
+            >> "${BOT_HOME:-${HOME}/.openclaw-data/runtime}/logs/no-external.log" 2>/dev/null || true
         http_code="204"
     else
         http_code=$(curl -s -o /tmp/webhook_response.txt -w "%{http_code}" -X POST "$WEBHOOK_URL" \

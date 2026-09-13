@@ -8,7 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/scripts/report-healthcheck.sh</string>
+        <string>/Users/ramsbaby/.openclaw-data/runtime/scripts/report-healthcheck.sh</string>
     </array>
 
     <key>StartCalendarInterval</key>
@@ -31,10 +31,10 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/report-healthcheck.out.log</string>
+    <string>/Users/ramsbaby/.openclaw-data/runtime/logs/report-healthcheck.out.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/report-healthcheck.err.log</string>
+    <string>/Users/ramsbaby/.openclaw-data/runtime/logs/report-healthcheck.err.log</string>
 
     <key>ProcessType</key>
     <string>Standard</string>

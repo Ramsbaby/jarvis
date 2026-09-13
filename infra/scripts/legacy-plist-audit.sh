@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 TASKS_FILE="$BOT_HOME/config/effective-tasks.json"
 [[ -f "$TASKS_FILE" ]] || TASKS_FILE="$BOT_HOME/config/tasks.json"

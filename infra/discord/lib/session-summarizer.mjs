@@ -4,7 +4,7 @@
  * ANTHROPIC_API_KEY 없는 Claude Max 환경에서 패턴 매칭으로
  * 오늘 세션 요약 파일을 분석해 facts를 추출, userMemory에 저장.
  *
- * 실행: /opt/homebrew/bin/node ~/.openclaw-data/jarvis/runtime/discord/lib/session-summarizer.mjs
+ * 실행: /opt/homebrew/bin/node ~/.openclaw-data/runtime/discord/lib/session-summarizer.mjs
  * 크론: 0 3 * * * (매일 새벽 3시)
  */
 
@@ -31,7 +31,7 @@ function sanitizeUnicode(str) {
   });
 }
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const SESSION_SUMMARY_DIR = join(BOT_HOME, 'state', 'session-summaries');
 const USERS_DIR = join(BOT_HOME, 'state', 'users');
 const LOGS_DIR = join(BOT_HOME, 'logs');

@@ -5,7 +5,7 @@
 // 사용: node preply-upload.mjs "<메시지>" <파일1> [파일2 ...]
 //       node preply-upload.mjs --channel <id> "<메시지>" <파일...>   (채널 직접 지정)
 //
-// 토큰: ~/.openclaw-data/jarvis/runtime/.env 의 DISCORD_TOKEN
+// 토큰: ~/.openclaw-data/runtime/.env 의 DISCORD_TOKEN
 // 의존: discord.js (infra/discord/node_modules 에 존재)
 
 import { readFileSync, existsSync, statSync, appendFileSync, mkdirSync } from 'node:fs';
@@ -20,14 +20,14 @@ const require = createRequire(resolve(__dirname, '..', 'discord', 'package.json'
 const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
 
 const HOME = homedir();
-const REGISTRY = `${HOME}/.openclaw-data/jarvis/runtime/config/preply-students.json`;
-const ENV_FILE = `${HOME}/.openclaw-data/jarvis/runtime/.env`;
+const REGISTRY = `${HOME}/.openclaw-data/runtime/config/preply-students.json`;
+const ENV_FILE = `${HOME}/.openclaw-data/runtime/.env`;
 
 function die(msg) { console.error(`❌ ${msg}`); process.exit(1); }
 
 // --- 업로드 시도/결과 원장 (2026-07-13: '파일전송' 반복 불만이 verify/렌더 검사 사각지대라 조용히 실패하던 문제.
 //     업로드 성공·실패를 기록해 가시화 → preply-complaint-scan이 교차 참조 가능.) ---
-const UPLOAD_LEDGER = `${HOME}/.openclaw-data/jarvis/runtime/state/preply-upload-ledger.jsonl`;
+const UPLOAD_LEDGER = `${HOME}/.openclaw-data/runtime/state/preply-upload-ledger.jsonl`;
 function logUpload(rec) {
   try {
     mkdirSync(dirname(UPLOAD_LEDGER), { recursive: true });

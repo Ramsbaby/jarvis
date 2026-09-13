@@ -30,7 +30,8 @@ catch (e) { console.error('ERROR: --data must be valid JSON:', e.message); proce
 // [2026-09-11] 옛 경로(~/jarvis)를 그대로 들고 있어 2026-09-10 이관 뒤 ENOTDIR 로 죽었다.
 // BOT_HOME 을 먼저 존중하고, 없으면 정본 루트를 쓴다.
 const RUNTIME_HOME = process.env.BOT_HOME
-  || join(process.env.JARVIS_HOME || join(homedir(), '.openclaw-data', 'jarvis'), 'runtime');
+  // [회차8 2026-09-12] JARVIS_HOME 하위 runtime 파생 금지 — 저장소에 runtime 이 없다(장벽 파일).
+  || join(homedir(), '.openclaw-data', 'runtime');
 const CONFIG_PATH = join(RUNTIME_HOME, 'config', 'monitoring.json');
 const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
 const WEBHOOK_URL = config.webhooks?.[CHANNEL] ?? config.webhook?.url;

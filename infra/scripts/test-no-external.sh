@@ -2,11 +2,11 @@
 # test-no-external.sh — JARVIS_NO_EXTERNAL=1 이 모든 Discord/ntfy 송출 경로를 막는지 (SELF-HEAL-PLAN 1d)
 # 각 경로를 실제 함수로 호출하되 JARVIS_NO_EXTERNAL=1 이므로 네트워크로 나가지 않는다.
 # 판정: 임시 BOT_HOME/logs/no-external.log 에 src 별 기록 + 실제 egress-audit.log 줄 수 불변.
-# 실행: bash ~/.openclaw-data/jarvis/infra/scripts/test-no-external.sh
+# 실행: bash ~/projects/jarvis/infra/scripts/test-no-external.sh
 set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 INFRA="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-REAL_RUNTIME="${HOME}/.openclaw-data/jarvis/runtime"
+REAL_RUNTIME="${HOME}/.openclaw-data/runtime"
 T=$(mktemp -d /var/tmp/noext-test.XXXXXX)
 trap 'rm -rf "$T"' EXIT
 export JARVIS_NO_EXTERNAL=1

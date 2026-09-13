@@ -17,7 +17,7 @@ unset ANTHROPIC_API_KEY 2>/dev/null || true
 # See: ask-claude.sh:141 "Unsetting CLAUDECODE breaks OAuth authentication in cron environments"
 unset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 NODE_SQLITE="node --experimental-sqlite --no-warnings"
 FSM_STORE="${BOT_HOME}/lib/task-store.mjs"
 
@@ -48,7 +48,7 @@ if [[ -f "${BOT_HOME}/lib/cron-helpers.sh" ]]; then
     source "${BOT_HOME}/lib/cron-helpers.sh"
 fi
 # egress 감사 라우터 — 모든 Discord 발송은 이 함수를 통해 중앙화
-source "${HOME}/.openclaw-data/jarvis/infra/lib/discord-route.sh" 2>/dev/null || true
+source "${HOME}/projects/jarvis/infra/lib/discord-route.sh" 2>/dev/null || true
 # ADR-007: Plugin system — regenerate effective-tasks.json, then use it
 if [[ -x "${BOT_HOME}/bin/plugin-loader.sh" ]]; then
     "${BOT_HOME}/bin/plugin-loader.sh" 2>/dev/null || true

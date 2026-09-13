@@ -9,7 +9,7 @@ set -euo pipefail
 
 BOARD_URL="${BOARD_URL:-http://localhost:3100}"
 AGENT_KEY="${AGENT_API_KEY:-jarvis-board-internal-2026}"
-LOGFILE="${HOME}/.openclaw-data/jarvis/runtime/logs/board-conclude.log"
+LOGFILE="${HOME}/.openclaw-data/runtime/logs/board-conclude.log"
 
 log() {
   local level="$1"

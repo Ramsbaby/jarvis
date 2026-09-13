@@ -26,7 +26,7 @@ set -euo pipefail
 # retry-wrapper.sh - Retry wrapper with exponential backoff for ask-claude.sh
 # Usage: retry-wrapper.sh <task-id> <prompt> [allowed-tools] [timeout] [max-budget]
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; case "$(uname -s)" in Darwin) IS_MACOS=true ;; esac
 }
@@ -34,8 +34,8 @@ source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 RETRY_LOG="${BOT_HOME}/logs/retry.jsonl"
 
 # Load .env for BOARD_URL and AGENT_API_KEY
-if [[ -z "${BOARD_URL:-}" && -f "${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/.env" ]]; then
-    set -a; source "${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/.env" 2>/dev/null || true; set +a
+if [[ -z "${BOARD_URL:-}" && -f "${JARVIS_HOME:-${HOME}/.openclaw-data/runtime}/.env" ]]; then
+    set -a; source "${JARVIS_HOME:-${HOME}/.openclaw-data/runtime}/.env" 2>/dev/null || true; set +a
 fi
 
 mkdir -p "$(dirname "$RETRY_LOG")"

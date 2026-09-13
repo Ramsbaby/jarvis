@@ -14,8 +14,9 @@
 #   bash cluster-guard-cl-0cece7e70f08a98f.sh status
 
 CLUSTER_ID="cl-0cece7e70f08a98f"
-JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis}"
-RUNTIME_HOME="${RUNTIME_HOME:-${JARVIS_HOME}/runtime}"
+JARVIS_HOME="${JARVIS_HOME:-${HOME}/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+RUNTIME_HOME="${RUNTIME_HOME:-${JARVIS_RUNTIME}}"
 STATE_DIR="${RUNTIME_HOME}/state/cluster-guards"
 RESULTS_DIR="${RUNTIME_HOME}/reports/cluster-guard-${CLUSTER_ID}"
 LOG_FILE="${RESULTS_DIR}/checklist-results.log"

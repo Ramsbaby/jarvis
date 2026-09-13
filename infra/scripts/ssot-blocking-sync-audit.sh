@@ -18,9 +18,9 @@
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-COVENANT="${HOME}/.openclaw-data/jarvis/infra/config/rule-covenant.json"
-LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/ssot-blocking-sync-audit.jsonl"
-LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/ssot-blocking-sync-audit.log"
+COVENANT="${HOME}/projects/jarvis/infra/config/rule-covenant.json"
+LEDGER="${HOME}/.openclaw-data/runtime/ledger/ssot-blocking-sync-audit.jsonl"
+LOG="${HOME}/.openclaw-data/runtime/logs/ssot-blocking-sync-audit.log"
 
 mkdir -p "$(dirname "$LEDGER")" "$(dirname "$LOG")"
 log() { echo "[$(TZ=Asia/Seoul date '+%Y-%m-%dT%H:%M:%S%z')] $*" | tee -a "${LOG}"; }
@@ -91,7 +91,7 @@ jq -cn \
 
 # ─── 경보 (누락 시에만) ───
 if (( gap_count > 0 )); then
-  ALERT_SCRIPT="${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh"
+  ALERT_SCRIPT="${HOME}/.openclaw-data/runtime/scripts/alert.sh"
   if [ -x "$ALERT_SCRIPT" ]; then
     title="🚨 규칙 문장 누락 ${gap_count}건 — 표면 간 동기화 깨짐"
     detail="언약(rule-covenant.json)에 등재된 문장이 일부 표면에서 사라졌습니다. 상세: ${LEDGER}"

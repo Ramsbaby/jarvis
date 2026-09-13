@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-measure-kpi 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/measure-kpi
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/measure-kpi" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/measure-kpi
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/measure-kpi" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[measure-kpi] 중지 플래그 있음 — 오픈클로로 이관됨"
     exit 0
 fi
@@ -12,7 +12,7 @@ set -euo pipefail
 # measure-kpi.sh - 자비스 컴퍼니 팀별 KPI 자동 측정
 # Usage: measure-kpi.sh [--discord] [--json] [--days N]
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG="${BOT_HOME}/logs/task-runner.jsonl"
 MONITORING="${BOT_HOME}/config/monitoring.json"
 DAYS=7
@@ -186,4 +186,4 @@ fi
 # 실패해도 KPI 마감 본체가 깨지지 않도록 || true 로 격리. (새 크론·데몬 0)
 _SCORECARD_NODE="$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)"
 export NODE_BIN="$_SCORECARD_NODE"
-"$_SCORECARD_NODE" "$HOME/.openclaw-data/jarvis/infra/scripts/improvement-scorecard-measure.mjs" --check-due || true
+"$_SCORECARD_NODE" "$HOME/projects/jarvis/infra/scripts/improvement-scorecard-measure.mjs" --check-due || true

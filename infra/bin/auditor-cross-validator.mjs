@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import { execSync, spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const STATE_DIR = join(BOT_HOME, 'state');
 
 class AuditorCrossValidator {

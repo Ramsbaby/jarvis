@@ -3,7 +3,7 @@
 #
 # 왜 이 파일이 존재하는가:
 #   BOT_HOME/JARVIS_HOME/HOME/.jarvis 3가지 패턴이 60+개 스크립트에 혼재했다.
-#   A2 마이그레이션(2026-04-17) 이후 런타임 경로는 ~/.openclaw-data/jarvis/runtime 단일 기준.
+#   A2 마이그레이션(2026-04-17) 이후 런타임 경로는 ~/.openclaw-data/runtime 단일 기준.
 #   구버전 경로(~/.jarvis, ~/.local/share/jarvis)는 호환성 심링크로만 유지됨.
 #
 # 사용법:
@@ -13,10 +13,10 @@
 # 환경 변수 우선순위:
 #   1. BOT_HOME    — LaunchAgent plist EnvironmentVariables 에서 주입 (런타임)
 #   2. JARVIS_HOME — Docker/CI override
-#   3. ~/.openclaw-data/jarvis/runtime — A2 마이그레이션 이후 기본값
+#   3. ~/.openclaw-data/runtime — A2 마이그레이션 이후 기본값
 
 # ── Root ─────────────────────────────────────────────────────────────────────
-export BOT_HOME="${BOT_HOME:-${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis/runtime}}"
+export BOT_HOME="${BOT_HOME:-${JARVIS_HOME:-${HOME}/.openclaw-data/runtime}}"
 
 # ── Logs ─────────────────────────────────────────────────────────────────────
 export JARVIS_LOGS_DIR="${BOT_HOME}/logs"

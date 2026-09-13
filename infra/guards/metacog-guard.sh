@@ -6,18 +6,19 @@
 #               자가진단 결과를 JSONL로 기록해 회고 시 정량 측정 지원.
 #
 # 사용법:
-#   ~/.openclaw-data/jarvis/infra/guards/metacog-guard.sh [context_label]
+#   ~/projects/jarvis/infra/guards/metacog-guard.sh [context_label]
 #   context_label: 점검 맥락 식별자 (기본값 "manual")
 #
 # 성공 기준:
-#   [1] ~/.openclaw-data/jarvis/runtime/logs/metacog-diagnose.jsonl 에 JSONL 레코드 기록
+#   [1] ~/.openclaw-data/runtime/logs/metacog-diagnose.jsonl 에 JSONL 레코드 기록
 #   [2] 취약점 미충족 항목이 있으면 exit 1, 전부 통과 시 exit 0
 
 set -euo pipefail
 
 # ── 경로 상수 ──────────────────────────────────────────────────────────────────
-JARVIS_HOME="${HOME}/.openclaw-data/jarvis"
-LOG_FILE="${JARVIS_HOME}/runtime/logs/metacog-diagnose.jsonl"
+JARVIS_HOME="${HOME}/projects/jarvis"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="${JARVIS_RUNTIME}/logs/metacog-diagnose.jsonl"
 CLUSTER_ID="cl-a092fb85afd92ba8"
 CONTEXT_LABEL="${1:-manual}"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -29,12 +30,12 @@ mkdir -p "$(dirname "$LOG_FILE")"
 # 각 항목: "ID|설명|점검 명령(exit 0=통과, 非0=실패)"
 # 점검 명령이 비어 있으면 수동 플래그 기반으로 처리 (AUTO_ONLY=false 일 때 항상 통과)
 declare -a CHECKS=(
-    "C01|tasks.json 문법 유효성|python3 -m json.tool --no-ensure-ascii '${JARVIS_HOME}/runtime/config/tasks.json' > /dev/null 2>&1"
+    "C01|tasks.json 문법 유효성|python3 -m json.tool --no-ensure-ascii '${JARVIS_RUNTIME}/config/tasks.json' > /dev/null 2>&1"
     "C02|orchestrator 프로세스 생존|pgrep -f 'orchestrator' > /dev/null 2>&1"
     "C03|discord-bot 프로세스 생존|pgrep -f 'discord-bot' > /dev/null 2>&1"
     "C04|guards 디렉토리 존재|test -d '${JARVIS_HOME}/infra/guards'"
     "C05|discord-route.sh 존재|test -f '${JARVIS_HOME}/infra/lib/discord-route.sh'"
-    "C06|런타임 로그 디렉토리 존재|test -d '${JARVIS_HOME}/runtime/logs'"
+    "C06|런타임 로그 디렉토리 존재|test -d '${JARVIS_RUNTIME}/logs'"
     "C07|메타인지 로그 쓰기 가능|touch '${LOG_FILE}' > /dev/null 2>&1"
     "C08|디스크 여유 20GB 이상|awk '(NR==2){if(\$4+0>=20971520) exit 0; else exit 1}' <(df -k ${HOME})"
 )

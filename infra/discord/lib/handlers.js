@@ -121,7 +121,7 @@ function _buildBatchContent(messages) {
 // Pending task state — timeout 발생 시 저장, "계속" 입력 시 재주입
 // ---------------------------------------------------------------------------
 
-const _BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const _BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const PENDING_TASKS_PATH = join(_BOT_HOME, 'state', 'pending-tasks.json');
 const _MODELS = JSON.parse(readFileSync(join(_BOT_HOME, 'config', 'models.json'), 'utf-8'));
 const PENDING_TASK_TTL_MS = 30 * 60 * 1000; // 30분
@@ -386,7 +386,7 @@ async function _autoYoutubeBench(prompt) {
   const { spawn } = await import('node:child_process');
   const { join } = await import('node:path');
   const { homedir } = await import('node:os');
-  const script = join(homedir(), '.openclaw-data/jarvis/infra/scripts/youtube-bench.sh');
+  const script = join(homedir(), 'projects/jarvis/infra/scripts/youtube-bench.sh');
 
   for (const m of matches) {
     const url = m[0];
@@ -1429,7 +1429,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
                 const { stdout, stderr } = await exec('bash', [`${home}/jarvis/runtime/scripts/interview-ralph-start.sh`, '--round', '9', '--limit', '24']).catch(e => ({ stdout: '', stderr: e.message || String(e) }));
                 const pidMatch = stdout.match(/PID\s+(\d+)/);
                 const pid = pidMatch ? pidMatch[1] : '?';
-                await message.reply(`🚀 **Ralph 시동 완료** — PID ${pid}, 라운드 9, 24문항 풀.\n• 진행: 약 50~70분 [검증 필요 — 실측 라운드별 분포 41~186초/문항]\n• 모니터: \`tail -f ~/.openclaw-data/jarvis/runtime/logs/interview-ralph-detached.log\`\n• 종료: 이 채널에 \`랄프 꺼\``);
+                await message.reply(`🚀 **Ralph 시동 완료** — PID ${pid}, 라운드 9, 24문항 풀.\n• 진행: 약 50~70분 [검증 필요 — 실측 라운드별 분포 41~186초/문항]\n• 모니터: \`tail -f ~/.openclaw-data/runtime/logs/interview-ralph-detached.log\`\n• 종료: 이 채널에 \`랄프 꺼\``);
               }
             } else if (isRalphStop) {
               const { stdout } = await exec('bash', [`${home}/jarvis/runtime/scripts/interview-ralph-stop.sh`, '--disable']).catch(e => ({ stdout: e.message || String(e) }));

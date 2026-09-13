@@ -32,7 +32,7 @@ fi
 # Google Workspace 변수(비밀 아님: 계정 이메일·Tasks 리스트 ID)를 .env에서 명시 로드.
 # (2026-07-13 회귀 수정: 크론 env 상속이 끊겨 morning-standup의 gog 호출이
 #  'GOOGLE_ACCOUNT 미설정'으로 매일 실패. 전체 .env source는 시크릿 오염 위험 → 필요한 2개만 추출·export.)
-_JARVIS_ENV_FILE="${HOME}/.openclaw-data/jarvis/runtime/.env"
+_JARVIS_ENV_FILE="${HOME}/.openclaw-data/runtime/.env"
 if [[ -r "$_JARVIS_ENV_FILE" ]]; then
     for _env_key in GOOGLE_ACCOUNT GOOGLE_TASKS_LIST_ID; do
         # set -u 모드에서 안전한 간접변수 참조: declare -p 사용
@@ -56,7 +56,7 @@ fi
 export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
 
 BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
-INFRA_DIR="${HOME}/.openclaw-data/jarvis/infra"
+INFRA_DIR="${HOME}/projects/jarvis/infra"
 # discord egress 중앙화 — 모든 Discord 발송은 discord_route_raw/discord_route를 통해야 함
 # shellcheck source=/dev/null
 source "${INFRA_DIR}/lib/discord-route.sh" 2>/dev/null || true
@@ -1097,7 +1097,7 @@ unset _sk_enabled_b
 # [B2] EUREKA_JSON 처리 (council-insight 하위 호환 — $RESULT 원본에서 직접 추출)
 if [[ "$TASK_ID" == "council-insight" ]] && command -v jq >/dev/null 2>&1 \
     && printf '%s' "$RESULT" | grep -q "^EUREKA_JSON:"; then
-    _eu_file="${HOME}/.openclaw-data/jarvis/runtime/wiki/meta/eureka.jsonl"
+    _eu_file="${HOME}/.openclaw-data/runtime/wiki/meta/eureka.jsonl"
     mkdir -p "$(dirname "$_eu_file")"
     _eu_added=0
     while IFS= read -r _eu_line; do

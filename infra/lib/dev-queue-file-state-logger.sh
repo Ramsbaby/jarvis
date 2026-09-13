@@ -14,7 +14,7 @@
 #   3. 중복 제거 (동일 위반은 한 번만 기록)
 #
 # 사용법:
-#   source ~/.openclaw-data/jarvis/infra/lib/dev-queue-file-state-logger.sh
+#   source ~/projects/jarvis/infra/lib/dev-queue-file-state-logger.sh
 #   log_file_state_violation_to_queue "response-id" "위반 설명" "심각도"
 #
 ################################################################################
@@ -26,7 +26,7 @@ set -euo pipefail
 # ──────────────────────────────────────────────────────────────────────────────
 
 JARVIS_HOME="${HOME}/.jarvis"
-JARVIS_RUNTIME="${JARVIS_HOME}/runtime"
+JARVIS_RUNTIME="${JARVIS_RUNTIME}"
 DEV_QUEUE_FILE="${JARVIS_RUNTIME}/state/dev-queue.json"
 FSC_GUARD_CLUSTER="cl-6f0c8cc1df90e995"
 DQL_LOG="${JARVIS_RUNTIME}/logs/dev-queue-file-state-logger.jsonl"

@@ -6,9 +6,10 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LOG_FILE="$JARVIS_HOME/runtime/logs/stabilization-review.log"
-REPORT="$JARVIS_HOME/runtime/wiki/meta/stabilization-review-2026-05-15.md"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="$JARVIS_RUNTIME/logs/stabilization-review.log"
+REPORT="$JARVIS_RUNTIME/wiki/meta/stabilization-review-2026-05-15.md"
 
 mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$REPORT")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"
@@ -19,7 +20,7 @@ _log "=== 1주 안정화 sprint 평가 시작 ==="
 # ── 1. Skill 시뮬 ledger 분석 ──────────────────────────────────────
 SKILL_DRYRUN=0
 SKILL_SPAWN=0
-SKILL_LEDGER="$JARVIS_HOME/runtime/state/skill-extractor-ledger.jsonl"
+SKILL_LEDGER="$JARVIS_RUNTIME/state/skill-extractor-ledger.jsonl"
 if [ -f "$SKILL_LEDGER" ]; then
     SKILL_DRYRUN=$(grep '"action":"dryrun-skip"' "$SKILL_LEDGER" 2>/dev/null | wc -l | tr -d ' \n')
     SKILL_SPAWN=$(grep '"action":"spawn"' "$SKILL_LEDGER" 2>/dev/null | wc -l | tr -d ' \n')
@@ -30,7 +31,7 @@ CRON_LIST="weekly-self-retrospective skill-dead-archive audit-dashboard llm-cost
 DEAD_CRONS=""
 ACTIVE_CRONS=""
 for c in $CRON_LIST; do
-    LOG="$JARVIS_HOME/runtime/logs/${c}.log"
+    LOG="$JARVIS_RUNTIME/logs/${c}.log"
     if [ -f "$LOG" ]; then
         LINES_7D=$(awk -v c="$(date -v-7d +%Y-%m-%d 2>/dev/null || date -d '-7 days' +%Y-%m-%d)" '$0 ~ c || $0 > c' "$LOG" 2>/dev/null | wc -l | tr -d ' \n')
         if [ "$LINES_7D" -lt 2 ]; then
@@ -45,21 +46,21 @@ done
 
 # ── 3. 효과 측정 (alerted / FAIL / mismatch) ──────────────────────
 SUPERVISOR_ALERTS_7D=$(awk -v c="$(date -v-7d +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -d '-7 days' +%Y-%m-%dT%H:%M:%S)" \
-    -F'"ts":"' 'NF>1 && $2 > c' "$JARVIS_HOME/runtime/state/supervisor-tick-ledger.jsonl" 2>/dev/null \
+    -F'"ts":"' 'NF>1 && $2 > c' "$JARVIS_RUNTIME/state/supervisor-tick-ledger.jsonl" 2>/dev/null \
     | grep '"alerted":true' | wc -l | tr -d ' \n')
-DOCS_REGENS_7D=$(grep "재생성: 성공" "$JARVIS_HOME/runtime/logs/docs-freshness-audit.log" 2>/dev/null | wc -l | tr -d ' \n')
-META_FAIL_7D=$(grep "fails=" "$JARVIS_HOME/runtime/logs/jarvis-meta-audit.log" 2>/dev/null | tail -1 || echo "no data")
+DOCS_REGENS_7D=$(grep "재생성: 성공" "$JARVIS_RUNTIME/logs/docs-freshness-audit.log" 2>/dev/null | wc -l | tr -d ' \n')
+META_FAIL_7D=$(grep "fails=" "$JARVIS_RUNTIME/logs/jarvis-meta-audit.log" 2>/dev/null | tail -1 || echo "no data")
 
 # ── 4. 알림 노이즈 평가 (Discord 송출 추정) ──────────────────────
-DISCORD_SENT_7D=$(grep -h "Discord visual sent" "$JARVIS_HOME/runtime/logs"/*.log 2>/dev/null | wc -l | tr -d ' \n')
+DISCORD_SENT_7D=$(grep -h "Discord visual sent" "$JARVIS_RUNTIME/logs"/*.log 2>/dev/null | wc -l | tr -d ' \n')
 
 # ── 5. AUTH_ERROR 추세 ─────────────────────────────────────────────
-AUTH_ERROR_7D=$(find "$JARVIS_HOME/runtime/logs" -name ".repeated-fail-*-AUTH_ERROR-*" -mtime -7 2>/dev/null | wc -l | tr -d ' \n')
+AUTH_ERROR_7D=$(find "$JARVIS_RUNTIME/logs" -name ".repeated-fail-*-AUTH_ERROR-*" -mtime -7 2>/dev/null | wc -l | tr -d ' \n')
 
 # ── 6. 자체 권고 (룰 기반) ────────────────────────────────────────
 RECOMMENDATIONS=()
 if [ "$SKILL_DRYRUN" -ge 5 ] && [ "$SKILL_SPAWN" -eq 0 ]; then
-    RECOMMENDATIONS+=("✅ Skill production 활성화 OK — touch ~/.openclaw-data/jarvis/runtime/state/skill-extract-production-active")
+    RECOMMENDATIONS+=("✅ Skill production 활성화 OK — touch ~/.openclaw-data/runtime/state/skill-extract-production-active")
 fi
 DEAD_COUNT=$(echo "$DEAD_CRONS" | wc -w | tr -d ' ')
 if [ "$DEAD_COUNT" -ge 3 ]; then

@@ -23,8 +23,9 @@
 set -uo pipefail
 
 # ── 경로 설정 ──────────────────────────────────────────────────────────────────
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-BOT_HOME="${BOT_HOME:-$JARVIS_HOME/runtime}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+BOT_HOME="${BOT_HOME:-$JARVIS_RUNTIME}"
 LOG_FILE="$BOT_HOME/logs/agent-sdk-billing-watch.log"
 STATE_DIR="$BOT_HOME/state/agent-sdk-billing-watch"
 RESULT_DIR="$BOT_HOME/results/tech-anthropic-agent-sdk-billing-watch"

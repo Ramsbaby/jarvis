@@ -7,7 +7,7 @@ set -euo pipefail
 # Execute : ask-claude.sh 위임 (기존 Sonnet 기반 복합 보고)
 # Verify  : 4개 섹션(cron/system/market/action) + 숫자 일관성 + context-bus 갱신 확인
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 TASK_ID="council-insight"
 LEDGER="${BOT_HOME}/state/token-ledger.jsonl"
 CONTEXT_BUS="${BOT_HOME}/state/context-bus.md"
@@ -65,11 +65,11 @@ stage_execute() {
     log "STAGE 2: execute (ask-claude.sh 위임)"
     local ask_claude="${BOT_HOME}/bin/ask-claude.sh"
     if [[ ! -x "$ask_claude" ]]; then
-        ask_claude="${HOME}/.openclaw-data/jarvis/infra/bin/ask-claude.sh"
+        ask_claude="${HOME}/projects/jarvis/infra/bin/ask-claude.sh"
     fi
     local prompt="ultrathink
 
-자비스 CEO(비서실장)로서 일일 종합 경영 점검을 수행해. 컨텍스트 파일의 실행 순서(Step 1→2→3)를 반드시 따를 것. 핵심: 데이터 수집 후 공용 게시판(~/.openclaw-data/jarvis/runtime/state/context-bus.md)과 모닝스탠드업 인계사항을 갱신하고, Discord #jarvis-ceo에 임원 보고서를 전송.
+자비스 CEO(비서실장)로서 일일 종합 경영 점검을 수행해. 컨텍스트 파일의 실행 순서(Step 1→2→3)를 반드시 따를 것. 핵심: 데이터 수집 후 공용 게시판(~/.openclaw-data/runtime/state/context-bus.md)과 모닝스탠드업 인계사항을 갱신하고, Discord #jarvis-ceo에 임원 보고서를 전송.
 
 ## 외부 에이전트 동향 (Workgroup 게시판)
 오늘 board 인사이트 파일이 있으면 참조해서 보고서에 '외부 에이전트 동향' 섹션을 추가하라.
@@ -140,7 +140,7 @@ stage_verify() {
 stage_write_note() {
     local write_note_sh="${BOT_HOME}/lib/write-agent-note.sh"
     if [[ ! -x "$write_note_sh" ]]; then
-        write_note_sh="${HOME}/.openclaw-data/jarvis/infra/lib/write-agent-note.sh"
+        write_note_sh="${HOME}/projects/jarvis/infra/lib/write-agent-note.sh"
     fi
     if [[ ! -x "$write_note_sh" ]]; then
         log "note_skip: write-agent-note.sh 없음"

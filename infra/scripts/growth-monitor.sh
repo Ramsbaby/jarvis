@@ -2,8 +2,8 @@
 # [오픈클로 이식 2026-09-10] jarvis-growth-monitor(08:30)로 이관됐다. 경고가 디스코드·ntfy로만 나가
 # 아무도 못 보던 것을 메인 세션 배달로 돌렸다. crontab 43행이 남아 있으나 쓰기가 막혀(rc=124)
 # 스크립트 층에서 이중 실행을 막는다. 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/growth-monitor
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/growth-monitor" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/growth-monitor
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/growth-monitor" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[growth-monitor] 중지 플래그 있음 — 오픈클로 잡으로 이관됨 (state/stopped/growth-monitor)"
     exit 0
 fi
@@ -16,7 +16,7 @@ set -euo pipefail
 # DRY: RAG 비대 경고는 기존 lancedb-alert.sh 재사용.
 # cron: 매일 1회. digest(직전 경고와 동일하면 skip)로 알림 폭주 차단(proactive 노이즈 교훈).
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LEDGER="${BOT_HOME}/state/growth-ledger.jsonl"
 LAST_WARN="${BOT_HOME}/state/growth-last-warn.txt"
 NTFY_TOPIC="openclaw-f101e56cb98a"
@@ -28,10 +28,10 @@ ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 disk_free_gb=$(df -g / 2>/dev/null | awk 'NR==2{print $4+0}')
 rag_mb=$(du -sm "${HOME}/.jarvis/rag/lancedb" 2>/dev/null | cut -f1 || echo 0)
 rag_frag=$(ls -1 "${HOME}/.jarvis/rag/lancedb/documents.lance/data/" 2>/dev/null | wc -l | tr -d ' ')
-logs_mb=$(du -smc "${HOME}/.jarvis/logs" "${HOME}/.openclaw-data/jarvis/runtime/logs" 2>/dev/null | tail -1 | cut -f1 || echo 0)
+logs_mb=$(du -smc "${HOME}/.jarvis/logs" "${HOME}/.openclaw-data/runtime/logs" 2>/dev/null | tail -1 | cut -f1 || echo 0)
 backup_mb=$(du -sm "${HOME}/backup" 2>/dev/null | cut -f1 || echo 0)
-state_mb=$(du -sm "${HOME}/.openclaw-data/jarvis/runtime/state" 2>/dev/null | cut -f1 || echo 0)
-bak_count=$(find "${HOME}/.jarvis" "${HOME}/.openclaw-data/jarvis/runtime" \( -name '*.bak' -o -name '*.tmp' -o -name '*.old' \) -not -path '*/backups/*' 2>/dev/null | wc -l | tr -d ' ')
+state_mb=$(du -sm "${HOME}/.openclaw-data/runtime/state" 2>/dev/null | cut -f1 || echo 0)
+bak_count=$(find "${HOME}/.jarvis" "${HOME}/.openclaw-data/runtime" \( -name '*.bak' -o -name '*.tmp' -o -name '*.old' \) -not -path '*/backups/*' 2>/dev/null | wc -l | tr -d ' ')
 # 통제 신호: 유명무실(정의는 있으나 실행 흔적 0) 태스크 수 — task-effectiveness-scan 최신 결과 재사용
 orphan_n=$(grep -c 'ORPHAN' "$BOT_HOME/logs/task-effectiveness-scan.log" 2>/dev/null || echo 0)
 
@@ -73,7 +73,7 @@ if [ -n "$WARN" ]; then
     fi
     # 통합 경고 카드 (디스크 여유 있을 때만 — node는 임시파일 필요)
     if (( disk_free_gb >= 3 )); then
-      cd "$HOME" && node "${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs" --type stats \
+      cd "$HOME" && node "${HOME}/projects/jarvis/infra/scripts/discord-visual.mjs" --type stats \
         --data "{\"title\":\"⚠️ 자비스 비대 경고\",\"data\":{\"경고\":\"${WARN}\",\"디스크여유\":\"${disk_free_gb}GB\",\"RAG\":\"${rag_mb}MB/${rag_frag}조각\",\"백업\":\"${backup_mb}MB\"},\"timestamp\":\"$(date '+%Y-%m-%d %H:%M KST')\"}" \
         --channel jarvis-system >/dev/null 2>&1 || true
     fi

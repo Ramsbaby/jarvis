@@ -3,7 +3,7 @@
  * mistake-extractor.mjs — 오답노트 자동 추출기 (Compound Engineering Phase 2)
  *
  * 세션 요약 파일에서 오너의 지적/정정 패턴을 Haiku로 감지하여
- * ~/.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md 상단에 4필드 섹션으로 append.
+ * ~/.openclaw-data/runtime/wiki/meta/learned-mistakes.md 상단에 4필드 섹션으로 append.
  *
  * 크론 스케줄: 매일 03:15 KST (session-summarizer 03:00 이후 / wiki-ingest 03:30 이전)
  *
@@ -18,7 +18,7 @@
  *   node mistake-extractor.mjs           # 실 추출
  *   node mistake-extractor.mjs --dry-run # 추출 후보만 출력, 파일 쓰기 없음
  *
- * Log: ~/.openclaw-data/jarvis/runtime/logs/mistake-extractor.log
+ * Log: ~/.openclaw-data/runtime/logs/mistake-extractor.log
  */
 
 import {
@@ -32,7 +32,7 @@ import { spawnSync } from 'node:child_process';
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
 const HOME          = homedir();
-const BOT_HOME      = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
+const BOT_HOME      = process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime');
 const LOG_FILE      = join(BOT_HOME, 'logs', 'mistake-extractor.log');
 const SUMMARIES_DIR = join(BOT_HOME, 'state', 'session-summaries');
 const MISTAKES_FILE = join(BOT_HOME, 'wiki', 'meta', 'learned-mistakes.md');
@@ -170,7 +170,7 @@ function withLock(lockPath, fn) {
 const BUDGET_DAILY_USD = Number(process.env.MISTAKE_EXTRACTOR_BUDGET || 0.50);
 function budgetCheck() {
   try {
-    const ledgerFile = join(homedir(), '.openclaw-data/jarvis/runtime/state/token-ledger.jsonl');
+    const ledgerFile = join(homedir(), '.openclaw-data/runtime/state/token-ledger.jsonl');
     if (!existsSync(ledgerFile)) return { allow: true, today: 0 };
     const today = kstNow().slice(0, 10); // YYYY-MM-DD (KST)
     const raw = readFileSync(ledgerFile, 'utf-8');
@@ -203,7 +203,7 @@ function budgetCheck() {
 // 2026-04-22 오답노트 등재: 단일 24h 쿨다운으로 자동 파이프라인이 24시간 멈춘 사고
 // → 백오프를 5min → 30min → 2h → 24h 4단계로 변경. 일시적 timeout 은 5분 후 회복 가능.
 // state: closed(정상) | open(차단) | half-open(쿨다운 후 1회 시도 허용 — 자동)
-const CIRCUIT_FILE = join(homedir(), '.openclaw-data/jarvis/runtime/state/mistake-extractor-circuit.json');
+const CIRCUIT_FILE = join(homedir(), '.openclaw-data/runtime/state/mistake-extractor-circuit.json');
 const CIRCUIT_FAIL_THRESHOLD = 3;
 // 실패 횟수별 쿨다운(ms) — 1·2회는 즉시 재시도, 3회=5min, 4회=30min, 5회=2h, 6회+=24h
 const CIRCUIT_BACKOFF_MS = [
@@ -345,7 +345,7 @@ function buildPrompt(sessionBodies) {
 - 오너가 대안을 제시하며 수정을 요구
 - Jarvis가 "죄송합니다 / 잘못 보고 / 확인 못했다"처럼 자체 정정한 경우
 - **Jarvis 자기검열 실패 사례**: "단언했/실측 없이/검증 전 OK 선언/추정을 사실처럼 보고" — Iron Law 6 (VERIFY BEFORE DECLARE) 위반
-- **SSoT 위반**: 기존 파일 미탐색 + 신규 중복 생성 ("~/.claude/commands/와 ~/.openclaw-data/jarvis/runtime/ # ALLOW-DOTJARVISskills/ 양쪽에 같은 이름")
+- **SSoT 위반**: 기존 파일 미탐색 + 신규 중복 생성 ("~/.claude/commands/와 ~/.openclaw-data/runtime/ # ALLOW-DOTJARVISskills/ 양쪽에 같은 이름")
 - **자동화 파이프라인 마비 미인지**: circuit OPEN, 추출 0건, 24h 무감지 등 메타 시스템 결함을 Jarvis 본인이 놓친 경우
 - **할루시네이션 / 편향**: 파일 미열람 상태에서 코드 단언, 첫 응답 단언 편향, 가정을 사실처럼 진술
 

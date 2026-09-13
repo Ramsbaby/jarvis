@@ -37,7 +37,7 @@
 # 개별 실패는 || true / 명시적 분기로 처리
 set -u
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 source "${BOT_HOME}/lib/compat.sh" 2>/dev/null || {
   IS_MACOS=false; case "$(uname -s)" in Darwin) IS_MACOS=true ;; esac
 }

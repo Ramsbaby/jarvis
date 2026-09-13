@@ -14,7 +14,7 @@
 set -euo pipefail
 
 STATE_DIR="${HOME}/.jarvis/state"
-FEEDBACK_CLI="${HOME}/.jarvis/bin/feedback-loop-cli.mjs"  # ~/.jarvis/bin → ~/.openclaw-data/jarvis/infra/bin 심링크
+FEEDBACK_CLI="${HOME}/.jarvis/bin/feedback-loop-cli.mjs"  # ~/.jarvis/bin → ~/projects/jarvis/infra/bin 심링크
 mkdir -p "$STATE_DIR"
 
 INPUT=$(cat)

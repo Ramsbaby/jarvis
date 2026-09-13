@@ -2,7 +2,7 @@
 // skill-loop-extract.mjs — 스킬 자가 생성 루프 3단: 선별 세션 → 스킬 초안 (4중 게이트)
 // 게이트: ①증거≥1 ②PII·시크릿·사내명 스크럽 ③기존 스킬 중복 ④quick_validate.py
 // Usage: node skill-loop-extract.mjs [--date YYYY-MM-DD] [--max 3]
-// 설계: ~/.openclaw-data/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 4)
+// 설계: ~/.openclaw-data/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 4)
 
 import { readFileSync, readdirSync, appendFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -10,13 +10,13 @@ import { join } from 'node:path';
 import os from 'node:os';
 
 const HOME = os.homedir();
-const DRAFTS = join(HOME, '.openclaw-data/jarvis', 'runtime', 'state', 'skill-drafts');
-const LEDGER = join(HOME, '.openclaw-data/jarvis', 'runtime', 'ledger', 'skill-loop.jsonl');
-const MODEL_POLICY = join(HOME, '.openclaw-data/jarvis', 'runtime', 'context', 'model-policy.json');
-const ASK_CLAUDE = join(HOME, '.openclaw-data/jarvis', 'infra', 'bin', 'ask-claude.sh');
+const DRAFTS = join(HOME, 'projects/jarvis', 'runtime', 'state', 'skill-drafts');
+const LEDGER = join(HOME, 'projects/jarvis', 'runtime', 'ledger', 'skill-loop.jsonl');
+const MODEL_POLICY = join(HOME, 'projects/jarvis', 'runtime', 'context', 'model-policy.json');
+const ASK_CLAUDE = join(HOME, 'projects/jarvis', 'infra', 'bin', 'ask-claude.sh');
 const VALIDATOR = join(HOME, '.claude', 'commands', 'skill-creator', 'scripts', 'quick_validate.py');
-const MISTAKES = join(HOME, '.openclaw-data/jarvis', 'runtime', 'wiki', 'meta', 'learned-mistakes.md');
-const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis', 'runtime');
+const MISTAKES = join(HOME, 'projects/jarvis', 'runtime', 'wiki', 'meta', 'learned-mistakes.md');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, 'projects/jarvis', 'runtime');
 const SKILL_DIRS = [join(HOME, '.claude', 'commands'), join(HOME, '.claude', 'skills')];
 
 const args = process.argv.slice(2);

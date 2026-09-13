@@ -28,7 +28,7 @@
 #   진짜 실패가 방치되는 것을 숨기지 않도록, 억제된 건수는 반드시 카운트로 남기고
 #   주간 감사(token-ledger-audit.sh)가 이를 리포트한다.
 
-_ALERT_GATE_DIR="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/state/alert-gate"
+_ALERT_GATE_DIR="${BOT_HOME:-${HOME}/.openclaw-data/runtime}/state/alert-gate"
 
 alert_gate() {
     local key="$1" severity="${2:-0}" signature="${3:-}"

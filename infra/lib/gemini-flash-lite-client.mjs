@@ -42,8 +42,8 @@ const PRICE_OUTPUT = 0.30  / 1_000_000;  // $0.30/1M tokens
 function loadApiKey() {
   if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
   const envPaths = [
-    join(homedir(), '.openclaw-data/jarvis', 'runtime', 'discord', '.env'),
-    join(homedir(), '.openclaw-data/jarvis', 'runtime', '.env'),
+    join(homedir(), 'projects/jarvis', 'runtime', 'discord', '.env'),
+    join(homedir(), 'projects/jarvis', 'runtime', '.env'),
     join(homedir(), '.jarvis', 'discord', '.env'),
   ];
   for (const p of envPaths) {
@@ -84,7 +84,7 @@ export async function flashLiteChat(messages, opts = {}) {
   if (!apiKey) {
     throw new Error(
       'GEMINI_API_KEY가 설정되지 않았습니다. ' +
-      '~/.openclaw-data/jarvis/runtime/runtime/discord/.env 에 GEMINI_API_KEY=... 를 추가하세요.'
+      '~/.openclaw-data/runtime/runtime/discord/.env 에 GEMINI_API_KEY=... 를 추가하세요.'
     );
   }
 

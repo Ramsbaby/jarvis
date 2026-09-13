@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # DB 경로
-IDEMPOTENCY_DB="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/data/command-state.db"
+IDEMPOTENCY_DB="${BOT_HOME:-${HOME}/.openclaw-data/runtime}/data/command-state.db"
 
 # DB 초기화 함수
 _init_idempotency_db() {

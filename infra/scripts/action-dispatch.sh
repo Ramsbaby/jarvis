@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # action-dispatch.sh — 매일 03:45 KST (insight-extractor 03:30 후): 결정사항 → 자동 분배
 #
-# 입력: ~/.openclaw-data/jarvis/runtime/rag/auto-insights/{TODAY}.md (insight-extractor 산출)
+# 입력: ~/.openclaw-data/runtime/rag/auto-insights/{TODAY}.md (insight-extractor 산출)
 # 출력: insight의 decisions/open_items 중 액션 가능한 것을
 #       - dev-queue propose (status=pending — 사용자 promote 대기)
 #       - 매 항목당 하나의 카드 알림
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LOG_FILE="$JARVIS_HOME/runtime/logs/action-dispatch.log"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="$JARVIS_RUNTIME/logs/action-dispatch.log"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
 TASK_STORE="$JARVIS_HOME/infra/lib/task-store.mjs"
-LEDGER="$JARVIS_HOME/runtime/state/action-dispatch-ledger.jsonl"
+LEDGER="$JARVIS_RUNTIME/state/action-dispatch-ledger.jsonl"
 
 # B4 fix (2026-05-08 verify): DRYRUN 가드 추가
 # 매일 dev-queue 무한 누적 위험 차단. 사용자 검토 게이트.
@@ -25,7 +26,7 @@ mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$LEDGER")"
 _log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
 TODAY=$(date +%Y-%m-%d)
-INSIGHT_FILE="$JARVIS_HOME/runtime/rag/auto-insights/${TODAY}.md"
+INSIGHT_FILE="$JARVIS_RUNTIME/rag/auto-insights/${TODAY}.md"
 
 [ -f "$INSIGHT_FILE" ] || { _log "오늘 insight 없음 — skip"; exit 0; }
 
@@ -64,7 +65,7 @@ if [ "$DISPATCHED" -gt 0 ] && [ -f "$DISCORD_VISUAL" ]; then
     PAYLOAD=$(jq -nc \
         --arg ts "$(date '+%Y-%m-%d %H:%M KST')" \
         --arg n "$DISPATCHED" \
-        '{title:"📤 결정사항 → dev-queue 분배", data:{"분배 건수":$n,"상태":"pending — 검토 후 /promote 또는 /reject", "확인":"node ~/.openclaw-data/jarvis/infra/lib/task-store.mjs list"}, timestamp:$ts}')
+        '{title:"📤 결정사항 → dev-queue 분배", data:{"분배 건수":$n,"상태":"pending — 검토 후 /promote 또는 /reject", "확인":"node ~/projects/jarvis/infra/lib/task-store.mjs list"}, timestamp:$ts}')
     discord_route_payload info "$PAYLOAD" 2>&1 | tee -a "$LOG_FILE" || true
 fi
 

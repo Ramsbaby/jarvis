@@ -8,7 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/scripts/report-generate.sh</string>
+        <string>/Users/ramsbaby/.openclaw-data/runtime/scripts/report-generate.sh</string>
         <string>monthly</string>
     </array>
 
@@ -34,10 +34,10 @@
     </dict>
 
     <key>StandardOutPath</key>
-    <string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/report-monthly.out.log</string>
+    <string>/Users/ramsbaby/.openclaw-data/runtime/logs/report-monthly.out.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/ramsbaby/.openclaw-data/jarvis/runtime/logs/report-monthly.err.log</string>
+    <string>/Users/ramsbaby/.openclaw-data/runtime/logs/report-monthly.err.log</string>
 
     <key>ProcessType</key>
     <string>Standard</string>

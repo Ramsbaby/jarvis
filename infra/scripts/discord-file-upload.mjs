@@ -6,7 +6,7 @@
 // 사용: node discord-file-upload.mjs <채널이름|채널ID> "<메시지>" <파일1> [파일2 ...]
 //   예: node discord-file-upload.mjs jarvis "면접 자료입니다" ~/Downloads/x.pdf
 //
-// 토큰: ~/.openclaw-data/jarvis/runtime/.env 의 DISCORD_TOKEN (값은 절대 출력하지 않음)
+// 토큰: ~/.openclaw-data/runtime/.env 의 DISCORD_TOKEN (값은 절대 출력하지 않음)
 // 의존: discord.js (infra/discord/node_modules)
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -20,7 +20,7 @@ const require = createRequire(resolve(__dirname, '..', 'discord', 'package.json'
 const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
 
 const HOME = homedir();
-const ENV_FILE = `${HOME}/.openclaw-data/jarvis/runtime/.env`;
+const ENV_FILE = `${HOME}/.openclaw-data/runtime/.env`;
 
 function die(msg) { console.error(`❌ ${msg}`); process.exit(1); }
 

@@ -13,7 +13,7 @@
  *   4. 중복 방지: 텍스트 기반 dedup (addFactToWiki 내부 처리)
  *
  * 크론: 매주 일요일 02:30 KST (주간 증류)
- * 로그: ~/.openclaw-data/jarvis/runtime/logs/owner-judgments-extract.log
+ * 로그: ~/.openclaw-data/runtime/logs/owner-judgments-extract.log
  *
  * Usage:
  *   node owner-judgments-extract.mjs [--dry-run] [--days <n>]
@@ -28,7 +28,7 @@ import { addFactToWiki } from '../discord/lib/wiki-engine.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HOME     = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime');
 
 const DISCORD_HISTORY_DIR = join(HOME, '.jarvis/context/discord-history');
 const WIKI_OWNER_FACTS    = join(HOME, '.jarvis/wiki/owner/_facts.md');

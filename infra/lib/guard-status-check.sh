@@ -21,9 +21,9 @@
 set -o pipefail
 
 # 상수 정의
-_GUARD_STATE_DIR="${GUARD_STATE_DIR:=${HOME}/.openclaw-data/jarvis/runtime/state/guard-status}"
-_GUARD_LOCK_DIR="${GUARD_LOCK_DIR:=${HOME}/.openclaw-data/jarvis/runtime/state/guard-locks}"
-_GUARD_LOG_DIR="${GUARD_LOG_DIR:=${HOME}/.openclaw-data/jarvis/runtime/logs}"
+_GUARD_STATE_DIR="${GUARD_STATE_DIR:=${HOME}/.openclaw-data/runtime/state/guard-status}"
+_GUARD_LOCK_DIR="${GUARD_LOCK_DIR:=${HOME}/.openclaw-data/runtime/state/guard-locks}"
+_GUARD_LOG_DIR="${GUARD_LOG_DIR:=${HOME}/.openclaw-data/runtime/logs}"
 
 # 내부: 상태 디렉토리 초기화
 _guard_init() {

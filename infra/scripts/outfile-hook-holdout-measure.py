@@ -10,8 +10,8 @@
 지표 2종 (동일 regex 로 baseline·D+14 재현):
   · NARROW  = 훅이 실제로 잡는 부분집합(제품 파일 생성 실패류 오답 제목 수)
   · BROAD   = #103 클러스터 전체(파일 생성/업로드 완료 거짓보고류)
-데이터 소스: ~/.openclaw-data/jarvis/runtime/state/mistake-ledger.jsonl (CLI Stop 훅 오답 추출 원장)
-훅 활동:     ~/.openclaw-data/jarvis/runtime/ledger/outfile-verify.jsonl (훅이 실제 warn 낸 건수)
+데이터 소스: ~/.openclaw-data/runtime/state/mistake-ledger.jsonl (CLI Stop 훅 오답 추출 원장)
+훅 활동:     ~/.openclaw-data/runtime/ledger/outfile-verify.jsonl (훅이 실제 warn 낸 건수)
 
 사용:
   python3 outfile-hook-holdout-measure.py --baseline   # baseline 기록(최초 1회, 2026-07-20)
@@ -30,9 +30,9 @@ import sys
 import datetime
 
 HOME = os.path.expanduser("~")
-MISTAKE_LEDGER = os.path.join(HOME, ".openclaw-data/jarvis/runtime/state/mistake-ledger.jsonl")
-WARN_LEDGER = os.path.join(HOME, ".openclaw-data/jarvis/runtime/ledger/outfile-verify.jsonl")
-BASELINE_FILE = os.path.join(HOME, ".openclaw-data/jarvis/runtime/ledger/outfile-hook-holdout-baseline.json")
+MISTAKE_LEDGER = os.path.join(HOME, ".openclaw-data/runtime/state/mistake-ledger.jsonl")
+WARN_LEDGER = os.path.join(HOME, ".openclaw-data/runtime/ledger/outfile-verify.jsonl")
+BASELINE_FILE = os.path.join(HOME, ".openclaw-data/runtime/ledger/outfile-hook-holdout-baseline.json")
 
 # ── FROZEN 측정 regex (baseline 과 D+14 가 반드시 동일해야 함) ────────────
 NARROW_RE = (

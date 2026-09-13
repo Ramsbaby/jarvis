@@ -10,19 +10,19 @@
 #   exit 1 — 불일치 또는 필수 키 누락 (전송 차단)
 #
 # 사용법:
-#   ~/.openclaw-data/jarvis/infra/guards/validate-channel-map.sh
-#   ~/.openclaw-data/jarvis/infra/guards/validate-channel-map.sh --quiet   # 오류만 출력
-#   ~/.openclaw-data/jarvis/infra/guards/validate-channel-map.sh --channel jarvis-info  # 특정 채널만 검증
+#   ~/projects/jarvis/infra/guards/validate-channel-map.sh
+#   ~/projects/jarvis/infra/guards/validate-channel-map.sh --quiet   # 오류만 출력
+#   ~/projects/jarvis/infra/guards/validate-channel-map.sh --channel jarvis-info  # 특정 채널만 검증
 
 set -euo pipefail
 
 # ── 경로 상수 ────────────────────────────────────────────────────────────────
 INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHANNEL_MAP="${INFRA_DIR}/config/channel-map.json"
-MONITORING_RT="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
+MONITORING_RT="${HOME}/.openclaw-data/runtime/config/monitoring.json"
 MONITORING_INFRA="${INFRA_DIR}/config/monitoring.json"
 CLUSTER_ID="cl-975bafeb5bb2be2b"
-LOG_DIR="${HOME}/.openclaw-data/jarvis/runtime/logs"
+LOG_DIR="${HOME}/.openclaw-data/runtime/logs"
 LOG_FILE="${LOG_DIR}/validate-channel-map.log"
 
 # ── 출력 모드 ────────────────────────────────────────────────────────────────

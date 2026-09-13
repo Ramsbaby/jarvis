@@ -10,13 +10,13 @@
 #   `^## 2026-` 패턴이 파일 이동과 무관하게 전체를 균일 집계한다.
 #
 # 사용:
-#   source "$HOME/.openclaw-data/jarvis/infra/lib/learned-mistakes-glob.sh"
+#   source "$HOME/projects/jarvis/infra/lib/learned-mistakes-glob.sh"
 #   CURRENT=$(lm_grep "^## 2026-" | wc -l | tr -d ' \n')   # 본체+아카이브 전체 헤더 카운트
 #   lm_files                                                # 파일 목록(줄 단위)
 
 # 오답노트 파일 목록(본체 + 아카이브)을 줄 단위로 출력. 없으면 무출력(exit 0).
 lm_files() {
-    local dir="${1:-${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}/wiki/meta}"
+    local dir="${1:-${BOT_HOME:-$HOME/.openclaw-data/runtime}/wiki/meta}"
     ls "$dir"/learned-mistakes*.md 2>/dev/null || true
 }
 

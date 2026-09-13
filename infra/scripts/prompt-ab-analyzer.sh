@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 MESSAGES_DB="${BOT_HOME}/state/messages.db"
 DAYS=7
 FILTER_TASK=""

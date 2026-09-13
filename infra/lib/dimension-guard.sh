@@ -32,7 +32,7 @@ set -uo pipefail
 # ── 상수 ─────────────────────────────────────────────────────────────────────
 readonly CLUSTER_ID="cl-2ff130add97125ec"
 readonly DIMENSION_STATE_DIR="${DIMENSION_STATE_DIR:-${HOME}/.jarvis/state/dimensions}"
-readonly LOG_FILE="${HOME}/.openclaw-data/jarvis/runtime/logs/dimension-guard.jsonl"
+readonly LOG_FILE="${HOME}/.openclaw-data/runtime/logs/dimension-guard.jsonl"
 
 # ── 초기화 ────────────────────────────────────────────────────────────────────
 mkdir -p "$DIMENSION_STATE_DIR" "$(dirname "$LOG_FILE")" 2>/dev/null || true

@@ -22,7 +22,7 @@ set -euo pipefail
 # set -e 때문에 그 뒤 좀비 정리 본체가 통째로 실행되지 않았다 (LastExitStatus=32512).
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/claude-zombie-cleanup.log"
+LOG="${HOME}/.openclaw-data/runtime/logs/claude-zombie-cleanup.log"
 mkdir -p "$(dirname "$LOG")"
 
 NOW=$(date '+%Y-%m-%d %H:%M:%S')
@@ -102,7 +102,7 @@ fi
 
 # serve 고아 Discord 알림 (실제 종료 시만 — info 레벨)
 if (( SERVE_KILLED > 0 )); then
-  WH_FILE="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
+  WH_FILE="${HOME}/.openclaw-data/runtime/config/monitoring.json"
   if [[ -f "$WH_FILE" ]]; then
     WH=$(node -e "try{console.log(JSON.parse(require('fs').readFileSync('$WH_FILE','utf8')).webhooks?.['jarvis-system']||'')}catch{}" 2>/dev/null || true)
     [[ -n "$WH" ]] && curl -s -X POST -H 'Content-Type: application/json' \
@@ -218,7 +218,7 @@ done
 echo "[$NOW] ✅ 정리 완료 — ${#ZOMBIES[@]}개 좀비, 약 ${TOTAL_FREED}MB 회수" >> "$LOG"
 
 # Discord 알림 (선택 — webhooks 설정 시)
-WEBHOOK_FILE="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
+WEBHOOK_FILE="${HOME}/.openclaw-data/runtime/config/monitoring.json"
 if [[ -f "$WEBHOOK_FILE" ]]; then
   WEBHOOK=$(node -e "try { console.log(JSON.parse(require('fs').readFileSync('$WEBHOOK_FILE','utf-8')).webhooks?.['jarvis-system']||'') } catch{}" 2>/dev/null)
   if [[ -n "$WEBHOOK" ]]; then

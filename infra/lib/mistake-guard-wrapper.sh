@@ -18,13 +18,14 @@
 set -euo pipefail
 
 # ─── 경로 상수 ───
-export JARVIS_HOME="${JARVIS_HOME:=${HOME}/.openclaw-data/jarvis}"
-export JARVIS_INFRA="${JARVIS_INFRA:=${HOME}/.openclaw-data/jarvis/infra}"
+export JARVIS_HOME="${JARVIS_HOME:=${HOME}/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+export JARVIS_INFRA="${JARVIS_INFRA:=${HOME}/projects/jarvis/infra}"
 MEMORY_MANAGER="${JARVIS_INFRA}/lib/student-memory-manager.mjs"
 GUARD_CHECKER="${JARVIS_INFRA}/lib/mistake-guard-checker.mjs"
 RULES_FILE="${JARVIS_INFRA}/lib/mistake-guard-rules.md"
-MEMORY_DIR="${JARVIS_HOME}/runtime/state/student-memory"
-GUARD_LOG="${JARVIS_HOME}/runtime/logs/mistake-guard.log"
+MEMORY_DIR="${JARVIS_RUNTIME}/state/student-memory"
+GUARD_LOG="${JARVIS_RUNTIME}/logs/mistake-guard.log"
 
 # ─── 정책 상수 ───
 MISTAKE_GUARD_ENABLED="${MISTAKE_GUARD_ENABLED:-true}"

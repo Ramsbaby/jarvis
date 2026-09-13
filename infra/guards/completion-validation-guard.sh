@@ -16,14 +16,14 @@
 #
 # 사용법:
 #   # 1. PDF 페이지 수 검증
-#   ~/.openclaw-data/jarvis/infra/guards/completion-validation-guard.sh validate-pdf "/path/to/file.pdf"
+#   ~/projects/jarvis/infra/guards/completion-validation-guard.sh validate-pdf "/path/to/file.pdf"
 #
 #   # 2. 파일 전송 응답 검증
-#   ~/.openclaw-data/jarvis/infra/guards/completion-validation-guard.sh validate-upload \
+#   ~/projects/jarvis/infra/guards/completion-validation-guard.sh validate-upload \
 #       --response "$RESPONSE" --expected-file-size 1024
 #
 #   # 3. 중복 파일 검사
-#   ~/.openclaw-data/jarvis/infra/guards/completion-validation-guard.sh check-duplicate \
+#   ~/projects/jarvis/infra/guards/completion-validation-guard.sh check-duplicate \
 #       --file "/path/to/file" --hash-db "$HASH_DB_FILE"
 #
 # 성공 기준:
@@ -37,8 +37,9 @@ set -euo pipefail
 
 # ── 상수 및 경로 설정 ──────────────────────────────────────────────────────
 JARVIS_HOME="${HOME}/.jarvis"
-GUARD_LOG="${JARVIS_HOME}/runtime/logs/completion-validation-guard.jsonl"
-HASH_DB_DIR="${JARVIS_HOME}/runtime/state/file-hashes"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+GUARD_LOG="${JARVIS_RUNTIME}/logs/completion-validation-guard.jsonl"
+HASH_DB_DIR="${JARVIS_RUNTIME}/state/file-hashes"
 CLUSTER_ID="cl-45670404fa7eb40c"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 HOSTNAME="$(hostname 2>/dev/null || echo 'unknown')"

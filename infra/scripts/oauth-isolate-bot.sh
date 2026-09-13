@@ -110,7 +110,7 @@ else
 fi
 
 # ── Ledger ───────────────────────────────────────────────────────────────────
-LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/oauth-refresh-ledger.jsonl"
+LEDGER="${HOME}/.openclaw-data/runtime/ledger/oauth-refresh-ledger.jsonl"
 mkdir -p "$(dirname "$LEDGER")"
 printf '{"ts":"%s","result":"isolation","action":"bot-isolated-to-longlived-token","plist_backup":".iso-bak-%s"}\n' \
   "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${TS}" >> "$LEDGER"

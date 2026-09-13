@@ -17,7 +17,8 @@ set -euo pipefail
 
 # ── 상수 및 경로 설정 ──────────────────────────────────────────────────────
 JARVIS_HOME="${HOME}/.jarvis"
-VALIDATOR_LOG="${JARVIS_HOME}/runtime/logs/file-existence-validator.jsonl"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+VALIDATOR_LOG="${JARVIS_RUNTIME}/logs/file-existence-validator.jsonl"
 CLUSTER_ID="cl-3dbad2477e65b7b7"
 FILE_GUARD_SCRIPT="${JARVIS_HOME}/infra/guards/file-existence-guard.sh"
 

@@ -6,7 +6,7 @@
 #
 # 역할: 3개 데이터 소스를 비교하여 진짜 중복(이중 실행 위험)만 식별.
 #   1) LaunchAgent plist (~/Library/LaunchAgents/com.jarvis.*.plist, ai.jarvis.*.plist)
-#   2) tasks.json (~/.openclaw-data/jarvis/runtime/config/tasks.json) — task spec/manifest SSoT
+#   2) tasks.json (~/.openclaw-data/runtime/config/tasks.json) — task spec/manifest SSoT
 #   3) crontab -l — 외부 *.sh / *.mjs / *.py 호출
 #
 # 진짜 중복 판정 기준:
@@ -17,8 +17,8 @@
 # 출력: Discord severity 따라 라우팅 (severity 필드 사용)
 set -euo pipefail
 
-LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/audit-la-cron.log"
-TASKS_JSON="${HOME}/.openclaw-data/jarvis/runtime/config/tasks.json"
+LOG="${HOME}/.openclaw-data/runtime/logs/audit-la-cron.log"
+TASKS_JSON="${HOME}/.openclaw-data/runtime/config/tasks.json"
 
 log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*" | tee -a "${LOG}"; }
 log "=== audit-la-cron 시작 (복원 v2.0) ==="
@@ -110,7 +110,7 @@ DETAIL="LA ${LA_COUNT}건, tasks.json ${TASK_COUNT}건. 진짜 중복 0건. OK_T
 if (( DUP_CRITICAL > 0 || DUP_DIRECT > 0 )); then
   SEVERITY="critical"
   TITLE="🚨 LA-Cron 진짜 중복 발견"
-  DETAIL="DUP_CRITICAL=${DUP_CRITICAL} (이중 dispatcher), DUP_DIRECT=${DUP_DIRECT} (직접 충돌). 상세: ~/.openclaw-data/jarvis/runtime/logs/audit-la-cron.log"
+  DETAIL="DUP_CRITICAL=${DUP_CRITICAL} (이중 dispatcher), DUP_DIRECT=${DUP_DIRECT} (직접 충돌). 상세: ~/.openclaw-data/runtime/logs/audit-la-cron.log"
 elif (( EXIT_FAIL > 0 )); then
   SEVERITY="info"
   TITLE="⚠️ LA exit≠0 ${EXIT_FAIL}건"
@@ -125,8 +125,8 @@ head -10 /tmp/audit-la-cron-detail.txt | tee -a "${LOG}"
 
 # 7) Discord 알림 (정상=silent, 비정상=전송)
 if [[ "${SEVERITY}" != "info" || "${EXIT_FAIL}" -gt 0 ]]; then
-  if [[ -x "${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh" ]]; then
-    bash "${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh" "${SEVERITY}" "${TITLE}" "${DETAIL}" 2>&1 | tee -a "${LOG}"
+  if [[ -x "${HOME}/.openclaw-data/runtime/scripts/alert.sh" ]]; then
+    bash "${HOME}/.openclaw-data/runtime/scripts/alert.sh" "${SEVERITY}" "${TITLE}" "${DETAIL}" 2>&1 | tee -a "${LOG}"
   fi
 fi
 

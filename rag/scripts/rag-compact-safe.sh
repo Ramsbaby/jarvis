@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10 · 회차5 2단계] 이관 완료 — crontab 경로를 막는다.
 # 오픈클로 jarvis-rag-compact-weekly(일 04:00)·jarvis-rag-compact-gate(매시)로 이관. 실행 검증 완료.
-# 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다. 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/rag-compact-safe
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/rag-compact-safe" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다. 재개: rm ~/.openclaw-data/runtime/state/stopped/rag-compact-safe
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/rag-compact-safe" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[rag-compact-safe] 중지 플래그 있음 — 오픈클로로 이관됨"
     exit 0
 fi

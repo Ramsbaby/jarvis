@@ -5,7 +5,7 @@
 #      매시간 디렉토리 스냅샷 → 변경 감지 시 ledger append + Discord 알림.
 #
 # Usage: tasks.json에 등록 (schedule: "13 * * * *", 매시간 13분)
-# 산출물: ~/.openclaw-data/jarvis/runtime/ledger/launchagents-audit.jsonl
+# 산출물: ~/.openclaw-data/runtime/ledger/launchagents-audit.jsonl
 #
 # 추적 대상 변화:
 #   - 신규 .plist (정책 가드 트리거)
@@ -18,9 +18,9 @@
 set -euo pipefail
 
 LA_DIR="${HOME}/Library/LaunchAgents"
-LEDGER_DIR="${HOME}/.openclaw-data/jarvis/runtime/ledger"
+LEDGER_DIR="${HOME}/.openclaw-data/runtime/ledger"
 LEDGER="${LEDGER_DIR}/launchagents-audit.jsonl"
-SNAPSHOT_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/launchagents-snapshots"
+SNAPSHOT_DIR="${HOME}/.openclaw-data/runtime/state/launchagents-snapshots"
 LATEST="${SNAPSHOT_DIR}/latest.txt"
 MTIME_LATEST="${SNAPSHOT_DIR}/latest-mtimes.tsv"
 
@@ -140,7 +140,7 @@ if [[ -f "$MTIME_LATEST" ]]; then
       plist_path="$LA_DIR/$entry"
       task_id="${label#com.jarvis.}"
       task_id="${task_id#ai.jarvis.}"
-      eff_tasks="${HOME}/.openclaw-data/jarvis/runtime/config/effective-tasks.json"
+      eff_tasks="${HOME}/.openclaw-data/runtime/config/effective-tasks.json"
       if [[ -f "$eff_tasks" && -f "$plist_path" ]]; then
         is_discord=$(jq -r --arg tid "$task_id" \
           '.tasks[]? | select(.id==$tid) | select((.output // []) | index("discord")) | .id' \
@@ -182,9 +182,9 @@ echo "[la-audit] changes: $CHANGES (total entries: $(wc -l < "$NOW" | tr -d ' ')
 
 # Discord 알림 (변경 있을 때만)
 if [[ ${#DISCORD_LINES[@]} -gt 0 ]]; then
-  WEBHOOK=$(jq -r '.webhooks["jarvis-system"] // empty' "${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json" 2>/dev/null || true)
+  WEBHOOK=$(jq -r '.webhooks["jarvis-system"] // empty' "${HOME}/.openclaw-data/runtime/config/monitoring.json" 2>/dev/null || true)
   if [[ -n "${WEBHOOK:-}" ]]; then
-    MSG="📡 **LaunchAgents 변경 감지**\n$(printf '%s\n' "${DISCORD_LINES[@]}")\n\n총 변경: ${CHANGES}건 / ledger: \`~/.openclaw-data/jarvis/runtime/ledger/launchagents-audit.jsonl\`"
+    MSG="📡 **LaunchAgents 변경 감지**\n$(printf '%s\n' "${DISCORD_LINES[@]}")\n\n총 변경: ${CHANGES}건 / ledger: \`~/.openclaw-data/runtime/ledger/launchagents-audit.jsonl\`"
     PAYLOAD=$(jq -n --arg m "$MSG" '{content: $m}')
     curl -sS -X POST "$WEBHOOK" -H "Content-Type: application/json" -d "$PAYLOAD" > /dev/null 2>&1 || true
   fi

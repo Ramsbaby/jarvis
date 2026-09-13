@@ -8,7 +8,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WRAPPER_SCRIPT="${SCRIPT_DIR}/cron-safe-wrapper.sh"
-WRAPPER_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/cron-safe-wrapper.log"
+WRAPPER_LOG="${HOME}/.openclaw-data/runtime/logs/cron-safe-wrapper.log"
 TEST_DIR="${SCRIPT_DIR}/../test-tmp-circuit"
 
 TESTS_PASSED=0

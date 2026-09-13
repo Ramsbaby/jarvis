@@ -116,7 +116,7 @@ SEVERITY="ok"
 # 2026-09-10 오픈클로 이식: 디스코드 봇을 의도적으로 제거했다. 이 줄이 남아 있으면 매시간
 # "🚨 시스템 위험 감지 — discord-bot 프로세스 없음"을 crit 으로 올려 디스크 같은 진짜 위험을 묻는다.
 # 정지 플래그가 있으면 "없는 게 정상"이고, 없는데 없으면 그때는 진짜 이상이다.
-if [[ ! -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/discord-removed" ]]; then
+if [[ ! -f "${HOME}/.openclaw-data/runtime/state/stopped/discord-removed" ]]; then
     (( BOT_UP == 0 ))     && ALERTS+=("🔴 discord-bot 프로세스 없음") && SEVERITY="crit" || true
 fi
 
@@ -130,7 +130,7 @@ fi
 log "ALERT(${SEVERITY}) — ${ALERTS[*]}"
 
 # discord_route를 통한 중앙화된 발송
-_INFRA_DIR="${HOME}/.openclaw-data/jarvis/infra"
+_INFRA_DIR="${HOME}/projects/jarvis/infra"
 _ROUTE_SH="${_INFRA_DIR}/lib/discord-route.sh"
 
 if [[ ! -f "$_ROUTE_SH" ]]; then
@@ -159,7 +159,7 @@ _alerts_text=$(printf "%s / " "${ALERTS[@]}" | sed 's/ \/ $//')
 
 if ! discord_route "$_severity_route" "$TITLE" "alerts=${_alerts_text},summary=${SUMMARY},timestamp=${TS}" 2>/dev/null; then
     log "WARN: Discord 라우팅 실패 (로컬 파일만 기록: ${TITLE})"
-elif [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/discord-removed" ]]; then
+elif [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/discord-removed" ]]; then
     # 2026-09-10: 억제된 것을 "전송 완료"라고 적으면 감사에서 "아직 송출 중"으로 오독된다.
     # 실제 배달은 no-external.log → jarvis-suppressed-digest 가 맡는다.
     log "알림 억제됨 — 송출 비활성, 다이제스트로 배달: ${TITLE}"

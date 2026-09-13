@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 GUARD_SCRIPT="${BOT_HOME}/lib/duplicate-request-guard.mjs"
 TEST_LOG="${BOT_HOME}/logs/test-duplicate-request-guard.log"
 

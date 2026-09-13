@@ -334,8 +334,8 @@ _handle_verify_gate_fail() {
     fi
     # 2026-07-27: 위 원복은 BOT_HOME 하위에만 닿는다는 사실이 실측으로 드러났다.
     #   ① BOT_HOME=~/.jarvis 는 git 저장소가 아니라 두 명령이 통째로 실패하고 `|| true`에 삼켜진다.
-    #   ② BOT_HOME=~/.openclaw-data/jarvis/runtime 이면 `-- .` 범위가 runtime 이하뿐이라, 실제 수정 대상인
-    #      ~/.openclaw-data/jarvis/infra/** 는 원복되지 않는다(runtime/infra 는 심볼릭 링크이며 git 추적 경로가 아님).
+    #   ② BOT_HOME=~/.openclaw-data/runtime 이면 `-- .` 범위가 runtime 이하뿐이라, 실제 수정 대상인
+    #      ~/projects/jarvis/infra/** 는 원복되지 않는다(runtime/infra 는 심볼릭 링크이며 git 추적 경로가 아님).
     #   그 결과 2026-07-27 오전 VERIFY_GATE 가 "검증 인프라 수정은 자동 승인 불가"로 정확히
     #   불합격시켰는데도 ask-claude.sh·cron-safe-wrapper.sh 등 4개 파일의 변경이 그대로 남았고,
     #   BOT_HOME 기본값을 정본에서 구경로로 되돌리는 역행이 저장소에 새겨졌다.
@@ -345,7 +345,7 @@ _handle_verify_gate_fail() {
     #   스냅샷에 함께 저장한 뒤 차집합만 되돌리는 방식으로 후속 도입한다.
     local _vg_root _vg_dirty
     _vg_root=$(git -C "$CODER_REPO" rev-parse --show-toplevel 2>/dev/null || true)
-    [[ -z "$_vg_root" ]] && _vg_root=$(git -C "${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}" rev-parse --show-toplevel 2>/dev/null || true)
+    [[ -z "$_vg_root" ]] && _vg_root=$(git -C "${JARVIS_HOME:-$HOME/projects/jarvis}" rev-parse --show-toplevel 2>/dev/null || true)
     if [[ -n "$_vg_root" ]]; then
         _vg_dirty=$(git -C "$_vg_root" status --porcelain 2>/dev/null | awk '{print $NF}' | head -20)
         if [[ -n "$_vg_dirty" ]]; then
@@ -435,7 +435,7 @@ _sc_hold_for_human() {
     # _discord_ceo_notify 는 debug-cron-* 를 무시한다 — 보류는 사람이 봐야 하므로 시스템 채널로 보낸다
     _discord_alert "⏸️ **Jarvis Coder**: \`${task_id}\` 사람 검토 보류 (${reason_key})
 ${human_text:0:300}
-${patch_file:+패치: \`${patch_file}\` — 적용: \`git -C ~/.openclaw-data/jarvis apply ${patch_file}\`}
+${patch_file:+패치: \`${patch_file}\` — 적용: \`git -C ~/projects/jarvis apply ${patch_file}\`}
 자동 재큐되지 않습니다. 확인 후 \`node runtime/lib/task-store.mjs transition ${task_id} queued\` 로 재개하십시오."
 }
 
@@ -472,9 +472,9 @@ _coder_wt_prompt_prefix() {
     [[ -n "$CODER_WT" ]] || { echo ""; return 0; }
     cat <<EOF
 [작업 디렉토리 — 반드시 지킬 것]
-현재 디렉토리 ${CODER_WT} 는 ~/.openclaw-data/jarvis 저장소의 격리 작업 사본(git worktree, 브랜치 $(coder_worktree_branch "$1"))이다.
-- 파일 편집은 이 디렉토리 안에서만 한다. 본체 ~/.openclaw-data/jarvis 는 읽기 전용이며 그쪽 쓰기·git 변조는 차단된다.
-- 본체 경로 ~/.openclaw-data/jarvis/infra/... 는 여기서 ${CODER_WT}/infra/... 다. 상대 경로(infra/..., runtime/...)를 쓰면 된다.
+현재 디렉토리 ${CODER_WT} 는 ~/projects/jarvis 저장소의 격리 작업 사본(git worktree, 브랜치 $(coder_worktree_branch "$1"))이다.
+- 파일 편집은 이 디렉토리 안에서만 한다. 본체 ~/projects/jarvis 는 읽기 전용이며 그쪽 쓰기·git 변조는 차단된다.
+- 본체 경로 ~/projects/jarvis/infra/... 는 여기서 ${CODER_WT}/infra/... 다. 상대 경로(infra/..., runtime/...)를 쓰면 된다.
 - runtime/ 은 본체와 공유하는 데이터 심링크다 — 읽기만 한다. 설정·상태·원장은 수정하지 않는다.
 - git commit 은 해도 되고 안 해도 된다(완료 시 자동 커밋). push·branch 전환·worktree 조작은 금지.
 - 완료 후 사람이 브랜치를 검토해 본체에 반영한다. 본체에 이미 반영된 것처럼 보고하지 않는다.
@@ -485,9 +485,9 @@ EOF
 _coder_wt_merge_hint() {
     local b; b=$(coder_worktree_branch "$1")
     if [[ -x "${BOT_HOME}/scripts/coder-merge.sh" ]]; then
-        echo "bash ~/.openclaw-data/jarvis/infra/scripts/coder-merge.sh $1"
+        echo "bash ~/projects/jarvis/infra/scripts/coder-merge.sh $1"
     else
-        echo "git -C ~/.openclaw-data/jarvis merge --ff-only ${b}   # 검토: git -C ~/.openclaw-data/jarvis diff main...${b}"
+        echo "git -C ~/projects/jarvis merge --ff-only ${b}   # 검토: git -C ~/projects/jarvis diff main...${b}"
     fi
 }
 # _coder_wt_done_extra <extra_json> [task] — done 전이 JSON 에 브랜치·패치 정보를 덧붙인다 (worktree 모드일 때만)

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-retention-jsonl(04:00) 로 이관. OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/retention-jsonl
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/retention-jsonl" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/retention-jsonl
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/retention-jsonl" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[retention-jsonl] 중지 플래그 있음"
     exit 0
 fi
@@ -12,16 +12,16 @@ fi
 # 정책:
 #   - 파일 크기 > ROTATE_MB (기본 20MB) 시 .1로 rotate
 #   - .1이 이미 있으면 .2 → .3 ... 최대 KEEP_N (기본 3)까지 보존
-#   - KEEP_N 초과분은 gzip 압축 후 별도 ~/.openclaw-data/jarvis/runtime/archive/ 에 이동
+#   - KEEP_N 초과분은 gzip 압축 후 별도 ~/.openclaw-data/runtime/archive/ 에 이동
 #   - 압축본도 KEEP_ARCHIVE_DAYS (기본 90일) 넘으면 삭제
 #
 # 실행: 매일 새벽 크론 (아래 crontab 추가 필요)
-# 대상: ~/.openclaw-data/jarvis/runtime/state/*.jsonl + ~/.openclaw-data/jarvis/runtime/logs/ 중 센서 관련 파일
+# 대상: ~/.openclaw-data/runtime/state/*.jsonl + ~/.openclaw-data/runtime/logs/ 중 센서 관련 파일
 
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin"
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 ARCHIVE_DIR="${BOT_HOME}/archive/jsonl"
 LOG="${BOT_HOME}/logs/retention-jsonl.log"
 

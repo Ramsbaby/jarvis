@@ -4,11 +4,11 @@ set -euo pipefail
 # route-result.sh - Route results to Discord, ntfy, file, or alert
 # Usage: route-result.sh <mode> <task-id> <message>
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 CONFIG="${BOT_HOME}/config/monitoring.json"
 
 # --- Runtime guards (Cluster cl-a1a431b0e672e736: path assertion before verification) ---
-source "${HOME}/.openclaw-data/jarvis/infra/lib/guards.sh" 2>/dev/null || true
+source "${HOME}/projects/jarvis/infra/lib/guards.sh" 2>/dev/null || true
 assert_directory_exists "$BOT_HOME" "bot home" || exit 1
 assert_file_readable "$CONFIG" "monitoring config" || exit 1
 
@@ -239,7 +239,7 @@ _discord_curl() {
     channel_id=$(get_channel_id)
     if [[ -n "$channel_id" ]]; then
         local token
-        token=$(grep -m1 '^DISCORD_TOKEN=' "${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}/.env" 2>/dev/null | cut -d= -f2-)
+        token=$(grep -m1 '^DISCORD_TOKEN=' "${BOT_HOME:-$HOME/.openclaw-data/runtime}/.env" 2>/dev/null | cut -d= -f2-)
         curl -s -o /dev/null -w "%{http_code}" \
             -X POST "https://discord.com/api/v10/channels/${channel_id}/messages" \
             -H "Authorization: Bot ${token}" \
@@ -257,7 +257,7 @@ _discord_curl() {
 # --- 송출 감사 원장 (2026-06-11 신설): 채널별 송출량·실패율 30일 추이 측정 기반 ---
 _route_audit_log() {
     local kind="$1" result="$2"
-    local ledger_dir="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}/ledger"
+    local ledger_dir="${BOT_HOME:-$HOME/.openclaw-data/runtime}/ledger"
     mkdir -p "$ledger_dir" 2>/dev/null || return 0
     jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --arg src "task-result-route" --arg k "$kind" \
@@ -377,7 +377,7 @@ _build_header() {
 }
 
 # --- Embed color by severity — 단일 정의(discord-severity.sh) 위임 (2026-06-11 중앙화) ---
-source "$HOME/.openclaw-data/jarvis/infra/lib/discord-severity.sh"
+source "$HOME/projects/jarvis/infra/lib/discord-severity.sh"
 _severity_embed_color() {
     local c
     c=$(severity_color "${1:-}")

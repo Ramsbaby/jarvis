@@ -8,11 +8,12 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LEDGER="$JARVIS_HOME/runtime/state/token-ledger.jsonl"
-LOG_FILE="$JARVIS_HOME/runtime/logs/llm-cost-cap-monitor.log"
-CAP_MARKER="$JARVIS_HOME/runtime/state/llm-daily-cap-exceeded"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LEDGER="$JARVIS_RUNTIME/state/token-ledger.jsonl"
+LOG_FILE="$JARVIS_RUNTIME/logs/llm-cost-cap-monitor.log"
+CAP_MARKER="$JARVIS_RUNTIME/state/llm-daily-cap-exceeded"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
 
 CAP="${LLM_DAILY_CAP_USD:-20.00}"
 WARN_PCT="${LLM_DAILY_WARN_PCT:-80}"

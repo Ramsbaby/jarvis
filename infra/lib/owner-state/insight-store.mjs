@@ -9,7 +9,7 @@
 import { readFileSync, appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-const BOT_HOME = process.env.BOT_HOME || join(process.env.HOME, '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(process.env.HOME, '.openclaw-data/runtime');
 const STORE = join(BOT_HOME, 'state/owner-state/insight-store.jsonl');
 
 const VALID_DOMAINS = ['career', 'health', 'family', 'finance', 'life'];

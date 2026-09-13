@@ -14,7 +14,7 @@ set -euo pipefail
 # Output: Writes result to stdout (captured by bot-cron.sh as RESULT).
 # Exit codes: 0 success (cache hit or miss), non-zero on ask-claude.sh failure.
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 TASK_ID="github-monitor"
 HASH_FILE="${BOT_HOME}/state/github-monitor-last.hash"
 CACHE_RESULT_FILE="${BOT_HOME}/state/github-monitor-last-result.md"
@@ -111,7 +111,7 @@ fi
 ASK_CLAUDE=""
 for candidate in \
     "${BOT_HOME}/bin/ask-claude.sh" \
-    "${HOME}/.openclaw-data/jarvis/infra/bin/ask-claude.sh" \
+    "${HOME}/projects/jarvis/infra/bin/ask-claude.sh" \
     "$(dirname "$0")/../bin/ask-claude.sh"; do
     if [[ -x "$candidate" ]]; then
         ASK_CLAUDE="$candidate"

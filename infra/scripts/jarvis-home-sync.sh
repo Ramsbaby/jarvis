@@ -4,7 +4,7 @@
 # 크론: 매일 새벽 4시 (서버 정비 후)
 
 set -euo pipefail
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG="$BOT_HOME/logs/jarvis-home-sync.log"
 ROUTE="$BOT_HOME/bin/route-result.sh"
 
@@ -63,14 +63,14 @@ if ! git merge upstream/main --no-edit --quiet >>"$LOG" 2>&1; then
       alert "⚠️ jarvis-home-sync: merge 충돌 후 stash pop도 실패. stash 잔류 가능 — \`git stash list\` 확인 필요"
     fi
   fi
-  alert "⚠️ jarvis-home-sync: upstream merge 충돌. 수동 처리 필요 (\`cd ~/.openclaw-data/jarvis/runtime && git merge upstream/main\`)"
+  alert "⚠️ jarvis-home-sync: upstream merge 충돌. 수동 처리 필요 (\`cd ~/.openclaw-data/runtime && git merge upstream/main\`)"
   exit 1
 fi
 
 # stash 복원
 if [[ "$STASHED" -eq 1 ]]; then
   if ! git stash pop >>"$LOG" 2>&1; then
-    alert "⚠️ jarvis-home-sync: stash pop 충돌. 확인 필요 (\`cd ~/.openclaw-data/jarvis/runtime && git stash show\`)"
+    alert "⚠️ jarvis-home-sync: stash pop 충돌. 확인 필요 (\`cd ~/.openclaw-data/runtime && git stash show\`)"
     exit 1
   fi
 fi

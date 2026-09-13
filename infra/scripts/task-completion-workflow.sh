@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 TASK_ID="${1:-}"
 RESULT_CONTENT="${2:-}"
 TRIGGERED_BY="${3:-bot-cron/complete}"

@@ -21,7 +21,7 @@ set -euo pipefail
 #   2 — contract 파일 없음
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 
 TASK_ID="${1:?Usage: verify-sprint-contract.sh <task_id>}"
 SC_DIR="${BOT_HOME}/state/sprint-contracts"

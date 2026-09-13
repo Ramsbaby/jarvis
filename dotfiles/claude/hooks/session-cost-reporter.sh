@@ -8,7 +8,7 @@
 set -euo pipefail
 
 SESSION_DIR="$HOME/.claude/projects"
-BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/runtime}"
 LEDGER_FILE="${BOT_HOME}/state/token-ledger.jsonl"
 
 # 가장 최근 수정된 JSONL 찾기

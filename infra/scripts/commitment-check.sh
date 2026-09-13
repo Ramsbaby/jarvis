@@ -3,7 +3,7 @@
 # v2 2026-06-14: 하루 1회(09:00 KST) 실행 + 7일 자동 만료
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 COMMIT_FILE="$BOT_HOME/state/commitments.jsonl"
 WEBHOOK_FILE="$BOT_HOME/config/monitoring.json"
 

@@ -12,7 +12,7 @@
 set -euo pipefail
 
 DAYS="${1:-7}"
-LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/unverified-assertion.jsonl"
+LEDGER="${HOME}/.openclaw-data/runtime/ledger/unverified-assertion.jsonl"
 
 if [[ ! -f "$LEDGER" ]]; then
   echo "❌ ledger 없음: $LEDGER"

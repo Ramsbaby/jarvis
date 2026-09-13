@@ -17,10 +17,10 @@
  * Wiki 항목 형식:
  *   - [date] [source:youtube-bench] [제목]: [핵심 인사이트] (원문: url)
  *
- * Ledger: ~/.openclaw-data/jarvis/runtime/state/youtube-bench-ledger.jsonl
+ * Ledger: ~/.openclaw-data/runtime/state/youtube-bench-ledger.jsonl
  *   — 처리된 videoId를 기록해 중복 적재 방지.
  *
- * Log: ~/.openclaw-data/jarvis/runtime/logs/youtube-bench.log
+ * Log: ~/.openclaw-data/runtime/logs/youtube-bench.log
  */
 
 import { existsSync, mkdirSync, appendFileSync, readFileSync, writeFileSync } from 'node:fs';
@@ -33,7 +33,7 @@ import { discordSend } from '../lib/discord-notify.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const HOME     = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime');
 
 const LEDGER_PATH  = join(BOT_HOME, 'state', 'youtube-bench-ledger.jsonl');
 const LOG_PATH     = join(BOT_HOME, 'logs',  'youtube-bench.log');

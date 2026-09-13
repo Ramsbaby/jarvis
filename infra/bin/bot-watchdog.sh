@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # [오픈클로 이식 2026-09-10] 디스코드 봇을 제거해 감시 대상이 없다. crontab 쓰기가 막혀 스크립트 층에 가드를 둔다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/bot-watchdog
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/bot-watchdog" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/bot-watchdog
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/bot-watchdog" ]]; then
     echo "[bot-watchdog] 중지 플래그 있음 — 감시 대상(디스코드 봇)이 제거됐다 (state/stopped/bot-watchdog)"
     exit 0
 fi
@@ -22,7 +22,7 @@ set -euo pipefail
 #   3. Send alerts via ntfy + Discord webhook
 
 # --- Configuration ---
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 BOT_LOG="$BOT_HOME/logs/discord-bot.jsonl"
 WATCHDOG_LOG="$BOT_HOME/logs/bot-watchdog.log"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
@@ -35,7 +35,7 @@ ALERT_COOLDOWN_SEC=900      # 15 minutes between alerts
 HEAL_CYCLE_TIMEOUT_SEC=1800 # 30 minutes — heal-cycle이 이 시간 초과 시 Discord 알람
 HEAL_START_FILE="$STATE_DIR/bot-heal-start-epoch"
 HEAL_TIMEOUT_ALERTED_FILE="$STATE_DIR/bot-heal-timeout-alerted"
-DISCORD_VISUAL="${HOME}/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="${HOME}/.openclaw-data/runtime/scripts/discord-visual.mjs"
 
 # --- Level 3/4 에스컬레이션 설정 (openclaw v4.4 선별 이식, 2026-04-22) ---
 # Jarvis 고유 방침(iii): Mac Mini 재부팅 안 함. Level 4는 수동 개입 요청 알람만.

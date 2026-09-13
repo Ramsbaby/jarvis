@@ -12,7 +12,7 @@ set -euo pipefail
 if GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null); then
     REPO_ROOT=$(dirname "$(cd "$GIT_COMMON_DIR" && pwd)")
 else
-    REPO_ROOT="$HOME/.openclaw-data/jarvis"
+    REPO_ROOT="$HOME/projects/jarvis"
 fi
 HOOKS_SRC="$REPO_ROOT/.githooks"
 

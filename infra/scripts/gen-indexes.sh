@@ -4,7 +4,7 @@ set -euo pipefail
 # gen-indexes.sh — AI 네비게이션용 인덱스 문서 자동 생성 (일일 크론)
 #
 # 맥도날드식 아키텍처의 핵심 자동화:
-#   - ~/.openclaw-data/jarvis/infra/docs/TASKS-INDEX.md + tasks-index.json   (82개 크론 → 팀별)
+#   - ~/projects/jarvis/infra/docs/TASKS-INDEX.md + tasks-index.json   (82개 크론 → 팀별)
 #   - ~/jarvis-board/docs/API-INDEX.md                        (69개 API route → 그룹별)
 #
 # 이 스크립트가 매일 돌면서 인덱스 문서가 코드와 드리프트되는 것을 방지한다.
@@ -13,12 +13,12 @@ set -euo pipefail
 
 LOG() { echo "[$(date '+%H:%M:%S')] $*"; }
 
-JARVIS_ROOT="${HOME}/.openclaw-data/jarvis"
+JARVIS_ROOT="${HOME}/projects/jarvis"
 BOARD_ROOT="${HOME}/jarvis-board"
 
 fail=0
 
-# 1) ~/.openclaw-data/jarvis — TASKS-INDEX 생성
+# 1) ~/projects/jarvis — TASKS-INDEX 생성
 if [[ -f "${JARVIS_ROOT}/infra/scripts/gen-tasks-index.mjs" ]]; then
     LOG "gen-tasks-index.mjs 실행"
     if ! node "${JARVIS_ROOT}/infra/scripts/gen-tasks-index.mjs"; then

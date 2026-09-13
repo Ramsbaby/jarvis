@@ -3,8 +3,8 @@
 # council-insight(23:05 KST) 실행 후 10분 뒤(23:15 KST) SKILL_JSON 합성 결과 자동 검증
 set -euo pipefail
 
-SKILLS_FILE="${HOME}/.openclaw-data/jarvis/runtime/skills/skills.jsonl"
-BOT_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/council-insight.log"
+SKILLS_FILE="${HOME}/.openclaw-data/runtime/skills/skills.jsonl"
+BOT_LOG="${HOME}/.openclaw-data/runtime/logs/council-insight.log"
 TODAY=$(TZ=Asia/Seoul date '+%Y-%m-%d')
 KST=$(TZ=Asia/Seoul date '+%H:%M KST')
 
@@ -60,8 +60,8 @@ fi
 echo ""
 
 # 5. 📊 GRADER — 오늘 적재된 Skill 품질 평가 (Hermes GEPA 경량 구현)
-GRADES_FILE="${HOME}/.openclaw-data/jarvis/runtime/skills/grades.jsonl"
-mkdir -p "${HOME}/.openclaw-data/jarvis/runtime/skills"
+GRADES_FILE="${HOME}/.openclaw-data/runtime/skills/grades.jsonl"
+mkdir -p "${HOME}/.openclaw-data/runtime/skills"
 
 if [[ -f "$SKILLS_FILE" ]]; then
     today_skills=$(grep "\"${TODAY}" "$SKILLS_FILE" 2>/dev/null || true)
@@ -174,7 +174,7 @@ echo ""
 #   3. "전체 N건 중 N건 처리 완료" 형식 강제 출력
 #   4. 부분 평가 시 exit code 1로 완료 선언 차단
 
-CLUSTER_GUARD_SCRIPT="${HOME}/.openclaw-data/jarvis/infra/scripts/cluster-completion-guard-cl-f6921eb1d5ea4c87.sh"
+CLUSTER_GUARD_SCRIPT="${HOME}/projects/jarvis/infra/scripts/cluster-completion-guard-cl-f6921eb1d5ea4c87.sh"
 if [[ -f "$CLUSTER_GUARD_SCRIPT" ]]; then
     # council-insight 작업의 SKILL 합성 완료 여부 검증
     today_skills=$(grep "\"${TODAY}" "$SKILLS_FILE" 2>/dev/null || true)
@@ -232,7 +232,7 @@ else
 fi
 
 # 7. 🔗 SKILL → wiki/_facts.md 브릿지 (학습된 패턴 봇 응답에 반영)
-FACTS_FILE="${HOME}/.openclaw-data/jarvis/runtime/wiki/ops/_facts.md"
+FACTS_FILE="${HOME}/.openclaw-data/runtime/wiki/ops/_facts.md"
 if [[ -f "$SKILLS_FILE" ]]; then
     added_count=0
     while IFS= read -r skill_line; do

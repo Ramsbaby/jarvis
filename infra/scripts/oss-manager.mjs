@@ -9,18 +9,18 @@
  *   - Discord 리포트 전송
  *
  * 사용법:
- *   node ~/.openclaw-data/jarvis/runtime/scripts/oss-manager.mjs --mode maintenance
+ *   node ~/.openclaw-data/runtime/scripts/oss-manager.mjs --mode maintenance
  *
  * 환경변수:
  *   GITHUB_TOKEN — GitHub API 토큰 (필수)
- *   BOT_HOME — Jarvis 홈 디렉토리 (기본값: ~/.openclaw-data/jarvis/runtime)
+ *   BOT_HOME — Jarvis 홈 디렉토리 (기본값: ~/.openclaw-data/runtime)
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || process.env.JARVIS_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || process.env.JARVIS_HOME || join(homedir(), '.openclaw-data/runtime');
 const CONFIG_PATH = join(BOT_HOME, 'config', 'oss-targets.json');
 const LOG_PATH = join(BOT_HOME, 'logs', 'oss-manager.log');
 const STATE_PATH = join(BOT_HOME, 'state', 'oss-maintenance-state.json');

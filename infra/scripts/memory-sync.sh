@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 MEMORY_FILE="$HOME/.claude/projects/$(echo "${HOME}" | tr "/" "-")/memory/MEMORY.md"
 ADR_INDEX="$BOT_HOME/adr/ADR-INDEX.md"
 MCP_CONFIG="$HOME/.mcp.json"
@@ -94,6 +94,25 @@ if [[ "$DO_SERENA" == "true" ]]; then
     if [[ ! -f "$MCP_CONFIG" ]]; then
         log "ERROR: ~/.mcp.json 없음 — Serena MCP 사용 불가"
         exit 1
+    fi
+
+    # [회차8 2026-09-12] 이 단계는 2026-09-10 부터 매번 실패하고 있었다.
+    #   원인은 코드가 아니라 **설정 드리프트**다 — ~/.mcp.json 에 `serena` 서버가 없다
+    #   (있는 것은 `serena-board` 이고 그건 /Users/ramsbaby/jarvis-board 전용이라 대체가 아니다).
+    #   `--strict-mcp-config` 아래에서 없는 서버의 도구를 요구하면 claude 가 exit 1 로 죽는다.
+    #   launchd 로 돌 때는 실패가 아무에게도 보고되지 않아 두 달 가까이 묻혀 있었다.
+    #
+    #   **없어서 못 하는 것과 하다가 실패한 것을 가른다.** 둘을 뭉뚱그리면
+    #   가짜 실패가 매주 쌓이고, 진짜 실패가 그 소음에 묻힌다(2026-09-10 alert-send 와 같은 형태).
+    #   서버가 돌아오면 이 가드는 저절로 통과한다 — 조건문 우회가 아니라 전제 검사다.
+    if ! /usr/bin/python3 -c "
+import json,sys
+d=json.load(open('$MCP_CONFIG'))
+sys.exit(0 if 'serena' in (d.get('mcpServers') or {}) else 1)
+" 2>/dev/null; then
+        log "SKIP: ~/.mcp.json 에 'serena' 서버가 없다 — Serena 메모리 갱신을 건너뛴다(실패 아님)."
+        log "SKIP: 복구하려면 serena MCP 서버를 'serena' 이름으로 등재한다. MEMORY.md 갱신은 위에서 이미 끝났다."
+        exit 0
     fi
 
     # 현재 lib/ 구조 수집

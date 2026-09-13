@@ -22,8 +22,9 @@
 set -euo pipefail
 
 JARVIS_HOME="${HOME}/.jarvis"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
 GUARD_SCRIPT="${JARVIS_HOME}/infra/guards/completion-validation-guard.sh"
-WRAPPER_LOG="${JARVIS_HOME}/runtime/logs/completion-guard-wrapper.jsonl"
+WRAPPER_LOG="${JARVIS_RUNTIME}/logs/completion-guard-wrapper.jsonl"
 
 # ── 로그 디렉토리 초기화 ────────────────────────────────────────────────────
 _ensure_log_dir() {

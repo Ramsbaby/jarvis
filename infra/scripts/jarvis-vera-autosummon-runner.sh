@@ -22,7 +22,7 @@ set -uo pipefail
 # 사용법 (훅이 내부 호출 — 사람이 직접 부를 일 없음):
 #   jarvis-vera-autosummon-runner.sh <SUMMON_ID> <SESSION_ID> <CLAIM> [CONTEXT]
 #
-# 원장: ~/.openclaw-data/jarvis/runtime/ledger/vera-auto.jsonl (append-only)
+# 원장: ~/.openclaw-data/runtime/ledger/vera-auto.jsonl (append-only)
 #   {ts, event:"verdict", summon_id, session_id, verdict, exit_code, claim, evidence}
 # ==============================================================================
 
@@ -37,8 +37,8 @@ SESSION_ID="${2:?SESSION_ID required}"
 CLAIM="${3:?CLAIM required}"
 CONTEXT="${4:-}"
 
-VERA="${HOME}/.openclaw-data/jarvis/infra/scripts/jarvis-verify-independent.sh"
-LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/vera-auto.jsonl"
+VERA="${HOME}/projects/jarvis/infra/scripts/jarvis-verify-independent.sh"
+LEDGER="${HOME}/.openclaw-data/runtime/ledger/vera-auto.jsonl"
 STATE_DIR="${HOME}/.jarvis/state/vera-auto"
 LOCK="${STATE_DIR}/inflight-${SESSION_ID}.lock"
 

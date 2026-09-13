@@ -4,11 +4,12 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LOG_FILE="$JARVIS_HOME/runtime/logs/external-detect.log"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
-MODEL_KNOWN_FILE="$JARVIS_HOME/runtime/state/known-claude-models.json"
-DEP_LAST_FILE="$JARVIS_HOME/runtime/state/dependency-snapshot.json"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="$JARVIS_RUNTIME/logs/external-detect.log"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
+MODEL_KNOWN_FILE="$JARVIS_RUNTIME/state/known-claude-models.json"
+DEP_LAST_FILE="$JARVIS_RUNTIME/state/dependency-snapshot.json"
 
 mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$MODEL_KNOWN_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"

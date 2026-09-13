@@ -20,10 +20,10 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const HOME    = homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime');
 
 // ─── 경로 상수 ───────────────────────────────────────────────────────────────
-const RAG_ENGINE_PATH = join(HOME, '.openclaw-data/jarvis/rag/lib/rag-engine.mjs');
+const RAG_ENGINE_PATH = join(HOME, 'projects/jarvis/rag/lib/rag-engine.mjs');
 const INDEX_STATE     = join(HOME, '.jarvis/rag/index-state.json');
 const ACCESS_LOG      = join(BOT_HOME, 'rag/access-log.json');
 const REPORT_DIR      = join(BOT_HOME, 'rag/teams/reports');

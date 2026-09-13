@@ -24,7 +24,7 @@ set -euo pipefail
 # Token consumption only occurs IF diagnosis output is sent to API.
 # ═══════════════════════════════════════════════════════════════
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
 
 # FSM 기록: 실행 추적 (stdout 억제 — Discord 출력 오염 방지)
@@ -115,11 +115,11 @@ for tid, reason in entries:
     else:
         print(f"- `{tid}` — {reason}")
 print()
-print("📋 `~/.openclaw-data/jarvis/runtime/logs/cron.log` 에서 상세 확인")
+print("📋 `~/.openclaw-data/runtime/logs/cron.log` 에서 상세 확인")
 PYEOF
 
 # Failure Rule Engine 연동: 매칭 규칙이 있으면 자동 해결 제안 추가
-RULE_ENGINE="${HOME}/.openclaw-data/jarvis/infra/scripts/failure-rule-engine.mjs"
+RULE_ENGINE="${HOME}/projects/jarvis/infra/scripts/failure-rule-engine.mjs"
 if [[ -f "$RULE_ENGINE" ]]; then
     # macOS 호환: grep -P 대신 sed + tr 사용 (BSD grep은 -P 미지원)
     for _fail_line in $(echo "$FAILURES" | sed -nE 's/.*\[([a-zA-Z0-9_-]+)\].*/\1/p' | sort -u); do

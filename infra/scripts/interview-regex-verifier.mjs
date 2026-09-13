@@ -356,7 +356,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
 
   // scenario 로드
-  const scPath = join(homedir(), '.openclaw-data/jarvis/runtime/state/scenarios', `${opt.scenario}.json`);
+  const scPath = join(homedir(), '.openclaw-data/runtime/state/scenarios', `${opt.scenario}.json`);
   if (!existsSync(scPath)) {
     console.error(`scenario not found: ${scPath}`);
     process.exit(1);
@@ -376,8 +376,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(`   fixture: ${insights.length} insights\n`);
 
   // 단순 fixture에는 답변 본문이 없으므로, sidecar md에서 답변 추출 시도
-  // sidecar 위치: ~/.openclaw-data/jarvis/runtime/wiki/05-career/interview-curated/<qid>.md
-  const curatedDir = join(homedir(), '.openclaw-data/jarvis/runtime/wiki/05-career/interview-curated');
+  // sidecar 위치: ~/.openclaw-data/runtime/wiki/05-career/interview-curated/<qid>.md
+  const curatedDir = join(homedir(), '.openclaw-data/runtime/wiki/05-career/interview-curated');
   let totalAgreement = 0;
   let totalDeterministic = 0;
   let totalCompared = 0;

@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] 판정 D — 정지.
 # 근거: 크론 산출물 소비처 없음 — 실효 가드는 pre-commit 훅이고 그 훅은 감사를 스스로 재실행한다
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/cost-cap-audit
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/cost-cap-audit" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/cost-cap-audit
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/cost-cap-audit" ]]; then
     echo "[cost-cap-audit] 중지 플래그 있음 (판정 D)"
     exit 0
 fi
@@ -23,7 +23,7 @@ fi
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 TASKS_JSON="${BOT_HOME}/config/tasks.json"
 LEDGER="${BOT_HOME}/state/token-ledger.jsonl"
 LOG_FILE="${BOT_HOME}/logs/cost-cap-audit.log"
@@ -42,9 +42,9 @@ fi
 log "=== Cost Cap Audit start ==="
 
 # 1. 캡 부재(null) 또는 캡=0인 task 수집
-# script-only 화이트리스트: prompt가 ~/.openclaw-data/jarvis/infra/bin/*.sh, ~/.jarvis/scripts/*.sh  # ALLOW-DOTJARVIS 등
+# script-only 화이트리스트: prompt가 ~/projects/jarvis/infra/bin/*.sh, ~/.jarvis/scripts/*.sh  # ALLOW-DOTJARVIS 등
 # 직접 스크립트 실행 패턴이면 LLM 비용 없으므로 maxBudget="0.00" 허용.
-SCRIPT_ONLY_PATTERN='(~/.openclaw-data/jarvis/infra/bin/|~/\.jarvis/scripts/|/infra/bin/[^ ]*\.sh|/scripts/[^ ]*\.sh)'
+SCRIPT_ONLY_PATTERN='(~/projects/jarvis/infra/bin/|~/\.jarvis/scripts/|/infra/bin/[^ ]*\.sh|/scripts/[^ ]*\.sh)'
 
 NO_CAP=$(jq '[.tasks[] | select(.maxBudget == null)] | length' "$TASKS_JSON")
 ZERO_CAP=$(jq --arg p "$SCRIPT_ONLY_PATTERN" '

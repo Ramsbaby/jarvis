@@ -7,7 +7,7 @@
 #                    신규 파일 생성 시 CSS 숨김만 적용하고 태그는 남김)
 #
 # 역할:
-#   1. 이전 세션 개선사항 목록 조회 (~/.openclaw-data/jarvis/runtime/state/session-improvements.jsonl)
+#   1. 이전 세션 개선사항 목록 조회 (~/.openclaw-data/runtime/state/session-improvements.jsonl)
 #   2. 신규 파일 생성 컨텍스트와 비교
 #   3. 미적용 항목 발견 시 경고 출력 + exit 1
 #   4. 모든 개선사항 적용 확인 시 exit 0
@@ -31,7 +31,7 @@ set -euo pipefail
 # 설정
 # ═══════════════════════════════════════════════════════════════
 
-JARVIS_STATE_DIR="${JARVIS_STATE_DIR:-${HOME}/.openclaw-data/jarvis/runtime/state}"
+JARVIS_STATE_DIR="${JARVIS_STATE_DIR:-${HOME}/.openclaw-data/runtime/state}"
 IMPROVEMENTS_FILE="${JARVIS_STATE_DIR}/session-improvements.jsonl"
 APPLIED_FILE="${JARVIS_STATE_DIR}/session-improvements-applied.jsonl"
 
@@ -303,7 +303,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   list                      전체 개선사항 목록 출력
 
 환경 변수:
-  JARVIS_STATE_DIR     상태 디렉터리 (기본: ~/.openclaw-data/jarvis/runtime/state)
+  JARVIS_STATE_DIR     상태 디렉터리 (기본: ~/.openclaw-data/runtime/state)
   CHECKLIST_SESSION_ID 세션 ID
 
 개선사항 파일: ${IMPROVEMENTS_FILE}

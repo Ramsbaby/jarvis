@@ -30,7 +30,7 @@ set -uo pipefail
 
 # ── 상수 ─────────────────────────────────────────────────────────────────────
 readonly CLUSTER_ID="cl-2ff130add97125ec"
-readonly LOG_FILE="${HOME}/.openclaw-data/jarvis/runtime/logs/requirement-parser.jsonl"
+readonly LOG_FILE="${HOME}/.openclaw-data/runtime/logs/requirement-parser.jsonl"
 readonly DIMENSION_STATE_DIR="${HOME}/.jarvis/state/dimensions"
 
 # ── 초기화 ────────────────────────────────────────────────────────────────────

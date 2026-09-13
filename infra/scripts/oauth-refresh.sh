@@ -15,7 +15,7 @@
 # └─────────────────────────────────────────────────────────────────────────────┘
 if [[ "${OAUTH_REFRESH_FORCE_RUN:-0}" != "1" ]]; then
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [oauth-refresh] NO-OP — 2026-05-31 영구 비활성화(2주체 race 주범). CLI 자체갱신에 위임. 호출자: PPID $PPID" \
-    >> "${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs/oauth-refresh.log" 2>/dev/null || true
+    >> "${BOT_HOME:-${HOME}/.openclaw-data/runtime}/logs/oauth-refresh.log" 2>/dev/null || true
   exit 0
 fi
 
@@ -85,7 +85,7 @@ fi
 CREDENTIALS_FILE="${HOME}/.claude/.credentials.json"
 TOKEN_URL="https://api.anthropic.com/v1/oauth/token"
 CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG="${BOT_HOME}/logs/oauth-refresh.log"
 RENEW_THRESHOLD_SECS=4200   # 만료 70분 전에만 회전 (1h cron 최소 마진 = 3600+600). 2026-05-30: 백그라운드 회전을 '만료 직전 안전망'으로 한정해 race 창 최소화. 정상 운영에선 SDK 자체갱신이 먼저 회전 → 이 cron은 거의 안 뜸. SDK가 실패(유휴 야간 등)할 때만 마지막에 1회 회전. 일찍 회전(넓은 window)은 인터랙티브/웹 세션과의 race 창만 키워 해로움.
 
@@ -178,7 +178,7 @@ FORCE_REFRESH=0   # 영구 0 고정 — race 방아쇠 제거 (임계값/만료 
 
 # 덫(caller trap): force 요청 호출자 부모 체인을 ledger에 기록(무력화해도 누가 시도하는지 추적).
 if (( _FORCE_REQUESTED == 1 )); then
-  _CALLER_LEDGER="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/ledger/oauth-force-caller-trap.jsonl"
+  _CALLER_LEDGER="${BOT_HOME:-${HOME}/.openclaw-data/runtime}/ledger/oauth-force-caller-trap.jsonl"
   mkdir -p "$(dirname "$_CALLER_LEDGER")" 2>/dev/null || true
   _pp=$PPID; _chain=""; _depth=0
   while [[ -n "$_pp" && "$_pp" != "0" && "$_pp" != "1" && $_depth -lt 6 ]]; do
@@ -288,7 +288,7 @@ if [[ -z "${ACCESS_TOKEN}" ]]; then
   if [[ -z "${ACCESS_TOKEN}" ]]; then
   log "ERROR: 갱신 실패 — 응답: ${RESPONSE:0:200}"
   # 2026-05-20: ledger append (감사·통계용 append-only)
-  _LEDGER="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/ledger/oauth-refresh-ledger.jsonl"
+  _LEDGER="${BOT_HOME:-${HOME}/.openclaw-data/runtime}/ledger/oauth-refresh-ledger.jsonl"
   mkdir -p "$(dirname "$_LEDGER")"
   _err_type=$(echo "${RESPONSE}" | node -e "try{const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));process.stdout.write(d.error?.type||d.error||'unknown')}catch(e){process.stdout.write('parse_error')}" 2>/dev/null || echo "unknown")
   printf '{"ts":"%s","result":"fail","trigger":"%s","err_type":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${FORCE_REFRESH:-cron}" "${_err_type}" >> "$_LEDGER"
@@ -363,7 +363,7 @@ JSEOF
 log "✅ 갱신 완료 — 새 만료: $(node -e "process.stdout.write(new Date(${NEW_EXPIRES_AT}).toISOString())")"
 
 # 2026-05-20: ledger append (성공)
-_LEDGER="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/ledger/oauth-refresh-ledger.jsonl"
+_LEDGER="${BOT_HOME:-${HOME}/.openclaw-data/runtime}/ledger/oauth-refresh-ledger.jsonl"
 mkdir -p "$(dirname "$_LEDGER")"
 printf '{"ts":"%s","result":"success","trigger":"%s","new_expires_at":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${FORCE_REFRESH:-cron}" "${NEW_EXPIRES_AT}" >> "$_LEDGER"
 

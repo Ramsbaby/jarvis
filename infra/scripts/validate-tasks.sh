@@ -16,11 +16,11 @@ set -uo pipefail
 #   1 — 검증 실패
 #
 # Usage:
-#   ~/.openclaw-data/jarvis/runtime/scripts/validate-tasks.sh
-#   ~/.openclaw-data/jarvis/runtime/scripts/validate-tasks.sh /path/to/tasks.json
+#   ~/.openclaw-data/runtime/scripts/validate-tasks.sh
+#   ~/.openclaw-data/runtime/scripts/validate-tasks.sh /path/to/tasks.json
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 
 # tasks.json 경로: 인자 > effective-tasks.json > tasks.json
 TASKS_FILE="${1:-}"

@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] 판정 D — 정지.
 # 근거: 기대 표면이 "discord-bot"으로 하드코딩(57행)인데 봇이 제거돼 영구 missing — 같은 ALERT만 반복
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/audit-cross-surface-learning
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/audit-cross-surface-learning" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/audit-cross-surface-learning
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/audit-cross-surface-learning" ]]; then
     echo "[audit-cross-surface-learning] 중지 플래그 있음 (판정 D)"
     exit 0
 fi
@@ -15,12 +15,12 @@ fi
 # → 파이프라인이 끊겨있거나 훅이 실종된 것. 즉시 오너에게 알림.
 #
 # 실행: 매주 월요일 07:00 (crontab 등록 필요)
-# 출력: ~/.openclaw-data/jarvis/runtime/logs/cross-surface-audit.log + 이상 시 Discord 알림
+# 출력: ~/.openclaw-data/runtime/logs/cross-surface-audit.log + 이상 시 Discord 알림
 
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG="${BOT_HOME}/logs/cross-surface-audit.log"
 USERS_DIR="${BOT_HOME}/state/users"
 OWNER_ID=$(python3 -c "import json; print(json.load(open('${BOT_HOME}/config/user_profiles.json'))['owner']['discordId'])" 2>/dev/null || echo "")

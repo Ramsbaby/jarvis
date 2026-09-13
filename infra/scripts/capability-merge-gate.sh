@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-LEDGER_DIR="${HOME}/.openclaw-data/jarvis/runtime/ledger"
+LEDGER_DIR="${HOME}/.openclaw-data/runtime/ledger"
 IV_LEDGER="${LEDGER_DIR}/independent-verify.jsonl"
 GATE_LEDGER="${LEDGER_DIR}/capability-merge-gate.jsonl"
 TS_ISO="$(TZ=Asia/Seoul date +%Y-%m-%dT%H:%M:%S%z)"

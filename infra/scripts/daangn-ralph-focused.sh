@@ -1,9 +1,9 @@
 #!/bin/bash
 # 당근페이 집중 ralph — 핵심 13문항만(미스·동적 제외), N라운드 순차. 2026-07-05
 set -uo pipefail
-LOG="$HOME/.openclaw-data/jarvis/runtime/logs/daangn-ralph-focused.log"
-START="$HOME/.openclaw-data/jarvis/runtime/scripts/interview-ralph-start-focused.sh"
-STOP="$HOME/.openclaw-data/jarvis/runtime/scripts/interview-ralph-stop.sh"
+LOG="$HOME/.openclaw-data/runtime/logs/daangn-ralph-focused.log"
+START="$HOME/.openclaw-data/runtime/scripts/interview-ralph-start-focused.sh"
+STOP="$HOME/.openclaw-data/runtime/scripts/interview-ralph-stop.sh"
 ROUNDS="${1:-4}"
 
 echo "=== 당근 집중 ralph ${ROUNDS}라운드 시작 $(date '+%H:%M:%S') ===" > "$LOG"

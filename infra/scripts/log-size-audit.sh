@@ -7,20 +7,20 @@
 #   별도 감지가 필요. 디스크 고갈 예방 + 정상성 cross-check.
 #
 # 감지 대상:
-#   ~/.openclaw-data/jarvis/runtime/logs/*.log (err/out 모두)
+#   ~/.openclaw-data/runtime/logs/*.log (err/out 모두)
 #   /tmp/jarvis-*.log (있으면)
 #
 # 임계값:
 #   WARN  = 10 MB  (정상적으로 커도 이 선을 넘는 로그는 rotate 전략 필요)
 #   CRIT  = 100 MB (디스크 고갈 위험 / crash loop 의심)
 #
-# 원장: ~/.openclaw-data/jarvis/runtime/ledger/log-size-audit.jsonl
+# 원장: ~/.openclaw-data/runtime/ledger/log-size-audit.jsonl
 # 알림: jarvis-system 웹훅 (CRIT 또는 WARN N개 이상일 때만)
 # 원칙: 감사 실행 자체는 항상 exit 0. violation 은 ledger + throttled alert.
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LEDGER_DIR="${BOT_HOME}/ledger"
 LEDGER="${LEDGER_DIR}/log-size-audit.jsonl"
 CONFIG_FILE="${BOT_HOME}/config/monitoring.json"
@@ -35,10 +35,10 @@ CRIT_BYTES=$((100 * 1024 * 1024))    # 100 MB
 
 # 감사 경로 수집
 PATHS=()
-if [[ -d "${HOME}/.openclaw-data/jarvis/runtime/logs" ]]; then
+if [[ -d "${HOME}/.openclaw-data/runtime/logs" ]]; then
   while IFS= read -r -d '' f; do
     PATHS+=("$f")
-  done < <(find "${HOME}/.openclaw-data/jarvis/runtime/logs" -maxdepth 2 -type f -name "*.log" -print0 2>/dev/null)
+  done < <(find "${HOME}/.openclaw-data/runtime/logs" -maxdepth 2 -type f -name "*.log" -print0 2>/dev/null)
 fi
 
 shopt -s nullglob

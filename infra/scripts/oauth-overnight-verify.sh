@@ -12,11 +12,11 @@
 #   - 진짜 fail 또는 토큰 expired: Discord critical
 set -euo pipefail
 
-LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/oauth-overnight-verify.log"
-LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/oauth-refresh-ledger.jsonl"
-REFRESH_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/oauth-refresh.log"
+LOG="${HOME}/.openclaw-data/runtime/logs/oauth-overnight-verify.log"
+LEDGER="${HOME}/.openclaw-data/runtime/ledger/oauth-refresh-ledger.jsonl"
+REFRESH_LOG="${HOME}/.openclaw-data/runtime/logs/oauth-refresh.log"
 CRED="${HOME}/.claude/.credentials.json"
-ALERT="${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh"
+ALERT="${HOME}/.openclaw-data/runtime/scripts/alert.sh"
 
 log() { echo "[$(date '+%Y-%m-%dT%H:%M:%S%z')] $*" >> "${LOG}"; }
 

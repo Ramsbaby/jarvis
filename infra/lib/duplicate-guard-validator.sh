@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 INFRA_HOME="${BOT_HOME%/runtime}/infra"
 PASS_COUNT=0
 FAIL_COUNT=0

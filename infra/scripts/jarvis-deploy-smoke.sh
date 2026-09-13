@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # deploy-with-smoke.sh — Jarvis 봇 변경사항 검증 후 재시작
 # 문법 오류·핵심 함수 삭제 감지 시 재시작 차단
-# 사용: bash ~/.openclaw-data/jarvis/runtime/scripts/deploy-with-smoke.sh
+# 사용: bash ~/.openclaw-data/runtime/scripts/deploy-with-smoke.sh
 
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 # Cross-platform compat
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 SERVICE="ai.jarvis.discord-bot"
 PASS=0; FAIL=0
 RESULTS=""

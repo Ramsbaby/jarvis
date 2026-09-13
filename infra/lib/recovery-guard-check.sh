@@ -20,7 +20,7 @@ TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
 # Configuration
 JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
-RUNTIME_HOME="${RUNTIME_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+RUNTIME_HOME="${RUNTIME_HOME:-${HOME}/.openclaw-data/runtime}"
 
 # Counter for recovery layers
 RECOVERY_LAYER_COUNT=0

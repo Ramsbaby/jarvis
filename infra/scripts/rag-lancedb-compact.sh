@@ -3,7 +3,7 @@
 # 백업(매일 03:00)과 인덱싱(매시 :30)이 같은 디렉터리에서 겹쳐
 # tar 가 "File removed before we read it" 로 51회 실패했다.
 # 백업 대상과 인덱싱 대상은 같은 디렉터리다(inode 동일 확인).
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
 RAG_LOCK_DIR="/tmp/jarvis-rag-lancedb.lock.d"
 [ -f "$JARVIS_HOME/infra/lib/single-instance.sh" ] \
   && . "$JARVIS_HOME/infra/lib/single-instance.sh" \
@@ -22,7 +22,7 @@ RAG_LOCK_DIR="/tmp/jarvis-rag-lancedb.lock.d"
 #   4. 결과 통계 출력 + lock 해제
 #
 # 호출처:
-#   ~/.openclaw-data/jarvis/runtime/config/tasks.json → id=rag-lancedb-compact, schedule="15 4 * * 0"
+#   ~/.openclaw-data/runtime/config/tasks.json → id=rag-lancedb-compact, schedule="15 4 * * 0"
 #
 # 안전:
 #   - 실패해도 lock은 trap으로 반드시 해제

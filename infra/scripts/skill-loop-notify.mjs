@@ -2,14 +2,14 @@
 // skill-loop-notify.mjs — pending 초안의 Discord 결재 카드 송출 (+월요일 묶음 재안내)
 // 카드 버튼 처리: infra/discord/lib/approval.js (slapprove/slreject/slhold → decision 파일 기록)
 // Usage: node skill-loop-notify.mjs [--digest-only]
-// 설계: ~/.openclaw-data/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 6)
+// 설계: ~/.openclaw-data/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 6)
 
 import { readFileSync, readdirSync, existsSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import os from 'node:os';
 
 const HOME = os.homedir();
-const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis', 'runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, 'projects/jarvis', 'runtime');
 const DRAFTS = join(BOT_HOME, 'state', 'skill-drafts');
 const DECISIONS = join(DRAFTS, 'decisions');
 const NOTIFIED = join(DRAFTS, 'notified.json');

@@ -13,8 +13,8 @@
 #
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-monitoring-pre-check(04:55)로 이관됐다.
 # 이 스크립트는 crontab 46행에서도 불리는데 crontab 쓰기가 이 환경에서 막혀 있어(rc=124 타임아웃)
-# 스크립트 층에 가드를 둬 이중 실행을 막는다. 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/monitoring-pre-check
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/monitoring-pre-check" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 스크립트 층에 가드를 둬 이중 실행을 막는다. 재개: rm ~/.openclaw-data/runtime/state/stopped/monitoring-pre-check
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/monitoring-pre-check" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[monitoring-pre-check] 중지 플래그 있음 — 오픈클로 잡으로 이관됨 (state/stopped/monitoring-pre-check)"
     exit 0
 fi
@@ -88,9 +88,9 @@ log_check() {
 # 홈 디렉토리 설정
 JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
 JARVIS_INFRA="${JARVIS_HOME}/infra"
-# tasks.json 위치: ~/.openclaw-data/jarvis/runtime/config/tasks.json 또는 ~/.jarvis 근처
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/config/tasks.json" ]]; then
-    TASKS_CONFIG="${HOME}/.openclaw-data/jarvis/runtime/config/tasks.json"
+# tasks.json 위치: ~/.openclaw-data/runtime/config/tasks.json 또는 ~/.jarvis 근처
+if [[ -f "${HOME}/.openclaw-data/runtime/config/tasks.json" ]]; then
+    TASKS_CONFIG="${HOME}/.openclaw-data/runtime/config/tasks.json"
 else
     TASKS_CONFIG="${JARVIS_HOME}/../jarvis/runtime/config/tasks.json"
 fi
@@ -293,7 +293,7 @@ echo ""
 
 # 2026-09-10 오픈클로 이식: orchestrator 는 runtime/discord/lib/orchestrator.mjs 로 도는
 # 디스코드 계열 데몬이었고 그 디렉토리를 제거했다. 정지 플래그가 있으면 없는 게 정상이다.
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/orchestrator" ]]; then
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/orchestrator" ]]; then
     log_check "process.orchestrator" "ok" "의도적 정지 (state/stopped/orchestrator — 디스코드 제거로 실행 파일 소멸)"
     orchestrator_pid=""
 else
@@ -314,7 +314,7 @@ fi
 
 # 2026-09-10 오픈클로 이식: ai.jarvis.watchdog 은 디스코드 봇 전용 감시자였고 봇과 함께 정지했다.
 # 정지 플래그가 있으면 "없는 게 정상"이므로 경고를 내지 않는다. 플래그가 없는데 없으면 그건 진짜 이상이다.
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/watchdog" ]]; then
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/watchdog" ]]; then
     log_check "process.watchdog" "ok" "의도적 정지 (state/stopped/watchdog — 디스코드 봇 제거로 감시 대상 소멸)"
 else
     log_check "process.watchdog" "ok" "확인 중..."

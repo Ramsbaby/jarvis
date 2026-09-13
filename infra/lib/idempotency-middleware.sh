@@ -21,7 +21,7 @@ source "${HOME}/.jarvis/lib/cluster-guard-cl-3e0048f79eb206f9.sh" 2>/dev/null ||
 IDEMPOTENCY_CLUSTER_ID="${IDEMPOTENCY_CLUSTER_ID:-cl-3e0048f79eb206f9}"
 
 # 로그 경로
-IDEMPOTENCY_LOG="${HOME}/.openclaw-data/jarvis/runtime/state/idempotency-middleware.jsonl"
+IDEMPOTENCY_LOG="${HOME}/.openclaw-data/runtime/state/idempotency-middleware.jsonl"
 
 # 명령 식별자 생성: TASK_ID + PROMPT 기반 해시
 _generate_command_id() {

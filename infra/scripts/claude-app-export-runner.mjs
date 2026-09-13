@@ -14,10 +14,10 @@
  *   DEBUG=1 node claude-app-export-runner.mjs         # headed + 디버그
  *
  * Exit: 항상 0.
- * Log: ~/.openclaw-data/jarvis/runtime/logs/claude-app-export.log
+ * Log: ~/.openclaw-data/runtime/logs/claude-app-export.log
  */
 
-import playwright from '/Users/ramsbaby/.openclaw-data/jarvis/infra/discord/node_modules/playwright/index.js';
+import playwright from '/Users/ramsbaby/projects/jarvis/infra/discord/node_modules/playwright/index.js';
 const { chromium } = playwright;
 import {
   readFileSync, existsSync, mkdirSync, writeFileSync,
@@ -28,10 +28,10 @@ import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 
 const HOME           = homedir();
-const STATE_FILE     = join(HOME, '.openclaw-data/jarvis/runtime/state/claude-app-auth.json');
+const STATE_FILE     = join(HOME, '.openclaw-data/runtime/state/claude-app-auth.json');
 const DOWNLOADS_DIR  = join(HOME, 'Downloads');
-const LOG_FILE       = join(HOME, '.openclaw-data/jarvis/runtime/logs/claude-app-export.log');
-const STATUS_FILE    = join(HOME, '.openclaw-data/jarvis/runtime/state/claude-app-export-status.json');
+const LOG_FILE       = join(HOME, '.openclaw-data/runtime/logs/claude-app-export.log');
+const STATUS_FILE    = join(HOME, '.openclaw-data/runtime/state/claude-app-export-status.json');
 const SETTINGS_URL   = 'https://claude.ai/settings/data-privacy-controls';
 const TIMEOUT_MS     = 60_000;
 const HEADLESS       = process.env.DEBUG !== '1';
@@ -62,7 +62,7 @@ function triggerIngest(zipPath) {
   // 비동기 fire-and-forget
   const child = spawn(
     process.execPath,
-    [join(HOME, '.openclaw-data/jarvis/infra/scripts/wiki-ingest-claude-app.mjs'), zipPath],
+    [join(HOME, 'projects/jarvis/infra/scripts/wiki-ingest-claude-app.mjs'), zipPath],
     { detached: true, stdio: 'ignore' }
   );
   child.unref();

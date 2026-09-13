@@ -18,7 +18,7 @@ export JARVIS_BATCH_MODE="${JARVIS_BATCH_MODE:-1}"
 
 # Working directories
 BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
-RUNTIME_HOME="${HOME}/.openclaw-data/jarvis/runtime"
+RUNTIME_HOME="${HOME}/.openclaw-data/runtime"
 
 # Use RUNTIME_HOME for logs when available
 if [[ -d "$RUNTIME_HOME" ]]; then
@@ -51,7 +51,7 @@ for cmd in jq; do
     fi
 done
 
-ASK_CLAUDE_SCRIPT="${HOME}/.openclaw-data/jarvis/infra/bin/ask-claude.sh"
+ASK_CLAUDE_SCRIPT="${HOME}/projects/jarvis/infra/bin/ask-claude.sh"
 [[ -f "$ASK_CLAUDE_SCRIPT" ]] || error_exit "ask-claude.sh not found at $ASK_CLAUDE_SCRIPT"
 
 # === Task Execution ===

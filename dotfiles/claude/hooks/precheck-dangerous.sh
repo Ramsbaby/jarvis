@@ -11,7 +11,7 @@ if [[ "$TOOL" != "Bash" ]]; then exit 0; fi
 # cl-602875a5289bba26: 비가역 작업 차단/우회 감사 원장. source 실패해도(부재/오류) 무해하게
 # 이어지도록 항상 || true 로 감싼다 — 이 훅의 차단 판정 로직에는 어떤 경우에도 영향을 주지 않는다.
 # shellcheck disable=SC1090
-source "${HOME}/.openclaw-data/jarvis/infra/lib/irreversible-bypass-guard.sh" 2>/dev/null || true
+source "${HOME}/projects/jarvis/infra/lib/irreversible-bypass-guard.sh" 2>/dev/null || true
 _log_irreversible() {
     # log_irreversible_event가 정의되지 않았으면(source 실패) 조용히 무시
     declare -F log_irreversible_event >/dev/null 2>&1 && log_irreversible_event "$1" "$2" "$CMD" "$TOOL" "$PWD"
@@ -150,9 +150,9 @@ _config_validate_check() {
             # 3. tasks.json 편집 시 schema 검증
             if echo "$CMD" | grep -q "tasks\.json"; then
                 echo "tasks.json 변경 감지:"
-                if [[ -f "${HOME}/.openclaw-data/jarvis/config/tasks.json" ]]; then
-                    local total=$(jq '.tasks | length' "${HOME}/.openclaw-data/jarvis/config/tasks.json" 2>/dev/null || echo "?")
-                    local disabled=$(jq '[.tasks[] | select(.enabled == false)] | length' "${HOME}/.openclaw-data/jarvis/config/tasks.json" 2>/dev/null || echo "?")
+                if [[ -f "${HOME}/projects/jarvis/config/tasks.json" ]]; then
+                    local total=$(jq '.tasks | length' "${HOME}/projects/jarvis/config/tasks.json" 2>/dev/null || echo "?")
+                    local disabled=$(jq '[.tasks[] | select(.enabled == false)] | length' "${HOME}/projects/jarvis/config/tasks.json" 2>/dev/null || echo "?")
                     echo "  전체 태스크: $total개"
                     echo "  disabled 태스크: $disabled개"
                     if [[ "$total" != "?" ]] && [[ "$disabled" != "?" ]]; then

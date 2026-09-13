@@ -3,7 +3,7 @@
 # Claude -p 불필요. 순수 bash + python3.
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 TRACKER="$BOT_HOME/state/rate-tracker.json"
 LIMIT=900
 

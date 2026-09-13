@@ -9,10 +9,11 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LOG_FILE="$JARVIS_HOME/runtime/logs/jarvis-meta-audit.log"
-LOGS_DIR="$JARVIS_HOME/runtime/logs"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="$JARVIS_RUNTIME/logs/jarvis-meta-audit.log"
+LOGS_DIR="$JARVIS_RUNTIME/logs"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"
@@ -56,7 +57,7 @@ done
 # ── 3. 효과 측정 — 주요 audit cron의 alerted/FAIL 카운트 (지난 7일) ──
 # B3 fix: grep -c || echo 0 → wc -l + tr (정수 안전)
 SUPERVISOR_ALERTS=$(awk -v c="$(date -v-7d +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -d '-7 days' +%Y-%m-%dT%H:%M:%S)" \
-    -F'"ts":"' 'NF>1 && $2 > c' "$JARVIS_HOME/runtime/state/supervisor-tick-ledger.jsonl" 2>/dev/null \
+    -F'"ts":"' 'NF>1 && $2 > c' "$JARVIS_RUNTIME/state/supervisor-tick-ledger.jsonl" 2>/dev/null \
     | grep '"alerted":true' | wc -l | tr -d ' \n')
 DOCS_REGENS=$(grep "재생성: 성공" "$LOGS_DIR/docs-freshness-audit.log" 2>/dev/null | wc -l | tr -d ' \n')
 MODEL_VIOLATIONS=$(grep "FAIL: 모델 정책 위반" "$LOGS_DIR/model-version-audit.log" 2>/dev/null | wc -l | tr -d ' \n')

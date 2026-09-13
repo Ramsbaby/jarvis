@@ -20,11 +20,11 @@ import { readFileSync, appendFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const DISCORD_CHAR_LIMIT = 1990; // 2000 - 여유 10자
 
 // channel-feed 기록 — 크론/스크립트 발신 메시지를 세션 컨텍스트에 반영 (2026-05-28)
-const _FEED_DIR = join(homedir(), '.openclaw-data/jarvis/runtime', 'state', 'channel-feed');
+const _FEED_DIR = join(homedir(), '.openclaw-data/runtime', 'state', 'channel-feed');
 const _FEED_MAX = 30;
 function _appendChannelFeed(channelKey, text) {
   if (!channelKey || !text?.trim()) return;

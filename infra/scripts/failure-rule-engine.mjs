@@ -11,7 +11,7 @@
  *   node failure-rule-engine.mjs outcome "rule-id" success|fail → 신뢰도 갱신
  *   node failure-rule-engine.mjs report              → 전체 규칙 요약
  *
- * 저장소: ~/.openclaw-data/jarvis/runtime/state/failure-rules.jsonl
+ * 저장소: ~/.openclaw-data/runtime/state/failure-rules.jsonl
  */
 
 import {
@@ -20,7 +20,7 @@ import {
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const RULES_PATH = join(BOT_HOME, 'state', 'failure-rules.jsonl');
 const LOG_PATH = join(BOT_HOME, 'logs', 'failure-rules.log');
 

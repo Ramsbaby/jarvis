@@ -20,11 +20,11 @@ set -euo pipefail
 # [1] assert_path_exists — 경로 존재 여부 검증 (파일/디렉토리 모두)
 # ═════════════════════════════════════════════════════════════════════════════════
 #
-# 클러스터 패턴: RAG 위치를 ~/.openclaw-data/jarvis/runtime/data/lancedb라고 가정
+# 클러스터 패턴: RAG 위치를 ~/.openclaw-data/runtime/data/lancedb라고 가정
 #              경로 미확인 후 하드코딩 단언
 #
 # 사용 예시:
-#   assert_path_exists "$HOME/.openclaw-data/jarvis/runtime/data/lancedb" "RAG database directory" || exit 1
+#   assert_path_exists "$HOME/.openclaw-data/runtime/data/lancedb" "RAG database directory" || exit 1
 #   assert_path_exists "/tmp/work/$TASK_ID" "working directory" || return 1
 #
 # 반환값:

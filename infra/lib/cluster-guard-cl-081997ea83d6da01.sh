@@ -11,8 +11,9 @@ set -euo pipefail
 
 CLUSTER_ID="cl-081997ea83d6da01"
 JARVIS_HOME="${HOME}/.jarvis"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
 LIB_DIR="${JARVIS_HOME}/lib"
-STATE_DIR="${JARVIS_HOME}/runtime/state"
+STATE_DIR="${JARVIS_RUNTIME}/state"
 CLUSTER_GUARDS_DIR="${STATE_DIR}/cluster-guards"
 
 # 색상 정의

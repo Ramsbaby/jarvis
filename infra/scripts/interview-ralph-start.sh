@@ -18,8 +18,8 @@ set -euo pipefail
 # disabled 상태였으면 enable 자동 (stop --disable 후 재가동 시 자연스럽게)
 launchctl enable "gui/$(id -u)/ai.jarvis.interview-ralph" 2>/dev/null || true
 
-RUNNER="$HOME/.openclaw-data/jarvis/infra/scripts/interview-ralph-runner.mjs"
-LOG_DIR="$HOME/.openclaw-data/jarvis/runtime/logs"
+RUNNER="$HOME/projects/jarvis/infra/scripts/interview-ralph-runner.mjs"
+LOG_DIR="$HOME/.openclaw-data/runtime/logs"
 LOG_FILE="$LOG_DIR/interview-ralph-detached.log"
 
 if [ ! -f "$RUNNER" ]; then
@@ -45,8 +45,8 @@ USER_ARGS=("$@")
 
 # v4.47 (2026-04-27): INTERVIEW_ACTIVE_SCENARIO env 자동 감지 → --scenario 자동 추가.
 # 중복 주입 방지: USER_ARGS에 이미 --scenario 있으면 skip (2026-04-30 v4.74 핫픽스).
-if [ -f "$HOME/.openclaw-data/jarvis/runtime/.env" ]; then
-  ACTIVE_SCN=$(grep -E "^INTERVIEW_ACTIVE_SCENARIO=" "$HOME/.openclaw-data/jarvis/runtime/.env" | head -1 | cut -d= -f2 | sed 's/#.*//' | tr -d '"' | tr -d "'" | xargs)
+if [ -f "$HOME/.openclaw-data/runtime/.env" ]; then
+  ACTIVE_SCN=$(grep -E "^INTERVIEW_ACTIVE_SCENARIO=" "$HOME/.openclaw-data/runtime/.env" | head -1 | cut -d= -f2 | sed 's/#.*//' | tr -d '"' | tr -d "'" | xargs)
   # shellcheck disable=SC2199
   if [ -n "${ACTIVE_SCN:-}" ] && [[ ! " ${USER_ARGS[*]:-} " =~ " --scenario " ]]; then
     DEFAULT_ARGS+=(--scenario "$ACTIVE_SCN")
@@ -78,7 +78,7 @@ if kill -0 $PID 2>/dev/null; then
   echo "   discord #jarvis-interview 채널"
   echo ""
   echo "⏸ 종료:"
-  echo "   bash $HOME/.openclaw-data/jarvis/runtime/scripts/interview-ralph-stop.sh"
+  echo "   bash $HOME/.openclaw-data/runtime/scripts/interview-ralph-stop.sh"
 else
   echo "❌ spawn 실패 — log 확인: $LOG_FILE"
   tail -20 "$LOG_FILE" 2>/dev/null

@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] 판정 P — 정지.
 # 근거: "반복 실패 크론 감지"는 프롬프트 명시대로 오픈클로 실행이력·실패알림 엔진이 기본 대체하는 범주. 산출물도 1주 넘게 정체 + 소비자 없음.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/cron-blindspot-analyzer
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/cron-blindspot-analyzer" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/cron-blindspot-analyzer
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/cron-blindspot-analyzer" ]]; then
     echo "[cron-blindspot-analyzer] 중지 플래그 있음 (판정 P)"
     exit 0
 fi

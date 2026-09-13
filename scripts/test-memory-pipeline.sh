@@ -17,7 +17,7 @@ ng()   { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
 sk()   { echo "  ⏭️  $1"; SKIP=$((SKIP+1)); }
 head2() { echo; echo "── $1"; }
 
-JARVIS="${HOME}/.openclaw-data/jarvis"
+JARVIS="${HOME}/projects/jarvis"
 SESS="${JARVIS}/runtime/context/claude-code-sessions"
 RAW="${SESS}-raw"
 TMP=$(mktemp -d)

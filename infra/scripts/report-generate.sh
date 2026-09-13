@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPORT_TYPE="${1:-daily}"
 BOARD_URL="${BOARD_URL:-http://localhost:3100}"  # 로컬 실행 전용 — NAT loopback 우회
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG_FILE="${BOT_HOME}/logs/report-generate.log"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }

@@ -20,7 +20,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-env_path = Path.home() / '.openclaw-data/jarvis/runtime/.env'
+env_path = Path.home() / '.openclaw-data/runtime/.env'
 if env_path.exists():
     for line in env_path.read_text().splitlines():
         if line.startswith('OPENAI_API_KEY='):
@@ -172,7 +172,7 @@ def main():
         sys.exit(2)
 
     client = OpenAI()
-    md_path = Path.home() / '.openclaw-data/jarvis/runtime/career/samsung-cnt-2026-04-v3/20-presentation-script-v11.md'
+    md_path = Path.home() / '.openclaw-data/runtime/career/samsung-cnt-2026-04-v3/20-presentation-script-v11.md'
     slides = parse_slides_from_md(md_path)
     print(f'슬라이드 {len(slides)}개 추출 완료')
 
@@ -209,7 +209,7 @@ def main():
 
     # 결과 저장
     ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-    log_path = Path.home() / f'.openclaw-data/jarvis/runtime/state/script-naturalize-log-{ts}.json'
+    log_path = Path.home() / f'.openclaw-data/runtime/state/script-naturalize-log-{ts}.json'
     log_path.write_text(json.dumps(results, ensure_ascii=False, indent=2))
     print(f'로그: {log_path}')
 

@@ -13,8 +13,8 @@
 set -euo pipefail
 
 # [오픈클로 이식 2026-09-10] 주인님 지시로 중지. crontab 쓰기가 막혀 스크립트 층에 가드를 둔다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/cron-master-smoke
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/cron-master-smoke" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/cron-master-smoke
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/cron-master-smoke" ]]; then
     echo "[cron-master-smoke] 중지 플래그 있음 — 실행하지 않는다 (state/stopped/cron-master-smoke)"
     exit 0
 fi
@@ -26,8 +26,8 @@ if [[ "${1:-}" == "--verbose" ]]; then VERBOSE=1; fi
 #   "심링크라 괜찮다"는 주석으로 경로 가드를 면제받고 있었다. 실측 결과 그 폴더는
 #   심링크가 아닌 독립 폴더이며 bin/ 자체가 존재하지 않아, 이 스크립트는 대상 파일을
 #   찾지 못하는 상태였다. 정본 경로로 교정하고 잘못된 면제 주석을 제거한다.
-CRON_MASTER="${HOME}/.openclaw-data/jarvis/infra/bin/cron-master.sh"
-STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state"
+CRON_MASTER="${HOME}/projects/jarvis/infra/bin/cron-master.sh"
+STATE_DIR="${HOME}/.openclaw-data/runtime/state"
 DIGEST_FILE="${STATE_DIR}/cron-master-last-digest.txt"
 LEDGER_FILE="${STATE_DIR}/cron-master-ledger.jsonl"
 

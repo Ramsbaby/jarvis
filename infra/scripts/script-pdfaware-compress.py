@@ -12,7 +12,7 @@ import base64, html, json, os, re, sys, time
 from pathlib import Path
 from datetime import datetime
 
-env_path = Path.home() / '.openclaw-data/jarvis/runtime/.env'
+env_path = Path.home() / '.openclaw-data/runtime/.env'
 for line in env_path.read_text().splitlines():
     if line.startswith('OPENAI_API_KEY='):
         os.environ['OPENAI_API_KEY'] = line.split('=', 1)[1].strip().strip('"').strip("'")
@@ -21,8 +21,8 @@ from openai import OpenAI
 
 MODEL = 'gpt-5.5-pro'
 PDF_DIR = Path('/tmp/script-pdf-pages')
-SCRIPT_MD_V11 = Path.home() / '.openclaw-data/jarvis/runtime/career/samsung-cnt-2026-04-v3/20-presentation-script-v11.md'
-PREV_LOG = Path('~/.openclaw-data/jarvis/runtime/state/script-pdfaware-log-20260505-170655.json').expanduser()
+SCRIPT_MD_V11 = Path.home() / '.openclaw-data/runtime/career/samsung-cnt-2026-04-v3/20-presentation-script-v11.md'
+PREV_LOG = Path('~/.openclaw-data/runtime/state/script-pdfaware-log-20260505-170655.json').expanduser()
 
 # 시간 영향 큰 5장
 TARGET_SLIDES = [4, 6, 9, 10, 11]
@@ -166,7 +166,7 @@ def main():
     print(f'비용: 약 ${cost:.2f}')
 
     ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-    log_path = Path.home() / f'.openclaw-data/jarvis/runtime/state/script-pdfaware-compress-log-{ts}.json'
+    log_path = Path.home() / f'.openclaw-data/runtime/state/script-pdfaware-compress-log-{ts}.json'
     log_path.write_text(json.dumps(results, ensure_ascii=False, indent=2))
     print(f'로그: {log_path}')
 

@@ -3,14 +3,14 @@
 # Nexus 크론으로 실행: 매일 09:00
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 NODE="/opt/homebrew/bin/node"
 LOG="${BOT_HOME}/logs/inbox-alert.log"
 STAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
 # LaunchAgent 실행 시 .env 자동 로드 (NOTION_TOKEN 등 — Notion 상세 리포트용)
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/.env" ]]; then
-  set -a; source "${HOME}/.openclaw-data/jarvis/runtime/.env"; set +a
+if [[ -f "${HOME}/.openclaw-data/runtime/.env" ]]; then
+  set -a; source "${HOME}/.openclaw-data/runtime/.env"; set +a
 fi
 
 mkdir -p "$(dirname "$LOG")"

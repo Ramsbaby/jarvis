@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-ajqe-generate 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/ajqe-generate
+// 재개: rm ~/.openclaw-data/runtime/state/stopped/ajqe-generate
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
-if (__sc(__sh() + '/.openclaw-data/jarvis/runtime/state/stopped/ajqe-generate') && process.env.OPENCLAW_JOB !== '1') {
+if (__sc(__sh() + '/.openclaw-data/runtime/state/stopped/ajqe-generate') && process.env.OPENCLAW_JOB !== '1') {
   console.log('[ajqe-generate] 중지 플래그 있음 — 오픈클로로 이관됨');
   process.exit(0);
 }
@@ -27,9 +27,9 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
 const HOME = homedir();
-const SSOT_REGISTRY_PATH = join(HOME, '.openclaw-data/jarvis/runtime/context/ssot-registry.json');
-const QUEUE_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-question-queue.jsonl');
-const POLICY_PATH = join(HOME, '.openclaw-data/jarvis/runtime/config/ajqe-policy.json');
+const SSOT_REGISTRY_PATH = join(HOME, '.openclaw-data/runtime/context/ssot-registry.json');
+const QUEUE_PATH = join(HOME, '.openclaw-data/runtime/state/ajqe-question-queue.jsonl');
+const POLICY_PATH = join(HOME, '.openclaw-data/runtime/config/ajqe-policy.json');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -114,7 +114,7 @@ function priorityFor(domain, policy) {
 // 침묵 도메인 trigger: wiki/<domain>/_facts.md가 N일 이상 미수정이면 질문 적재.
 // id에 yyyy-WW(ISO week) 포함 → 주 1회만 적재.
 function scanSilentDomains(policy) {
-  const wikiDir = join(HOME, '.openclaw-data/jarvis/runtime/wiki');
+  const wikiDir = join(HOME, '.openclaw-data/runtime/wiki');
   if (!existsSync(wikiDir)) return [];
   const thresholdDays = policy.silenceThresholdDays ?? 30;
   const excludeDomains = new Set(policy.excludeDomains || []);

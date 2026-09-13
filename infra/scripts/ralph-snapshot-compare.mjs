@@ -5,7 +5,7 @@
 // 사용:
 //   node ralph-snapshot-compare.mjs <snapshot-A-dir> <snapshot-B-dir>
 //   node ralph-snapshot-compare.mjs latest-r1-baseline-serial latest-r2-concurrency3-hybrid
-//     → ~/.openclaw-data/jarvis/runtime/state/snapshots/comparison-<A>-vs-<B>-<timestamp>.md 생성
+//     → ~/.openclaw-data/runtime/state/snapshots/comparison-<A>-vs-<B>-<timestamp>.md 생성
 //
 // 비교 메트릭:
 //   - 평균 초/문항 (87.8 → ?)
@@ -21,7 +21,7 @@ import { readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { join, basename, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 
-const SNAP_ROOT = join(homedir(), '.openclaw-data/jarvis/runtime/state/snapshots');
+const SNAP_ROOT = join(homedir(), '.openclaw-data/runtime/state/snapshots');
 
 function resolveSnapPath(arg) {
   if (isAbsolute(arg)) return arg;

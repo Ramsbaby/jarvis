@@ -70,7 +70,7 @@ export function triggerDiscordMistakeExtract(sessionSummaryFilePath) {
       const NODE_BIN = process.execPath;
       const SCRIPT = join(BOT_HOME, '..', 'infra', 'scripts', 'mistake-extractor.mjs');
       // BOT_HOME 미설정 시 기본 경로 fallback
-      const scriptPath = existsSync(SCRIPT) ? SCRIPT : join(homedir(), '.openclaw-data/jarvis/infra/scripts/mistake-extractor.mjs');
+      const scriptPath = existsSync(SCRIPT) ? SCRIPT : join(homedir(), 'projects/jarvis/infra/scripts/mistake-extractor.mjs');
       if (!existsSync(scriptPath)) {
         recordSilentError('claude-runner.mistake-extract', new Error(`script not found: ${scriptPath}`));
         return;
@@ -123,7 +123,7 @@ export function processFeedback(userId, text) {
 // ---------------------------------------------------------------------------
 
 const HOME = homedir();
-const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime'));
+const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime'));
 const MODELS = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'models.json'), 'utf-8'));
 const DISCORD_MCP_PATH = join(BOT_HOME, 'config', 'discord-mcp.json');
 const USER_PROFILE_PATH = join(BOT_HOME, 'context', 'user-profile.md');
@@ -341,7 +341,7 @@ export async function execRagAsync(query, opts = {}) {
 function _isSimulationTurn(userMsg) {
   if (!userMsg) return false;
   const text = userMsg.toLowerCase();
-  // 슬래시 커맨드 형태 — ~/.openclaw-data/jarvis/runtime/skills/<name>.md 파일 존재 여부로 판정.
+  // 슬래시 커맨드 형태 — ~/.openclaw-data/runtime/skills/<name>.md 파일 존재 여부로 판정.
   // (claude-runner 상단의 fs/path/os 임포트를 공유)
   const slashMatch = userMsg.trim().match(/^\/([a-zA-Z0-9_-]+)/);
   if (slashMatch) {
@@ -482,7 +482,7 @@ const memoryHashCache = new Map();
 const _extractCooldown = new Map();
 
 // 감정 트리거 반복 카운터: 채널별 감정 발화 횟수 추적 (디스크 영속화 — 재시작 후에도 유지)
-const _EMOTION_COUNTS_FILE = join(homedir(), '.openclaw-data/jarvis/runtime/state/emotion-trigger-counts.json');
+const _EMOTION_COUNTS_FILE = join(homedir(), '.openclaw-data/runtime/state/emotion-trigger-counts.json');
 const _emotionTriggerCounts = (() => {
   const m = new Map();
   try {
@@ -495,7 +495,7 @@ const _emotionTriggerCounts = (() => {
 })();
 function _saveEmotionCounts() {
   try {
-    const dir = join(homedir(), '.openclaw-data/jarvis/runtime/state');
+    const dir = join(homedir(), '.openclaw-data/runtime/state');
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(_EMOTION_COUNTS_FILE, JSON.stringify(Object.fromEntries(_emotionTriggerCounts)));
   } catch { /* non-critical — 저장 실패해도 동작은 계속 */ }
@@ -870,7 +870,7 @@ export async function* createClaudeSession(prompt, {
   const _hasImageAttachment = attachments.some(a =>
     /\.(png|jpe?g|gif|webp|heic|bmp)$/i.test(a.safeName || a.localPath || ''));
   // [2026-06-11 v2] #jarvis-career 코딩테스트 모드 — env 게이트 → 상태 파일 토글 (재시작 불필요).
-  //   토글: bash ~/.openclaw-data/jarvis/infra/scripts/career-coding-mode.sh {coach|solve|off|status}
+  //   토글: bash ~/projects/jarvis/infra/scripts/career-coding-mode.sh {coach|solve|off|status}
   //   solve = 자바 직접 풀이 (기존) · coach = 생성형AI 프롬프트 전략 코치 (AI 활용형 라이브코딩 대비) · off = 평소.
   //   공통(solve·coach): fresh 세션, Sonnet, RAG/피드 주입 끔 — 문제 간 오염·지연 차단.
   const _ccMode = channelId === '1471694919339868190' ? getCareerCodingMode() : 'off';
@@ -1007,7 +1007,7 @@ export async function* createClaudeSession(prompt, {
     : null;
 
   // ---------------------------------------------------------------------------
-  // 공통 스킬 주입 (~/.openclaw-data/jarvis/runtime/skills/) — CLI·Discord·Mac 앱이 SSoT로 공유
+  // 공통 스킬 주입 (~/.openclaw-data/runtime/skills/) — CLI·Discord·Mac 앱이 SSoT로 공유
   // 주입 우선순위:
   //   1) 슬래시 커맨드 (`/skillname args`) — 명시적, 최우선
   //   2) 채널 매칭 (skill의 channels에 현재 채널 포함)
@@ -1646,7 +1646,7 @@ export async function* createClaudeSession(prompt, {
               if (isMaterial && exists) {
                 log('warn', 'PreToolUse: 교재 통째 재작성(Write) 차단 → Edit 권고', { fp: fp.slice(-60) });
                 try {
-                  const ledgerDir = join(HOME, '.openclaw-data/jarvis/runtime', 'state');
+                  const ledgerDir = join(HOME, '.openclaw-data/runtime', 'state');
                   mkdirSync(ledgerDir, { recursive: true });
                   appendFileSync(join(ledgerDir, 'permission-denied.jsonl'),
                     JSON.stringify({ ts: new Date().toISOString(), source: 'discord-bot', tool: 'Write', blocked: 'preply-material-rewrite', fp: fp.slice(-80) }) + '\n');
@@ -1671,7 +1671,7 @@ export async function* createClaudeSession(prompt, {
                 tool: input.tool_name, blocked: String(blocked).slice(0, 160),
               });
               try {
-                const ledgerDir = join(HOME, '.openclaw-data/jarvis/runtime', 'state');
+                const ledgerDir = join(HOME, '.openclaw-data/runtime', 'state');
                 mkdirSync(ledgerDir, { recursive: true });
                 appendFileSync(
                   join(ledgerDir, 'permission-denied.jsonl'),
@@ -1711,7 +1711,7 @@ export async function* createClaudeSession(prompt, {
               ]);
               // 커밋(제출·결제·전송·삭제·로그인)류 라벨 — 클릭 대상 설명에 이 단어가 있으면 차단.
               const COMMIT_RE = /\b(submit|send|pay|buy|order|purchase|checkout|confirm|delete|remove|sign\s?in|log\s?in|register|apply now)\b|제출|보내기|결제|구매|주문|결정|확인|완료|삭제|신청|등록|로그인|동의/i;
-              const bLedgerDir = join(HOME, '.openclaw-data/jarvis/runtime', 'ledger');
+              const bLedgerDir = join(HOME, '.openclaw-data/runtime', 'ledger');
               const bLog = (row) => {
                 try {
                   mkdirSync(bLedgerDir, { recursive: true });
@@ -1730,7 +1730,7 @@ export async function* createClaudeSession(prompt, {
                 let host = '';
                 try { host = new URL(String(input.tool_input?.url || '')).hostname.toLowerCase(); } catch { /* 파싱 실패 = deny */ }
                 let allow = [];
-                try { allow = (JSON.parse(readFileSync(join(HOME, '.openclaw-data/jarvis/runtime/config/browser-allowlist.json'), 'utf-8')).allowedHosts) || []; } catch { /* 파일 없음/깨짐 = deny-all */ }
+                try { allow = (JSON.parse(readFileSync(join(HOME, '.openclaw-data/runtime/config/browser-allowlist.json'), 'utf-8')).allowedHosts) || []; } catch { /* 파일 없음/깨짐 = deny-all */ }
                 const ok = !!host && allow.some((h) => host === h || host.endsWith('.' + h));
                 bLog({ tool: toolShort, url: String(input.tool_input?.url || '').slice(0, 200), host, decision: ok ? 'allow' : 'deny' });
                 if (!ok) {
@@ -1822,7 +1822,7 @@ export async function* createClaudeSession(prompt, {
   }
   // [2026-05-28] Token Budget Hard Cap — 비대화 구조적 차단
   //   발화 카테고리 추론 → 모드별 budget 적용 → score 낮은 섹션 자동 drop
-  //   drop ledger: ~/.openclaw-data/jarvis/runtime/state/prompt-budget-drops.jsonl
+  //   drop ledger: ~/.openclaw-data/runtime/state/prompt-budget-drops.jsonl
   // [2026-05-28 v2] budget mode를 embedding classifier 결과로 결정.
   //   _classifiedIntent는 위에서 이미 emotional/analytical/code/casual 중 하나로 분류됨.
   //   분석 채널(jarvis-career 등)은 분류 결과 override해서 analytical 강제 (도메인 가드).

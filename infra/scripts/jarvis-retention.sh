@@ -8,10 +8,11 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-ARCHIVE_DIR="$JARVIS_HOME/runtime/state/archive/$(date +%Y-%m)"
-LOG_FILE="$JARVIS_HOME/runtime/logs/jarvis-retention.log"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+ARCHIVE_DIR="$JARVIS_RUNTIME/state/archive/$(date +%Y-%m)"
+LOG_FILE="$JARVIS_RUNTIME/logs/jarvis-retention.log"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$ARCHIVE_DIR" "$(dirname "$LOG_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"
@@ -21,7 +22,7 @@ CUTOFF_ISO=$(date -v-90d +%Y-%m-%dT 2>/dev/null || date -d '-90 days' +%Y-%m-%dT
 
 # 1. JSONL — 90일 이상 라인 분리
 ARCHIVED_LINES=0
-for f in "$JARVIS_HOME/runtime/state"/*.jsonl; do
+for f in "$JARVIS_RUNTIME/state"/*.jsonl; do
     [ -f "$f" ] || continue
     BASE=$(basename "$f")
     OLD_LINES=$(awk -v c="$CUTOFF_ISO" -F'"ts":"' 'NF>1 && $2 < c' "$f" | wc -l | tr -d ' ')
@@ -43,7 +44,7 @@ done
 
 # 2. 로그 — 90일 이상 mtime 파일 gzip (이미 gz 제외)
 ARCHIVED_LOGS=0
-for f in "$JARVIS_HOME/runtime/logs"/*.log; do
+for f in "$JARVIS_RUNTIME/logs"/*.log; do
     [ -f "$f" ] || continue
     MTIME=$(stat -f %m "$f" 2>/dev/null || echo 0)
     CUTOFF_EPOCH=$(date -v-90d +%s 2>/dev/null || date -d '-90 days' +%s)

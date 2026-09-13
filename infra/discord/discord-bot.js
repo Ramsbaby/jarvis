@@ -21,7 +21,7 @@ import {
   Routes,
 } from 'discord.js';
 import { config as loadEnv } from 'dotenv';
-loadEnv({ path: join(process.env.JARVIS_HOME || join(homedir(), '.openclaw-data/jarvis'), 'runtime/discord/.env') });
+loadEnv({ path: join(process.env.JARVIS_HOME || join(homedir(), 'projects/jarvis'), 'runtime/discord/.env') });
 
 import { log, sendNtfy, getSessionHistoryFile } from './lib/claude-runner.js';
 import { SessionStore, RateTracker, Semaphore } from './lib/session.js';
@@ -39,7 +39,7 @@ import { closeRagEngine } from './lib/rag-helper.js';
 // ---------------------------------------------------------------------------
 
 const HOME = homedir();
-const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime'));
+const BOT_HOME = join(process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime'));
 const SESSIONS_PATH = join(BOT_HOME, 'state', 'sessions.json');
 const RATE_TRACKER_PATH = join(BOT_HOME, 'state', 'rate-tracker.json');
 const MAX_CONCURRENT = 4;
@@ -54,7 +54,7 @@ const BOT_NAME = process.env.BOT_NAME || 'Claude Bot';
  *
  * [1] 세션 저장소 (SessionStore)
  *   - 역할: 디스코드 스레드 ID ↔ Claude 세션 ID 매핑
- *   - 파일: ~/.openclaw-data/jarvis/runtime/state/sessions.json
+ *   - 파일: ~/.openclaw-data/runtime/state/sessions.json
  *   - 데이터 구조:
  *     {
  *       "123456789-987654321": {
@@ -68,7 +68,7 @@ const BOT_NAME = process.env.BOT_NAME || 'Claude Bot';
  *
  * [2] 레이트 트래커 (RateTracker)
  *   - 역할: 5시간 슬라이딩 윈도우 기반 API 호출 속도 제한
- *   - 파일: ~/.openclaw-data/jarvis/runtime/state/rate-tracker.json
+ *   - 파일: ~/.openclaw-data/runtime/state/rate-tracker.json
  *   - 형식: [timestamp_ms, timestamp_ms, ...]
  *   - 임계값: 5시간에 900 호출 (180 calls/hour)
  *   - 경고: 80% 초과 시 warning, 90% 초과 시 reject
@@ -214,7 +214,7 @@ async function registerSlashCommands(clientId, guildId) {
   ];
 
   // ---------------------------------------------------------------------------
-  // SSoT 스킬 자동 등록 — ~/.openclaw-data/jarvis/runtime/skills/*.md 를 Discord 슬래시 커맨드로 승격
+  // SSoT 스킬 자동 등록 — ~/.openclaw-data/runtime/skills/*.md 를 Discord 슬래시 커맨드로 승격
   // CLI의 `/mock-interview 지원회사` 경험을 디스코드에서 그대로 재현.
   // 중복 이름은 기존 하드코딩 커맨드가 우선 (스킬 무시).
   // ---------------------------------------------------------------------------

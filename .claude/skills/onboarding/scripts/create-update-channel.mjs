@@ -3,7 +3,7 @@
  * create-update-channel.mjs — 🚀jarvis-update 채널 생성 및 등록
  *
  * Usage:
- *   export $(grep -v '^#' ~/.openclaw-data/jarvis/runtime/.env | grep -v '^$' | xargs)
+ *   export $(grep -v '^#' ~/.openclaw-data/runtime/.env | grep -v '^$' | xargs)
  *   node create-update-channel.mjs
  *
  * Output:

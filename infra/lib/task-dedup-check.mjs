@@ -19,7 +19,7 @@ const tokens = (id) => new Set(
 const candidate = process.argv[2];
 if (!candidate) { console.error('usage: task-dedup-check.mjs <task-id>'); process.exit(2); }
 
-const dbPath = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime'), 'state', 'tasks.db');
+const dbPath = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime'), 'state', 'tasks.db');
 const db = new DatabaseSync(dbPath, { readOnly: true });
 const rows = db.prepare('SELECT id FROM tasks').all();
 

@@ -17,7 +17,7 @@
 set -euo pipefail
 
 CLUSTER_ID="${CLUSTER_ID:-cl-5f04f13d1c3d759d}"
-STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state"
+STATE_DIR="${HOME}/.openclaw-data/runtime/state"
 VERIFY_FLAG="${STATE_DIR}/.verify-passed-${CLUSTER_ID}"
 AUDIT_LOG="${STATE_DIR}/rule-execution-audit.jsonl"
 VIOLATIONS_LOG="${STATE_DIR}/rule-violations.jsonl"

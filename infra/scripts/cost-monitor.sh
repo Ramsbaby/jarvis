@@ -3,7 +3,7 @@
 # Cost Monitoring & Alerting Script
 # routing-metrics.jsonl을 모니터링하고 이상 탐지 시 Discord 알림 발송
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 METRICS_FILE="$BOT_HOME/logs/routing-metrics.jsonl"
 MONITORING_CONFIG="$BOT_HOME/infra/config/task-routing-config.json"
 

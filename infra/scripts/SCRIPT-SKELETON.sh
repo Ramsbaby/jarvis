@@ -10,9 +10,10 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LOG_FILE="$JARVIS_HOME/runtime/logs/{SCRIPT_NAME}.log"
-LEDGER="$JARVIS_HOME/runtime/state/{SCRIPT_NAME}-ledger.jsonl"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="$JARVIS_RUNTIME/logs/{SCRIPT_NAME}.log"
+LEDGER="$JARVIS_RUNTIME/state/{SCRIPT_NAME}-ledger.jsonl"
 
 # discord-route 사용 (채널 분산 wrapper)
 # shellcheck source=/dev/null

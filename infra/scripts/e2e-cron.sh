@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-e2e-cron 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/e2e-cron
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/e2e-cron" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/e2e-cron
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/e2e-cron" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[e2e-cron] 중지 플래그 있음 — 오픈클로로 이관됨"
     exit 0
 fi
@@ -13,8 +13,8 @@ fi
 set -uo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
-export BOT_HOME="${BOT_HOME:-${JARVIS_RUNTIME:-${HOME}/.openclaw-data/jarvis/runtime}}"
-export JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis}"
+export BOT_HOME="${BOT_HOME:-${JARVIS_RUNTIME:-${HOME}/.openclaw-data/runtime}}"
+export JARVIS_HOME="${JARVIS_HOME:-${HOME}/projects/jarvis}"
 SCRIPTS_DIR="${JARVIS_HOME}/infra/scripts"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 

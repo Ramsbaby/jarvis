@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # skill-loop-nightly.sh — 스킬 자가 생성 루프 야간 배치 (선별 → 추출)
 # DRYRUN 모드: SKILL_LOOP_DRYRUN=1 (기본) — 초안만 생성, Discord 카드 송출 안 함
-# 설계: ~/.openclaw-data/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 5)
+# 설계: ~/.openclaw-data/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 5)
 set -euo pipefail
 
 export HOME="${HOME:-$(eval echo "~$(whoami)")}"
 export PATH="${PATH}:/opt/homebrew/bin:/usr/local/bin"
 
-SCRIPTS_DIR="${HOME}/.openclaw-data/jarvis/infra/scripts"
-DRAFTS_DIR="${HOME}/.openclaw-data/jarvis/runtime/state/skill-drafts"
-LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/skill-loop.jsonl"
+SCRIPTS_DIR="${HOME}/projects/jarvis/infra/scripts"
+DRAFTS_DIR="${HOME}/.openclaw-data/runtime/state/skill-drafts"
+LEDGER="${HOME}/.openclaw-data/runtime/ledger/skill-loop.jsonl"
 MAX="${SKILL_LOOP_MAX:-3}"
 TODAY="$(date +%F)"
 
@@ -25,7 +25,7 @@ fi
 # 실패 관측: tasks.json discordChannel도 script 태스크엔 비실효 → 직접 알림 (B2 수리)
 on_fail() {
   printf '{"ts":"%s","event":"batch-failed","line":"%s"}\n' "$(date -u +%FT%TZ)" "${1:-?}" >> "$LEDGER" 2>/dev/null || true
-  node "${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs" --type stats \
+  node "${HOME}/projects/jarvis/infra/scripts/discord-visual.mjs" --type stats \
     --data "{\"title\":\"⚠️ skill-loop 야간 배치 실패\",\"data\":{\"시각\":\"$(date '+%F %T KST')\",\"실패 라인\":\"${1:-?}\",\"로그\":\"results/skill-loop-nightly\"},\"timestamp\":\"${TODAY}\"}" \
     --channel jarvis-system >/dev/null 2>&1 || true
 }
@@ -69,7 +69,7 @@ echo "✅ 배치 완료 — pending ${pending_count}건, 만료 처리 ${expired
 #   crash가 아니라 무산출이라 on_fail trap이 못 잡았다. 이 감시가 그 '눈'이 된다.
 DRY_STREAK="$(node -e '
 const fs=require("fs");
-const L=process.env.HOME+"/.openclaw-data/jarvis/runtime/ledger/skill-loop.jsonl";
+const L=process.env.HOME+"/.openclaw-data/runtime/ledger/skill-loop.jsonl";
 let lines=[]; try{lines=fs.readFileSync(L,"utf8").trim().split("\n");}catch(e){console.log(0);process.exit(0);}
 const byDay={};
 for(const l of lines){try{const o=JSON.parse(l);const d=(o.ts||"").slice(0,10);const e=o.event;
@@ -90,7 +90,7 @@ console.log(streak);
 ' 2>/dev/null || echo 0)"
 if [ "${DRY_STREAK:-0}" -ge 3 ]; then
   echo "⚠️ 조용한 무산출 ${DRY_STREAK}일 연속 — jarvis-system 경고 송출"
-  node "${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs" --type stats \
+  node "${HOME}/projects/jarvis/infra/scripts/discord-visual.mjs" --type stats \
     --data "{\"title\":\"⚠️ skill-loop 조용한 무산출 ${DRY_STREAK}일 연속\",\"data\":{\"증상\":\"선별은 되는데 초안 생성 0건\",\"의심\":\"추출 게이트·경로 이슈\",\"점검\":\"skill-loop-extract 로그 + selected/draft-created ledger\",\"시각\":\"$(date '+%F %T KST')\"},\"timestamp\":\"${TODAY}\"}" \
     --channel jarvis-system >/dev/null 2>&1 || true
 fi

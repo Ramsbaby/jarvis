@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] 판정 D — 정지.
 # 근거: tasks.json에 이미 enabled:false + _disabled_reason "죽은 층, task=unknown 메트릭만, 소비자 0". @reboot 데몬만 남아 있었다
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/cron-completion-hook
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/cron-completion-hook" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/cron-completion-hook
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/cron-completion-hook" ]]; then
     echo "[cron-completion-hook] 중지 플래그 있음 (판정 D)"
     exit 0
 fi
@@ -31,7 +31,7 @@ source "${BOT_HOME:-${HOME}/.jarvis}/infra/lib/guards.sh" 2>/dev/null || {
 BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 if [[ ! -d "$BOT_HOME" ]]; then
   # Fallback to runtime path if .jarvis symlink doesn't exist
-  BOT_HOME="${HOME}/.openclaw-data/jarvis/runtime"
+  BOT_HOME="${HOME}/.openclaw-data/runtime"
 fi
 
 LOG_DIR="$BOT_HOME/logs"

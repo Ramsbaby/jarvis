@@ -15,8 +15,8 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
-JARVIS_HOME="${HOME}/.openclaw-data/jarvis"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
+JARVIS_HOME="${HOME}/projects/jarvis"
 LEDGER="$BOT_HOME/state/prompt-budget-drops.jsonl"
 MANIFEST="$BOT_HOME/context/injection-watch.json"
 LOG="${BOT_HOME}/logs/prompt-bloat-sentinel.log"

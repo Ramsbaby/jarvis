@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] crontab 쓰기가 막혀(rc=124) 스크립트 층에 가드를 둔다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/cf-pages-deploy-notify
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/cf-pages-deploy-notify" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/cf-pages-deploy-notify
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/cf-pages-deploy-notify" ]]; then
     echo "[cf-pages-deploy-notify] 중지 플래그 있음 (state/stopped/cf-pages-deploy-notify)"
     exit 0
 fi
@@ -13,11 +13,11 @@ fi
 # 크론: */3 * * * * (3분 폴링). 상태 파일로 중복 알림 방지.
 set -euo pipefail
 
-ENV="${HOME}/.openclaw-data/jarvis/runtime/.env"
-STATE="${HOME}/.openclaw-data/jarvis/runtime/state/cf-deploy-last.txt"
-MON="${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json"
+ENV="${HOME}/.openclaw-data/runtime/.env"
+STATE="${HOME}/.openclaw-data/runtime/state/cf-deploy-last.txt"
+MON="${HOME}/.openclaw-data/runtime/config/monitoring.json"
 PROJECT="ramsbaby-blog-starter"
-STATE_DIR="${HOME}/.openclaw-data/jarvis/runtime/state"
+STATE_DIR="${HOME}/.openclaw-data/runtime/state"
 
 CF_KEY=$(grep '^CLOUDFLARE_API_KEY=' "$ENV" 2>/dev/null | cut -d= -f2- || true)
 CF_EMAIL=$(grep '^CLOUDFLARE_EMAIL=' "$ENV" 2>/dev/null | cut -d= -f2- || true)

@@ -4,17 +4,18 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LOG_FILE="$JARVIS_HOME/runtime/logs/personal-snapshot.log"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
-SNAPSHOT_FILE="$JARVIS_HOME/runtime/state/personal-snapshot-state.json"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="$JARVIS_RUNTIME/logs/personal-snapshot.log"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
+SNAPSHOT_FILE="$JARVIS_RUNTIME/state/personal-snapshot-state.json"
 
 mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$SNAPSHOT_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"
 _log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
 # ── 1. 이력서 STAR 변화 ──────────────────────────────────────────────
-USER_PROFILE="$JARVIS_HOME/runtime/context/user-profile.md"
+USER_PROFILE="$JARVIS_RUNTIME/context/user-profile.md"
 STAR_COUNT=0
 [ -f "$USER_PROFILE" ] && STAR_COUNT=$(grep -E "^### S[0-9]+|^### STAR-[0-9]+" "$USER_PROFILE" 2>/dev/null | wc -l | tr -d ' \n')
 LAST_STAR=$(jq -r '.lastStarCount // 0' "$SNAPSHOT_FILE" 2>/dev/null || echo 0)
@@ -22,14 +23,14 @@ STAR_DELTA=$((STAR_COUNT - LAST_STAR))
 
 # ── 2. 포트폴리오 risk (단순 — 손절선 근접 종목 카운트) ────────────────
 PORTFOLIO_RISK="N/A"
-PORTFOLIO_FILE="$JARVIS_HOME/runtime/state/portfolio-snapshot.json"
+PORTFOLIO_FILE="$JARVIS_RUNTIME/state/portfolio-snapshot.json"
 if [ -f "$PORTFOLIO_FILE" ]; then
     # 단순 risk: holdings 중 -10% 이상 하락한 것 카운트
     PORTFOLIO_RISK=$(jq -r '[.holdings[]? | select((.changePct // 0) < -10)] | length' "$PORTFOLIO_FILE" 2>/dev/null || echo "0")
 fi
 
 # ── 3. 일상 키워드 누적 (지난 7일 세션 요약) ────────────────────────
-SESSIONS_DIR="$JARVIS_HOME/runtime/state/session-summaries"
+SESSIONS_DIR="$JARVIS_RUNTIME/state/session-summaries"
 EXERCISE_HITS=0
 READING_HITS=0
 INVESTMENT_HITS=0

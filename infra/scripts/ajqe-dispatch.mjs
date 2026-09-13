@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-ajqe-dispatch 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/ajqe-dispatch
+// 재개: rm ~/.openclaw-data/runtime/state/stopped/ajqe-dispatch
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
-if (__sc(__sh() + '/.openclaw-data/jarvis/runtime/state/stopped/ajqe-dispatch') && process.env.OPENCLAW_JOB !== '1') {
+if (__sc(__sh() + '/.openclaw-data/runtime/state/stopped/ajqe-dispatch') && process.env.OPENCLAW_JOB !== '1') {
   console.log('[ajqe-dispatch] 중지 플래그 있음 — 오픈클로로 이관됨');
   process.exit(0);
 }
@@ -33,10 +33,10 @@ import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
 const HOME = homedir();
-const QUEUE_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-question-queue.jsonl');
-const SENT_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-sent.jsonl');
-const POLICY_PATH = join(HOME, '.openclaw-data/jarvis/runtime/config/ajqe-policy.json');
-const MONITORING_PATH = join(HOME, '.openclaw-data/jarvis/runtime/config/monitoring.json');
+const QUEUE_PATH = join(HOME, '.openclaw-data/runtime/state/ajqe-question-queue.jsonl');
+const SENT_PATH = join(HOME, '.openclaw-data/runtime/state/ajqe-sent.jsonl');
+const POLICY_PATH = join(HOME, '.openclaw-data/runtime/config/ajqe-policy.json');
+const MONITORING_PATH = join(HOME, '.openclaw-data/runtime/config/monitoring.json');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const FORCE = process.argv.includes('--force');
@@ -63,7 +63,7 @@ const DEFAULT_POLICY = {
   },
 };
 
-const EMPTY_MCP = join(HOME, '.openclaw-data/jarvis/runtime/config/empty-mcp.json');
+const EMPTY_MCP = join(HOME, '.openclaw-data/runtime/config/empty-mcp.json');
 // claude CLI 절대 경로 — PATH 의존 제거 + 최신 버전 보장.
 // Homebrew claude(/opt/homebrew/bin/claude)는 구버전 (2.1.37)이라 신규 옵션 미지원.
 // ~/.local/bin/claude (2.1.131+) 사용. 부재 시 PATH의 claude로 fallback.
@@ -340,7 +340,7 @@ async function main() {
       const cfg = loadJSON(MONITORING_PATH, {});
       if (cfg._webhook_disabled_20260910 || cfg._webhooks_disabled_20260910) {
         try {
-          const logDir = join(process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime'), 'logs');
+          const logDir = join(process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime'), 'logs');
           mkdirSync(logDir, { recursive: true });
           // 원장은 한 줄 = 한 건이다. 질문 본문에 줄바꿈이 있어 그대로 넣으면 형식이 깨지고
           // 다이제스트 파서가 뒤 줄들을 통째로 잃는다. 공백으로 눕혀서 넣는다.

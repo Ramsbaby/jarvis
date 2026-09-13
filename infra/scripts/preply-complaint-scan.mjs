@@ -2,10 +2,10 @@
 
 // [오픈클로 이식 2026-09-10] 판정 D — 정지.
 // 근거: discord.js Client 로 채널 메시지를 직접 fetch 하는 구조(24·85행) — 봇 제거로 입력원 소멸. 원장도 7/27 이후 정지
-// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/preply-complaint-scan
+// 재개: rm ~/.openclaw-data/runtime/state/stopped/preply-complaint-scan
 import { existsSync as __stopChk } from 'node:fs';
 import { homedir as __stopHome } from 'node:os';
-if (__stopChk(__stopHome() + '/.openclaw-data/jarvis/runtime/state/stopped/preply-complaint-scan')) {
+if (__stopChk(__stopHome() + '/.openclaw-data/runtime/state/stopped/preply-complaint-scan')) {
   console.log('[preply-complaint-scan] 중지 플래그 있음 (판정 D)');
   process.exit(0);
 }
@@ -24,20 +24,20 @@ if (__stopChk(__stopHome() + '/.openclaw-data/jarvis/runtime/state/stopped/prepl
  *   --days N   최근 N일 스캔 (기본 7)
  *   --notify   미커버 반복 불만이 임계 이상이면 Discord(jarvis-system)로 알림
  *
- * 원장: ~/.openclaw-data/jarvis/runtime/state/preply-complaint-ledger.jsonl (msgId 기준 멱등 append)
+ * 원장: ~/.openclaw-data/runtime/state/preply-complaint-ledger.jsonl (msgId 기준 멱등 append)
  */
 import { readFileSync, existsSync, appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 
-const require = createRequire('/Users/ramsbaby/.openclaw-data/jarvis/infra/discord/package.json');
+const require = createRequire('/Users/ramsbaby/projects/jarvis/infra/discord/package.json');
 const { Client, GatewayIntentBits } = require('discord.js');
 
 const HOME = homedir();
-const ENV_FILE = `${HOME}/.openclaw-data/jarvis/runtime/.env`;
-const LEDGER = `${HOME}/.openclaw-data/jarvis/runtime/state/preply-complaint-ledger.jsonl`;
-const UPLOAD_LEDGER = `${HOME}/.openclaw-data/jarvis/runtime/state/preply-upload-ledger.jsonl`; // 2026-07-13: 업로드 실패 상관분석용
+const ENV_FILE = `${HOME}/.openclaw-data/runtime/.env`;
+const LEDGER = `${HOME}/.openclaw-data/runtime/state/preply-complaint-ledger.jsonl`;
+const UPLOAD_LEDGER = `${HOME}/.openclaw-data/runtime/state/preply-upload-ledger.jsonl`; // 2026-07-13: 업로드 실패 상관분석용
 const THRESHOLD = 3; // 미커버 불만이 이 횟수 이상이면 "검사 추가 필요" 승격
 
 const argv = process.argv.slice(2);
@@ -79,7 +79,7 @@ function loadSeen() {
 async function sendNotify(text) {
   // jarvis 채널 webhook으로 알림 (2026-07-13 주인님 지시로 jarvis-system → jarvis 변경). 실패는 비차단.
   try {
-    const cfg = JSON.parse(readFileSync(`${HOME}/.openclaw-data/jarvis/runtime/config/monitoring.json`, 'utf8'));
+    const cfg = JSON.parse(readFileSync(`${HOME}/.openclaw-data/runtime/config/monitoring.json`, 'utf8'));
     const url = cfg.webhooks?.['jarvis'];
     if (!url) return;
     await fetch(url, {

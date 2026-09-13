@@ -12,13 +12,13 @@
 #
 # 사용법:
 #   # 1. 가드 실행: 지정 경로 탐색 + JSON 결과 출력
-#   ~/.openclaw-data/jarvis/infra/guards/file-existence-guard.sh scan /path/to/file
+#   ~/projects/jarvis/infra/guards/file-existence-guard.sh scan /path/to/file
 #
 #   # 2. 가드 실행: 디렉토리 패턴 탐색
-#   ~/.openclaw-data/jarvis/infra/guards/file-existence-guard.sh scan "~/.openclaw-data/jarvis/**/*.sh"
+#   ~/projects/jarvis/infra/guards/file-existence-guard.sh scan "~/projects/jarvis/**/*.sh"
 #
 #   # 3. 응답 검증: 파일 단언과 실제 탐색 결과 대조
-#   ~/.openclaw-data/jarvis/infra/guards/file-existence-guard.sh validate \
+#   ~/projects/jarvis/infra/guards/file-existence-guard.sh validate \
 #       --scan-result "$JSON_SCAN" \
 #       --response "$RESPONSE_TEXT"
 #
@@ -32,7 +32,8 @@ set -euo pipefail
 
 # ── 상수 및 경로 설정 ──────────────────────────────────────────────────────
 JARVIS_HOME="${HOME}/.jarvis"
-GUARD_LOG="${JARVIS_HOME}/runtime/logs/file-existence-guard.jsonl"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+GUARD_LOG="${JARVIS_RUNTIME}/logs/file-existence-guard.jsonl"
 CLUSTER_ID="cl-3dbad2477e65b7b7"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 HOSTNAME="$(hostname 2>/dev/null || echo 'unknown')"

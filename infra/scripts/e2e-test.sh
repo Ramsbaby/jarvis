@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # Jarvis E2E Test Suite
-# Usage: ~/.openclaw-data/jarvis/runtime/scripts/e2e-test.sh [--ntfy] (--ntfy sends test push notification)
+# Usage: ~/.openclaw-data/runtime/scripts/e2e-test.sh [--ntfy] (--ntfy sends test push notification)
 
 # [2026-09-11] 기본값이 폐기된 옛 경로(~/jarvis)였다. 잡이 env 로 넘겨줄 때만 맞고
 # 사람이 직접 돌리면 통째로 엉뚱한 곳을 검사한다.
@@ -32,8 +32,8 @@ check() {
   # [오픈클로 이식 2026-09-10] 디스코드를 전면 제거했다. 그 트리를 보는 검사 15건이 영구 FAIL 이 되고,
   # jarvis-auditor 가 FAIL 수만큼 매일 코더 티켓을 만든다(2026-09-10 FAIL 1 → 19 급증).
   # "없어서 실패"와 "일부러 없앰"을 가르지 않으면 감사 전체가 못 쓰게 된다.
-  # 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/discord-removed (검사도 함께 되살아난다)
-  if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/discord-removed" ]] && [[ "$* $name" == */discord/* || "$name" == *"discord"* || "$name" == *"Discord"* ]]; then
+  # 재개: rm ~/.openclaw-data/runtime/state/stopped/discord-removed (검사도 함께 되살아난다)
+  if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/discord-removed" ]] && [[ "$* $name" == */discord/* || "$name" == *"discord"* || "$name" == *"Discord"* ]]; then
     skip "$name (디스코드 의도적 제거 — 2026-09-10)"
     return 0
   fi
@@ -109,9 +109,9 @@ ci_check "monitoring.json exists" test -f "$BOT_HOME/config/monitoring.json"
 # --- Dependency Tests ---
 echo ""
 echo "▶ Dependencies"
-check "LanceDB package installed" test -d "${HOME}/.openclaw-data/jarvis/rag/node_modules/@lancedb/lancedb"   # 2026-09-10: discord/ 제거로 경로 이동 — RAG 실제 설치 위치
-check "OpenAI package installed" test -d "${HOME}/.openclaw-data/jarvis/infra/discord/node_modules/openai"   # 2026-09-10: runtime/discord 제거 후 infra/discord 잔존본이 실사용처
-check "apache-arrow installed" test -d "${HOME}/.openclaw-data/jarvis/rag/node_modules/apache-arrow"   # 2026-09-10: RAG 실제 설치 위치
+check "LanceDB package installed" test -d "${HOME}/projects/jarvis/rag/node_modules/@lancedb/lancedb"   # 2026-09-10: discord/ 제거로 경로 이동 — RAG 실제 설치 위치
+check "OpenAI package installed" test -d "${HOME}/projects/jarvis/infra/discord/node_modules/openai"   # 2026-09-10: runtime/discord 제거 후 infra/discord 잔존본이 실사용처
+check "apache-arrow installed" test -d "${HOME}/projects/jarvis/rag/node_modules/apache-arrow"   # 2026-09-10: RAG 실제 설치 위치
 check "discord-bot.js syntax valid" node --check "$BOT_HOME/discord/discord-bot.js"
 check "handlers.js syntax valid" node --check "$BOT_HOME/discord/lib/handlers.js"
 check "handlers.js no-undef (ESLint)" bash -c "

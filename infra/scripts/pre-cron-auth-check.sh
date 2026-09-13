@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG_FILE="${BOT_HOME}/logs/pre-cron-auth-check.log"
 MONITORING_CONFIG="${BOT_HOME}/config/monitoring.json"
 

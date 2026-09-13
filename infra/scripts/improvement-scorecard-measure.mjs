@@ -25,18 +25,18 @@ import { join } from 'node:path';
 
 const HOME = homedir();
 const ANCHOR = '2026-07-20';
-const BASELINE_FILE = join(HOME, '.openclaw-data/jarvis/runtime/ledger/improvement-scorecard-baseline-20260720.json');
+const BASELINE_FILE = join(HOME, '.openclaw-data/runtime/ledger/improvement-scorecard-baseline-20260720.json');
 
 // ── 데이터 소스 (실측 확인된 실제 경로) ───────────────────────────────
 const SRC = {
   autolearnMd:   join(HOME, '.claude/rules/jarvis-autolearn.md'),
-  mistakeLedger: join(HOME, '.openclaw-data/jarvis/runtime/state/mistake-ledger.jsonl'),
-  promoterLedger:join(HOME, '.openclaw-data/jarvis/runtime/ledger/promoter-ledger.jsonl'),
-  independentVerify: join(HOME, '.openclaw-data/jarvis/runtime/ledger/independent-verify.jsonl'),
-  botResponseBus: join(HOME, '.openclaw-data/jarvis/runtime/ledger/bot-response-bus.jsonl'),
-  discordSendAudit: join(HOME, '.openclaw-data/jarvis/runtime/ledger/discord-send-audit.jsonl'),
-  outfileBaseline: join(HOME, '.openclaw-data/jarvis/runtime/ledger/outfile-hook-holdout-baseline.json'),
-  ragStats:      join(HOME, '.openclaw-data/jarvis/rag/bin/rag-stats.mjs'),
+  mistakeLedger: join(HOME, '.openclaw-data/runtime/state/mistake-ledger.jsonl'),
+  promoterLedger:join(HOME, '.openclaw-data/runtime/ledger/promoter-ledger.jsonl'),
+  independentVerify: join(HOME, '.openclaw-data/runtime/ledger/independent-verify.jsonl'),
+  botResponseBus: join(HOME, '.openclaw-data/runtime/ledger/bot-response-bus.jsonl'),
+  discordSendAudit: join(HOME, '.openclaw-data/runtime/ledger/discord-send-audit.jsonl'),
+  outfileBaseline: join(HOME, '.openclaw-data/runtime/ledger/outfile-hook-holdout-baseline.json'),
+  ragStats:      join(HOME, 'projects/jarvis/rag/bin/rag-stats.mjs'),
 };
 
 // ── 채널 분류 ────────────────────────────────────────────────────────
@@ -156,10 +156,10 @@ function m5_outfile() {
   try {
     const b = JSON.parse(readFileSync(SRC.outfileBaseline,'utf8'));
     out.linked_baseline = SRC.outfileBaseline;
-    out.linked_measure_script = join(HOME, '.openclaw-data/jarvis/infra/scripts/outfile-hook-holdout-measure.py');
+    out.linked_measure_script = join(HOME, 'projects/jarvis/infra/scripts/outfile-hook-holdout-measure.py');
     out.measure_after = b.measure_date_dplus14 || '2026-08-03';
     out.baseline_windows = b.baseline_windows || null;
-    out.run_hint = 'python3 ~/.openclaw-data/jarvis/infra/scripts/outfile-hook-holdout-measure.py --measure  (D+14 이후)';
+    out.run_hint = 'python3 ~/projects/jarvis/infra/scripts/outfile-hook-holdout-measure.py --measure  (D+14 이후)';
   } catch (e) { out.note = '측정불가: outfile baseline 파싱 실패 — '+e.message; }
   return out;
 }
@@ -316,8 +316,8 @@ if (argv.includes('--session-reminder')) {
   const assume = getOpt('assume-today');
   const todayStr = assume || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
 
-  const SENT_DIR   = join(HOME, '.openclaw-data/jarvis/runtime/state/scorecard-due-sent');
-  const DEFER_FILE = join(HOME, '.openclaw-data/jarvis/runtime/ledger/deferred-tasks.jsonl');
+  const SENT_DIR   = join(HOME, '.openclaw-data/runtime/state/scorecard-due-sent');
+  const DEFER_FILE = join(HOME, '.openclaw-data/runtime/ledger/deferred-tasks.jsonl');
 
   // (마스터 스위치) open && revisit_on<=오늘 인 미뤄둔 과제 — 이게 있어야만 리마인더가 뜬다.
   //
@@ -399,16 +399,16 @@ if (argv.includes('--check-due')) {
   const todayStr = assume || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
   const measureNow = assume ? new Date(assume + 'T12:00:00+09:00') : now;
 
-  const SENT_DIR     = join(HOME, '.openclaw-data/jarvis/runtime/state/scorecard-due-sent');
-  const DEFER_FILE   = join(HOME, '.openclaw-data/jarvis/runtime/ledger/deferred-tasks.jsonl');
-  const WATCH_LOG    = join(HOME, '.openclaw-data/jarvis/runtime/logs/scorecard-watchman.log');
-  const WATCH_LEDGER = join(HOME, '.openclaw-data/jarvis/runtime/ledger/scorecard-watchman-ledger.jsonl');
-  const ROUTE_LIB    = join(HOME, '.openclaw-data/jarvis/infra/lib/discord-route.sh');
+  const SENT_DIR     = join(HOME, '.openclaw-data/runtime/state/scorecard-due-sent');
+  const DEFER_FILE   = join(HOME, '.openclaw-data/runtime/ledger/deferred-tasks.jsonl');
+  const WATCH_LOG    = join(HOME, '.openclaw-data/runtime/logs/scorecard-watchman.log');
+  const WATCH_LEDGER = join(HOME, '.openclaw-data/runtime/ledger/scorecard-watchman-ledger.jsonl');
+  const ROUTE_LIB    = join(HOME, 'projects/jarvis/infra/lib/discord-route.sh');
 
   const logLine = (s) => {
     const ln = `[${new Date().toISOString()}] ${s}`;
     console.log(ln);
-    try { mkdirSync(join(HOME, '.openclaw-data/jarvis/runtime/logs'), { recursive: true }); appendFileSync(WATCH_LOG, ln + '\n'); } catch {}
+    try { mkdirSync(join(HOME, '.openclaw-data/runtime/logs'), { recursive: true }); appendFileSync(WATCH_LOG, ln + '\n'); } catch {}
   };
 
   if (!existsSync(BASELINE_FILE)) { logLine(`[check-due] baseline 없음 — skip (today=${todayStr})`); process.exit(0); }
@@ -510,7 +510,7 @@ if (argv.includes('--check-due')) {
   }
 
   try {
-    mkdirSync(join(HOME, '.openclaw-data/jarvis/runtime/ledger'), { recursive: true });
+    mkdirSync(join(HOME, '.openclaw-data/runtime/ledger'), { recursive: true });
     appendFileSync(WATCH_LEDGER, JSON.stringify({
       ts: new Date().toISOString(), today: todayStr, dry_run: dryRun, sent,
       fired_buckets: firedBuckets.map(b => ({ bucket: b.bucketKey, due: b.dueDate, verdicts: b.rows.map(r => `${r.id}:${r.verdict}`) })),

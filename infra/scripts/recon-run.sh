@@ -8,7 +8,7 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 export HOME="${HOME:-/Users/$(id -un)}"
 
-export BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
+export BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/runtime}"
 CRON_LOG="$BOT_HOME/logs/cron.log"
 ASK_CLAUDE="$BOT_HOME/bin/ask-claude.sh"
 

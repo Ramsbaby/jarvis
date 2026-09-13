@@ -25,7 +25,7 @@ if [[ -z "$KEYWORD" ]]; then
     exit 1
 fi
 
-REPO="${REPO:-/Users/ramsbaby/.openclaw-data/jarvis}"
+REPO="${REPO:-/Users/ramsbaby/projects/jarvis}"
 cd "$REPO"
 
 echo "╔══════════════════════════════════════════════════════════"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-task-effectiveness(07:00) 로 이관. OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/task-effectiveness-scan
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/task-effectiveness-scan" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/task-effectiveness-scan
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/task-effectiveness-scan" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[task-effectiveness-scan] 중지 플래그 있음"
     exit 0
 fi
@@ -14,7 +14,7 @@ set -uo pipefail
 #       교차해, 정의만 있고 어디서도 안 도는 "유명무실(orphan)" 태스크를 식별한다.
 # 실행 경로가 파편화(bot-cron/crontab/LA/dev-queue)돼 한 곳만 보면 안 보이던 것을 한곳에서 통합.
 
-BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/runtime}"
 TASKS="$BOT_HOME/config/tasks.json"
 OUTCOMES=$(ls -t "$BOT_HOME"/rag/task-outcomes-*.md 2>/dev/null | head -1)
 CRONTAB=$(crontab -l 2>/dev/null || true)

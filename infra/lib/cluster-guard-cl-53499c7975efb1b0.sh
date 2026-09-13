@@ -16,7 +16,7 @@
 #   4. 불일치 시 상세 리포트 + UNVERIFIED_CONSISTENCY 표시
 #
 # 사용:
-#   source ~/.openclaw-data/jarvis/infra/lib/cluster-guard-cl-53499c7975efb1b0.sh
+#   source ~/projects/jarvis/infra/lib/cluster-guard-cl-53499c7975efb1b0.sh
 #   validate_document_consistency "교재_파일"
 #   validate_related_files "교재_파일" "요약본" "숙제"
 #   get_guard_status
@@ -28,8 +28,9 @@ set -euo pipefail
 # ============================================================================
 
 readonly CLUSTER_ID="cl-53499c7975efb1b0"
-readonly JARVIS_HOME="${HOME}/.openclaw-data/jarvis"
-readonly STATE_DIR="${JARVIS_HOME}/runtime/state/cluster-guards"
+readonly JARVIS_HOME="${HOME}/projects/jarvis"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+readonly STATE_DIR="${JARVIS_RUNTIME}/state/cluster-guards"
 readonly GUARD_STATE="${STATE_DIR}/${CLUSTER_ID}-state.json"
 readonly VALIDATION_LOG="${STATE_DIR}/${CLUSTER_ID}-validations.jsonl"
 

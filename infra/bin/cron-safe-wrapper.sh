@@ -56,7 +56,7 @@ if ! [[ "$MAX_TIMEOUT" =~ ^[0-9]+$ ]] || (( MAX_TIMEOUT <= 0 )); then
 fi
 # 나머지 $@ = 실행할 커맨드 전체 (bash/node/python 구분 없이 수용)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOCK_DIR="/tmp/jarvis-cron-${LOCK_NAME}.lock"
 WRAPPER_LOG="${BOT_HOME}/logs/cron-safe-wrapper.log"
 

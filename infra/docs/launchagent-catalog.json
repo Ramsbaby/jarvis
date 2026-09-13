@@ -40,7 +40,7 @@
       "file": "ai.jarvis.interview-verifier.plist",
       "schedule": "(없음)",
       "runAtLoad": true,
-      "program": "/opt/homebrew/bin/node ~/.openclaw-data/jarvis/infra/scripts/interview-verifier-server.mjs",
+      "program": "/opt/homebrew/bin/node ~/projects/jarvis/infra/scripts/interview-verifier-server.mjs",
       "active": true,
       "pid": "10496",
       "lastExitCode": "0"
@@ -50,7 +50,7 @@
       "file": "ai.jarvis.launchagents-watcher.plist",
       "schedule": "(없음)",
       "runAtLoad": true,
-      "program": "/bin/bash ~/.openclaw-data/jarvis/infra/scripts/launchagents-watcher.sh",
+      "program": "/bin/bash ~/projects/jarvis/infra/scripts/launchagents-watcher.sh",
       "active": true,
       "pid": "10422",
       "lastExitCode": "0"
@@ -70,7 +70,7 @@
       "file": "com.jarvis.memory-sync.plist",
       "schedule": "매주 월요일 04:30 KST",
       "runAtLoad": false,
-      "program": "/bin/bash ~/.openclaw-data/jarvis/runtime/scripts/memory-sync.sh",
+      "program": "/bin/bash ~/.openclaw-data/runtime/scripts/memory-sync.sh",
       "active": true,
       "pid": "-",
       "lastExitCode": "0"
@@ -80,7 +80,7 @@
       "file": "com.jarvis.vault-auto-link.plist",
       "schedule": "매일 06:30 KST",
       "runAtLoad": false,
-      "program": "/bin/bash ~/.openclaw-data/jarvis/runtime/scripts/vault-auto-link.sh",
+      "program": "/bin/bash ~/.openclaw-data/runtime/scripts/vault-auto-link.sh",
       "active": true,
       "pid": "-",
       "lastExitCode": "0"

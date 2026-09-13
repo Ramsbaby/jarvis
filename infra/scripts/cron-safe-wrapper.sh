@@ -14,7 +14,7 @@ TASK_NAME="${1:-unknown}"
 TIMEOUT_SEC="${2:-300}"
 shift 2 || true
 
-CRON_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/cron.log"
+CRON_LOG="${HOME}/.openclaw-data/runtime/logs/cron.log"
 TEMP_STDOUT=$(mktemp)
 TEMP_STDERR=$(mktemp)
 
@@ -28,8 +28,8 @@ if [[ $# -eq 0 ]]; then
 fi
 
 # 중복 실행 방지 (동시 실행 체크 + 타임아웃)
-LOCK_FILE="${HOME}/.openclaw-data/jarvis/runtime/tmp/.cron-wrapper-${TASK_NAME}.lock"
-mkdir -p "${HOME}/.openclaw-data/jarvis/runtime/tmp"
+LOCK_FILE="${HOME}/.openclaw-data/runtime/tmp/.cron-wrapper-${TASK_NAME}.lock"
+mkdir -p "${HOME}/.openclaw-data/runtime/tmp"
 
 # 오래된 락파일 정리 (30분 초과)
 if [[ -f "$LOCK_FILE" ]]; then
@@ -88,7 +88,7 @@ fi
 
 # 실패 시 알림 (옵션)
 if [[ $EXIT_CODE -ne 0 ]]; then
-  ALERT_WEBHOOK="${HOME}/.openclaw-data/jarvis/runtime/config/webhooks/discord-cron-alerts"
+  ALERT_WEBHOOK="${HOME}/.openclaw-data/runtime/config/webhooks/discord-cron-alerts"
   if [[ -f "$ALERT_WEBHOOK" ]]; then
     WEBHOOK_URL=$(cat "$ALERT_WEBHOOK")
     curl -s -X POST "$WEBHOOK_URL" \

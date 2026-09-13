@@ -115,13 +115,13 @@ _llm_py() {
 # kind: budget_exceeded | degraded_to_ollama
 _llm_alert_silent_failure() {
     local kind="$1" detail="$2"
-    local _ledger="${HOME}/.openclaw-data/jarvis/runtime/ledger/llm-degradation.jsonl"
+    local _ledger="${HOME}/.openclaw-data/runtime/ledger/llm-degradation.jsonl"
     mkdir -p "$(dirname "$_ledger")" 2>/dev/null || true
     jq -cn --arg ts "$(date -u +%FT%TZ)" --arg kind "$kind" \
         --arg task "${TASK_ID:-unknown}" --arg model "${model:-auto}" --arg detail "$detail" \
         '{ts:$ts, kind:$kind, task:$task, model:$model, detail:$detail}' \
         >> "$_ledger" 2>/dev/null || true
-    bash "${HOME}/.openclaw-data/jarvis/infra/scripts/alert-send.sh" critical \
+    bash "${HOME}/projects/jarvis/infra/scripts/alert-send.sh" critical \
         "⚠️ LLM 무성 실패 유성화: ${kind}" \
         "task=${TASK_ID:-unknown} model=${model:-auto} — ${detail}" \
         >/dev/null 2>&1 || true
@@ -149,7 +149,7 @@ _llm_claude_cli() {
     # ~/.claude/settings.json 의 훅은 -p 세션에서 신뢰할 수 없다 — claude 2.1.257 은 그 파일에
     # 훅 이벤트명을 키로 가진 임의 객체가 있으면 hooks 전체를 버린다(2026-09-03 캐너리로 확인).
     # 배치 세션은 이 파일을 --settings 로 직접 주입해 사용자 설정과 무관하게 강제한다.
-    # 검증: rm -rf ~/.openclaw-data/jarvis/runtime/<child> 캐너리 → 차단 + state/runtime-guard.jsonl 기록.
+    # 검증: rm -rf ~/.openclaw-data/runtime/<child> 캐너리 → 차단 + state/runtime-guard.jsonl 기록.
     local _batch_hooks="${LLM_GATEWAY_BOT_HOME}/config/claude-batch-hooks.json"
     if [[ -f "$_batch_hooks" ]]; then
         cmd+=(--settings "$_batch_hooks")
@@ -209,7 +209,7 @@ _llm_claude_cli() {
     #   판정은 healthcheck 원장의 마지막 행을 쓴다. 매 호출마다 재검하지 않는다(호출 비용).
     #   401 도 같이 본다 — 폐기된 토큰 역시 재시도로 살아나지 않는다.
     _iso_token_blocked() {
-        local _led="${HOME}/.openclaw-data/jarvis/runtime/ledger/long-lived-token-healthcheck.jsonl"
+        local _led="${HOME}/.openclaw-data/runtime/ledger/long-lived-token-healthcheck.jsonl"
         [[ -s "$_led" ]] || return 1
         python3 - "$_led" <<'PY'
 import json, sys
@@ -244,7 +244,7 @@ PY
         log_warn "격리 토큰이 API 에 거부됨(직전 healthcheck 401/403) — claude-cli 네이티브 인증으로 폴백 (degraded)"
         printf '{"ts":"%s","event":"iso_token_blocked_fallback","task":"%s"}\n' \
             "$(date -u +%FT%TZ)" "${TASK_ID:-unknown}" \
-            >> "${HOME}/.openclaw-data/jarvis/runtime/ledger/llm-degradation.jsonl" 2>/dev/null || true
+            >> "${HOME}/.openclaw-data/runtime/ledger/llm-degradation.jsonl" 2>/dev/null || true
     elif [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
         _token_to_use="${CLAUDE_CODE_OAUTH_TOKEN}"
         _run+=(CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}")
@@ -308,7 +308,7 @@ except:
             local _iso_token_file="${HOME}/.claude-bot/.long-lived-token"
             if (( _iso_blocked )); then
                 log_error "인증 실패 — 격리 토큰 차단 상태에서 네이티브 폴백도 실패. 재시도 생략."
-                bash "${HOME}/.openclaw-data/jarvis/infra/scripts/alert-send.sh" critical \
+                bash "${HOME}/projects/jarvis/infra/scripts/alert-send.sh" critical \
                     "🔑 claude 배치 인증 실패 (격리 토큰 차단 + 네이티브 폴백 실패)" \
                     "task=${TASK_ID:-unknown} model=${model:-auto} — 격리 토큰은 403/401 로 거부됐고 CLI 네이티브 인증도 실패. 사람이 로그인해야 합니다." \
                     >/dev/null 2>&1 || true
@@ -344,14 +344,14 @@ except:
 
                 if [[ "$_retry_success" != "true" ]]; then
                     log_error "AUTH_ERROR 3회 재시도 모두 실패 — critical alert 발송"
-                    bash "${HOME}/.openclaw-data/jarvis/infra/scripts/alert-send.sh" critical \
+                    bash "${HOME}/projects/jarvis/infra/scripts/alert-send.sh" critical \
                         "🔑 claude 배치 인증 실패 (401 — 3회 재시도 후 실패)" \
                         "task=${TASK_ID:-unknown} model=${model:-auto} — 격리 토큰은 존재하나 API 거부. OAuth 토큰 폐기 또는 API 서비스 이슈 의심" \
                         >/dev/null 2>&1 || true
                 fi
             else
                 log_error "AUTH_ERROR 감지 — 격리 토큰 파일 누락 (메인 폴백 사용 중) — critical alert"
-                bash "${HOME}/.openclaw-data/jarvis/infra/scripts/alert-send.sh" critical \
+                bash "${HOME}/projects/jarvis/infra/scripts/alert-send.sh" critical \
                     "🔑 claude 배치 인증 실패 (401 — 격리 토큰 누락)" \
                     "task=${TASK_ID:-unknown} model=${model:-auto} — 격리 토큰이 없어 메인 credentials.json 사용 (갱신 경쟁 위험)" \
                     >/dev/null 2>&1 || true
@@ -381,7 +381,7 @@ except:
         printf '{"ts":"%s","task":"%s","model":"%s","auth":"%s"}\n' \
             "$(date -u +%FT%TZ)" "${TASK_ID:-unknown}" "${model:-auto}" \
             "$( (( _iso_blocked )) && echo native_fallback || { [[ -n "$_token_to_use" ]] && echo isolated || echo native; } )" \
-            >> "${HOME}/.openclaw-data/jarvis/runtime/ledger/llm-calls.jsonl" 2>/dev/null || true
+            >> "${HOME}/.openclaw-data/runtime/ledger/llm-calls.jsonl" 2>/dev/null || true
     fi
     return "$exit_code"
 }

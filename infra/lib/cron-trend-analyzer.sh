@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] 판정 D — 정지.
 # 근거: 인자 없이 실행돼 TASK_FILTER=bot-cron 고정인데 cron.log에 [bot-cron] 태그가 0건 — 설계 결함으로 2026-03-31 이후 5개월간 무동작(산출물 3바이트)
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/cron-trend-analyzer
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/cron-trend-analyzer" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/cron-trend-analyzer
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/cron-trend-analyzer" ]]; then
     echo "[cron-trend-analyzer] 중지 플래그 있음 (판정 D)"
     exit 0
 fi

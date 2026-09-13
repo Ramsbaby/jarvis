@@ -24,7 +24,7 @@ function _loadIdentifiers() {
   for (const v of (process.env.OWNER_NAME || '').split(',')) if (v.trim().length >= 2) set.add(v.trim());
   for (const v of (process.env.OWNER_ALIASES || '').split(',')) if (v.trim().length >= 2) set.add(v.trim());
   try {
-    const ct = join(HOME, '.openclaw-data/jarvis', 'private', 'config', 'owner-companies.txt');
+    const ct = join(HOME, 'projects/jarvis', 'private', 'config', 'owner-companies.txt');
     if (existsSync(ct)) {
       for (const v of readFileSync(ct, 'utf-8').split(/[\n,]/)) if (v.trim().length >= 2) set.add(v.trim());
     }

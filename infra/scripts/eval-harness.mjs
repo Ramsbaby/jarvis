@@ -21,10 +21,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 const HOME = homedir();
-const EVAL_DIR = join(HOME, '.openclaw-data/jarvis/runtime/eval');
+const EVAL_DIR = join(HOME, '.openclaw-data/runtime/eval');
 const GOLDEN = join(EVAL_DIR, 'golden-set.jsonl');
-const SNAPSHOT = join(HOME, '.openclaw-data/jarvis/runtime/state/system-prompt-snapshot.md');
-const MODELS_JSON = join(HOME, '.openclaw-data/jarvis/infra/config/models.json');
+const SNAPSHOT = join(HOME, '.openclaw-data/runtime/state/system-prompt-snapshot.md');
+const MODELS_JSON = join(HOME, 'projects/jarvis/infra/config/models.json');
 const CLAUDE_BIN = process.env.CLAUDE_BINARY || join(HOME, '.local/bin/claude');
 const TOKEN_FILE = join(HOME, '.claude-bot/.long-lived-token');
 

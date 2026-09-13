@@ -24,7 +24,7 @@ set -euo pipefail
 CREDENTIALS_FILE="${HOME}/.claude-bot/.credentials.json"
 TOKEN_URL="https://api.anthropic.com/v1/oauth/token"
 CLIENT_ID="9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG="${BOT_HOME}/logs/oauth-refresh-bot.log"
 LEDGER="${BOT_HOME}/ledger/oauth-refresh-bot-ledger.jsonl"
 RENEW_THRESHOLD_SECS=18000   # 만료 5시간 전 선제 갱신 — 2h에서 상향(race 완전 차단, subprocess 임계값 ~5분과 충분한 간격)

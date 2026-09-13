@@ -4,7 +4,7 @@ set -euo pipefail
 # 백업(매일 03:00)과 인덱싱(매시 :30)이 같은 디렉터리에서 겹쳐
 # tar 가 "File removed before we read it" 로 51회 실패했다.
 # 백업 대상과 인덱싱 대상은 같은 디렉터리다(inode 동일 확인).
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
 RAG_LOCK_DIR="/tmp/jarvis-rag-lancedb.lock.d"
 [ -f "$JARVIS_HOME/infra/lib/single-instance.sh" ] \
   && . "$JARVIS_HOME/infra/lib/single-instance.sh" \
@@ -14,7 +14,7 @@ RAG_LOCK_DIR="/tmp/jarvis-rag-lancedb.lock.d"
 # 매주 일요일 03:00 tar.gz 생성, 7일 retention(최근 1개만 유지 — 디스크 절약).
 # RAG는 재인덱싱으로 재생성 가능한 파생 데이터라 안전망 1개면 충분.
 
-BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/runtime}"
 RAG_SRC="$BOT_HOME/rag"
 BACKUP_DIR="$HOME/backup/runtime-rag"
 LOG="$BOT_HOME/logs/runtime-rag-backup.log"

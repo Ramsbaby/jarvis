@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10 · 회차5 2단계] 이관 완료 — crontab 경로를 막는다.
 # 오픈클로 jarvis-db-backup-board(02:00)·jarvis-db-backup-rag(일 03:30)으로 이관.
-# 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다. 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/db-backup
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/db-backup" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다. 재개: rm ~/.openclaw-data/runtime/state/stopped/db-backup
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/db-backup" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[db-backup] 중지 플래그 있음 — 오픈클로로 이관됨"
     exit 0
 fi
@@ -18,12 +18,13 @@ fi
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 # jarvis-board는 BOT_HOME(runtime)과 별도 트리. 실제 DB는 ~/jarvis-board/data/board.db (2026-06-25 경로 정정)
 BOARD_DB="${BOARD_DIR:-${HOME}/jarvis-board}/data/board.db"
 BOARD_BACKUP_DIR="${BOARD_DIR:-${HOME}/jarvis-board}/data/backups"
 RAG_DIR="${BOT_HOME}/rag/lancedb"
-RAG_BACKUP_DIR="${BOT_HOME}/backups"
+# [회차8 2026-09-12] 백업은 트리 밖으로 뺀다 — 지우려는 트리 안에 유일한 복구본을 두지 않는다.
+RAG_BACKUP_DIR="${RAG_BACKUP_DIR:-${HOME}/.openclaw-data/backups/jarvis-rag-db}"
 
 LOG="${BOT_HOME}/logs/db-backup.log"
 mkdir -p "$(dirname "$LOG")" "$BOARD_BACKUP_DIR" "$RAG_BACKUP_DIR"

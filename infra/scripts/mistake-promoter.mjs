@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-mistake-promoter 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/mistake-promoter
+// 재개: rm ~/.openclaw-data/runtime/state/stopped/mistake-promoter
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
 // [2026-09-11] 이 검사는 2026-09-10 이관 뒤 옛 경로를 보고 있어 플래그를 한 번도 못 찾았다(항상 통과).
 // 경로를 고치자 이번엔 샌드박스 테스트(BOT_HOME 을 /var/tmp 로 돌리는)까지 막혔다 —
 // 중지 플래그는 "이 runtime 이 멈췄는가"이므로 BOT_HOME 을 존중해야 한다.
-if (__sc((process.env.BOT_HOME || __sh() + '/.openclaw-data/jarvis/runtime') + '/state/stopped/mistake-promoter') && process.env.OPENCLAW_JOB !== '1') {
+if (__sc((process.env.BOT_HOME || __sh() + '/.openclaw-data/runtime') + '/state/stopped/mistake-promoter') && process.env.OPENCLAW_JOB !== '1') {
   console.log('[mistake-promoter] 중지 플래그 있음 — 오픈클로로 이관됨');
   process.exit(0);
 }
@@ -17,7 +17,7 @@ if (__sc((process.env.BOT_HOME || __sh() + '/.openclaw-data/jarvis/runtime') + '
 // 매일 04:10 KST cron 실행 (재발 카운터 03:30 → 체크리스트 03:45 → 승격 04:10).
 //
 // 동작 흐름:
-//   ① 입력: ~/.openclaw-data/jarvis/runtime/state/mistake-recurrence.json 의 top_clusters (빈도순 최대 10개)
+//   ① 입력: ~/.openclaw-data/runtime/state/mistake-recurrence.json 의 top_clusters (빈도순 최대 10개)
 //      — recurrence-audit.sh 가 매일 03:30 생성. 파일 부재 시 audit 1회 재실행으로 복구.
 //   ② 판정: llm-gateway.sh 경유 sonnet 1콜 — 클러스터별 {skip|tier_a|tier_b|tier_c}
 //      + tier_a 는 룰 블록 텍스트 생성 (쉬운말 · BLOCKING 톤 · 출처 클러스터 ID 명기)
@@ -57,11 +57,14 @@ import {
 
 // ─── 경로 상수 (하드코딩 금지 — 환경변수 우선) ───
 const HOME = homedir();
-// [2026-09-11] INFRA 기본값이 옛 경로(~/.openclaw-data/jarvis/infra)였다. 잡은 BOT_HOME 만 넘겨주고
+// [2026-09-11] INFRA 기본값이 옛 경로(~/projects/jarvis/infra)였다. 잡은 BOT_HOME 만 넘겨주고
 // JARVIS_INFRA_HOME 은 안 넘겨서, llm-gateway.sh source 에서 "Not a directory" 로 죽었다
 // — 잡 jarvis-mistake-promoter 상시 실패의 원인.
-const JARVIS_HOME = process.env.JARVIS_HOME || join(HOME, '.openclaw-data', 'jarvis');
-const BOT_HOME = process.env.BOT_HOME || join(JARVIS_HOME, 'runtime');
+// [회차8 2026-09-12] 이관 뒤 기본값이 죽은 경로였다 — env 없이 돌면 ENOTDIR 로 죽는다.
+//   저장소에는 더 이상 runtime 이 없다(그 자리는 장벽 파일). 런타임 정본은 ~/.openclaw-data/runtime.
+const JARVIS_HOME = process.env.JARVIS_HOME || join(HOME, 'projects', 'jarvis');
+// [회차8 2026-09-12] 폴백이 JARVIS_HOME/runtime 이었다 — 그 자리는 장벽 파일이다.
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data', 'runtime');
 const INFRA = process.env.JARVIS_INFRA_HOME || join(JARVIS_HOME, 'infra');
 const REPORT_FILE = join(BOT_HOME, 'state', 'mistake-recurrence.json');
 const AUDIT_SH = join(INFRA, 'scripts', 'mistake-recurrence-audit.sh');
@@ -214,8 +217,8 @@ const RULES_HEADER = `# jarvis-autolearn — 오답 클러스터 자동 승격 �
 
 > ⚠️ **자동 관리 파일** — \`mistake-promoter.mjs\` 가 생성·관리합니다. **블록 단위 삭제로 롤백**하십시오.
 > 블록 경계: \`<!-- AL:BEGIN id=... -->\` ~ \`<!-- AL:END id=... -->\`
-> 활성 블록 ${MAX_ACTIVE_BLOCKS}개 초과 시 가장 오래된 블록은 \`~/.openclaw-data/jarvis/runtime/backups/autolearn-archive.md\` 로 이동됩니다.
-> 처리 원장: \`~/.openclaw-data/jarvis/runtime/ledger/promoter-ledger.jsonl\`
+> 활성 블록 ${MAX_ACTIVE_BLOCKS}개 초과 시 가장 오래된 블록은 \`~/.openclaw-data/runtime/backups/autolearn-archive.md\` 로 이동됩니다.
+> 처리 원장: \`~/.openclaw-data/runtime/ledger/promoter-ledger.jsonl\`
 `;
 
 // 활성 블록 30개 초과 시 가장 오래된(파일 상단) 블록을 아카이브로 이동
@@ -499,7 +502,7 @@ function main() {
         counters.proposed += 1;
         notify('retro', `규칙 승격 제안 ${todayKST()} ${prop.id}`, {
           제안: prop.id, 제목: v.title || cluster.seed, 근거: `${prop.evidence_count}건`, 클러스터: v.id,
-          승격: `node ~/.openclaw-data/jarvis/infra/scripts/rule-proposal-ctl.mjs promote ${prop.id} --to <규칙파일>`,
+          승격: `node ~/projects/jarvis/infra/scripts/rule-proposal-ctl.mjs promote ${prop.id} --to <규칙파일>`,
           제안서: PROPOSALS_MD,
         });
       }
@@ -517,7 +520,7 @@ function main() {
         // 2026-06-12 사고: "Discord에 결과 보고"라는 자유 지시만 주자 야간 에이전트가 monitoring.json에서
         // jarvis-boram(가족 채널) 웹훅을 임의로 골라 내부 완료 임베드를 오발송. 보고 명령을 정확히 고정한다.
         '완료 보고는 반드시 아래 명령 한 가지만 사용한다 (monitoring.json 웹훅 직접 호출·임의 채널 선택 절대 금지):',
-        `source ~/.openclaw-data/jarvis/infra/lib/discord-route.sh && discord_route info "오답승격 가드 구현 완료 ${v.id}" "클러스터=${v.id},결과=<한줄요약>"`,
+        `source ~/projects/jarvis/infra/lib/discord-route.sh && discord_route info "오답승격 가드 구현 완료 ${v.id}" "클러스터=${v.id},결과=<한줄요약>"`,
       ].join('\n');
       const q = enqueueDevQueue(v.id, `[오답승격 tier_b] ${v.title || cluster.seed.slice(0, 40)}`, promptText);
       ledgerAppend({ ...base, status: 'proposed_dev_queue', dev_queue_action: q.action || 'unknown' });

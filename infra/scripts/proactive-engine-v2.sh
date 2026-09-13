@@ -2,8 +2,8 @@
 # proactive-engine-v2.sh — 자비스 선제 발화 데몬 v2 (영화 JARVIS 5패턴)
 #
 # 2026-05-14 — 1주 풀스택 Day 1 골격
-# 스펙: ~/.openclaw-data/jarvis/runtime/specs/proactive-jarvis-v2-2026-05-14.md
-# 결정: ~/.openclaw-data/jarvis/runtime/ledger/deep-interview-2026-05-14.jsonl
+# 스펙: ~/.openclaw-data/runtime/specs/proactive-jarvis-v2-2026-05-14.md
+# 결정: ~/.openclaw-data/runtime/ledger/deep-interview-2026-05-14.jsonl
 #
 # v2 full (2026-05-15): 5패턴 전체 구현 완료
 #   ① 맥락 추적: 특정기업 팔로업 · AWS SAA D-day
@@ -15,7 +15,7 @@ set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG="${BOT_HOME}/logs/proactive-engine-v2.log"
 STATE_DIR="${BOT_HOME}/state"
 FREQ_LEDGER="${STATE_DIR}/proactive-frequency.jsonl"

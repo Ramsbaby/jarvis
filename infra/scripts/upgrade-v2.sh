@@ -2,10 +2,10 @@
 set -euo pipefail
 # upgrade-v2.sh — Jarvis v1.x → v2.0.0 One-shot Upgrade
 #
-# A2 Runtime Migration: ~/.jarvis/ → ~/.openclaw-data/jarvis/runtime/
+# A2 Runtime Migration: ~/.jarvis/ → ~/.openclaw-data/runtime/
 #
 # Usage:
-#   cd ~/.openclaw-data/jarvis && git pull && bash infra/scripts/upgrade-v2.sh
+#   cd ~/projects/jarvis && git pull && bash infra/scripts/upgrade-v2.sh
 #
 # 특징:
 #   - Idempotent: 이미 마이그레이션됐으면 skip
@@ -93,7 +93,7 @@ log "  ✅ bootout 완료"
 
 # ─── Phase 2: Data migration ────────────────────────────────────────
 log ""
-log "━━━ Phase 2: 데이터 이사 (~/.jarvis → ~/.openclaw-data/jarvis/runtime) ━━━"
+log "━━━ Phase 2: 데이터 이사 (~/.jarvis → ~/.openclaw-data/runtime) ━━━"
 # 크기 사전 안내 — RAG DB가 크면 몇 분 걸릴 수 있음
 LEGACY_SIZE=$(du -sh "$LEGACY" 2>/dev/null | awk '{print $1}' || echo "?")
 log "  전체 크기: $LEGACY_SIZE (큰 경우 RAG DB 때문 — 중단하지 말고 대기)"
@@ -233,9 +233,9 @@ log "  Legacy backup: $BACKUP (7일 후 자동 삭제)"
 log "  로그: $LOG"
 log ""
 log "  검증 명령:"
-log "    cat ~/.openclaw-data/jarvis/runtime/state/bot-heartbeat      # heartbeat 최신"
+log "    cat ~/.openclaw-data/runtime/state/bot-heartbeat      # heartbeat 최신"
 log "    launchctl list | grep jarvis                  # LaunchAgents 상태"
-log "    tail ~/.openclaw-data/jarvis/runtime/logs/cron.log           # 크론 실행 로그"
+log "    tail ~/.openclaw-data/runtime/logs/cron.log           # 크론 실행 로그"
 log ""
 log "  문제 시 롤백:"
 log "    rm ~/.jarvis && mv $BACKUP ~/.jarvis"

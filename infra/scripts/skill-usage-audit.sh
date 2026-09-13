@@ -10,12 +10,13 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-SKILLS_DIR="$JARVIS_HOME/runtime/wiki/skills"
-MATCHER_LEDGER="$JARVIS_HOME/runtime/state/skill-matcher-ledger.jsonl"
-EXTRACTOR_LEDGER="$JARVIS_HOME/runtime/state/skill-extractor-ledger.jsonl"
-LOG_FILE="$JARVIS_HOME/runtime/logs/skill-usage-audit.log"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+SKILLS_DIR="$JARVIS_RUNTIME/wiki/skills"
+MATCHER_LEDGER="$JARVIS_RUNTIME/state/skill-matcher-ledger.jsonl"
+EXTRACTOR_LEDGER="$JARVIS_RUNTIME/state/skill-extractor-ledger.jsonl"
+LOG_FILE="$JARVIS_RUNTIME/logs/skill-usage-audit.log"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 _log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }

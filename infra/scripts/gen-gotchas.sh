@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # gen-gotchas.sh — recovery-learnings.md에서 3회↑ 반복 패턴을 gotchas.md에 자동 승격
-# 사용: bash ~/.openclaw-data/jarvis/runtime/scripts/gen-gotchas.sh
+# 사용: bash ~/.openclaw-data/runtime/scripts/gen-gotchas.sh
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LEARNINGS_FILE="$BOT_HOME/state/recovery-learnings.md"
 GOTCHAS_FILE="$BOT_HOME/state/gotchas.md"
 MIN_COUNT=3
@@ -25,7 +25,7 @@ import os
 import sys
 from collections import Counter
 
-bot_home = os.environ.get("BOT_HOME", os.path.expanduser("~/.openclaw-data/jarvis/runtime"))
+bot_home = os.environ.get("BOT_HOME", os.path.expanduser("~/.openclaw-data/runtime"))
 learnings_file = os.path.join(bot_home, "state", "recovery-learnings.md")
 gotchas_file   = os.path.join(bot_home, "state", "gotchas.md")
 min_count = 3

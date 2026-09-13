@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 source "${BOT_HOME}/lib/log-utils.sh" 2>/dev/null || true
 
 LOG_FILE="${BOT_HOME}/logs/boot-auth-check.log"

@@ -21,7 +21,7 @@ import { homedir } from 'node:os';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434/api/embeddings';
 const EMBED_MODEL = 'bge-m3';
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const CACHE_PATH = join(BOT_HOME, 'state', 'intent-category-vectors.json');
 
 // 카테고리별 sample 발화 (다양성 확보)

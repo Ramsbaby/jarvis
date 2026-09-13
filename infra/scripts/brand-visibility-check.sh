@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] 판정 D — 정지.
 # 근거: BRAVE_API_KEY가 .env 어디에도 없어(0건) 모든 검색이 항상 실패 — 자격증명 미등록
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/brand-visibility-check
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/brand-visibility-check" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/brand-visibility-check
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/brand-visibility-check" ]]; then
     echo "[brand-visibility-check] 중지 플래그 있음 (판정 D)"
     exit 0
 fi

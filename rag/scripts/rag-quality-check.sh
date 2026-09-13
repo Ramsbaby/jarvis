@@ -138,7 +138,7 @@ if [[ -f "$REBUILD_SENTINEL" ]]; then
         if (( ${disk_avail_mb:-99999} < 2000 )); then
             alert_and_exit "🔴 디스크 여유 공간 부족 (리빌드 중)
 남은 공간: ${disk_avail_mb}MB (기준: 2GB 미만)
-조치: du -sh ~/.openclaw-data/jarvis/runtime/rag/lancedb/ 확인 후 불필요 파일 정리" disk-full
+조치: du -sh ~/.openclaw-data/runtime/rag/lancedb/ 확인 후 불필요 파일 정리" disk-full
         fi
         exit 0
     fi
@@ -317,7 +317,7 @@ if (( ${disk_avail_mb:-99999} < 2000 )); then
     alert_and_exit "$(cat <<MSG
 🔴 디스크 여유 공간 부족
 남은 공간: ${disk_avail_mb}MB (기준: 2GB 미만)
-조치: du -sh ~/.openclaw-data/jarvis/runtime/rag/lancedb/ 확인 후 rag-compact 또는 불필요 파일 정리
+조치: du -sh ~/.openclaw-data/runtime/rag/lancedb/ 확인 후 rag-compact 또는 불필요 파일 정리
 MSG
 )"
     exit 0
@@ -345,7 +345,7 @@ JSEOF
         alert_and_exit "⚠️ LanceDB soft-delete 누적 경고
 deleted 비율: ${deleted_ratio_pct}% (기준: 40%)
 원인: soft-delete된 행이 compact 없이 쌓이는 중
-조치: bash ~/.openclaw-data/jarvis/runtime/scripts/rag-compact-safe.sh"
+조치: bash ~/.openclaw-data/runtime/scripts/rag-compact-safe.sh"
         exit 0
     fi
 
@@ -353,7 +353,7 @@ deleted 비율: ${deleted_ratio_pct}% (기준: 40%)
     if (( ${db_mb:-0} > 3500 )); then
         alert_and_exit "⚠️ LanceDB 크기 경고
 현재: ${db_mb}MB / deleted: ${deleted_ratio_pct}% (기준: 3.5GB)
-조치: bash ~/.openclaw-data/jarvis/runtime/scripts/rag-compact-safe.sh"
+조치: bash ~/.openclaw-data/runtime/scripts/rag-compact-safe.sh"
         exit 0
     fi
 fi

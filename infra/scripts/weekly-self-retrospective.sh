@@ -11,16 +11,17 @@
 #   - supervisor-tick-ledger.jsonl
 #
 # 출력:
-#   - ~/.openclaw-data/jarvis/runtime/wiki/meta/weekly-retro-YYYY-WW.md
+#   - ~/.openclaw-data/runtime/wiki/meta/weekly-retro-YYYY-WW.md
 #   - Discord #jarvis-system 카드
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-DB="$JARVIS_HOME/runtime/state/tasks.db"
-WIKI_META="$JARVIS_HOME/runtime/wiki/meta"
-LOG_FILE="$JARVIS_HOME/runtime/logs/weekly-self-retro.log"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+DB="$JARVIS_RUNTIME/state/tasks.db"
+WIKI_META="$JARVIS_RUNTIME/wiki/meta"
+LOG_FILE="$JARVIS_RUNTIME/logs/weekly-self-retro.log"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$WIKI_META" "$(dirname "$LOG_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"
@@ -38,25 +39,25 @@ FAILED_7D=$(sqlite3 "$DB" "SELECT COUNT(*) FROM task_transitions WHERE to_status
 REAPER_7D=$(sqlite3 "$DB" "SELECT COUNT(*) FROM task_transitions WHERE triggered_by LIKE 'reaper%' AND created_at > $CUTOFF_MS;")
 
 # ── 2. AUTH_ERROR 사고 (오늘 사각지대 검증) ─────────────────────────
-AUTH_ERROR_7D=$(find "$JARVIS_HOME/runtime/logs" -name ".repeated-fail-*-AUTH_ERROR-*" -mtime -7 2>/dev/null | wc -l | tr -d ' ')
+AUTH_ERROR_7D=$(find "$JARVIS_RUNTIME/logs" -name ".repeated-fail-*-AUTH_ERROR-*" -mtime -7 2>/dev/null | wc -l | tr -d ' ')
 
 # ── 3. supervisor 알림 발화 횟수 (7일) ──────────────────────────────
 SUPERVISOR_ALERTS=$(awk -v cutoff="$(date -v-7d +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -d '-7 days' +%Y-%m-%dT%H:%M:%S)" \
-    -F'"ts":"' 'NF>1 && $2 > cutoff' "$JARVIS_HOME/runtime/state/supervisor-tick-ledger.jsonl" 2>/dev/null \
+    -F'"ts":"' 'NF>1 && $2 > cutoff' "$JARVIS_RUNTIME/state/supervisor-tick-ledger.jsonl" 2>/dev/null \
     | grep '"alerted":true' | wc -l | tr -d ' \n')
 
 # ── 4. skill 시스템 활동 ────────────────────────────────────────────
-SKILL_TOTAL=$(ls "$JARVIS_HOME/runtime/wiki/skills"/*.md 2>/dev/null | grep -v SKILL-TEMPLATE | wc -l | tr -d ' ')
+SKILL_TOTAL=$(ls "$JARVIS_RUNTIME/wiki/skills"/*.md 2>/dev/null | grep -v SKILL-TEMPLATE | wc -l | tr -d ' ')
 SKILL_MATCHER_HITS_7D=0
-if [ -f "$JARVIS_HOME/runtime/state/skill-matcher-ledger.jsonl" ]; then
+if [ -f "$JARVIS_RUNTIME/state/skill-matcher-ledger.jsonl" ]; then
     SKILL_MATCHER_HITS_7D=$(awk -v cutoff="$(date -v-7d +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -d '-7 days' +%Y-%m-%dT%H:%M:%S)" \
-        -F'"ts":"' 'NF>1 && $2 > cutoff' "$JARVIS_HOME/runtime/state/skill-matcher-ledger.jsonl" \
+        -F'"ts":"' 'NF>1 && $2 > cutoff' "$JARVIS_RUNTIME/state/skill-matcher-ledger.jsonl" \
         | grep '"matched_count":[1-9]' | wc -l | tr -d ' \n')
 fi
 
 # ── 5b. Meta-audit SPOF 가드 (B fix: meta-audit 자체 fail 감지) ──────
 # meta-audit이 자기 fail 시 알림 안 가는 문제 → weekly-self-retro가 last-run age 점검
-META_AUDIT_LOG="$JARVIS_HOME/runtime/logs/jarvis-meta-audit.log"
+META_AUDIT_LOG="$JARVIS_RUNTIME/logs/jarvis-meta-audit.log"
 META_AUDIT_AGE_DAYS=999
 if [ -f "$META_AUDIT_LOG" ]; then
     META_MTIME=$(stat -f %m "$META_AUDIT_LOG" 2>/dev/null || echo 0)
@@ -71,7 +72,7 @@ fi
 
 # ── 5. 학습된 오답노트 신규 추가 ────────────────────────────────────
 # [2026-07-22] 본체+아카이브 glob 집계(아카이빙 후 카운트 급락 방지). ※변수명은 7D이나 실제 전체 2026 항목 카운트(기존 라벨 유지).
-source "$HOME/.openclaw-data/jarvis/infra/lib/learned-mistakes-glob.sh"
+source "$HOME/projects/jarvis/infra/lib/learned-mistakes-glob.sh"
 NEW_MISTAKES_7D=$(lm_grep "^## 2026-" | wc -l | tr -d ' \n')
 
 # ── 6. 자비스 자체 평가 (단순 룰) ───────────────────────────────────

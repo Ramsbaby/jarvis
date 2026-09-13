@@ -13,7 +13,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { discordSend } from '../lib/discord-notify.mjs';
 
-const STATE_FILE = join(homedir(), '.openclaw-data/jarvis/runtime/state/career-jobs.json');
+const STATE_FILE = join(homedir(), '.openclaw-data/runtime/state/career-jobs.json');
 
 function getDayOfWeek(date) {
   const days = ['일', '월', '화', '수', '목', '금', '토'];

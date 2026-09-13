@@ -17,8 +17,8 @@
 
 set -euo pipefail
 
-VALIDATOR_STATE="${HOME}/.openclaw-data/jarvis/runtime/state/completion-validator"
-VALIDATOR_LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/completion-validator.log"
+VALIDATOR_STATE="${HOME}/.openclaw-data/runtime/state/completion-validator"
+VALIDATOR_LOG="${HOME}/.openclaw-data/runtime/logs/completion-validator.log"
 
 # 색상 코드
 RED='\033[0;31m'

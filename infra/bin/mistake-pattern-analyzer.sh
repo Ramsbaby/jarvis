@@ -6,9 +6,9 @@
 
 set -euo pipefail
 
-WIKI_LM="${HOME}/.openclaw-data/jarvis/runtime/wiki/meta/learned-mistakes.md"
-LOG_FILE="${HOME}/.openclaw-data/jarvis/runtime/logs/mistake-pattern-analyzer.log"
-RESULT="${HOME}/.openclaw-data/jarvis/runtime/state/mistake-pattern-analysis.json"
+WIKI_LM="${HOME}/.openclaw-data/runtime/wiki/meta/learned-mistakes.md"
+LOG_FILE="${HOME}/.openclaw-data/runtime/logs/mistake-pattern-analyzer.log"
+RESULT="${HOME}/.openclaw-data/runtime/state/mistake-pattern-analysis.json"
 
 mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$RESULT")"
 
@@ -20,7 +20,7 @@ log() { echo "[$(ts)] [mistake-pattern-analyzer] $*" | tee -a "$LOG_FILE"; }
 log "=== Mistake Pattern Analysis start ==="
 
 # [2026-07-22] 본체+아카이브 glob 집계(아카이빙 후 카운트·키워드 분포 왜곡 방지). SIZE_KB는 활성본 기준 유지.
-source "$HOME/.openclaw-data/jarvis/infra/lib/learned-mistakes-glob.sh"
+source "$HOME/projects/jarvis/infra/lib/learned-mistakes-glob.sh"
 TOTAL=$(lm_grep "^## 2026-" | wc -l | tr -d ' \n')
 SIZE_KB=$(($(wc -c < "$WIKI_LM") / 1024))
 HEADERS=$(lm_grep "^## 2026-" | sed 's/^## 2026-[0-9-]* — //')
@@ -85,7 +85,7 @@ fi
 # ── P2 단정·미확인 게이트 효과 측정 (2026-06-04 신설 — 완결 루프) ──
 # stop-unverified-assertion-guard.sh가 적재하는 ledger의 violation 추세로
 # "검증 없는 단정" 패턴이 실제 줄어드는지 추적. 발동률 감소 = 게이트 효과.
-UA_LEDGER="$HOME/.openclaw-data/jarvis/runtime/ledger/unverified-assertion.jsonl"
+UA_LEDGER="$HOME/.openclaw-data/runtime/ledger/unverified-assertion.jsonl"
 if [[ -f "$UA_LEDGER" ]]; then
   UA_VIOL=$(grep -c '"status":"violation"' "$UA_LEDGER" 2>/dev/null || echo 0)
   UA_TOTAL=$(wc -l < "$UA_LEDGER" 2>/dev/null | tr -d ' ')

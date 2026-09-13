@@ -4,16 +4,16 @@
  * jarvis-interview 채널 ledger 자동 분석. 봇 재시작 후 자체 검증용.
  *
  * 사용:
- *   node ~/.openclaw-data/jarvis/infra/scripts/interview-ledger-report.mjs --since=last-restart
- *   node ~/.openclaw-data/jarvis/infra/scripts/interview-ledger-report.mjs --since=15m
- *   node ~/.openclaw-data/jarvis/infra/scripts/interview-ledger-report.mjs --since=2026-04-25T07:35:00Z
+ *   node ~/projects/jarvis/infra/scripts/interview-ledger-report.mjs --since=last-restart
+ *   node ~/projects/jarvis/infra/scripts/interview-ledger-report.mjs --since=15m
+ *   node ~/projects/jarvis/infra/scripts/interview-ledger-report.mjs --since=2026-04-25T07:35:00Z
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const LEDGER = join(homedir(), '.openclaw-data/jarvis/runtime/state/openai-ledger.jsonl');
-const BOT_LOG = join(homedir(), '.openclaw-data/jarvis/runtime/logs/discord-bot.out.log');
+const LEDGER = join(homedir(), '.openclaw-data/runtime/state/openai-ledger.jsonl');
+const BOT_LOG = join(homedir(), '.openclaw-data/runtime/logs/discord-bot.out.log');
 
 const args = process.argv.slice(2);
 const sinceArg = (args.find(a => a.startsWith('--since=')) || '--since=last-restart').split('=')[1];

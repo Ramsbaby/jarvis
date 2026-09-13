@@ -28,7 +28,7 @@ set -euo pipefail
 readonly GUARD_VERSION="1.0.0"
 readonly GUARD_CLUSTER="cl-81d765eefdc6ec7f"
 readonly GUARD_NAME="pre-service-stop-check"
-readonly GUARD_LOG_DIR="${HOME}/.openclaw-data/jarvis/runtime/logs"
+readonly GUARD_LOG_DIR="${HOME}/.openclaw-data/runtime/logs"
 readonly GUARD_LOG_FILE="${GUARD_LOG_DIR}/${GUARD_NAME}.jsonl"
 
 # Recovery mechanism keywords

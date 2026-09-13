@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-11T02:59:33.115Z",
-  "source": "~/.openclaw-data/jarvis/runtime/config/tasks.json",
+  "generatedAt": "2026-09-12T21:17:00.418Z",
+  "source": "~/.openclaw-data/runtime/config/tasks.json",
   "totalTasks": 112,
   "teamDistribution": {
     "standup": 1,
@@ -45,11 +45,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/morning-standup.log",
+              "path": "~/.openclaw-data/runtime/logs/morning-standup.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/morning-standup-err.log",
+              "path": "~/.openclaw-data/runtime/logs/morning-standup-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -85,11 +85,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/board-meeting-am.log",
+              "path": "~/.openclaw-data/runtime/logs/board-meeting-am.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/board-meeting-am-err.log",
+              "path": "~/.openclaw-data/runtime/logs/board-meeting-am-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -117,11 +117,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/board-meeting-pm.log",
+              "path": "~/.openclaw-data/runtime/logs/board-meeting-pm.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/board-meeting-pm-err.log",
+              "path": "~/.openclaw-data/runtime/logs/board-meeting-pm-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -149,11 +149,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/ceo-daily-digest.log",
+              "path": "~/.openclaw-data/runtime/logs/ceo-daily-digest.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/ceo-daily-digest-err.log",
+              "path": "~/.openclaw-data/runtime/logs/ceo-daily-digest-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -181,11 +181,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/council-insight.log",
+              "path": "~/.openclaw-data/runtime/logs/council-insight.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/council-insight-err.log",
+              "path": "~/.openclaw-data/runtime/logs/council-insight-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -213,11 +213,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/daily-summary.log",
+              "path": "~/.openclaw-data/runtime/logs/daily-summary.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/daily-summary-err.log",
+              "path": "~/.openclaw-data/runtime/logs/daily-summary-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -245,11 +245,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/weekly-report.log",
+              "path": "~/.openclaw-data/runtime/logs/weekly-report.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/weekly-report-err.log",
+              "path": "~/.openclaw-data/runtime/logs/weekly-report-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -285,11 +285,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/bot-crash-classifier.log",
+              "path": "~/.openclaw-data/runtime/logs/bot-crash-classifier.log",
               "exists": false
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/bot-crash-classifier-err.log",
+              "path": "~/.openclaw-data/runtime/logs/bot-crash-classifier-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -317,11 +317,11 @@
           "description": "system.cost_alert 이벤트 발생 시 비용 초과 경보를 Discord로 즉시 전송.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cost-alert-handler.log",
+              "path": "~/.openclaw-data/runtime/logs/cost-alert-handler.log",
               "exists": false
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cost-alert-handler-err.log",
+              "path": "~/.openclaw-data/runtime/logs/cost-alert-handler-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -349,11 +349,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/disk-alert.log",
+              "path": "~/.openclaw-data/runtime/logs/disk-alert.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/disk-alert-err.log",
+              "path": "~/.openclaw-data/runtime/logs/disk-alert-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -381,11 +381,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/infra-daily.log",
+              "path": "~/.openclaw-data/runtime/logs/infra-daily.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/infra-daily-err.log",
+              "path": "~/.openclaw-data/runtime/logs/infra-daily-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -413,11 +413,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/log-cleanup.log",
+              "path": "~/.openclaw-data/runtime/logs/log-cleanup.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/log-cleanup-err.log",
+              "path": "~/.openclaw-data/runtime/logs/log-cleanup-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -445,11 +445,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/memory-cleanup.log",
+              "path": "~/.openclaw-data/runtime/logs/memory-cleanup.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/memory-cleanup-err.log",
+              "path": "~/.openclaw-data/runtime/logs/memory-cleanup-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -477,11 +477,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/memory-expire.log",
+              "path": "~/.openclaw-data/runtime/logs/memory-expire.log",
               "exists": false
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/memory-expire-err.log",
+              "path": "~/.openclaw-data/runtime/logs/memory-expire-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -509,11 +509,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/memory-sync.log",
+              "path": "~/.openclaw-data/runtime/logs/memory-sync.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/memory-sync-err.log",
+              "path": "~/.openclaw-data/runtime/logs/memory-sync-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -541,11 +541,11 @@
           "description": "매시간 정각. mistake-extractor의 circuit-state.json을 읽어 OPEN 상태이면 Discord jarvis-system 채널에 알람 (6h rate limit). 2026-04-22 18시간 마비 사고 재발 방지용.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/mistake-circuit-healthcheck.log",
+              "path": "~/.openclaw-data/runtime/logs/mistake-circuit-healthcheck.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/mistake-circuit-healthcheck-err.log",
+              "path": "~/.openclaw-data/runtime/logs/mistake-circuit-healthcheck-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -573,11 +573,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rag-health.log",
+              "path": "~/.openclaw-data/runtime/logs/rag-health.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rag-health-err.log",
+              "path": "~/.openclaw-data/runtime/logs/rag-health-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -605,11 +605,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rate-limit-check.log",
+              "path": "~/.openclaw-data/runtime/logs/rate-limit-check.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rate-limit-check-err.log",
+              "path": "~/.openclaw-data/runtime/logs/rate-limit-check-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -637,11 +637,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/stale-task-watcher.log",
+              "path": "~/.openclaw-data/runtime/logs/stale-task-watcher.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/stale-task-watcher-err.log",
+              "path": "~/.openclaw-data/runtime/logs/stale-task-watcher-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -669,11 +669,11 @@
           "description": "Jarvis 자동 시스템 점검 (LaunchAgent, Discord봇, RAG, 크론, E2E, Glances, 디스크)",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/system-doctor.log",
+              "path": "~/.openclaw-data/runtime/logs/system-doctor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/system-doctor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/system-doctor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -701,11 +701,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/system-health.log",
+              "path": "~/.openclaw-data/runtime/logs/system-health.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/system-health-err.log",
+              "path": "~/.openclaw-data/runtime/logs/system-health-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -733,11 +733,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/token-sync.log",
+              "path": "~/.openclaw-data/runtime/logs/token-sync.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/token-sync-err.log",
+              "path": "~/.openclaw-data/runtime/logs/token-sync-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -773,11 +773,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cost-monitor.log",
+              "path": "~/.openclaw-data/runtime/logs/cost-monitor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cost-monitor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/cost-monitor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -805,11 +805,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/daily-usage-check.log",
+              "path": "~/.openclaw-data/runtime/logs/daily-usage-check.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/daily-usage-check-err.log",
+              "path": "~/.openclaw-data/runtime/logs/daily-usage-check-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -837,11 +837,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/macro-briefing.log",
+              "path": "~/.openclaw-data/runtime/logs/macro-briefing.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/macro-briefing-err.log",
+              "path": "~/.openclaw-data/runtime/logs/macro-briefing-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -869,11 +869,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/market-alert.log",
+              "path": "~/.openclaw-data/runtime/logs/market-alert.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/market-alert-err.log",
+              "path": "~/.openclaw-data/runtime/logs/market-alert-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -901,11 +901,11 @@
           "description": "매일 07:30 KST Preply 수업 일정을 #jarvis-boram 채널로 자동 전송.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/personal-schedule-daily.log",
+              "path": "~/.openclaw-data/runtime/logs/personal-schedule-daily.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/personal-schedule-daily-err.log",
+              "path": "~/.openclaw-data/runtime/logs/personal-schedule-daily-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -933,11 +933,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/tqqq-monitor.log",
+              "path": "~/.openclaw-data/runtime/logs/tqqq-monitor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/tqqq-monitor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/tqqq-monitor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -965,11 +965,11 @@
           "description": "/usage 명령 stale 방지 — 30분마다 ~/.claude/usage-cache.json 갱신",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/update-usage-cache.log",
+              "path": "~/.openclaw-data/runtime/logs/update-usage-cache.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/update-usage-cache-err.log",
+              "path": "~/.openclaw-data/runtime/logs/update-usage-cache-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1005,11 +1005,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/calendar-alert.log",
+              "path": "~/.openclaw-data/runtime/logs/calendar-alert.log",
               "exists": false
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/calendar-alert-err.log",
+              "path": "~/.openclaw-data/runtime/logs/calendar-alert-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -1037,11 +1037,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/news-briefing.log",
+              "path": "~/.openclaw-data/runtime/logs/news-briefing.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/news-briefing-err.log",
+              "path": "~/.openclaw-data/runtime/logs/news-briefing-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1069,11 +1069,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/oss-recon.log",
+              "path": "~/.openclaw-data/runtime/logs/oss-recon.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/oss-recon-err.log",
+              "path": "~/.openclaw-data/runtime/logs/oss-recon-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -1101,11 +1101,11 @@
           "description": "매주 월요일 AI/기술/시장 정보탐험. recon/team.yml 기반으로 실행.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/recon-weekly.log",
+              "path": "~/.openclaw-data/runtime/logs/recon-weekly.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/recon-weekly-err.log",
+              "path": "~/.openclaw-data/runtime/logs/recon-weekly-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1141,11 +1141,11 @@
           "description": "매시간 30분. rag-write-queue.jsonl 적재된 인덱싱 큐 소비. 2026-04-22 트리거 부재 사고(learned-mistakes 인덱싱 0건) 재발 방지용.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rag-index-consume.log",
+              "path": "~/.openclaw-data/runtime/logs/rag-index-consume.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rag-index-consume-err.log",
+              "path": "~/.openclaw-data/runtime/logs/rag-index-consume-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1173,11 +1173,11 @@
           "description": "매주 일요일 04:15 KST. LanceDB fragment/version 컴팩트 + prune. 2026-05-07 누적 사고(208 fragments / 169 versions / 7.7GB → 1/1/3.7GB) 재발 방지용. 검색 속도 6배 향상 부수 효과.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rag-lancedb-compact.log",
+              "path": "~/.openclaw-data/runtime/logs/rag-lancedb-compact.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rag-lancedb-compact-err.log",
+              "path": "~/.openclaw-data/runtime/logs/rag-lancedb-compact-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1205,11 +1205,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/record-daily.log",
+              "path": "~/.openclaw-data/runtime/logs/record-daily.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/record-daily-err.log",
+              "path": "~/.openclaw-data/runtime/logs/record-daily-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1237,11 +1237,11 @@
           "description": "2026-04-23 AUP refusal 반복 사고(injectedSummary 누적) 재발 방지. 7일 TTL + 8KB size cap으로 session-summaries 회전. 매일 03:30 KST.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/session-summaries-rotate.log",
+              "path": "~/.openclaw-data/runtime/logs/session-summaries-rotate.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/session-summaries-rotate-err.log",
+              "path": "~/.openclaw-data/runtime/logs/session-summaries-rotate-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1269,11 +1269,11 @@
           "description": "최근 30분 내 대화 활동 감지 시 context-bus 즉시 갱신",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/session-sync.log",
+              "path": "~/.openclaw-data/runtime/logs/session-sync.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/session-sync-err.log",
+              "path": "~/.openclaw-data/runtime/logs/session-sync-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1301,11 +1301,11 @@
           "description": "매일 08:00 KST. 전체 사용자(정우·보람 등) user-memory facts 총량·카테고리별 임계치 감시. boram-memory-monitor 통합 대체.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/user-memory-monitor.log",
+              "path": "~/.openclaw-data/runtime/logs/user-memory-monitor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/user-memory-monitor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/user-memory-monitor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1333,11 +1333,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/vault-auto-link.log",
+              "path": "~/.openclaw-data/runtime/logs/vault-auto-link.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/vault-auto-link-err.log",
+              "path": "~/.openclaw-data/runtime/logs/vault-auto-link-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1365,11 +1365,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/vault-sync.log",
+              "path": "~/.openclaw-data/runtime/logs/vault-sync.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/vault-sync-err.log",
+              "path": "~/.openclaw-data/runtime/logs/vault-sync-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1405,11 +1405,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/academy-support.log",
+              "path": "~/.openclaw-data/runtime/logs/academy-support.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/academy-support-err.log",
+              "path": "~/.openclaw-data/runtime/logs/academy-support-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1437,11 +1437,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/career-daily.log",
+              "path": "~/.openclaw-data/runtime/logs/career-daily.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/career-daily-err.log",
+              "path": "~/.openclaw-data/runtime/logs/career-daily-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1469,11 +1469,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/inbox-alert.log",
+              "path": "~/.openclaw-data/runtime/logs/inbox-alert.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/inbox-alert-err.log",
+              "path": "~/.openclaw-data/runtime/logs/inbox-alert-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1501,11 +1501,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/interview-harness-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/interview-harness-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/interview-harness-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/interview-harness-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1533,11 +1533,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/interview-ssot-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/interview-ssot-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/interview-ssot-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/interview-ssot-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1565,11 +1565,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/profile-extractor.log",
+              "path": "~/.openclaw-data/runtime/logs/profile-extractor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/profile-extractor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/profile-extractor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1605,11 +1605,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/oss-maintenance.log",
+              "path": "~/.openclaw-data/runtime/logs/oss-maintenance.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/oss-maintenance-err.log",
+              "path": "~/.openclaw-data/runtime/logs/oss-maintenance-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1637,11 +1637,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/oss-promo.log",
+              "path": "~/.openclaw-data/runtime/logs/oss-promo.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/oss-promo-err.log",
+              "path": "~/.openclaw-data/runtime/logs/oss-promo-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -1677,11 +1677,11 @@
           "description": "일요일 07:30 KST. tasks.json ↔ LaunchAgents plist 양방향 감사. orphan/missing/mismatch 3종 감지. 4층 방어막 P4 (2026-04-22 BYPASS 사건 구조적 재발 방지).",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/bidirectional-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/bidirectional-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/bidirectional-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/bidirectional-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1709,11 +1709,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/claude-md-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/claude-md-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/claude-md-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/claude-md-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1741,11 +1741,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/code-auditor.log",
+              "path": "~/.openclaw-data/runtime/logs/code-auditor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/code-auditor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/code-auditor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1773,11 +1773,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cost-cap-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/cost-cap-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cost-cap-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/cost-cap-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1805,11 +1805,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-auditor.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-auditor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-auditor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-auditor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1837,11 +1837,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/doc-supervisor.log",
+              "path": "~/.openclaw-data/runtime/logs/doc-supervisor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/doc-supervisor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/doc-supervisor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1869,11 +1869,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/doc-sync-auditor.log",
+              "path": "~/.openclaw-data/runtime/logs/doc-sync-auditor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/doc-sync-auditor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/doc-sync-auditor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1901,11 +1901,11 @@
           "description": "시스템 개요 문서 자동 재생성 (SYSTEM-OVERVIEW.md)",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/gen-system-overview.log",
+              "path": "~/.openclaw-data/runtime/logs/gen-system-overview.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/gen-system-overview-err.log",
+              "path": "~/.openclaw-data/runtime/logs/gen-system-overview-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1933,11 +1933,11 @@
           "description": "2026-07-19 watchdog_crons 재가동: 순수 bash·file 출력만(Discord 무). 수동실행 exit 0 검증.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/launchagents-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/launchagents-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/launchagents-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/launchagents-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1965,11 +1965,11 @@
           "description": "2026-04-16 카카오 토큰 갱신 크론 영구 소실 사고 재발 방지. com.jarvis.* plist 중 tasks.json에 id 없는 legacy를 주간 탐지. --notify-discord 옵션으로 경보 가능.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/legacy-plist-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/legacy-plist-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/legacy-plist-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/legacy-plist-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -1997,11 +1997,11 @@
           "description": "WARN ≥10MB / CRIT ≥100MB. webhook-listener.err.log(2.9MB) 폭주 재발 방지. 매일 13:17 KST. violation 있을 때만 Discord (24h throttle).",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/log-size-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/log-size-audit.log",
               "exists": false
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/log-size-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/log-size-audit-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -2029,11 +2029,11 @@
           "description": "클러스터 cl-8a2b1b50fcd5ba63 (7일 재발 14건: 'HTML 검증만 통과 → 완료 선언 → PDF 실패') 재발 방지. HTML/PDF 짝을 산출물 폴더 전체에서 실측 배치 감사. 실패·누락 있으면 exit=1로 감지되어 retro 채널 리포트. 파괴 금지 원칙 — 파일 수정 없이 관찰·저널만 갱신.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/pdf-pipeline-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/pdf-pipeline-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/pdf-pipeline-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/pdf-pipeline-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2061,11 +2061,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/qa-consistency-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/qa-consistency-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/qa-consistency-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/qa-consistency-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2093,11 +2093,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/schedule-coherence.log",
+              "path": "~/.openclaw-data/runtime/logs/schedule-coherence.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/schedule-coherence-err.log",
+              "path": "~/.openclaw-data/runtime/logs/schedule-coherence-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2125,11 +2125,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/security-scan.log",
+              "path": "~/.openclaw-data/runtime/logs/security-scan.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/security-scan-err.log",
+              "path": "~/.openclaw-data/runtime/logs/security-scan-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2157,11 +2157,11 @@
           "description": "enabled 태스크의 script 경로 + LaunchAgent 로드 상태를 매일 전수 검증. 매일 10:07 KST. 문제 있을 때만 Discord 알림.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/tasks-integrity-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/tasks-integrity-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/tasks-integrity-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/tasks-integrity-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2189,11 +2189,11 @@
           "description": "매일 03:23 KST 활성 태스크 프롬프트/script 필드의 스크립트 경로 존재성 감사. 유령 발견 시 jarvis-system 채널 알림 + ledger 기록 + exit 2. 매주 → 매일로 상향(24h 내 감지 보장).",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/tasks-prompt-path-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/tasks-prompt-path-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/tasks-prompt-path-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/tasks-prompt-path-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2221,11 +2221,11 @@
           "description": "com.jarvis.token-ledger-audit plist 이관. SSoT 정합화.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/token-ledger-audit.log",
+              "path": "~/.openclaw-data/runtime/logs/token-ledger-audit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/token-ledger-audit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/token-ledger-audit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2253,11 +2253,11 @@
           "description": "com.jarvis.tune-task-params plist 이관. SSoT 정합화.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/tune-task-params.log",
+              "path": "~/.openclaw-data/runtime/logs/tune-task-params.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/tune-task-params-err.log",
+              "path": "~/.openclaw-data/runtime/logs/tune-task-params-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2285,11 +2285,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/weekly-code-review.log",
+              "path": "~/.openclaw-data/runtime/logs/weekly-code-review.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/weekly-code-review-err.log",
+              "path": "~/.openclaw-data/runtime/logs/weekly-code-review-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2325,11 +2325,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/agent-batch-commit.log",
+              "path": "~/.openclaw-data/runtime/logs/agent-batch-commit.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/agent-batch-commit-err.log",
+              "path": "~/.openclaw-data/runtime/logs/agent-batch-commit-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2357,11 +2357,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/bot-quality-check.log",
+              "path": "~/.openclaw-data/runtime/logs/bot-quality-check.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/bot-quality-check-err.log",
+              "path": "~/.openclaw-data/runtime/logs/bot-quality-check-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2389,11 +2389,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/bot-self-critique.log",
+              "path": "~/.openclaw-data/runtime/logs/bot-self-critique.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/bot-self-critique-err.log",
+              "path": "~/.openclaw-data/runtime/logs/bot-self-critique-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2421,11 +2421,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/dev-runner.log",
+              "path": "~/.openclaw-data/runtime/logs/dev-runner.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/dev-runner-err.log",
+              "path": "~/.openclaw-data/runtime/logs/dev-runner-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2453,11 +2453,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/skill-eval.log",
+              "path": "~/.openclaw-data/runtime/logs/skill-eval.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/skill-eval-err.log",
+              "path": "~/.openclaw-data/runtime/logs/skill-eval-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2485,11 +2485,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/weekly-usage-stats.log",
+              "path": "~/.openclaw-data/runtime/logs/weekly-usage-stats.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/weekly-usage-stats-err.log",
+              "path": "~/.openclaw-data/runtime/logs/weekly-usage-stats-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2525,11 +2525,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/age-mem-discard.log",
+              "path": "~/.openclaw-data/runtime/logs/age-mem-discard.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/age-mem-discard-err.log",
+              "path": "~/.openclaw-data/runtime/logs/age-mem-discard-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2557,11 +2557,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/agent-sdk-billing-watch.log",
+              "path": "~/.openclaw-data/runtime/logs/agent-sdk-billing-watch.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/agent-sdk-billing-watch-err.log",
+              "path": "~/.openclaw-data/runtime/logs/agent-sdk-billing-watch-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2589,11 +2589,11 @@
           "description": "DRYRUN 1주 시뮬 후 ANALYSIS_COST_DRYRUN=0 수동 전환. 분석 채널 매트릭스 정식 등재 비용 감시.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/analysis-channel-cost-daily.log",
+              "path": "~/.openclaw-data/runtime/logs/analysis-channel-cost-daily.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/analysis-channel-cost-daily-err.log",
+              "path": "~/.openclaw-data/runtime/logs/analysis-channel-cost-daily-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2621,11 +2621,11 @@
           "description": "매일 04:00 KST. 오래된 백업 파일 보존 정책 적용. plist-only였으나 Nexus SSoT로 이관 (2026-04-21).",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/backup-retention-daily.log",
+              "path": "~/.openclaw-data/runtime/logs/backup-retention-daily.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/backup-retention-daily-err.log",
+              "path": "~/.openclaw-data/runtime/logs/backup-retention-daily-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2653,11 +2653,11 @@
           "description": "SELF-HEAL-PLAN 3a·3d. coder/* 브랜치마다 coder-merge.sh --dry-run 게이트 + Read 전용 상위 모델(claude-opus-5) 판정 merge/reject/needs_human → ledger/coder-review.jsonl. merge 이고 자율성 정책표(infra/config/coder-autonomy.json)가 허용하는 class 만 coder-merge.sh --auto. 7일 방치 브랜치는 --expire 폐기. 코더 running 브랜치는 건너뜀.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/coder-review.log",
+              "path": "~/.openclaw-data/runtime/logs/coder-review.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/coder-review-err.log",
+              "path": "~/.openclaw-data/runtime/logs/coder-review-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2685,11 +2685,11 @@
           "description": "매주 일요일 20:30 KST. wiki/meta/learned-mistakes.md(오답노트)의 90일 무재발 항목을 archive로 이동 + 본체 1,000자 상한 압축. Compound Engineering 루프의 '회수' 단계. [2026-08-12] ultrathink 제거·maxBudget 1.00→2.50 상향 (토큰 절감 + 큰 파일 처리용)",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/compound-review.log",
+              "path": "~/.openclaw-data/runtime/logs/compound-review.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/compound-review-err.log",
+              "path": "~/.openclaw-data/runtime/logs/compound-review-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2717,11 +2717,11 @@
           "description": "크론 태스크 완료 이벤트를 수집·기록하는 백그라운드 훅. 15분마다 실행되며 완료 로그와 성능 메트릭을 기록함.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-completion-hook.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-completion-hook.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-completion-hook-err.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-completion-hook-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2749,11 +2749,11 @@
           "description": "실제 호출자는 crontab의 cron-monitoring-orchestrator.sh component proactive_monitoring (*/30). LaunchAgent plist는 legacy 경로로 보존하되 실제로는 미동작(로그상 06:03 실행 흔적 없음). 2026-04-21 실체 정합화: tasks.json 스케줄을 실제 동작(30분)에 맞춤. Discord 전송은 상태 변화·긴급(PERMA_FAILS)·주간 요약(월 09:00) 시에만 (cron-master.sh 내부 digest hash 비교). allowEmptyResult=true로 빈 출력 허용.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-master.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-master.log",
               "exists": false
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-master-err.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-master-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -2781,11 +2781,11 @@
           "description": "cron-master.sh 주요 플로우 regression 감지. 월요일 09:15 실행 — 주간 강제 리포트(09:00) 직후. 8 테스트/11 검증. PASS=11/11이면 ✅ 요약만, 하나라도 FAIL이면 실패 케이스 목록 Discord 전송. 신설: 2026-04-21 (UNLOADED[@] unbound variable 재발 방지 포함).",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-master-smoke.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-master-smoke.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-master-smoke-err.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-master-smoke-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -2813,11 +2813,11 @@
           "description": "tasks.json 변경이 즉시 ~/Library/LaunchAgents/com.jarvis.*.plist에 반영되도록 매 시간 15분에 cron-sync 실행. 카카오 사고 재발 방지의 일부.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-sync-hourly.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-sync-hourly.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/cron-sync-hourly-err.log",
+              "path": "~/.openclaw-data/runtime/logs/cron-sync-hourly-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2845,11 +2845,11 @@
           "description": "com.jarvis.dev-task-runner plist 이관. SSoT 정합화.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/dev-task-runner.log",
+              "path": "~/.openclaw-data/runtime/logs/dev-task-runner.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/dev-task-runner-err.log",
+              "path": "~/.openclaw-data/runtime/logs/dev-task-runner-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2877,11 +2877,11 @@
           "description": "com.jarvis.entity-graph plist 이관. SSoT 정합화.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/entity-graph.log",
+              "path": "~/.openclaw-data/runtime/logs/entity-graph.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/entity-graph-err.log",
+              "path": "~/.openclaw-data/runtime/logs/entity-graph-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2909,11 +2909,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/followup-sync.log",
+              "path": "~/.openclaw-data/runtime/logs/followup-sync.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/followup-sync-err.log",
+              "path": "~/.openclaw-data/runtime/logs/followup-sync-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2941,11 +2941,11 @@
           "description": "com.jarvis.gen-indexes plist 이관. SSoT 정합화.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/gen-indexes.log",
+              "path": "~/.openclaw-data/runtime/logs/gen-indexes.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/gen-indexes-err.log",
+              "path": "~/.openclaw-data/runtime/logs/gen-indexes-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -2973,11 +2973,11 @@
           "description": "SELF-HEAL-PLAN 4a. LLM 없음. state/runtime-guard.jsonl · ledger/coder-review.jsonl(reject) · ledger/coder-merge.jsonl(blocked/rejected/reverted) · ledger/tasks-integrity-audit.jsonl(critical/missing/ghost) 를 14일 창으로 훑어 ledger/incidents.jsonl 에 key 당 1건 open. 닫힌 key 재등장은 재발(reopen). 신규·재발 있을 때만 출력. 닫기·폐기는 incident-ctl.sh (close 는 --fix 커밋/티켓 필수).",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/incident-ingest.log",
+              "path": "~/.openclaw-data/runtime/logs/incident-ingest.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/incident-ingest-err.log",
+              "path": "~/.openclaw-data/runtime/logs/incident-ingest-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3005,11 +3005,11 @@
           "description": "refresh_token으로 access_token 재발급 (6h 만료 주기 대응). 2026-04-16 LaunchAgent 정리 때 누락됐다가 2026-04-22 재등록. 2026-09-09 스크립트를 infra/scripts로 이전(오픈클로 state dir 의존 제거).",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/kakao-token-refresh.log",
+              "path": "~/.openclaw-data/runtime/logs/kakao-token-refresh.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/kakao-token-refresh-err.log",
+              "path": "~/.openclaw-data/runtime/logs/kakao-token-refresh-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3037,11 +3037,11 @@
           "description": "매일 03:15 KST. session-summaries에서 오너 지적/정정을 Haiku로 추출해 wiki/meta/learned-mistakes.md에 append. Jaccard 0.65 유사도로 중복 감지. Compound Engineering 루프의 '수집' 단계.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/mistake-extractor.log",
+              "path": "~/.openclaw-data/runtime/logs/mistake-extractor.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/mistake-extractor-err.log",
+              "path": "~/.openclaw-data/runtime/logs/mistake-extractor-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3069,11 +3069,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/mistake-pattern-analyzer.log",
+              "path": "~/.openclaw-data/runtime/logs/mistake-pattern-analyzer.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/mistake-pattern-analyzer-err.log",
+              "path": "~/.openclaw-data/runtime/logs/mistake-pattern-analyzer-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3101,11 +3101,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/monitoring-pre-check.log",
+              "path": "~/.openclaw-data/runtime/logs/monitoring-pre-check.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/monitoring-pre-check-err.log",
+              "path": "~/.openclaw-data/runtime/logs/monitoring-pre-check-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -3133,11 +3133,11 @@
           "description": "discord-history에서 오너 발화 추출 → Haiku로 판단 원칙 증류 → wiki/owner/_facts.md source:judgment-extract 적재. 주 1회 실행.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/owner-judgments-extract.log",
+              "path": "~/.openclaw-data/runtime/logs/owner-judgments-extract.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/owner-judgments-extract-err.log",
+              "path": "~/.openclaw-data/runtime/logs/owner-judgments-extract-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3165,11 +3165,11 @@
           "description": "참견 v3 (Owner State Engine). 스크립트 기본 OSE_DRYRUN=true — 1주 DRYRUN(~2026-07-01) 후 production 결정. 통찰 0이면 침묵. discord-route info. CRON-INTRODUCTION-CHECKLIST 통과. production 전환 시 proactive-engine v1 폐기 예정.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/owner-state-engine.log",
+              "path": "~/.openclaw-data/runtime/logs/owner-state-engine.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/owner-state-engine-err.log",
+              "path": "~/.openclaw-data/runtime/logs/owner-state-engine-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3197,11 +3197,11 @@
           "description": "매일 06:00 KST. tasks.json의 output:discord 태스크 중 plist가 bot-cron.sh를 우회하는 항목을 자동으로 정상 패턴으로 rewrite + reload. 2026-04-22 daily-usage-check 4일 침묵 사건 재발 방지 가드.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/plist-bypass-autofix.log",
+              "path": "~/.openclaw-data/runtime/logs/plist-bypass-autofix.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/plist-bypass-autofix-err.log",
+              "path": "~/.openclaw-data/runtime/logs/plist-bypass-autofix-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3229,11 +3229,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/proactive-engine.log",
+              "path": "~/.openclaw-data/runtime/logs/proactive-engine.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/proactive-engine-err.log",
+              "path": "~/.openclaw-data/runtime/logs/proactive-engine-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3261,11 +3261,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/promoter-auto-close.log",
+              "path": "~/.openclaw-data/runtime/logs/promoter-auto-close.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/promoter-auto-close-err.log",
+              "path": "~/.openclaw-data/runtime/logs/promoter-auto-close-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3293,11 +3293,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rag-stale-scan.log",
+              "path": "~/.openclaw-data/runtime/logs/rag-stale-scan.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/rag-stale-scan-err.log",
+              "path": "~/.openclaw-data/runtime/logs/rag-stale-scan-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3325,11 +3325,11 @@
           "description": "매일 03:00 KST. RAG 런타임 데이터 백업. plist-only였으나 Nexus SSoT로 이관 (2026-04-21).",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/runtime-rag-backup.log",
+              "path": "~/.openclaw-data/runtime/logs/runtime-rag-backup.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/runtime-rag-backup-err.log",
+              "path": "~/.openclaw-data/runtime/logs/runtime-rag-backup-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -3357,11 +3357,11 @@
           "description": "SELF-HEAL-PLAN 4d. LLM 없음. 월 12:00 — 11:30 데드맨 판정과 09:xx 자기평가 클러스터가 끝난 뒤. 지난 7일: ① 오탐 티켓 비율(감사 mismatch + 코더 '오탐:')/(신규 티켓+mismatch) <10% ② 코더 리뷰 통과율(coder-review.jsonl) ③ 설정 변조 감지 시간(tasks-integrity-audit.jsonl 행 ts − tasks.json mtime) ≤24h ④ 사고 닫힘률(incidents.jsonl, 폐기 제외) ≥80% ⑤ 크론 성공률 SUCCESS/START(cron.log) ≥95%. 부록: incident-ctl summary 첫 줄 · rule-proposal-ctl summary · 데드맨 마지막 행 · coder-autonomy class 별 스트릭/문턱 — 문턱 완화는 2주 연속 ①②④ 충족일 때만 '권고'(편집은 사람). 주인님께 묻는 것 최대 3개. 지표가 비면 exit 1(서술만 남은 회고는 실패). 매 실행 ledger/self-heal-retro.jsonl 1행 → 전주 ▲▼.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/self-heal-weekly-retro.log",
+              "path": "~/.openclaw-data/runtime/logs/self-heal-weekly-retro.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/self-heal-weekly-retro-err.log",
+              "path": "~/.openclaw-data/runtime/logs/self-heal-weekly-retro-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3389,11 +3389,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/self-healing-digest.log",
+              "path": "~/.openclaw-data/runtime/logs/self-healing-digest.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/self-healing-digest-err.log",
+              "path": "~/.openclaw-data/runtime/logs/self-healing-digest-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3421,11 +3421,11 @@
           "description": "SELF-HEAL-PLAN 4c. LLM 없음. crontab 직행 크론(월 09:00~09:50 자기평가 클러스터 7종, 매일 e2e-cron·mistake-recurrence-audit·mistake-promoter)과 tasks-integrity-audit 원장·scorecard-enforcer 의 출력 파일 mtime 을 기대 실행 시각(+유예 90분)과 비교. 안 돌았으면 ledger/incidents.jsonl 에 deadman:<name> high 로 open(멱등). 2026-09-03 복원 이전 흔적은 보류(unknown). 죽음·회복이 있을 때와 월요일(생존 확인 보고)만 출력. 매 실행 ledger/sensor-deadman.jsonl 1행. 회복은 자동 close 안 함 — 사람이 원인 적고 incident-ctl.sh close.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/sensor-deadman-check.log",
+              "path": "~/.openclaw-data/runtime/logs/sensor-deadman-check.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/sensor-deadman-check-err.log",
+              "path": "~/.openclaw-data/runtime/logs/sensor-deadman-check-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3453,11 +3453,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/session-report.log",
+              "path": "~/.openclaw-data/runtime/logs/session-report.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/session-report-err.log",
+              "path": "~/.openclaw-data/runtime/logs/session-report-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3485,11 +3485,11 @@
           "description": "DRYRUN 1주 (06-10~06-17): 초안만 생성, 카드 OFF. 체크리스트 통과 기록: autoplan/2026-06-10-skill-evolution-loop.md. Why 1줄: 성공 절차가 휘발되어 같은 작업을 매번 처음부터 다시 하는 낭비 차단.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/skill-loop-nightly.log",
+              "path": "~/.openclaw-data/runtime/logs/skill-loop-nightly.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/skill-loop-nightly-err.log",
+              "path": "~/.openclaw-data/runtime/logs/skill-loop-nightly-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3517,11 +3517,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/skill-synthesis-verify.log",
+              "path": "~/.openclaw-data/runtime/logs/skill-synthesis-verify.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/skill-synthesis-verify-err.log",
+              "path": "~/.openclaw-data/runtime/logs/skill-synthesis-verify-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3549,11 +3549,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/unpause-rebound-check.log",
+              "path": "~/.openclaw-data/runtime/logs/unpause-rebound-check.log",
               "exists": false
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/unpause-rebound-check-err.log",
+              "path": "~/.openclaw-data/runtime/logs/unpause-rebound-check-err.log",
               "exists": false
             },
             "claudeStderr": {
@@ -3581,11 +3581,11 @@
           "description": "클러스터 cl-af6fb756761bb676 (7일 재발 10건: CLAUDE.md 메타정보 stale) 재발 방지. 매주 월요일 05:05 KST CLAUDE.md에 기재된 파일 경로·줄 수를 실제 파일과 비교 검증. 괴리 20% 이상 시 자동 갱신. 변경 로그는 ~/.jarvis/logs/claude-md-updates/ 에 기록.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/update-claude-md-meta.log",
+              "path": "~/.openclaw-data/runtime/logs/update-claude-md-meta.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/update-claude-md-meta-err.log",
+              "path": "~/.openclaw-data/runtime/logs/update-claude-md-meta-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3613,11 +3613,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/weekly-dream-insight.log",
+              "path": "~/.openclaw-data/runtime/logs/weekly-dream-insight.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/weekly-dream-insight-err.log",
+              "path": "~/.openclaw-data/runtime/logs/weekly-dream-insight-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3645,11 +3645,11 @@
           "description": null,
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/wiki-contradiction-scan.log",
+              "path": "~/.openclaw-data/runtime/logs/wiki-contradiction-scan.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/wiki-contradiction-scan-err.log",
+              "path": "~/.openclaw-data/runtime/logs/wiki-contradiction-scan-err.log",
               "exists": true
             },
             "claudeStderr": {
@@ -3677,11 +3677,11 @@
           "description": "매주 일요일 20:00 KST (compound-review 직전). wiki-inject.log를 집계해 도메인별 주입 빈도 + 오답노트 참조율 + 최근 7일 vs 이전 7일 증감을 리포트. wiki/meta/metrics.jsonl에 기록. Compound Engineering 루프의 '효과 측정' 단계.",
           "logs": {
             "stdout": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/wiki-reference-report.log",
+              "path": "~/.openclaw-data/runtime/logs/wiki-reference-report.log",
               "exists": true
             },
             "stderr": {
-              "path": "~/.openclaw-data/jarvis/runtime/logs/wiki-reference-report-err.log",
+              "path": "~/.openclaw-data/runtime/logs/wiki-reference-report-err.log",
               "exists": false
             },
             "claudeStderr": {

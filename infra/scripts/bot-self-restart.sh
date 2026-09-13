@@ -6,13 +6,13 @@
 # 현재 응답이 Discord에 전송되고 난 뒤 자동으로 재시작됨.
 #
 # 사용법 (claude -p Bash 도구에서):
-#   bash ~/.openclaw-data/jarvis/runtime/scripts/bot-self-restart.sh
-#   bash ~/.openclaw-data/jarvis/runtime/scripts/bot-self-restart.sh "재시작 이유"
+#   bash ~/.openclaw-data/runtime/scripts/bot-self-restart.sh
+#   bash ~/.openclaw-data/runtime/scripts/bot-self-restart.sh "재시작 이유"
 
 set -euo pipefail
 # Cross-platform compat
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 REASON="${1:-manual restart}"
 LOG="${BOT_HOME}/logs/bot-self-restart.log"
 STAMP=$(date '+%Y-%m-%d %H:%M:%S')

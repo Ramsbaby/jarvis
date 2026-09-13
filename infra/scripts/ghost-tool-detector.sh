@@ -9,7 +9,7 @@
 #   자비스 LA-cron 정합성 감사 무능 상태 → 84건 정리 위기로 이어짐.
 #
 # 감지 기준:
-#   1) ~/.openclaw-data/jarvis/infra/scripts/*.sh, ~/.openclaw-data/jarvis/runtime/scripts/*.sh
+#   1) ~/projects/jarvis/infra/scripts/*.sh, ~/.openclaw-data/runtime/scripts/*.sh
 #   2) line count < 5 (실질 내용 없음)
 #   3) exec 권한 있음
 #   4) mtime 7일 이상 미변경 (긴급 임시 stub은 제외)
@@ -18,10 +18,10 @@
 # 동작: 발견 시 Discord critical + ledger 기록 + 30일 이상 stub은 graveyard 자동 이동 권고
 set -euo pipefail
 
-LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/ghost-tool-detector.log"
-LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/ghost-tool-detector.jsonl"
-ALERT="${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh"
-GRAVEYARD="${HOME}/.openclaw-data/jarvis/runtime/state/.graveyard"
+LOG="${HOME}/.openclaw-data/runtime/logs/ghost-tool-detector.log"
+LEDGER="${HOME}/.openclaw-data/runtime/ledger/ghost-tool-detector.jsonl"
+ALERT="${HOME}/.openclaw-data/runtime/scripts/alert.sh"
+GRAVEYARD="${HOME}/.openclaw-data/runtime/state/.graveyard"
 
 mkdir -p "$(dirname "${LEDGER}")" "${GRAVEYARD}"
 
@@ -30,9 +30,9 @@ log "=== ghost-tool-detector 시작 ==="
 
 # 1) 후보 디렉토리 스캔
 SEARCH_DIRS=(
-  "${HOME}/.openclaw-data/jarvis/infra/scripts"
-  "${HOME}/.openclaw-data/jarvis/runtime/scripts"
-  "${HOME}/.openclaw-data/jarvis/infra/bin"
+  "${HOME}/projects/jarvis/infra/scripts"
+  "${HOME}/.openclaw-data/runtime/scripts"
+  "${HOME}/projects/jarvis/infra/bin"
 )
 
 DETECTED=0

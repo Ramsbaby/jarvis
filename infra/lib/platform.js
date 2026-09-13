@@ -13,11 +13,11 @@ export const IS_LINUX   = os.platform() === 'linux'
 /**
  * JARVIS_HOME resolution order:
  * 1. $JARVIS_HOME env var (Docker / CI / custom installs)
- * 2. ~/.openclaw-data/jarvis/runtime (macOS, Linux, WSL2)
+ * 2. ~/.openclaw-data/runtime (macOS, Linux, WSL2)
  * 3. %USERPROFILE%\.jarvis (Windows native)
  */
 export const JARVIS_HOME = process.env.JARVIS_HOME
-  ?? path.join(os.homedir(), '.openclaw-data/jarvis/runtime')
+  ?? path.join(os.homedir(), '.openclaw-data/runtime')
 
 export const LOGS_DIR    = path.join(JARVIS_HOME, 'logs')
 export const INBOX_DIR   = path.join(JARVIS_HOME, 'inbox')
@@ -37,7 +37,7 @@ export function getShell() {
 
 /**
  * Normalizes a legacy hard-coded path to use JARVIS_HOME.
- * e.g. ~/.openclaw-data/jarvis/runtime/logs → <JARVIS_HOME>/logs
+ * e.g. ~/.openclaw-data/runtime/logs → <JARVIS_HOME>/logs
  */
 export function normalizePath(legacyPath) {
   return legacyPath.replace(/\/Users\/[^/]+\/\.jarvis/, JARVIS_HOME)

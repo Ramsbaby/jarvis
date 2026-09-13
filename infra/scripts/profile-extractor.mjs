@@ -13,7 +13,7 @@
  *   Vault/05-topics/inbox-tracker.md       ← 누적 트래커
  *
  * 프롬프트 템플릿 (개인화):
- *   ~/.openclaw-data/jarvis/private/prompts/profile-extract.md (gitignored)
+ *   ~/projects/jarvis/private/prompts/profile-extract.md (gitignored)
  *   - 파일 있으면 해당 내용으로 추출
  *   - 없으면 generic fallback 프롬프트 사용 (주요 주제 요약)
  */
@@ -28,11 +28,11 @@ const HOME          = homedir();
 const VAULT_DIR     = join(HOME, 'Jarvis-Vault');
 const DISCORD_DIR   = join(VAULT_DIR, '02-daily', 'discord');
 const TOPIC_DIR     = join(VAULT_DIR, '05-topics');
-const BOT_HOME      = join(HOME, '.openclaw-data/jarvis/runtime');
+const BOT_HOME      = join(HOME, '.openclaw-data/runtime');
 const LOG_FILE      = join(BOT_HOME, 'logs', 'profile-extractor.log');
 const TRACKER_FILE  = join(TOPIC_DIR, 'inbox-tracker.md');
 const MCP_CONFIG    = join(BOT_HOME, 'config', 'empty-mcp.json');
-const PROMPT_PATH   = join(HOME, '.openclaw-data/jarvis', 'private', 'prompts', 'profile-extract.md');
+const PROMPT_PATH   = join(HOME, 'projects/jarvis', 'private', 'prompts', 'profile-extract.md');
 
 // OAuth 격리 (2026-06-11 사고 재발 방지): 배치 claude 호출은 격리 장수명 토큰을 사용.
 // 메인 ~/.claude/.credentials.json은 대화형 CLI 전용 — llm-gateway.sh와 동일 패턴.
@@ -111,7 +111,7 @@ function buildPrompt(blogContent) {
 대화에서 논의된 주요 주제들을 추출해 마크다운 형식으로 정리해줘.
 각 주제는 H2 헤더로. 핵심 3~5줄 요약. 원문 그대로 복붙 금지.
 
-사용자 정의 추출 항목은 ~/.openclaw-data/jarvis/private/prompts/profile-extract.md 파일로 설정 가능.
+사용자 정의 추출 항목은 ~/projects/jarvis/private/prompts/profile-extract.md 파일로 설정 가능.
 
 ---
 ${blogContent}`;

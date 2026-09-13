@@ -13,10 +13,11 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
 SCRIPT_NAME="pattern-detect-schedule-request"
-LOG_FILE="$JARVIS_HOME/runtime/logs/${SCRIPT_NAME}.log"
-STATE_FILE="$JARVIS_HOME/runtime/state/${SCRIPT_NAME}-state.json"
+LOG_FILE="$JARVIS_RUNTIME/logs/${SCRIPT_NAME}.log"
+STATE_FILE="$JARVIS_RUNTIME/state/${SCRIPT_NAME}-state.json"
 
 mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$STATE_FILE")"
 
@@ -179,7 +180,7 @@ validate_health_responses() {
 block_recommendation_if_needed() {
     local text="$1"
     local user_id="$2"
-    local state_file="$JARVIS_HOME/runtime/state/${SCRIPT_NAME}-${user_id}.json"
+    local state_file="$JARVIS_RUNTIME/state/${SCRIPT_NAME}-${user_id}.json"
 
     if detect_schedule_pattern "$text"; then
         _log "일정/여행/운동 요청 감지: $text"
@@ -213,7 +214,7 @@ EOF
 
 save_health_state() {
     local user_id="$1"
-    local state_file="$JARVIS_HOME/runtime/state/${SCRIPT_NAME}-${user_id}.json"
+    local state_file="$JARVIS_RUNTIME/state/${SCRIPT_NAME}-${user_id}.json"
     local health_data="$2"
 
     mkdir -p "$(dirname "$state_file")"
@@ -251,7 +252,7 @@ main() {
         check-health)
             # 건강 정보 체크리스트 출력
             local user_id="${2:-default}"
-            local state_file="$JARVIS_HOME/runtime/state/${SCRIPT_NAME}-${user_id}.json"
+            local state_file="$JARVIS_RUNTIME/state/${SCRIPT_NAME}-${user_id}.json"
 
             if validate_health_responses "$state_file"; then
                 _log "OK: 건강 정보 확인됨"

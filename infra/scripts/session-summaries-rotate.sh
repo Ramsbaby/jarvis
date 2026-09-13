@@ -16,7 +16,7 @@ set -uo pipefail
 # Exit code: 0 (always succeeds, errors logged but non-fatal)
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin:${PATH}"
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 SUMMARIES_DIR="$BOT_HOME/state/session-summaries"
 LOG_FILE="$BOT_HOME/logs/session-summaries-rotate.log"
 STATE_FILE="$BOT_HOME/state/session-summaries-rotate.state.json"

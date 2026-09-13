@@ -17,7 +17,7 @@ set -euo pipefail
 
 LABEL="${1:-r1-baseline-serial}"
 LOG_PATH="${HOME}/.jarvis/logs/interview-ralph-detached.log" # ALLOW-DOTJARVIS (심링크)
-SNAP_SCRIPT="${HOME}/.openclaw-data/jarvis/infra/scripts/ralph-snapshot.sh"
+SNAP_SCRIPT="${HOME}/projects/jarvis/infra/scripts/ralph-snapshot.sh"
 MAX_WAIT_SEC=14400  # 4시간
 POLL_SEC=60
 WAITED=0

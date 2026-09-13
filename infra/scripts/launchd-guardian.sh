@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10] jarvis-launchd-guardian(*/3) 으로 이관. OPENCLAW_JOB=1 로 통과한다.
 # crontab 6행이 남아 있으나 crontab 쓰기가 막혀(rc=124) 스크립트 층에서 이중 실행을 막는다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/launchd-guardian
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/launchd-guardian" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/launchd-guardian
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/launchd-guardian" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[launchd-guardian] 중지 플래그 있음 — 오픈클로로 이관됨"
     exit 0
 fi
@@ -14,7 +14,7 @@ set -euo pipefail
 # Runs every 3 minutes via cron. Detects unloaded launchd services and re-registers them.
 # Ensures critical LaunchAgents remain registered after system sleep or restart.
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 # Cross-platform compat
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/compat.sh" 2>/dev/null || true
 
@@ -33,12 +33,54 @@ KEEPALIVE_SERVICES=(
     # "ai.jarvis.watchdog"     # [오픈클로 이식 2026-09-10] watchdog.sh는 디스코드 봇 전용 감시자다. 같이 정지.
     "ai.jarvis.cloudflared-tunnel"
     "ai.jarvis.board"
+    # [회차8 2026-09-12] 실측으로 메운 사각지대 — 이 5종은 KeepAlive 인데 감시 목록에 없었다.
+    #   launchd 가 직접 띄우는 상주 데몬이라 죽어도 오픈클로는 모른다.
+    #   입사(9/14) 후 무인 운전에서 이게 가장 큰 노출이었다.
+    "ai.jarvis.github-runner"
+    "ai.jarvis.interview-verifier"
+    "ai.jarvis.launchagents-watcher"
+    "ai.jarvis.rag-watcher"
+    "ai.openclaw.glances"
 )
 
-# StartInterval services: run periodically, PID=- between runs is normal
+# StartInterval / StartCalendarInterval services: 주기 실행. 실행 사이 PID=- 는 정상이다.
 # 2026-09-10 오픈클로 이식: symlink-audit·board-watchdog 는 오픈클로 잡으로 옮기고 plist 를 격리했다.
 #   plist 파일이 없으면 check_loaded 가 즉시 return 하므로 되살리진 않지만, 목록을 실제와 맞춘다.
-INTERVAL_SERVICES=()
+# [회차8 2026-09-12] Calendar 발화 2종 추가.
+INTERVAL_SERVICES=(
+    # [회차8 2026-09-12] com.jarvis.memory-sync 제거 — 오픈클로 잡 `jarvis-memory-sync` 로 이관했다.
+    #   목록에 남겨두면 guardian 이 bootout 한 서비스를 매 15분마다 되살려 이중 실행이 된다.
+    #   **이관은 '새 쪽을 켜는 것'과 '옛 쪽을 끄는 것'과 '되살리는 감시자를 끄는 것' 세 가지다.**
+    # vault-auto-link 는 구조상 잔류 — 실측 실행시간 81분(06:30→07:51)으로
+    #   오픈클로 command 페이로드 상한(900초)의 5배다. launchd 가 맞는 자리다.
+    "com.jarvis.vault-auto-link"
+)
+
+# [회차8 2026-09-12] 발화조건 검사.
+#   계기 — 2026-04~05 calendar-alert 가 StartInterval 을 잃고 넉 달간 미실행이었는데,
+#   launchd 에 로드돼 있었기 때문에 모든 감사가 "정상"으로 셌다.
+#   **등록돼 있다는 것과 발화한다는 것은 다르다.** 로드 검사만으로는 이 상태를 못 잡는다.
+check_trigger() {
+    local service="$1"
+    local plist_file="${PLIST_DIR}/${service}.plist"
+    [[ -f "$plist_file" ]] || return 0
+    local keys
+    keys=$(/usr/bin/python3 - "$plist_file" <<'PY' 2>/dev/null
+import plistlib, sys
+try:
+    d = plistlib.load(open(sys.argv[1], 'rb'))
+except Exception:
+    sys.exit(0)
+found = [k for k in ('KeepAlive', 'StartInterval', 'StartCalendarInterval', 'WatchPaths', 'QueueDirectories')
+         if d.get(k)]
+print(','.join(found))
+PY
+)
+    if [[ -z "$keys" ]]; then
+        log "ERROR: $service 에 발화조건이 없다 (KeepAlive·StartInterval·Calendar 전부 없음) — 로드돼 있어도 영원히 안 돈다"
+        trigger_missing=$(( trigger_missing + 1 ))
+    fi
+}
 
 PLIST_DIR="$HOME/Library/LaunchAgents"
 
@@ -54,6 +96,7 @@ if [[ "$minute" == "00" || "$minute" == "01" || "$minute" == "02" ]]; then
 fi
 
 recovered=0
+trigger_missing=0   # [회차8] 발화조건이 사라진 서비스 수 — 로드 검사로는 안 잡히는 상태
 
 check_loaded() {
     local service="$1"
@@ -195,6 +238,12 @@ for service in "${INTERVAL_SERVICES[@]+"${INTERVAL_SERVICES[@]}"}"; do
     fi
 done
 
+# [회차8 2026-09-12] 발화조건 검사 — 감시 대상 전체를 본다.
+#   등록 여부와 발화 여부는 다르다. 이 루프가 없으면 "로드됐지만 영원히 안 도는" 상태가 정상으로 셈해진다.
+for service in "${KEEPALIVE_SERVICES[@]}" "${INTERVAL_SERVICES[@]}"; do
+    check_trigger "$service"
+done
+
 # Send alert on recovery
 if (( recovered > 0 )); then
     if [[ -x "$ROUTE_RESULT" ]]; then
@@ -205,5 +254,13 @@ fi
 # Heartbeat log (hourly only)
 if [[ "$is_heartbeat" == "true" ]]; then
     total=$(( ${#KEEPALIVE_SERVICES[@]} + ${#INTERVAL_SERVICES[@]} ))
-    log "Heartbeat: checked ${total} services, recovered=$recovered"
+    log "Heartbeat: checked ${total} services, recovered=$recovered, trigger_missing=$trigger_missing"
 fi
+
+# [회차8] 발화조건 소실은 **실패로 끝낸다** — 오픈클로 failureAlert 가 받아야 사람이 안다.
+#   조용히 로그만 남기면 2026-04 calendar-alert 처럼 넉 달을 모른 채 지난다.
+if (( trigger_missing > 0 )); then
+    echo "[guardian] 발화조건 없는 서비스 ${trigger_missing}건 — launchd 에 로드돼 있어도 실행되지 않는다" >&2
+    exit 1
+fi
+exit 0

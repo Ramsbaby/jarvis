@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-dup-request-cleanup(매시) 로 이관. OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/duplicate-request-guard
+// 재개: rm ~/.openclaw-data/runtime/state/stopped/duplicate-request-guard
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
-if (__sc(__sh() + '/.openclaw-data/jarvis/runtime/state/stopped/duplicate-request-guard') && process.env.OPENCLAW_JOB !== '1') {
+if (__sc(__sh() + '/.openclaw-data/runtime/state/stopped/duplicate-request-guard') && process.env.OPENCLAW_JOB !== '1') {
   console.log('[duplicate-request-guard] 중지 플래그 있음 — 오픈클로로 이관됨');
   process.exit(0);
 }
@@ -35,7 +35,7 @@ import crypto from 'crypto';
 
 const STATE_DIR = process.env.BOT_HOME
   ? path.join(process.env.BOT_HOME, 'state')
-  : path.join(process.env.HOME || '/tmp', '.openclaw-data/jarvis/runtime/state');
+  : path.join(process.env.HOME || '/tmp', '.openclaw-data/runtime/state');
 
 const CACHE_FILE = path.join(STATE_DIR, 'duplicate-request-cache.jsonl');
 const STATS_FILE = path.join(STATE_DIR, 'duplicate-request-stats.json');

@@ -16,7 +16,7 @@ set -euo pipefail
 # --- 전역 설정 ---
 RCA_ENABLED="${RCA_ENABLED:-1}"
 RCA_STRICT_MODE="${RCA_STRICT_MODE:-1}"  # 1: 차단, 0: 경고만
-RCA_LOG_FILE="${RCA_LOG_FILE:-${HOME}/.openclaw-data/jarvis/runtime/logs/rca-validation.log}"
+RCA_LOG_FILE="${RCA_LOG_FILE:-${HOME}/.openclaw-data/runtime/logs/rca-validation.log}"
 
 # --- RCA 판별 기준 정의 ---
 # 증상억제(Symptom Suppression) 패턴

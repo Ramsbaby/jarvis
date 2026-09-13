@@ -10,7 +10,7 @@
 #   auto memory 디렉터리는 그 바깥이다. SSoT 로 옮겨 심링크를 남기는 이 훅이 유일한 다리다.
 #
 # 2026-08-06: 감시 경로를 settings.json 의 autoMemoryDirectory 에서 동적으로 읽도록 고쳤다.
-#   계기 — 같은 날 auto memory 가 ~/.openclaw-data/jarvis/runtime/claude-automemory 로 옮겨졌으나
+#   계기 — 같은 날 auto memory 가 ~/.openclaw-data/runtime/claude-automemory 로 옮겨졌으나
 #   이 훅은 옛 경로(~/.claude/projects/*/memory)에 하드코딩돼 있어 조용히 죽었다.
 #   경로를 또 하드코딩하면 다음 전환 때 같은 사고가 반복된다.
 #   --print-watched 는 그 드리프트를 감사가 부작용 없이 잡기 위한 창구다
@@ -21,8 +21,8 @@ set -euo pipefail
 MODE="${1:-sync}"
 
 # SSoT — RAG 가 실제로 색인하는 경로 표기를 정본으로 쓴다(~/.jarvis 는 이곳으로 가는 호환 링크).
-SSOT_DIR="${HOME}/.openclaw-data/jarvis/runtime/context/claude-memory"
-LOG_FILE="${HOME}/.openclaw-data/jarvis/runtime/logs/memory-sync.log"
+SSOT_DIR="${HOME}/.openclaw-data/runtime/context/claude-memory"
+LOG_FILE="${HOME}/.openclaw-data/runtime/logs/memory-sync.log"
 
 if [[ "$MODE" == "--print-watched" ]]; then
   INPUT=""
@@ -119,7 +119,7 @@ if [[ -f "$DEST" ]]; then
     log "memory-sync: ${FILENAME} 내용 동일 → 링크만 복원"
     exit 0
   fi
-  ARCHIVE_DIR="${HOME}/.openclaw-data/jarvis/runtime/backups/claude-memory-superseded"
+  ARCHIVE_DIR="${HOME}/.openclaw-data/runtime/backups/claude-memory-superseded"
   mkdir -p "$ARCHIVE_DIR"
   cp -p "$DEST" "${ARCHIVE_DIR}/${FILENAME%.md}.$(date +%Y%m%d-%H%M%S).md"
   log "memory-sync: ${FILENAME} 이전 판 보존 → backups/claude-memory-superseded/"

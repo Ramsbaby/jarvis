@@ -2,7 +2,7 @@
 /**
  * dump-system-prompt.mjs — 시스템 프롬프트 실측 도구 (Harness P1)
  *
- * Discord 봇이 매 turn마다 ~/.openclaw-data/jarvis/runtime/state/system-prompt-snapshot.md 에
+ * Discord 봇이 매 turn마다 ~/.openclaw-data/runtime/state/system-prompt-snapshot.md 에
  * 실제 LLM 입력을 덮어쓰기 저장한다 (claude-runner.js:1311 직후 hook).
  *
  * 이 도구는 그 스냅샷을 읽어 다음을 보고:
@@ -22,7 +22,7 @@ import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const SNAPSHOT_FILE = join(BOT_HOME, 'state', 'system-prompt-snapshot.md');
 
 const RAW = process.argv.includes('--raw');

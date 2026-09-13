@@ -12,7 +12,7 @@
  *   - runtime/config/tasks.json          (cron 정의 SSoT)
  *
  * 사용:
- *   node ~/.openclaw-data/jarvis/infra/scripts/gen-cron-matrix.mjs
+ *   node ~/projects/jarvis/infra/scripts/gen-cron-matrix.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';

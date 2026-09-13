@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG_DIR="$BOT_HOME/logs"
 
 if [ ! -d "$LOG_DIR" ]; then

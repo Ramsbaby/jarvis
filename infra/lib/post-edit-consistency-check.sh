@@ -21,9 +21,10 @@ set -euo pipefail
 # 설정
 # ============================================================================
 
-readonly JARVIS_HOME="${HOME}/.openclaw-data/jarvis"
+readonly JARVIS_HOME="${HOME}/projects/jarvis"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
 readonly GUARD_LIB="${JARVIS_HOME}/infra/lib/cluster-guard-cl-53499c7975efb1b0.sh"
-readonly STATE_DIR="${JARVIS_HOME}/runtime/state/consistency-checks"
+readonly STATE_DIR="${JARVIS_RUNTIME}/state/consistency-checks"
 
 # 옵션 파싱
 STRICT_MODE=0

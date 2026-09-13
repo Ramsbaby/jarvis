@@ -19,7 +19,7 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const LEDGER = join(BOT_HOME, 'state', 'error-ledger.jsonl');
 const COOLDOWN_FILE = join(BOT_HOME, 'state', 'silent-error-spike-cooldown.json');
 const COOLDOWN_HOURS = 6; // 같은 src는 6h 내 재알림 차단 (alert spam 방지)
@@ -90,7 +90,7 @@ if (NOTIFY) {
   if (toAlert.length === 0) {
     console.log(`\n(쿨다운 중 — 알림 ${spikes.length}건 모두 ${COOLDOWN_HOURS}h 내 발송됨, skip)`);
   } else {
-    const notifyScript = join(homedir(), '.openclaw-data/jarvis/infra/scripts/discord-visual.mjs');
+    const notifyScript = join(homedir(), 'projects/jarvis/infra/scripts/discord-visual.mjs');
     if (existsSync(notifyScript)) {
       const data = JSON.stringify({
         title: '🚨 Silent Error 스파이크',

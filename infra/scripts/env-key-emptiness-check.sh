@@ -9,7 +9,7 @@
 # 트리거: LaunchAgent ai.jarvis.env-key-emptiness-check (매일 09:00 KST)
 #
 # 동작:
-#   1) 검사 대상 .env 파일 4개 (~/.openclaw-data/jarvis/runtime/.env, ~/.openclaw-data/jarvis/runtime/.env, ~/jarvis-board/.env, ~/.env)
+#   1) 검사 대상 .env 파일 4개 (~/.openclaw-data/runtime/.env, ~/.openclaw-data/runtime/.env, ~/jarvis-board/.env, ~/.env)
 #   2) symlink 정규화로 동일 파일 중복 검사 회피
 #   3) `^[A-Z][A-Z0-9_]*=$` 패턴 (값이 빈 문자열인 KEY) 추출
 #   4) whitelist 제외 (env-key-emptiness-whitelist.txt 있으면 그 안의 KEY는 정상으로 인정)
@@ -22,9 +22,9 @@
 
 set -euo pipefail
 
-LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/env-key-emptiness-check.log"
-LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/env-key-emptiness-check.jsonl"
-WHITELIST="${HOME}/.openclaw-data/jarvis/runtime/config/env-key-emptiness-whitelist.txt"
+LOG="${HOME}/.openclaw-data/runtime/logs/env-key-emptiness-check.log"
+LEDGER="${HOME}/.openclaw-data/runtime/ledger/env-key-emptiness-check.jsonl"
+WHITELIST="${HOME}/.openclaw-data/runtime/config/env-key-emptiness-whitelist.txt"
 
 mkdir -p "$(dirname "$LEDGER")" "$(dirname "$LOG")"
 
@@ -34,7 +34,7 @@ log "=== env-key-emptiness-check 시작 ==="
 # ─── 검사 대상 .env (symlink 정규화 — macOS bash 3.2 호환) ───
 env_paths=()
 seen_reals=""
-for candidate in "$HOME/.openclaw-data/jarvis/runtime/.env" "$HOME/.openclaw-data/jarvis/runtime/.env" "$HOME/.openclaw-data/jarvis/runtime/discord/.env" "$HOME/jarvis-board/.env" "$HOME/.env"; do
+for candidate in "$HOME/.openclaw-data/runtime/.env" "$HOME/.openclaw-data/runtime/.env" "$HOME/.openclaw-data/runtime/discord/.env" "$HOME/jarvis-board/.env" "$HOME/.env"; do
   [ -f "$candidate" ] || continue
   # realpath 표준 — macOS coreutils 부재 시 python3 fallback
   if command -v realpath >/dev/null 2>&1; then
@@ -106,7 +106,7 @@ jq -cn \
   >> "$LEDGER"
 
 # ─── Discord critical alert ───
-ALERT_SCRIPT="${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh"
+ALERT_SCRIPT="${HOME}/.openclaw-data/runtime/scripts/alert.sh"
 if [ -x "$ALERT_SCRIPT" ]; then
   title="🚨 .env 빈 값 KEY ${empty_keys_total}건 (silent fail 위험)"
   detail="검사 ${#env_paths[@]}개 파일 중 빈 값 KEY ${empty_keys_total}건 발견. 외부 API silent fail 가능 — 즉시 채우거나 의도적 빈 값이면 whitelist 등재. 상세: ${LEDGER}"

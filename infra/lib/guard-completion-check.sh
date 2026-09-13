@@ -14,7 +14,7 @@
 #   4. 기존 Claude Code 명령어에 영향 없음 (조용한 검사)
 #
 # 사용법:
-#   source ~/.openclaw-data/jarvis/infra/lib/guard-completion-check.sh
+#   source ~/projects/jarvis/infra/lib/guard-completion-check.sh
 #
 #   # 사용자 요청 텍스트와 도구 호출 히스토리를 전달
 #   check_completion_safety "$user_message" "$tool_history_json"
@@ -66,7 +66,7 @@ _guard_completion_log() {
   timestamp=$(date '+[%Y-%m-%d %H:%M:%S]')
 
   # 로그 디렉토리 생성
-  local log_dir="${HOME}/.openclaw-data/jarvis/logs"
+  local log_dir="${HOME}/projects/jarvis/logs"
   mkdir -p "$log_dir" 2>/dev/null || return 0
 
   local log_file="$log_dir/guard-completion-check.log"

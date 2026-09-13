@@ -6,7 +6,7 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const BOT_HOME = process.env.BOT_HOME || join(process.env.HOME, '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(process.env.HOME, '.openclaw-data/runtime');
 const DIR = join(BOT_HOME, 'state/owner-state');
 const LEDGER = join(DIR, 'insight-ledger.jsonl');
 const FEEDBACK = join(DIR, 'feedback.jsonl');

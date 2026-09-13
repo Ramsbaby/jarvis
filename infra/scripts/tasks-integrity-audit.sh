@@ -12,7 +12,7 @@ set -euo pipefail
 #     해시만 바뀌면 🟡 통지. 매 실행이 ~/backup/jarvis-topology/tasks-json/ 에 백업(14일 회전).
 # 원장: ${BOT_HOME}/ledger/tasks-integrity-audit.jsonl (append-only)
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 TASKS_FILE="${BOT_HOME}/config/tasks.json"
 LEDGER_DIR="${BOT_HOME}/ledger"
 LEDGER_FILE="${LEDGER_DIR}/tasks-integrity-audit.jsonl"
@@ -30,7 +30,7 @@ AUDIT_JSON=$(BOT_HOME="$BOT_HOME" python3 - "$TASKS_FILE" <<'PYEOF'
 import json, os, sys, subprocess, re
 
 path = sys.argv[1]
-bot_home = os.environ.get('BOT_HOME', os.path.expanduser('~/.openclaw-data/jarvis/runtime'))
+bot_home = os.environ.get('BOT_HOME', os.path.expanduser('~/.openclaw-data/runtime'))
 
 with open(path) as f:
     d = json.load(f)
@@ -268,7 +268,7 @@ log "$MSG"
 
 # 24h throttle — 동일 문제 알림 하루 1회 (2026-07-19 인프라 지혈: 94건 반복 도배 방지)
 # ledger 기록(관측)은 위에서 매번 유지하고, Discord 발송만 제한한다.
-THROTTLE_STATE="${HOME}/.openclaw-data/jarvis/runtime/state/tasks-integrity-audit-last-alert.txt"
+THROTTLE_STATE="${HOME}/.openclaw-data/runtime/state/tasks-integrity-audit-last-alert.txt"
 THROTTLE_OK=yes
 if [[ -f "$THROTTLE_STATE" ]]; then
     LAST_ALERT=$(cat "$THROTTLE_STATE" 2>/dev/null || echo 0)

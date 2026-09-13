@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] crontab 쓰기가 막혀(rc=124) 스크립트 층에 가드를 둔다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/mistake-recurrence-audit
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/mistake-recurrence-audit" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/mistake-recurrence-audit
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/mistake-recurrence-audit" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[mistake-recurrence-audit] 중지 플래그 있음 (state/stopped/mistake-recurrence-audit)"
     exit 0
 fi
@@ -22,7 +22,7 @@ fi
 
 set -uo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LEDGER="${BOT_HOME}/state/mistake-ledger.jsonl"
 REPORT_DIR="${BOT_HOME}/state"
 REPORT_FILE="${REPORT_DIR}/mistake-recurrence.json"
@@ -280,7 +280,7 @@ if clusters:
             lines.append(f\"     ↪ {m}\")
     lines.append('')
 
-lines.append(f\"리포트: ~/.openclaw-data/jarvis/runtime/state/mistake-recurrence.json\")
+lines.append(f\"리포트: ~/.openclaw-data/runtime/state/mistake-recurrence.json\")
 lines.append(f\"구조적 가드가 부재하다는 신호 — oops/verify 스킬로 즉각 재발방지 훅 신설 권고\")
 print('\\n'.join(lines))
 ")

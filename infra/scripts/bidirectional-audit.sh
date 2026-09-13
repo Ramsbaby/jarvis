@@ -8,12 +8,12 @@
 #        (3) spec mismatch — plist ProgramArguments 가 2층 템플릿 위반
 #
 # Usage: weekly cron (일요일 07:30 KST)
-# 산출물: ~/.openclaw-data/jarvis/runtime/ledger/bidirectional-audit.jsonl
+# 산출물: ~/.openclaw-data/runtime/ledger/bidirectional-audit.jsonl
 #         stdout: Discord 리포트 텍스트 (bot-cron.sh 가 라우팅)
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LA_DIR="${HOME}/Library/LaunchAgents"
 EFF_TASKS="${BOT_HOME}/config/effective-tasks.json"
 [[ -f "$EFF_TASKS" ]] || EFF_TASKS="${BOT_HOME}/config/tasks.json"
@@ -157,5 +157,5 @@ if [[ ${#MISMATCH_LIST[@]} -gt 0 ]]; then
   echo ""
 fi
 
-echo "-# ledger: \`~/.openclaw-data/jarvis/runtime/ledger/bidirectional-audit.jsonl\`"
+echo "-# ledger: \`~/.openclaw-data/runtime/ledger/bidirectional-audit.jsonl\`"
 exit 0

@@ -3,10 +3,10 @@
  * skill-extractor.mjs — Hermes 패턴 흡수: task done → skill 자동 생성
  *
  * 입력:  task transcript (또는 task id로 DB에서 조회)
- * 출력:  ~/.openclaw-data/jarvis/runtime/wiki/skills/skill-{slug}.md
+ * 출력:  ~/.openclaw-data/runtime/wiki/skills/skill-{slug}.md
  *
  * 사용:
- *   node ~/.openclaw-data/jarvis/infra/lib/skill-extractor.mjs --task-id <id> [--transcript <file>] [--dry-run]
+ *   node ~/projects/jarvis/infra/lib/skill-extractor.mjs --task-id <id> [--transcript <file>] [--dry-run]
  *
  * 호출 시점: dev-queue task done 시 background (jarvis-coder.sh 또는 coder-functions.sh hook)
  */
@@ -17,7 +17,7 @@ import { homedir } from 'node:os';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { getTask } from './task-store.mjs';
 
-const MISTAKES_FILE = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime'), 'wiki', 'meta', 'learned-mistakes.md');
+const MISTAKES_FILE = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime'), 'wiki', 'meta', 'learned-mistakes.md');
 
 function normalizeForMatch(s) {
   return s.replace(/[^a-zA-Z0-9가-힣]/g, '').slice(0, 30);
@@ -45,7 +45,7 @@ function loadMistakeAsTask(taskId) {
 
 delete process.env.CLAUDECODE;
 
-const BOT_HOME    = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME    = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const SKILLS_DIR  = join(homedir(), '.jarvis', 'skills');
 const MODELS_FILE = join(BOT_HOME, 'config', 'models.json');
 const CLAUDE_BIN  = process.env.CLAUDE_BINARY || join(homedir(), '.local/bin/claude');

@@ -9,11 +9,11 @@ set -euo pipefail
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Directories - use ~/.jarvis (preferred) instead of ~/.openclaw-data/jarvis/runtime
+# Directories - use ~/.jarvis (preferred) instead of ~/.openclaw-data/runtime
 JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
 # 실제 코드가 있는 저장소 루트. JARVIS_HOME(~/.jarvis)은 런타임 루트이고
 # 그 아래 lib/bin/scripts 는 심볼릭 링크라 find 가 -L 없이는 들어가지 못한다.
-JARVIS_REPO="${JARVIS_REPO:-${HOME}/.openclaw-data/jarvis}"
+JARVIS_REPO="${JARVIS_REPO:-${HOME}/projects/jarvis}"
 
 # 오늘 자정(로컬) 기준. GNU 전용인 -daystart 대신 BSD/GNU 양쪽이 지원하는 -newermt 를 쓴다.
 # -daystart 는 macOS /usr/bin/find 에서 "unknown primary" 로 죽고, 그 에러가

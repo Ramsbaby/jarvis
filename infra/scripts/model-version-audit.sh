@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # model-version-audit.sh — Jarvis 모델 사용 정책 자동 검증
-# SSoT: ~/.openclaw-data/jarvis/runtime/context/model-policy.json
+# SSoT: ~/.openclaw-data/runtime/context/model-policy.json
 # 정책 위반 발견 시 Discord #jarvis-system 알림 + 로그
 #
 # 매주 월 09:00 KST 자동 실행 (ai.jarvis.model-version-audit LaunchAgent)
-# 수동 실행: bash ~/.openclaw-data/jarvis/infra/scripts/model-version-audit.sh
+# 수동 실행: bash ~/projects/jarvis/infra/scripts/model-version-audit.sh
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-SSOT_REGISTRY="${JARVIS_HOME}/runtime/context/ssot-registry.json"
-TASKS_FILE="${JARVIS_HOME}/runtime/config/tasks.json"
-LOG_FILE="${JARVIS_HOME}/runtime/logs/model-version-audit.log"
-DISCORD_VISUAL="${HOME}/.openclaw-data/jarvis/infra/scripts/discord-visual.mjs"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+SSOT_REGISTRY="${JARVIS_RUNTIME}/context/ssot-registry.json"
+TASKS_FILE="${JARVIS_RUNTIME}/config/tasks.json"
+LOG_FILE="${JARVIS_RUNTIME}/logs/model-version-audit.log"
+DISCORD_VISUAL="${HOME}/projects/jarvis/infra/scripts/discord-visual.mjs"
 
 # SSoT Registry에서 model-policy 경로 단일 참조 (권고 ③ 통합 — 2026-05-08)
 POLICY_FILE_RAW=$(jq -r '.operationalPolicy[]? | select(.name=="model-policy") | .path' "$SSOT_REGISTRY" 2>/dev/null || echo "")
@@ -20,7 +21,7 @@ if [[ -n "$POLICY_FILE_RAW" ]]; then
   POLICY_FILE="${POLICY_FILE_RAW/#~/$HOME}"
 else
   # Fallback (registry 부재 시)
-  POLICY_FILE="${JARVIS_HOME}/runtime/context/model-policy.json"
+  POLICY_FILE="${JARVIS_RUNTIME}/context/model-policy.json"
 fi
 
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -93,7 +94,7 @@ fi
 # 마커 없이 오탐을 방치하면 감사가 매주 같은 소음을 내고 결국 아무도 안 본다 —
 # topology-guard 의 ALLOW-DOTJARVIS 와 같은 관례다.
 CODE_HITS=$(grep -rEn "(${DEPRECATED_RE})([^0-9]|$)" \
-  "${JARVIS_HOME}/infra/" "${JARVIS_HOME}/runtime/scripts/" 2>/dev/null \
+  "${JARVIS_HOME}/infra/" "${JARVIS_RUNTIME}/scripts/" 2>/dev/null \
   | grep -v "ALLOW-DEPRECATED-MODEL" \
   | grep -v "node_modules\|\.git/\|model-policy.json\|model-version-audit\|CLAUDE.md\|learned-mistakes\|README\|/docs/\|/wiki/\|/adr/\|tasks-index.json\|tasks.schema.json\|\.bak" \
   | cut -d: -f1 | sort -u \

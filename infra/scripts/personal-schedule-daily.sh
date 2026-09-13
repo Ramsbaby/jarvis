@@ -5,10 +5,10 @@ set -euo pipefail
 
 # 1단계: 수업 데이터 조회
 TODAY=$(date +%F)
-LESSONS_JSON=$(bash ~/.openclaw-data/jarvis/runtime/private/scripts/preply-today.sh "$TODAY")
+LESSONS_JSON=$(bash ~/.openclaw-data/runtime/private/scripts/preply-today.sh "$TODAY")
 
 # 2단계: 환율 조회
-EXCHANGE_RATE=$(bash ~/.openclaw-data/jarvis/runtime/private/scripts/get-exchange-rate.sh)
+EXCHANGE_RATE=$(bash ~/.openclaw-data/runtime/private/scripts/get-exchange-rate.sh)
 
 # OAuth 격리 (2026-07-27 등재 — 2026-06-11 로그인 세션 폭파 사고 재발 방지)
 # 이 스크립트는 매일 07:30 LaunchAgent로 도는 배치다. 배치가 메인

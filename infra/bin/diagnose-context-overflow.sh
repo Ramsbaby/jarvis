@@ -30,7 +30,7 @@ set -uo pipefail
 
 TASK_ID="${1:-UNKNOWN}"
 STDERR_FILE="${2:-}"
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 
 # ── 유틸 ──────────────────────────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ _diag_section "1) model-router.mjs — contextWindow 설정"
 
 MODEL_ROUTER="${BOT_HOME}/lib/model-router.mjs"
 if [[ ! -f "$MODEL_ROUTER" ]]; then
-    MODEL_ROUTER="${HOME}/.openclaw-data/jarvis/infra/lib/model-router.mjs"
+    MODEL_ROUTER="${HOME}/projects/jarvis/infra/lib/model-router.mjs"
 fi
 
 if [[ -f "$MODEL_ROUTER" ]]; then
@@ -94,7 +94,7 @@ _diag_section "2) llm-gateway.sh — 활성 컨텍스트 설정"
 
 LLM_GATEWAY="${BOT_HOME}/lib/llm-gateway.sh"
 if [[ ! -f "$LLM_GATEWAY" ]]; then
-    LLM_GATEWAY="${HOME}/.openclaw-data/jarvis/infra/lib/llm-gateway.sh"
+    LLM_GATEWAY="${HOME}/projects/jarvis/infra/lib/llm-gateway.sh"
 fi
 
 if [[ -f "$LLM_GATEWAY" ]]; then
@@ -114,7 +114,7 @@ _diag_kv "JARVIS_CONTEXT_MODE" "${JARVIS_CONTEXT_MODE:-(미설정=full)}" "환�
 
 CTX_LOADER="${BOT_HOME}/lib/context-loader.sh"
 if [[ ! -f "$CTX_LOADER" ]]; then
-    CTX_LOADER="${HOME}/.openclaw-data/jarvis/infra/lib/context-loader.sh"
+    CTX_LOADER="${HOME}/projects/jarvis/infra/lib/context-loader.sh"
 fi
 
 if [[ -f "$CTX_LOADER" ]]; then

@@ -4,7 +4,7 @@
  * Claude CLI 세션(.jsonl) → RAG inbox 변환 싱크
  *
  * ~/.claude/projects/ 하위 .jsonl 파일에서 user/assistant 대화 추출 후
- * ~/.openclaw-data/jarvis/runtime/inbox/claude-cli-YYYYMMDD-{sessionId}.md 로 저장
+ * ~/.openclaw-data/runtime/inbox/claude-cli-YYYYMMDD-{sessionId}.md 로 저장
  * → rag-watch.mjs가 감지해 LanceDB 자동 인덱싱
  *
  * 사용법: node claude-cli-rag-sync.mjs [--dry-run]
@@ -18,7 +18,7 @@ import { maskPII } from '../discord/lib/mask-pii.mjs';
 
 const HOME = homedir();
 const CLAUDE_PROJECTS = join(HOME, '.claude', 'projects');
-const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime');
 const INBOX = join(BOT_HOME, 'inbox');
 const STATE_FILE = join(BOT_HOME, 'state', 'cli-rag-sync.json');
 const DRY_RUN = process.argv.includes('--dry-run');

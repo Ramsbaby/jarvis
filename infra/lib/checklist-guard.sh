@@ -9,7 +9,7 @@
 #
 # 역할:
 #   1. 다중 항목 지시에서 체크리스트 자동 생성
-#   2. 항목별 완료 여부 추적 (상태 파일: ~/.openclaw-data/jarvis/runtime/state/checklist-<session>.json)
+#   2. 항목별 완료 여부 추적 (상태 파일: ~/.openclaw-data/runtime/state/checklist-<session>.json)
 #   3. 미완료 항목이 1개 이상이면 exit 1 반환 → 완료 선언 차단
 #   4. 전체 완료 시에만 exit 0 반환
 #
@@ -26,7 +26,7 @@ set -euo pipefail
 # 설정
 # ═══════════════════════════════════════════════════════════════
 
-JARVIS_STATE_DIR="${JARVIS_STATE_DIR:-${HOME}/.openclaw-data/jarvis/runtime/state}"
+JARVIS_STATE_DIR="${JARVIS_STATE_DIR:-${HOME}/.openclaw-data/runtime/state}"
 CHECKLIST_DIR="${JARVIS_STATE_DIR}/checklists"
 SESSION_ID="${CHECKLIST_SESSION_ID:-$$}"
 CHECKLIST_FILE="${CHECKLIST_DIR}/checklist-${SESSION_ID}.json"
@@ -265,7 +265,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 
 환경 변수:
   CHECKLIST_SESSION_ID     세션 ID (기본: 현재 PID)
-  JARVIS_STATE_DIR         상태 디렉터리 (기본: ~/.openclaw-data/jarvis/runtime/state)
+  JARVIS_STATE_DIR         상태 디렉터리 (기본: ~/.openclaw-data/runtime/state)
 HELP
       exit 0
       ;;

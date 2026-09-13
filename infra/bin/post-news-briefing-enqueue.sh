@@ -9,9 +9,10 @@
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-RESULTS_DIR="${JARVIS_HOME}/runtime/results/news-briefing"
-LOG_FILE="${JARVIS_HOME}/runtime/logs/post-news-briefing.log"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+RESULTS_DIR="${JARVIS_RUNTIME}/results/news-briefing"
+LOG_FILE="${JARVIS_RUNTIME}/logs/post-news-briefing.log"
 TASK_STORE="${JARVIS_HOME}/infra/lib/task-store.mjs"
 
 mkdir -p "$(dirname "$LOG_FILE")"

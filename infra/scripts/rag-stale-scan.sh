@@ -5,16 +5,16 @@
 #       자동 삭제 없음 — 수동 검토 후 결정.
 #       매주 일요일 03:00 KST 실행 (rag-lancedb-compact 04:15 이전).
 #
-# 출력: ~/.openclaw-data/jarvis/runtime/rag/teams/reports/rag-stale-YYYY-MM-DD.md
+# 출력: ~/.openclaw-data/runtime/rag/teams/reports/rag-stale-YYYY-MM-DD.md
 #       50건 초과 시 Discord #jarvis-system 경고 전송
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG_FILE="${BOT_HOME}/logs/rag-stale-scan.log"
 REPORT_DIR="${BOT_HOME}/rag/teams/reports"
 ACCESS_LOG="${BOT_HOME}/rag/access-log.json"
-ALERT_SCRIPT="${HOME}/.openclaw-data/jarvis/runtime/scripts/alert.sh"
+ALERT_SCRIPT="${HOME}/.openclaw-data/runtime/scripts/alert.sh"
 
 ts()  { date '+%Y-%m-%dT%H:%M:%S'; }
 log() { echo "[$(ts)] [rag-stale-scan] $*" | tee -a "$LOG_FILE"; }
@@ -35,7 +35,7 @@ RESULT=$(node --input-type=module << 'NODEJS'
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const BOT_HOME = process.env.BOT_HOME || path.join(process.env.HOME, '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || path.join(process.env.HOME, '.openclaw-data/runtime');
 const ACCESS_LOG_PATH = path.join(BOT_HOME, 'rag', 'access-log.json');
 const CUTOFF_MS = Date.now() - 30 * 24 * 3600 * 1000; // 30일
 

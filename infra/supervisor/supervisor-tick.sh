@@ -5,15 +5,15 @@
 # 자가 회복(L1~L5)은 Phase 2에서 추가. 본 tick은 collect + alert까지만.
 #
 # 호출: ai.jarvis.supervisor LaunchAgent (*/5 * * * *)
-# state: ~/.openclaw-data/jarvis/runtime/state/supervisor-snapshot.json (delta 비교용)
-#        ~/.openclaw-data/jarvis/runtime/state/supervisor-tick-ledger.jsonl (30일 retention)
-# log:   ~/.openclaw-data/jarvis/runtime/logs/supervisor.log
+# state: ~/.openclaw-data/runtime/state/supervisor-snapshot.json (delta 비교용)
+#        ~/.openclaw-data/runtime/state/supervisor-tick-ledger.jsonl (30일 retention)
+# log:   ~/.openclaw-data/runtime/logs/supervisor.log
 
 set -euo pipefail
 
 # ── 환경 ──────────────────────────────────────────────────────────
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 DOT_JARVIS="${HOME}/.jarvis"
 LOG="${BOT_HOME}/logs/supervisor.log"
 SNAPSHOT="${BOT_HOME}/state/supervisor-snapshot.json"

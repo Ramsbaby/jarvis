@@ -110,7 +110,7 @@ function maskTechDetails(text) {
     let masked = line
       // PID 숫자 (예: "PID 1234", "pid=5678")
       .replace(/\b(PID|pid)[=\s]+\d{2,6}\b/g, '(내부 프로세스)')
-      // 절대 홈 경로 (예: /Users/username/.jarvis/..., ~/.openclaw-data/jarvis/runtime/...) gitleaks:allow
+      // 절대 홈 경로 (예: /Users/username/.jarvis/..., ~/.openclaw-data/runtime/...) gitleaks:allow
       .replace(/\/Users\/[^/\s]+\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)') // gitleaks:allow
       .replace(/~\/\.jarvis\/[^\s,)'"]+/g, '(Jarvis 내부 경로)') // gitleaks:allow
       // 절대 홈 경로 일반 (예: /Users/username/...)  gitleaks:allow
@@ -190,7 +190,7 @@ function convertTablesToList(text) {
 }
 
 // Active placeholder tracking — persisted for orphan cleanup on restart
-const PLACEHOLDER_STATE = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime'), 'state', 'active-placeholders.json');
+const PLACEHOLDER_STATE = join(process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime'), 'state', 'active-placeholders.json');
 
 function _loadPlaceholders() {
   try { return JSON.parse(readFileSync(PLACEHOLDER_STATE, 'utf-8')); } catch { return []; }

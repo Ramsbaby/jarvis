@@ -12,12 +12,12 @@
  *   수동: node wiki-reference-report.mjs [--dry-run]
  *
  * 입력
- *   - ~/.openclaw-data/jarvis/runtime/logs/wiki-inject.log
+ *   - ~/.openclaw-data/runtime/logs/wiki-inject.log
  *     각 줄: {"ts","domain","chars","parts","mistakes"(2026-04-20 이후)}
  *
  * 출력
  *   - stdout: Discord 포맷 메시지 (bot-cron.sh → route-result.sh)
- *   - ~/.openclaw-data/jarvis/runtime/wiki/meta/metrics.jsonl append
+ *   - ~/.openclaw-data/runtime/wiki/meta/metrics.jsonl append
  *     {"ts","type":"reference_report","week","wikiRefs","mistakeNoteRefs","domains":{...}}
  */
 
@@ -25,7 +25,7 @@ import { readFileSync, appendFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis', 'runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), 'projects/jarvis', 'runtime');
 const LOG_PATH = join(BOT_HOME, 'logs', 'wiki-inject.log');
 const METRICS_PATH = join(BOT_HOME, 'wiki', 'meta', 'metrics.jsonl');
 const DRY_RUN = process.argv.includes('--dry-run');

@@ -8,11 +8,12 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LEDGER="$JARVIS_HOME/runtime/state/skill-extractor-ledger.jsonl"
-LOG_FILE="$JARVIS_HOME/runtime/logs/skill-dryrun-auto-activate.log"
-ACTIVATION_MARKER="$JARVIS_HOME/runtime/state/skill-extract-production-active"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LEDGER="$JARVIS_RUNTIME/state/skill-extractor-ledger.jsonl"
+LOG_FILE="$JARVIS_RUNTIME/logs/skill-dryrun-auto-activate.log"
+ACTIVATION_MARKER="$JARVIS_RUNTIME/state/skill-extract-production-active"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"

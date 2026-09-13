@@ -115,7 +115,7 @@ run_verify_gate() {
 
 ## 태스크 (id: ${task_id})
 ${task_name}
-${JARVIS_CODER_REPO:+저장소 경로(격리 작업 사본): ${JARVIS_CODER_REPO} — 파일을 직접 열어 확인할 때 이 경로 기준이다. ~/.openclaw-data/jarvis 본체가 아니다.}
+${JARVIS_CODER_REPO:+저장소 경로(격리 작업 사본): ${JARVIS_CODER_REPO} — 파일을 직접 열어 확인할 때 이 경로 기준이다. ~/projects/jarvis 본체가 아니다.}
 
 ## 태스크 원문 프롬프트
 ${task_prompt:0:2000}

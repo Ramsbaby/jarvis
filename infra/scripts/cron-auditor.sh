@@ -11,7 +11,7 @@
 # 붙이고 요약에 센다 — 이 수가 감사 오탐율의 원천 지표다.
 
 set -euo pipefail
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 NOW=$(date +%s)
 TASKS_TMP=$(mktemp /tmp/cron-audit-tasks-XXXXXX)
 COUNTS_TMP=$(mktemp /tmp/cron-audit-counts-XXXXXX)

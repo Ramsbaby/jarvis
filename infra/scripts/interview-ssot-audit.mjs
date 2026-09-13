@@ -16,26 +16,26 @@ import { parseStarLookup } from '../discord/lib/star-lookup.mjs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const UP_PATH = join(homedir(), '.openclaw-data/jarvis/runtime/context/user-profile.md');
-const FP_PATH = join(homedir(), '.openclaw-data/jarvis/infra/discord/lib/interview-fast-path.js');
-const MONITORING_PATH = join(homedir(), '.openclaw-data/jarvis/runtime/config/monitoring.json');
+const UP_PATH = join(homedir(), '.openclaw-data/runtime/context/user-profile.md');
+const FP_PATH = join(homedir(), 'projects/jarvis/infra/discord/lib/interview-fast-path.js');
+const MONITORING_PATH = join(homedir(), '.openclaw-data/runtime/config/monitoring.json');
 // v2.0 (2026-04-27 주인님 지시·verify-20260427-141350 권고 P0-1):
 // _facts.md ↔ user-profile.md 양방향 분기 검사 추가. 본 사고 재발 자동 감지 가드.
-const FACTS_PATH = join(homedir(), '.openclaw-data/jarvis/runtime/wiki/career/_facts.md');
+const FACTS_PATH = join(homedir(), '.openclaw-data/runtime/wiki/career/_facts.md');
 
 // v3.1 (2026-04-27 주인님 승인 — Registry 패턴 도입):
-// 모든 LLM 주입 SSoT를 ~/.openclaw-data/jarvis/runtime/context/ssot-registry.json에서 읽어 자동 순회.
+// 모든 LLM 주입 SSoT를 ~/.openclaw-data/runtime/context/ssot-registry.json에서 읽어 자동 순회.
 // 새 SSoT 추가 시 registry에 등록만 하면 자동 가드 적용.
-const SSOT_REGISTRY_PATH = join(homedir(), '.openclaw-data/jarvis/runtime/context/ssot-registry.json');
+const SSOT_REGISTRY_PATH = join(homedir(), '.openclaw-data/runtime/context/ssot-registry.json');
 
 function loadSsotRegistry() {
   if (!existsSync(SSOT_REGISTRY_PATH)) {
     console.warn(`⚠️ ssot-registry.json 부재 — fallback hardcoded list 사용`);
     return {
       ssotFiles: [
-        { name: 'owner-preferences', path: join(homedir(), '.openclaw-data/jarvis/runtime/context/owner/preferences.md'), factsCandidates: ['knowledge', 'meta'], deepTagPrefixes: ['preference-deep', 'comm-deep'], auditEnabled: true },
-        { name: 'owner-visualization', path: join(homedir(), '.openclaw-data/jarvis/runtime/context/owner/visualization.md'), factsCandidates: ['knowledge'], deepTagPrefixes: ['viz-deep', 'design-deep'], auditEnabled: true },
-        { name: 'owner-persona', path: join(homedir(), '.openclaw-data/jarvis/runtime/context/owner/persona.md'), factsCandidates: ['meta'], deepTagPrefixes: ['persona-deep'], auditEnabled: true },
+        { name: 'owner-preferences', path: join(homedir(), '.openclaw-data/runtime/context/owner/preferences.md'), factsCandidates: ['knowledge', 'meta'], deepTagPrefixes: ['preference-deep', 'comm-deep'], auditEnabled: true },
+        { name: 'owner-visualization', path: join(homedir(), '.openclaw-data/runtime/context/owner/visualization.md'), factsCandidates: ['knowledge'], deepTagPrefixes: ['viz-deep', 'design-deep'], auditEnabled: true },
+        { name: 'owner-persona', path: join(homedir(), '.openclaw-data/runtime/context/owner/persona.md'), factsCandidates: ['meta'], deepTagPrefixes: ['persona-deep'], auditEnabled: true },
       ],
     };
   }
@@ -275,7 +275,7 @@ function auditOwnerSsotFiles() {
     }
     // 도메인 _facts.md cross-search 후보
     for (const factsDomain of ssot.factsCandidates) {
-      const factsPath = join(homedir(), `.openclaw-data/jarvis/runtime/wiki/${factsDomain}/_facts.md`);
+      const factsPath = join(homedir(), `.openclaw-data/runtime/wiki/${factsDomain}/_facts.md`);
       if (!existsSync(factsPath)) continue;
       const facts = readFileSync(factsPath, 'utf-8');
       // ssot.name과 도메인 매칭되는 deep-tag 검색 (예: 'preferences-deep', 'persona-deep')

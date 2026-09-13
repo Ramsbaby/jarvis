@@ -42,8 +42,8 @@ function loadApiKey() {
 
   // 2순위: runtime/.env 파일
   const envPaths = [
-    join(homedir(), '.openclaw-data/jarvis', 'runtime', 'discord', '.env'),
-    join(homedir(), '.openclaw-data/jarvis', 'runtime', '.env'),
+    join(homedir(), 'projects/jarvis', 'runtime', 'discord', '.env'),
+    join(homedir(), 'projects/jarvis', 'runtime', '.env'),
     join(homedir(), '.jarvis', 'discord', '.env'),
   ];
   for (const p of envPaths) {
@@ -90,7 +90,7 @@ export async function deepseekChat(messages, opts = {}) {
   if (!apiKey) {
     throw new Error(
       'DEEPSEEK_API_KEY가 설정되지 않았습니다. ' +
-      '~/.openclaw-data/jarvis/runtime/runtime/discord/.env 에 DEEPSEEK_API_KEY=sk-... 를 추가하세요.'
+      '~/.openclaw-data/runtime/runtime/discord/.env 에 DEEPSEEK_API_KEY=sk-... 를 추가하세요.'
     );
   }
 

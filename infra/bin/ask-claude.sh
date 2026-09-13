@@ -5,7 +5,7 @@
 # --- HOME 보증 (cron에서 HOME 누락 가능성) ---
 export HOME="${HOME:-$(eval echo ~$(whoami))}"
 
-_EARLY_LOG="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs/ask-claude-invocations.log"
+_EARLY_LOG="${BOT_HOME:-${HOME}/.openclaw-data/runtime}/logs/ask-claude-invocations.log"
 printf '[%s] PID=%d TASK=%s\n' "$(date -u +%FT%TZ 2>/dev/null || echo unknown)" "$$" "${1:-?}" >> "$_EARLY_LOG" 2>/dev/null || true
 unset _EARLY_LOG
 # --- PATH 강화 (cron 환경에서 경로 누락 방지) ---
@@ -28,7 +28,7 @@ RESULT_RETENTION="${6:-7}"
 MODEL="${7:-}"
 
 # Determine BOT_HOME early to handle compat.sh sourcing reliably in cron environments
-BOT_HOME_FALLBACK="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME_FALLBACK="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 _COMPAT_PATH="${BOT_HOME_FALLBACK}/lib/compat.sh"
 if [[ -f "$_COMPAT_PATH" ]]; then
     source "$_COMPAT_PATH" 2>/dev/null || true
@@ -50,7 +50,7 @@ unset _TASK_ID_SAVED
 # ask-claude.sh - Core wrapper around `claude -p` for AI task execution
 # Usage: ask-claude.sh TASK_ID PROMPT [ALLOWED_TOOLS] [TIMEOUT] [MAX_BUDGET]
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 LOG_FILE="${BOT_HOME}/logs/task-runner.jsonl"
 
 # --- Inherit allowedTools from parent task for debug-cron-* variants ---
@@ -1182,7 +1182,7 @@ if [[ -f "${BOT_HOME}/lib/file-validator.sh" ]] && command -v jq >/dev/null 2>&1
 fi
 
 # --- Agent Self-Note hook (Dreaming) ---
-# 태스크 성공 완료 후 에이전트가 패턴/실수/제안을 ~/.openclaw-data/jarvis/runtime/agent-notes/에 저장.
+# 태스크 성공 완료 후 에이전트가 패턴/실수/제안을 ~/.openclaw-data/runtime/agent-notes/에 저장.
 # 다음 세션의 context-loader.sh가 read-agent-note.sh로 주입하여 반복 실수 감소.
 # TODO: AGENT_NOTE_JSON 변수는 각 태스크별 에이전트 스크립트에서 export하면
 #       자동으로 이 훅이 노트를 저장함. 미설정 시 silently skip.
@@ -1196,7 +1196,7 @@ fi
 # === 토큰 레져 개념 정리 ===
 #
 # [토큰 레져 (Token Ledger)]
-#   - 파일: ~/.openclaw-data/jarvis/runtime/state/token-ledger.jsonl
+#   - 파일: ~/.openclaw-data/runtime/state/token-ledger.jsonl
 #   - 목적: 모든 LLM 호출의 "Single Source of Truth" (SSoT) 레져
 #   - 형식: 라인 단위 JSON (JSONL), 각 호출마다 1라인 추가
 #   - 용도:

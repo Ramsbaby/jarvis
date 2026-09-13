@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # [오픈클로 이식 2026-09-10] 오픈클로 jarvis-vault-daily-digest 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-# 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/vault-daily-digest
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/vault-daily-digest" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 재개: rm ~/.openclaw-data/runtime/state/stopped/vault-daily-digest
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/vault-daily-digest" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[vault-daily-digest] 중지 플래그 있음 — 오픈클로로 이관됨"
     exit 0
 fi

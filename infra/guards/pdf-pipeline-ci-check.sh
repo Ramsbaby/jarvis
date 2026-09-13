@@ -27,9 +27,10 @@
 set -uo pipefail
 
 JARVIS_HOME="${HOME}/.jarvis"
-INFRA="${HOME}/.openclaw-data/jarvis/infra"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+INFRA="${HOME}/projects/jarvis/infra"
 GUARD="${INFRA}/guards/pdf-pipeline-checkpoint.sh"
-CI_LOG_DIR="${JARVIS_HOME}/runtime/state/pdf-pipeline"
+CI_LOG_DIR="${JARVIS_RUNTIME}/state/pdf-pipeline"
 CI_LOG="${CI_LOG_DIR}/ci-check.jsonl"
 CLUSTER_ID="cl-8a2b1b50fcd5ba63"
 

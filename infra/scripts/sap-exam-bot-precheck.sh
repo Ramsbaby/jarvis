@@ -7,10 +7,10 @@ set -uo pipefail
 
 LABEL="ai.jarvis.sap-exam-precheck"
 PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
-ENV_FILE="$HOME/.openclaw-data/jarvis/runtime/.env"
-LOG="$HOME/.openclaw-data/jarvis/runtime/logs/sap-exam-precheck.log"
-LEDGER="$HOME/.openclaw-data/jarvis/runtime/ledger/bot-response-bus.jsonl"
-BOTLOG="$HOME/.openclaw-data/jarvis/runtime/logs/discord-bot.jsonl"
+ENV_FILE="$HOME/.openclaw-data/runtime/.env"
+LOG="$HOME/.openclaw-data/runtime/logs/sap-exam-precheck.log"
+LEDGER="$HOME/.openclaw-data/runtime/ledger/bot-response-bus.jsonl"
+BOTLOG="$HOME/.openclaw-data/runtime/logs/discord-bot.jsonl"
 CH_DEV="1469905074661757049"   # jarvis-dev
 BOT_LABEL="ai.jarvis.discord-bot"
 MODE="${1:-scheduled}"          # scheduled | test

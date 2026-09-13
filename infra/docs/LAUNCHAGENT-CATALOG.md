@@ -26,13 +26,13 @@
 
 ### ✅ `ai.jarvis.interview-verifier`
 - **Schedule**: (없음)
-- **Program**: `/opt/homebrew/bin/node ~/.openclaw-data/jarvis/infra/scripts/interview-verifier-server.mjs`
+- **Program**: `/opt/homebrew/bin/node ~/projects/jarvis/infra/scripts/interview-verifier-server.mjs`
 - **RunAtLoad**: true
 - **Active**: ✅ (PID 10496, last exit 0)
 
 ### ✅ `ai.jarvis.launchagents-watcher`
 - **Schedule**: (없음)
-- **Program**: `/bin/bash ~/.openclaw-data/jarvis/infra/scripts/launchagents-watcher.sh`
+- **Program**: `/bin/bash ~/projects/jarvis/infra/scripts/launchagents-watcher.sh`
 - **RunAtLoad**: true
 - **Active**: ✅ (PID 10422, last exit 0)
 
@@ -44,12 +44,12 @@
 
 ### ✅ `com.jarvis.memory-sync`
 - **Schedule**: 매주 월요일 04:30 KST
-- **Program**: `/bin/bash ~/.openclaw-data/jarvis/runtime/scripts/memory-sync.sh`
+- **Program**: `/bin/bash ~/projects/jarvis/runtime/scripts/memory-sync.sh`
 - **RunAtLoad**: false
 - **Active**: ✅ (PID -, last exit 0)
 
 ### ✅ `com.jarvis.vault-auto-link`
 - **Schedule**: 매일 06:30 KST
-- **Program**: `/bin/bash ~/.openclaw-data/jarvis/runtime/scripts/vault-auto-link.sh`
+- **Program**: `/bin/bash ~/projects/jarvis/runtime/scripts/vault-auto-link.sh`
 - **RunAtLoad**: false
 - **Active**: ✅ (PID -, last exit 0)

@@ -2,8 +2,8 @@
 
 # [오픈클로 이식 2026-09-10 · 회차5 2단계] 이관 완료 — crontab 경로를 막는다.
 # 오픈클로 jarvis-rag-bug-detector(03:10)로 이관. 실행 검증 완료(1 issues found = 정상 신호).
-# 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다. 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/rag-bug-detector
-if [[ -f "${HOME}/.openclaw-data/jarvis/runtime/state/stopped/rag-bug-detector" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
+# 오픈클로 잡은 OPENCLAW_JOB=1 로 통과한다. 재개: rm ~/.openclaw-data/runtime/state/stopped/rag-bug-detector
+if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/rag-bug-detector" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[rag-bug-detector] 중지 플래그 있음 — 오픈클로로 이관됨"
     exit 0
 fi
@@ -15,12 +15,12 @@ fi
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 export BOT_HOME
 
 MONITORING_CONFIG="${MONITORING_CONFIG:-$BOT_HOME/config/monitoring.json}"
 if [[ ! -f "$MONITORING_CONFIG" ]]; then
-    MONITORING_CONFIG="/Users/ramsbaby/.openclaw-data/jarvis/runtime/config/monitoring.json"
+    MONITORING_CONFIG="/Users/ramsbaby/.openclaw-data/runtime/config/monitoring.json"
 fi
 RAG_LOG="$BOT_HOME/logs/rag-index.log"
 INDEX_STATE="$BOT_HOME/rag/index-state.json"
@@ -41,7 +41,7 @@ if [[ ! -f "$MONITORING_CONFIG" ]]; then
 fi
 
 WEBHOOK="jarvis-system"
-INFRA_HOME="${INFRA_HOME:-${HOME}/.openclaw-data/jarvis/infra}"
+INFRA_HOME="${INFRA_HOME:-${HOME}/projects/jarvis/infra}"
 source "${INFRA_HOME}/lib/discord-notify-bash.sh" || {
     echo "ERROR: discord-notify-bash.sh not found at $INFRA_HOME/lib/" >&2
     exit 1
@@ -89,7 +89,7 @@ report_lines+=("")
 report_lines+=("## 1. 소스 편향 감지")
 report_lines+=("")
 
-bias_result=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/.openclaw-data/jarvis/rag/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
+bias_result=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/projects/jarvis/rag/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
 const lancedb = (await import(process.env.LANCE_MOD)).default;
 (async () => {
     const db = await lancedb.connect(process.env.LANCEDB_DIR);
@@ -235,7 +235,7 @@ else
 fi
 
 # LanceDB 실제 행 수
-db_chunks=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/.openclaw-data/jarvis/rag/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
+db_chunks=$(LANCEDB_DIR="$LANCEDB_PATH" LANCE_MOD="${HOME}/projects/jarvis/rag/node_modules/@lancedb/lancedb/dist/index.js" node --input-type=module --eval "
 const lancedb = (await import(process.env.LANCE_MOD)).default;
 (async () => {
     const db = await lancedb.connect(process.env.LANCEDB_DIR);
@@ -383,7 +383,7 @@ if [[ $alert_trigger -gt 0 ]]; then
         fi
         detail=""
         if [[ "${new_broken_snapshots:-0}" -gt 0 ]]; then
-            detail="${detail}\n- 신규 broken 격리본 ${new_broken_snapshots}개 → \`~/.openclaw-data/jarvis/runtime/state/broken-forensic/\` 확인"
+            detail="${detail}\n- 신규 broken 격리본 ${new_broken_snapshots}개 → \`~/.openclaw-data/runtime/state/broken-forensic/\` 확인"
         fi
         if [[ "$bias_issues" -gt 0 ]] 2>/dev/null; then
             detail="${detail}\n- 소스 편향 감지됨"

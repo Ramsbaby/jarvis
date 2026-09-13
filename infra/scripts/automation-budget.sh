@@ -10,15 +10,15 @@
 # 측정 5종 (주간):
 #   1) plists_added   — ~/Library/LaunchAgents/ai.jarvis.* + com.jarvis.* 신규 plist (mtime <7d)
 #   2) hooks_added    — ~/.claude/hooks/*.sh 신규/변경 (mtime <7d)
-#   3) scripts_added  — ~/.openclaw-data/jarvis/infra/scripts/*.sh + ~/.openclaw-data/jarvis/infra/bin/*.sh (mtime <7d)
+#   3) scripts_added  — ~/projects/jarvis/infra/scripts/*.sh + ~/projects/jarvis/infra/bin/*.sh (mtime <7d)
 #   4) why_documented — 위 신규 항목 중 # Why 또는 #.*신설 코멘트 포함 비율
 #   5) budget_status  — 주간 신규 합계 vs 임계 (7건/주 초과 시 ⚠️, 15건/주 초과 시 🔴)
 #
 # 출력: ledger jsonl + Discord 카드
 set -euo pipefail
 
-LOG="${HOME}/.openclaw-data/jarvis/runtime/logs/automation-budget.log"
-LEDGER="${HOME}/.openclaw-data/jarvis/runtime/ledger/automation-budget.jsonl"
+LOG="${HOME}/.openclaw-data/runtime/logs/automation-budget.log"
+LEDGER="${HOME}/.openclaw-data/runtime/ledger/automation-budget.jsonl"
 
 mkdir -p "$(dirname "${LEDGER}")" "$(dirname "${LOG}")"
 
@@ -47,8 +47,8 @@ hooks_added=${hooks_added:-0}
 
 # ─── 3) scripts_added ───
 scripts_files=$(find \
-  "${HOME}/.openclaw-data/jarvis/infra/scripts" \
-  "${HOME}/.openclaw-data/jarvis/infra/bin" \
+  "${HOME}/projects/jarvis/infra/scripts" \
+  "${HOME}/projects/jarvis/infra/bin" \
   -maxdepth 1 -type f -name "*.sh" -mtime -7 2>/dev/null)
 scripts_added=$(echo "$scripts_files" | grep -c '\.sh$' 2>/dev/null || true)
 scripts_added=${scripts_added:-0}
@@ -109,7 +109,7 @@ jq -cn \
 log "ledger append 완료: ${LEDGER}"
 
 # ─── Discord 카드 송출 ───
-DISCORD_SCRIPT="${HOME}/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_SCRIPT="${HOME}/.openclaw-data/runtime/scripts/discord-visual.mjs"
 if [[ -f "$DISCORD_SCRIPT" ]]; then
   card_data=$(jq -cn \
     --arg title "Automation Budget — ${TODAY} 주간" \

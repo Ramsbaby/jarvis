@@ -11,7 +11,7 @@
  *   - launchctl list (활성 상태)
  *
  * 사용:
- *   node ~/.openclaw-data/jarvis/infra/scripts/gen-launchagent-catalog.mjs
+ *   node ~/projects/jarvis/infra/scripts/gen-launchagent-catalog.mjs
  */
 import fs from 'node:fs';
 import path from 'node:path';

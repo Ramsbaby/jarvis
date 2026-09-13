@@ -11,14 +11,15 @@
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
 LA_DIR="$HOME/Library/LaunchAgents"
 SCRIPTS_DIR="$JARVIS_HOME/infra/scripts"
 DOCS_DIR="$JARVIS_HOME/infra/docs"
-LOG_FILE="$JARVIS_HOME/runtime/logs/docs-freshness-audit.log"
+LOG_FILE="$JARVIS_RUNTIME/logs/docs-freshness-audit.log"
 # 서술형(손으로 쓴) 문서가 코드보다 며칠 이상 뒤처지면 보고할지. 기본 30일.
 DOC_DRIFT_DAYS="${DOC_DRIFT_DAYS:-30}"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
 
 mkdir -p "$(dirname "$LOG_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"
@@ -53,13 +54,13 @@ check() {
 }
 
 # 1. cron-matrix
-check "$(mtime "$JARVIS_HOME/runtime/config/tasks.json")" \
+check "$(mtime "$JARVIS_RUNTIME/config/tasks.json")" \
       "$DOCS_DIR/cron-matrix.json" \
       "node $SCRIPTS_DIR/gen-cron-matrix.mjs" \
       "cron-matrix"
 
 # 2. tasks-index (기존 자동 생성 문서)
-check "$(mtime "$JARVIS_HOME/runtime/config/tasks.json")" \
+check "$(mtime "$JARVIS_RUNTIME/config/tasks.json")" \
       "$DOCS_DIR/tasks-index.json" \
       "node $SCRIPTS_DIR/gen-tasks-index.mjs" \
       "tasks-index"
@@ -72,7 +73,7 @@ check "$LA_LATEST" \
 
 # 4. discord-channels
 MODELS_JSON_MTIME=$(mtime "$JARVIS_HOME/infra/config/models.json")
-TASKS_JSON_MTIME=$(mtime "$JARVIS_HOME/runtime/config/tasks.json")
+TASKS_JSON_MTIME=$(mtime "$JARVIS_RUNTIME/config/tasks.json")
 NEWER=$MODELS_JSON_MTIME
 [ "$TASKS_JSON_MTIME" -gt "$NEWER" ] && NEWER=$TASKS_JSON_MTIME
 check "$NEWER" \
@@ -92,7 +93,7 @@ crosscheck() {
 
 # C1. tasks.json 총 task 수 vs cron-matrix.json
 if [ -f "$DOCS_DIR/cron-matrix.json" ]; then
-    SRC_COUNT=$(jq '.tasks | length' "$JARVIS_HOME/runtime/config/tasks.json" 2>/dev/null || echo 0)
+    SRC_COUNT=$(jq '.tasks | length' "$JARVIS_RUNTIME/config/tasks.json" 2>/dev/null || echo 0)
     CACHE_COUNT=$(jq '.totalTasks' "$DOCS_DIR/cron-matrix.json" 2>/dev/null || echo -1)
     crosscheck "cron-matrix.totalTasks" "$SRC_COUNT" "$CACHE_COUNT" \
                "node $SCRIPTS_DIR/gen-cron-matrix.mjs"
@@ -112,7 +113,7 @@ fi
 if [ -f "$DOCS_DIR/discord-channels.json" ]; then
     # 생성기(gen-discord-channels.mjs:29)는 `t.discordChannel || '<no-channel>'` 이라
     # 빈 문자열도 <no-channel> 로 접는다. jq 의 // 는 null 만 처리해 17 vs 16 오탐이 났다 (2026-08-25 수정).
-    SRC_CH=$(jq -r '[.tasks[] | (if (.discordChannel // "") == "" then "<no-channel>" else .discordChannel end)] | unique | length' "$JARVIS_HOME/runtime/config/tasks.json" 2>/dev/null || echo 0)
+    SRC_CH=$(jq -r '[.tasks[] | (if (.discordChannel // "") == "" then "<no-channel>" else .discordChannel end)] | unique | length' "$JARVIS_RUNTIME/config/tasks.json" 2>/dev/null || echo 0)
     CACHE_CH=$(jq '.totalChannels' "$DOCS_DIR/discord-channels.json" 2>/dev/null || echo -1)
     crosscheck "discord-channels.totalChannels" "$SRC_CH" "$CACHE_CH" \
                "node $SCRIPTS_DIR/gen-discord-channels.mjs"
@@ -121,12 +122,12 @@ fi
 # ── 마크다운 산출물 (구멍 4 — 2026-08-25) ──────────────────────
 # 지금까지 감시 대상이 JSON 캐시 4종뿐이었다. 같은 생성기가 .md 도 함께 뱉는데
 # .md 만 실패해도 아무도 몰랐다. 실제로 SYSTEM-OVERVIEW.md 가 126일간 방치됐다.
-check "$(mtime "$JARVIS_HOME/runtime/config/tasks.json")" \
+check "$(mtime "$JARVIS_RUNTIME/config/tasks.json")" \
       "$DOCS_DIR/CRON-MATRIX.md" \
       "node $SCRIPTS_DIR/gen-cron-matrix.mjs" \
       "CRON-MATRIX.md"
 
-check "$(mtime "$JARVIS_HOME/runtime/config/tasks.json")" \
+check "$(mtime "$JARVIS_RUNTIME/config/tasks.json")" \
       "$DOCS_DIR/TASKS-INDEX.md" \
       "node $SCRIPTS_DIR/gen-tasks-index.mjs" \
       "TASKS-INDEX.md"
@@ -142,8 +143,8 @@ check "$NEWER" \
       "DISCORD-CHANNELS.md"
 
 # SYSTEM-OVERVIEW.md 정본은 runtime/docs (로컬 전용, gitignore). 2026-08-25 경로 일원화.
-check "$(mtime "$JARVIS_HOME/runtime/config/tasks.json")" \
-      "$JARVIS_HOME/runtime/docs/SYSTEM-OVERVIEW.md" \
+check "$(mtime "$JARVIS_RUNTIME/config/tasks.json")" \
+      "$JARVIS_RUNTIME/docs/SYSTEM-OVERVIEW.md" \
       "bash $SCRIPTS_DIR/gen-system-overview.sh" \
       "SYSTEM-OVERVIEW.md"
 

@@ -12,10 +12,11 @@
 
 set -euo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LOG_FILE="$JARVIS_HOME/runtime/logs/analysis-channel-cost-daily.log"
-LEDGER="$JARVIS_HOME/runtime/state/analysis-channel-cost-ledger.jsonl"
-RESPONSE_LEDGER="$JARVIS_HOME/runtime/state/response-ledger.jsonl"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="$JARVIS_RUNTIME/logs/analysis-channel-cost-daily.log"
+LEDGER="$JARVIS_RUNTIME/state/analysis-channel-cost-ledger.jsonl"
+RESPONSE_LEDGER="$JARVIS_RUNTIME/state/response-ledger.jsonl"
 
 # shellcheck source=/dev/null
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"

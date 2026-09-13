@@ -18,9 +18,9 @@
 #
 set -euo pipefail
 
-PERSONAS=~/.openclaw-data/jarvis/infra/discord/personas.json
-FAST_PATH=~/.openclaw-data/jarvis/infra/discord/lib/interview-fast-path.js
-RUNNER_BAK=~/.openclaw-data/jarvis/infra/scripts/interview-ralph-runner.mjs.bak-20260428-3rd
+PERSONAS=~/projects/jarvis/infra/discord/personas.json
+FAST_PATH=~/projects/jarvis/infra/discord/lib/interview-fast-path.js
+RUNNER_BAK=~/projects/jarvis/infra/scripts/interview-ralph-runner.mjs.bak-20260428-3rd
 CHANNEL_ID="1497124568031301752"
 
 echo "═══════════════════════════════════════════════════════"

@@ -6,7 +6,7 @@
  * soft-delete 버그나 인덱서 오류로 중복이 쌓였을 때 사용.
  *
  * Usage:
- *   node ~/.openclaw-data/jarvis/runtime/bin/rag-repair.mjs [--dry-run] [--source <path>]
+ *   node ~/.openclaw-data/runtime/bin/rag-repair.mjs [--dry-run] [--source <path>]
  *
  *   --dry-run    실제 삭제 없이 중복 현황만 출력
  *   --source     특정 소스 파일만 처리

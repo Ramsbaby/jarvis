@@ -20,9 +20,9 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const SIGNALS_FILE = join(BOT_HOME, 'state', 'anger-signals.jsonl');
-const EXTRACTOR_SCRIPT = join(homedir(), '.openclaw-data/jarvis/infra/scripts/mistake-extractor.mjs');
+const EXTRACTOR_SCRIPT = join(homedir(), 'projects/jarvis/infra/scripts/mistake-extractor.mjs');
 
 // 분노/지적 키워드 — 한국어 위주
 // false positive 회피: 단독 욕설은 매치하지 않고, 자비스 지칭 또는 "왜/뭐가/이거" 컨텍스트 필요

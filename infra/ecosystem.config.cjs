@@ -8,7 +8,10 @@
  *   pm2 startup && pm2 save
  */
 
-const JARVIS_HOME = process.env.JARVIS_HOME || require('os').homedir() + '/.openclaw-data/jarvis/runtime'
+// [회차8 2026-09-12] 이관 뒤 기본값이 죽은 경로였다 — env 없이 돌면 ENOTDIR 로 죽는다.
+//   저장소에는 더 이상 runtime 이 없다(그 자리는 장벽 파일). 런타임 정본은 ~/.openclaw-data/runtime.
+//   이 변수는 이름과 달리 *런타임* 경로를 담는다.
+const JARVIS_HOME = process.env.BOT_HOME || process.env.JARVIS_RUNTIME || require('os').homedir() + '/.openclaw-data/runtime'
 
 module.exports = {
   apps: [

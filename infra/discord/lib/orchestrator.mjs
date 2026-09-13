@@ -19,9 +19,9 @@ import { URL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 
-const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const DISCORD_DIR = join(BOT_HOME, 'discord'); // A2 2026-04-17: BOT_HOME/../.jarvis 패턴 제거 (심링크 제거 시 파괴됨)
-const ENV_PATH = join(homedir(), '.openclaw-data/jarvis/runtime', 'discord', '.env');
+const ENV_PATH = join(homedir(), '.openclaw-data/runtime', 'discord', '.env');
 
 // Minimal dotenv parser — no external dep needed for key=value files
 function loadDotenv(path) {
@@ -321,7 +321,7 @@ async function main() {
   log('info', `BOT_HOME: ${BOT_HOME}`);
 
   // Dynamically import message-queue.mjs (relative to this file)
-  // NOTE: 2026-04-16 심링크 정합화 이후 `~/.openclaw-data/jarvis/.jarvis/` 제거됨 → SSoT 상대 경로(infra/lib)로 교체
+  // NOTE: 2026-04-16 심링크 정합화 이후 `~/projects/jarvis/.jarvis/` 제거됨 → SSoT 상대 경로(infra/lib)로 교체
   const mqPath = new URL('../../lib/message-queue.mjs', import.meta.url);
   let mq;
   try {

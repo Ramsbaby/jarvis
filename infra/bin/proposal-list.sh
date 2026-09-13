@@ -3,7 +3,7 @@
 # Usage: proposal-list.sh [--status pending|approved|rejected|done] [--approve <id>] [--reject <id>] [--done <id>]
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/runtime}"
 PROPOSALS_FILE="$BOT_HOME/state/proposals.jsonl"
 
 [[ -f "$PROPOSALS_FILE" ]] || { echo "제안 큐 없음 ($PROPOSALS_FILE)"; exit 0; }

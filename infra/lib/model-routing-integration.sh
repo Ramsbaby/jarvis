@@ -13,7 +13,7 @@
 #
 
 # ── 설정 로드 ────────────────────────────────────────────────────────────────
-_ROUTING_CONFIG="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/config/task-routing-config.json"
+_ROUTING_CONFIG="${BOT_HOME:-${HOME}/.openclaw-data/runtime}/config/task-routing-config.json"
 
 # ── 라우팅 로직 ──────────────────────────────────────────────────────────────
 select_model_for_task() {
@@ -72,7 +72,7 @@ record_routing_metric() {
     local success="${8:-true}"
     local error_msg="${9:-}"
 
-    local metrics_file="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}/logs/routing-metrics.jsonl"
+    local metrics_file="${BOT_HOME:-${HOME}/.openclaw-data/runtime}/logs/routing-metrics.jsonl"
     mkdir -p "$(dirname "$metrics_file")" 2>/dev/null || true
 
     jq -cn \

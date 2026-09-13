@@ -6,8 +6,8 @@
 #   공식 InstructionsLoaded 훅은 CLAUDE.md 와 .claude/rules/*.md 의 로드를 이벤트로 준다.
 #   이 훅은 차단하지 않는다 — 공식 문서상 이 이벤트의 exit code 는 무시된다. 계측 전용이다.
 #
-# 원장: ~/.openclaw-data/jarvis/runtime/state/instructions-loaded.jsonl
-#   조회: node ~/.openclaw-data/jarvis/infra/scripts/instructions-loaded-report.mjs
+# 원장: ~/.openclaw-data/runtime/state/instructions-loaded.jsonl
+#   조회: node ~/projects/jarvis/infra/scripts/instructions-loaded-report.mjs
 set -uo pipefail
 
 LEDGER="${BOT_HOME:-${HOME}/jarvis/runtime}/state/instructions-loaded.jsonl"

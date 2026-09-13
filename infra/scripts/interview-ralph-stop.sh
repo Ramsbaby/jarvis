@@ -24,7 +24,7 @@ for arg in "$@"; do
 done
 
 PATTERN="interview-ralph-runner"
-RUNNER_PATH="$HOME/.openclaw-data/jarvis/infra/scripts/interview-ralph-runner.mjs"
+RUNNER_PATH="$HOME/projects/jarvis/infra/scripts/interview-ralph-runner.mjs"
 
 echo "🔍 진행 중 ralph runner 검색..."
 PIDS=$(pgrep -f "$PATTERN" || true)
@@ -89,4 +89,4 @@ fi
 
 echo ""
 echo "📂 state 파일은 보존 (재시작 시 누적 사용):"
-ls -la ~/.openclaw-data/jarvis/runtime/state/ralph-*.{json,jsonl} 2>/dev/null | awk '{print "   " $NF}' || echo "   (state 파일 없음 — 첫 라운드 미완)"
+ls -la ~/.openclaw-data/runtime/state/ralph-*.{json,jsonl} 2>/dev/null | awk '{print "   " $NF}' || echo "   (state 파일 없음 — 첫 라운드 미완)"

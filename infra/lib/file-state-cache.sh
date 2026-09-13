@@ -39,7 +39,7 @@ export FSC_VIOLATION_LOG="${BOT_HOME}/logs/file-state-violations.jsonl"
 #
 # 사용법:
 #   init_file_state_cache "response-123-abc-def"
-#   # → ~/.openclaw-data/jarvis/runtime/state/file-state-cache/response-123-abc-def.json 생성
+#   # → ~/.openclaw-data/runtime/state/file-state-cache/response-123-abc-def.json 생성
 #
 # 반환값:
 #   0 = 성공

@@ -24,7 +24,7 @@
 set -euo pipefail
 
 CLUSTER_ID="${CLUSTER_ID:-cl-f6921eb1d5ea4c87}"
-EVIDENCE_DIR="${HOME}/.openclaw-data/jarvis/runtime/reports/completion-evidence"
+EVIDENCE_DIR="${HOME}/.openclaw-data/runtime/reports/completion-evidence"
 mkdir -p "$EVIDENCE_DIR" 2>/dev/null || true
 
 # 색상

@@ -13,7 +13,7 @@ import { readFileSync, readdirSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const BOT_HOME   = process.env.BOT_HOME || join(homedir(), '.openclaw-data/jarvis/runtime');
+const BOT_HOME   = process.env.BOT_HOME || join(homedir(), '.openclaw-data/runtime');
 const SKILLS_DIR = join(BOT_HOME, 'wiki', 'skills');
 const LEDGER     = join(BOT_HOME, 'state', 'skill-matcher-ledger.jsonl');
 

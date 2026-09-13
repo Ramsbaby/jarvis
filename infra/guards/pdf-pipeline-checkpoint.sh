@@ -26,10 +26,11 @@
 set -euo pipefail
 
 JARVIS_HOME="${HOME}/.jarvis"
-STATE_DIR="${JARVIS_HOME}/runtime/state/pdf-pipeline"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+STATE_DIR="${JARVIS_RUNTIME}/state/pdf-pipeline"
 JOURNAL="${STATE_DIR}/checkpoints.jsonl"
 CLUSTER_ID="cl-8a2b1b50fcd5ba63"
-INFRA="${HOME}/.openclaw-data/jarvis/infra"
+INFRA="${HOME}/projects/jarvis/infra"
 
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 

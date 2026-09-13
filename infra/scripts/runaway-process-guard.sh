@@ -68,9 +68,9 @@ json.dump(d, open(p,'w'), ensure_ascii=False, indent=2)
 
 _notify() {
     local msg="$1"
-    if [[ -f "$HOME/.openclaw-data/jarvis/infra/lib/discord-route.sh" ]]; then
+    if [[ -f "$HOME/projects/jarvis/infra/lib/discord-route.sh" ]]; then
         # shellcheck source=/dev/null
-        source "$HOME/.openclaw-data/jarvis/infra/lib/discord-route.sh" 2>/dev/null || true
+        source "$HOME/projects/jarvis/infra/lib/discord-route.sh" 2>/dev/null || true
         discord_route_raw jarvis-system "$msg" 2>/dev/null || true
     fi
 }

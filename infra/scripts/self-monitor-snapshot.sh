@@ -4,11 +4,12 @@
 
 set -uo pipefail
 
-JARVIS_HOME="${JARVIS_HOME:-$HOME/.openclaw-data/jarvis}"
-LOG_FILE="$JARVIS_HOME/runtime/logs/self-monitor.log"
-DISCORD_VISUAL="$HOME/.openclaw-data/jarvis/runtime/scripts/discord-visual.mjs"
-LEDGER="$JARVIS_HOME/runtime/state/token-ledger.jsonl"
-THRESHOLD_FILE="$JARVIS_HOME/runtime/state/adaptive-thresholds.json"
+JARVIS_HOME="${JARVIS_HOME:-$HOME/projects/jarvis}"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="$JARVIS_RUNTIME/logs/self-monitor.log"
+DISCORD_VISUAL="$HOME/.openclaw-data/runtime/scripts/discord-visual.mjs"
+LEDGER="$JARVIS_RUNTIME/state/token-ledger.jsonl"
+THRESHOLD_FILE="$JARVIS_RUNTIME/state/adaptive-thresholds.json"
 
 mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$THRESHOLD_FILE")"
 [ -f "$JARVIS_HOME/infra/lib/discord-route.sh" ] && source "$JARVIS_HOME/infra/lib/discord-route.sh"
@@ -28,7 +29,7 @@ if [ -f "$LEDGER" ]; then
 fi
 
 # ── 2. 적응형 임계값 — heartbeat / RAG 30일 평균 ─────────────────────
-LEDGER_SUPERVISOR="$JARVIS_HOME/runtime/state/supervisor-tick-ledger.jsonl"
+LEDGER_SUPERVISOR="$JARVIS_RUNTIME/state/supervisor-tick-ledger.jsonl"
 HEARTBEAT_AVG="N/A"
 RAG_AVG="N/A"
 if [ -f "$LEDGER_SUPERVISOR" ]; then
@@ -46,7 +47,7 @@ RAG_THRESHOLD=$((RAG_AVG * 3))
 echo "{\"heartbeat\": $HEARTBEAT_THRESHOLD, \"rag_min\": $RAG_THRESHOLD, \"updated\": \"$(date -u +%FT%TZ)\"}" > "$THRESHOLD_FILE"
 
 # ── 3. Stale 인용 — RAG 인덱싱 문서 중 6개월↑ 비율 ───────────────────
-RAG_DOCS_DIR="$JARVIS_HOME/runtime/rag"
+RAG_DOCS_DIR="$JARVIS_RUNTIME/rag"
 STALE_RATIO="N/A"
 if [ -d "$RAG_DOCS_DIR" ]; then
     TOTAL=$(find "$RAG_DOCS_DIR" -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')

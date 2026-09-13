@@ -12,14 +12,14 @@
  *   node claude-app-auth-capture.mjs
  */
 
-import playwright from '/Users/ramsbaby/.openclaw-data/jarvis/infra/discord/node_modules/playwright/index.js';
+import playwright from '/Users/ramsbaby/projects/jarvis/infra/discord/node_modules/playwright/index.js';
 const { chromium } = playwright;
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 
 const HOME = homedir();
-const STATE_FILE = join(HOME, '.openclaw-data/jarvis/runtime/state/claude-app-auth.json');
+const STATE_FILE = join(HOME, '.openclaw-data/runtime/state/claude-app-auth.json');
 const POLL_INTERVAL_MS = 3000;
 const MAX_WAIT_MS = 10 * 60 * 1000; // 10분 한도
 

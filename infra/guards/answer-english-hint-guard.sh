@@ -29,8 +29,9 @@
 set -euo pipefail
 
 CLUSTER_ID="cl-33ab3e59820bd8c8"
-JARVIS_HOME="${HOME}/.openclaw-data/jarvis"
-LOG_FILE="${JARVIS_HOME}/runtime/logs/answer-english-hint-guard.jsonl"
+JARVIS_HOME="${HOME}/projects/jarvis"
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+LOG_FILE="${JARVIS_RUNTIME}/logs/answer-english-hint-guard.jsonl"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 mkdir -p "$(dirname "$LOG_FILE")"

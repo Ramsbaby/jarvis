@@ -22,7 +22,7 @@
 #   5. 검증 성공 시 진행 허용
 #
 # 사용법 (task runner 통합):
-#   source ~/.openclaw-data/jarvis/infra/lib/completion-file-validator-guard.sh
+#   source ~/projects/jarvis/infra/lib/completion-file-validator-guard.sh
 #   check_completion_with_file_validation "$user_message" "$context_json"
 #   # exit code: 0 = 안전, 1 = 위험
 #
@@ -38,9 +38,9 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # 상수
-JARVIS_LIB="${HOME}/.openclaw-data/jarvis/infra/lib"
+JARVIS_LIB="${HOME}/projects/jarvis/infra/lib"
 FILE_VALIDATOR="${JARVIS_LIB}/file-validator.sh"
-LOG_DIR="${HOME}/.openclaw-data/jarvis/logs"
+LOG_DIR="${HOME}/projects/jarvis/logs"
 
 # 로그 생성
 mkdir -p "$LOG_DIR" 2>/dev/null || true

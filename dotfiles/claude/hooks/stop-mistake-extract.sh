@@ -25,7 +25,7 @@ set -euo pipefail
 
 LOG_DIR="${HOME}/.jarvis/logs"
 LOG="${LOG_DIR}/stop-mistake-extract.log"
-SCRIPT="${HOME}/.openclaw-data/jarvis/infra/scripts/mistake-extractor.mjs"
+SCRIPT="${HOME}/projects/jarvis/infra/scripts/mistake-extractor.mjs"
 SESSION_BASE="${HOME}/.jarvis/context/claude-code-sessions"
 
 mkdir -p "$LOG_DIR"
@@ -137,7 +137,7 @@ if [[ -n "${COUNT:-}" && "$COUNT" -gt 0 ]]; then
   # 실측 — 이 알림이 7일 111회(일 16회)로 단일 항목 최다였다. 추출 자체는 정상 동작이고
   # 오답은 원장에 그대로 쌓이므로, 세션마다 카드를 받을 이유가 없다(받아도 할 행동이 없다).
   # 억제된 사이의 건수는 다음 발송 때 함께 표시한다.
-  _AG="${HOME}/.openclaw-data/jarvis/infra/lib/alert-gate.sh"
+  _AG="${HOME}/projects/jarvis/infra/lib/alert-gate.sh"
   # shellcheck source=/dev/null
   [[ -f "$_AG" ]] && source "$_AG" 2>/dev/null || true
   if declare -F alert_ratelimit >/dev/null 2>&1; then

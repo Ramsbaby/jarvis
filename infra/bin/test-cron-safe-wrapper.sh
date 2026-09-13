@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-WRAPPER="$HOME/.openclaw-data/jarvis/runtime/bin/cron-safe-wrapper.sh"
+WRAPPER="$HOME/.openclaw-data/runtime/bin/cron-safe-wrapper.sh"
 TEST_LOG="/tmp/cron-wrapper-test-$(date +%s).log"
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -89,8 +89,8 @@ bash "$WRAPPER" test-auth 10 bash -c "echo 'AUTH_FAILED' >&2; exit 1" 2>&1 || EX
 _assert_exit_code 1 "$EXIT_CODE"
 
 # Check wrapper log for auth detection
-if [[ -f "$HOME/.openclaw-data/jarvis/runtime/logs/cron-safe-wrapper.log" ]]; then
-    _assert_log_contains "AUTH" "$HOME/.openclaw-data/jarvis/runtime/logs/cron-safe-wrapper.log"
+if [[ -f "$HOME/.openclaw-data/runtime/logs/cron-safe-wrapper.log" ]]; then
+    _assert_log_contains "AUTH" "$HOME/.openclaw-data/runtime/logs/cron-safe-wrapper.log"
 else
     _fail "Wrapper log not created"
 fi

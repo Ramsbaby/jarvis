@@ -5,15 +5,19 @@
 # Provides OS-agnostic wrappers for macOS-specific commands.
 # On Linux/Docker: uses PM2 equivalents instead of launchctl.
 
-# JARVIS_HOME 은 "저장소 루트"(~/.openclaw-data/jarvis)다. 런타임 폴더가 아니다.
+# JARVIS_HOME 은 "저장소 루트"(~/projects/jarvis)다. 런타임 폴더가 아니다.
 #   근거(2026-07-25 실측): 코드 176곳이 "$JARVIS_HOME/runtime/..." · "$JARVIS_HOME/infra/..." 로
-#   루트를 가정하고, LaunchAgent 20개 모두 JARVIS_HOME=~/.openclaw-data/jarvis 를 주입한다.
-# 정정 이력: 이전 값은 "${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}" 이었다. 그 경우
-#   "$JARVIS_HOME/runtime/..." 이 ~/.openclaw-data/jarvis/runtime/runtime/... 으로 풀려 그림자 폴더에 데이터가 샜다.
+#   루트를 가정하고, LaunchAgent 20개 모두 JARVIS_HOME=~/projects/jarvis 를 주입한다.
+# 정정 이력: 이전 값은 "${BOT_HOME:-${HOME}/.openclaw-data/runtime}" 이었다. 그 경우
+#   "$JARVIS_HOME/runtime/..." 이 ~/.openclaw-data/runtime/runtime/... 으로 풀려 그림자 폴더에 데이터가 샜다.
 #   BOT_HOME 은 한 단계 아래(런타임)를 가리키므로 JARVIS_HOME 의 대체값이 될 수 없다.
-export JARVIS_HOME="${JARVIS_HOME:-${HOME}/.openclaw-data/jarvis}"
+export JARVIS_HOME="${JARVIS_HOME:-${HOME}/projects/jarvis}"
 # 런타임 경로가 필요하면 이 변수를 쓴다 (루트/런타임 혼동 방지).
-export JARVIS_RUNTIME="${JARVIS_RUNTIME:-${JARVIS_HOME}/runtime}"
+# [회차8 2026-09-12] 런타임이 코드 루트 밖으로 나갔다 — "${JARVIS_HOME}/runtime" 자리에는 장벽 파일이 있다.
+#   코드 루트에서 런타임을 파생시키는 계산은 두 루트가 갈라진 순간 전부 틀린다.
+#   2026-07-25 그림자 폴더 사고의 교훈은 여전히 유효하다: BOT_HOME 은 JARVIS_HOME 의 대체값이 아니다.
+#   다만 JARVIS_RUNTIME 의 대체값으로는 정확히 맞는다(둘 다 런타임 루트를 가리킨다).
+export JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-${HOME}/.openclaw-data/runtime}}"
 export IS_MACOS=false
 export IS_LINUX=false
 export IS_DOCKER=false

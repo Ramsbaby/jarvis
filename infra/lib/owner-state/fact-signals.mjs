@@ -63,7 +63,7 @@ export function detectFactSignals(snapshot) {
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 if (process.argv[1] && process.argv[1].endsWith('fact-signals.mjs')) {
-  const BOT_HOME = process.env.BOT_HOME || join(process.env.HOME, '.openclaw-data/jarvis/runtime');
+  const BOT_HOME = process.env.BOT_HOME || join(process.env.HOME, '.openclaw-data/runtime');
   const DIR = join(BOT_HOME, 'state/owner-state');
   try {
     const snap = JSON.parse(readFileSync(join(DIR, 'snapshot-latest.json'), 'utf-8'));

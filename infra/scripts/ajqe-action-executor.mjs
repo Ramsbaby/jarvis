@@ -22,13 +22,13 @@ import { homedir } from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 
 const HOME = homedir();
-const SENT_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-sent.jsonl');
-const ACTIONS_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-actions.jsonl');
-const COOLDOWN_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/ajqe-signal-cooldown.json');
-const MONITORING_PATH = join(HOME, '.openclaw-data/jarvis/runtime/config/monitoring.json');
-const CRON_STATUS_PATH = join(HOME, '.openclaw-data/jarvis/runtime/state/cron-status.json');
+const SENT_PATH = join(HOME, '.openclaw-data/runtime/state/ajqe-sent.jsonl');
+const ACTIONS_PATH = join(HOME, '.openclaw-data/runtime/state/ajqe-actions.jsonl');
+const COOLDOWN_PATH = join(HOME, '.openclaw-data/runtime/state/ajqe-signal-cooldown.json');
+const MONITORING_PATH = join(HOME, '.openclaw-data/runtime/config/monitoring.json');
+const CRON_STATUS_PATH = join(HOME, '.openclaw-data/runtime/state/cron-status.json');
 const EFFECTIVE_TASKS_PATH = join(HOME, '.jarvis/config/effective-tasks.json');
-const LOGS_DIR = join(HOME, '.openclaw-data/jarvis/runtime/logs');
+const LOGS_DIR = join(HOME, '.openclaw-data/runtime/logs');
 
 const [, , AJQE_ID, ACTION, CHANNEL_ARG] = process.argv;
 const CHANNEL = CHANNEL_ARG || 'jarvis';
@@ -145,7 +145,7 @@ async function actionInvestigate(sent) {
       lines.push(`_로그 파일 부재: ${logName}_`);
     }
   } else if (signal === 'cron-failure-spike') {
-    const dailyPath = join(HOME, '.openclaw-data/jarvis/runtime/state/cron-master-daily.jsonl');
+    const dailyPath = join(HOME, '.openclaw-data/runtime/state/cron-master-daily.jsonl');
     const lines5 = loadJSONL(dailyPath).slice(-5);
     lines.push('**최근 5일 크론 실패 추이**:');
     for (const d of lines5) {
@@ -188,7 +188,7 @@ async function actionRestart(sent) {
 
   if (signal === 'discord-bot-unhealthy') {
     try {
-      execSync('bash ~/.openclaw-data/jarvis/infra/scripts/bot-preflight.sh', { encoding: 'utf-8', stdio: 'pipe' });
+      execSync('bash ~/projects/jarvis/infra/scripts/bot-preflight.sh', { encoding: 'utf-8', stdio: 'pipe' });
       result = '✅ 봇 재시작 완료 (bot-preflight.sh).';
     } catch (e) {
       result = `❌ 봇 재시작 실패: ${e.message.slice(0, 200)}`;

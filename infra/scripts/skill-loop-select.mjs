@@ -2,7 +2,7 @@
 // skill-loop-select.mjs — 스킬 자가 생성 루프 1~2단: 성공 세션 후보 선별
 // 1단 휴리스틱(비LLM) → 2단 LLM 재사용 가치 스코어링 → 임계치+상한 컷
 // Usage: node skill-loop-select.mjs [--hours 26] [--no-llm] [--cap 3] [--threshold 7] [--include-active]
-// 설계: ~/.openclaw-data/jarvis/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 2~3)
+// 설계: ~/.openclaw-data/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 2~3)
 
 import { readFileSync, readdirSync, statSync, appendFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -12,8 +12,11 @@ import os from 'node:os';
 const HOME = os.homedir();
 // [2026-09-11] HOME+'jarvis' 를 그대로 들고 있어 2026-09-10 이관 뒤 ENOTDIR 로 죽었다.
 // 잡 jarvis-skill-loop-nightly 상시 실패의 원인. 뿌리를 하나로 묶어 다시 갈라지지 않게 한다.
-const JARVIS_HOME = process.env.JARVIS_HOME || join(HOME, '.openclaw-data', 'jarvis');
-const BOT_HOME = process.env.BOT_HOME || join(JARVIS_HOME, 'runtime');
+// [회차8 2026-09-12] 이관 뒤 기본값이 죽은 경로였다 — env 없이 돌면 ENOTDIR 로 죽는다.
+//   저장소에는 더 이상 runtime 이 없다(그 자리는 장벽 파일). 런타임 정본은 ~/.openclaw-data/runtime.
+const JARVIS_HOME = process.env.JARVIS_HOME || join(HOME, 'projects', 'jarvis');
+// [회차8 2026-09-12] 폴백이 JARVIS_HOME/runtime 이었다 — 그 자리는 장벽 파일이다.
+const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data', 'runtime');
 const PROJECTS_DIR = join(HOME, '.claude', 'projects');
 const DISCORD_DIR = join(BOT_HOME, 'context', 'discord-history');
 const DRAFTS_DIR = join(BOT_HOME, 'state', 'skill-drafts');

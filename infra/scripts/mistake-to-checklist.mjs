@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 // [오픈클로 이식 2026-09-10] 오픈클로 jarvis-mistake-to-checklist 로 이관(회차5 M단계). OPENCLAW_JOB=1 로 통과한다.
-// 재개: rm ~/.openclaw-data/jarvis/runtime/state/stopped/mistake-to-checklist
+// 재개: rm ~/.openclaw-data/runtime/state/stopped/mistake-to-checklist
 import { existsSync as __sc } from 'node:fs';
 import { homedir as __sh } from 'node:os';
-if (__sc(__sh() + '/.openclaw-data/jarvis/runtime/state/stopped/mistake-to-checklist') && process.env.OPENCLAW_JOB !== '1') {
+if (__sc(__sh() + '/.openclaw-data/runtime/state/stopped/mistake-to-checklist') && process.env.OPENCLAW_JOB !== '1') {
   console.log('[mistake-to-checklist] 중지 플래그 있음 — 오픈클로로 이관됨');
   process.exit(0);
 }
@@ -13,7 +13,7 @@ if (__sc(__sh() + '/.openclaw-data/jarvis/runtime/state/stopped/mistake-to-check
 //
 // learned-mistakes.md의 각 오답 블록을 파싱하여 `대응` 필드를 추출하고,
 // 제목·패턴에서 관련 스킬(investigate/verify/deploy/review 등)을 추정한 뒤
-// ~/.openclaw-data/jarvis/runtime/wiki/meta/checklists/<skill>.md 로 그룹화 저장.
+// ~/.openclaw-data/runtime/wiki/meta/checklists/<skill>.md 로 그룹화 저장.
 //
 // 효과: 스킬 실행 전 해당 체크리스트를 참조하면 과거 실수 대응책이 바로 보임.
 // 주기: 일 1회 (03:45 KST, 재발 카운터 이후) 또는 수동 실행.

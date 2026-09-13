@@ -23,7 +23,11 @@
 
 set -euo pipefail
 
-JARVIS_ROOT="${JARVIS_ROOT:-${HOME}/.openclaw-data/jarvis}"
+# [회차8 2026-09-12] 코드 루트와 런타임 루트가 갈라졌다.
+#   이 가드는 옛 단일 트리를 전제로 JARVIS_ROOT 하나만 썼는데,
+#   그 경로가 죽으면서 TARGETS 가 전부 비어 `set -u` 로 죽었다(빈 결과가 아니라 크래시).
+JARVIS_ROOT="${JARVIS_ROOT:-${HOME}/projects/jarvis}"
+JARVIS_RUNTIME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 # 기준선: 2026-07-25 시점에 이미 존재하던 위반 목록. 여기 있는 항목은 통과시키고
 #   "새로 생기는 위반"만 차단한다. 기존 항목은 상태 파일 경로라 이관 계획 없이 바꾸면
 #   idempotency(중복 실행 방지) 기록을 잃고 작업이 재실행될 수 있어 일괄 수정하지 않는다.
@@ -33,8 +37,8 @@ BASELINE="${JARVIS_ROOT}/infra/config/shadow-path-baseline.txt"
 shopt -s nullglob
 # 설정·프롬프트 (기존 범위)
 TARGETS=(
-  "$JARVIS_ROOT"/runtime/config/*.md
-  "$JARVIS_ROOT"/runtime/config/*.json
+  "$JARVIS_RUNTIME"/config/*.md
+  "$JARVIS_RUNTIME"/config/*.json
   "$JARVIS_ROOT"/infra/agents/*.md
   "$JARVIS_ROOT"/infra/prompts/*.md
 )
@@ -92,8 +96,8 @@ done
 
 if [ "$hits" -gt 0 ]; then
   printf '🚨 그림자 경로 안티패턴 %d건 발견\n' "$hits"
-  printf '   A형 수정: "~/.jarvis/runtime/" → "~/.openclaw-data/jarvis/runtime/"\n'  # ALLOW-DOTJARVIS
-  printf '   B형 수정: "JARVIS_HOME:-${BOT_HOME:-...}" → "JARVIS_HOME:-$HOME/.openclaw-data/jarvis" (계층이 다른 변수를 대체값으로 쓰지 말 것)\n'
+  printf '   A형 수정: "~/.jarvis/runtime/" → "~/.openclaw-data/runtime/"\n'  # ALLOW-DOTJARVIS
+  printf '   B형 수정: "JARVIS_HOME:-${BOT_HOME:-...}" → "JARVIS_HOME:-$HOME/projects/jarvis" (계층이 다른 변수를 대체값으로 쓰지 말 것)\n'
   printf '   의도적이면 같은 줄에 "# ALLOW-DOTJARVIS" 주석\n'
   exit 1
 fi

@@ -22,7 +22,7 @@ from datetime import datetime
 from pathlib import Path
 
 # .env 로드
-env_path = Path.home() / '.openclaw-data/jarvis/runtime/.env'
+env_path = Path.home() / '.openclaw-data/runtime/.env'
 if env_path.exists():
     for line in env_path.read_text().splitlines():
         for k in ('OPENAI_API_KEY',):
@@ -31,7 +31,7 @@ if env_path.exists():
 
 from openai import OpenAI  # noqa: E402
 
-SCENARIO_PATH = Path.home() / '.openclaw-data/jarvis/runtime/state/scenarios/samsung-cnt.json'
+SCENARIO_PATH = Path.home() / '.openclaw-data/runtime/state/scenarios/samsung-cnt.json'
 MODEL = 'gpt-4o'  # 한국어 자연스러움 + 비용 균형
 # 가격 (2025-04 기준): $2.50 IN / $10.00 OUT per M tokens
 PRICE_IN = 2.50
@@ -250,7 +250,7 @@ def main():
     # 샘플/적용 공통: 상세 로그 저장
     if detail_log:
         ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-        log_path = Path.home() / f'.openclaw-data/jarvis/runtime/state/scenarios/qa-naturalize-log-{ts}.json'
+        log_path = Path.home() / f'.openclaw-data/runtime/state/scenarios/qa-naturalize-log-{ts}.json'
         log_path.write_text(json.dumps(detail_log, ensure_ascii=False, indent=2))
         print(f'📋 상세 로그: {log_path}')
 

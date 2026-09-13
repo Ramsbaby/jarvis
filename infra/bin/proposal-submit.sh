@@ -3,7 +3,7 @@
 # Usage: proposal-submit.sh --from sre --title "제목" --what "무엇" --why "왜" --effect "효과"
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/runtime}"
 PROPOSALS_FILE="$BOT_HOME/state/proposals.jsonl"
 MONITORING_CONFIG="$BOT_HOME/config/monitoring.json"
 

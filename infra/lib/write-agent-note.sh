@@ -13,13 +13,13 @@
 #   - context-bus.md에 context_bus_update 필드가 있으면 자동 append
 #
 # 저장 위치:
-#   ~/.openclaw-data/jarvis/runtime/agent-notes/{TASK_ID}/{ISO8601_timestamp}.json
-#   ~/.openclaw-data/jarvis/runtime/agent-notes/{TASK_ID}/latest.json  (덮어씀)
-#   ~/.openclaw-data/jarvis/runtime/agent-notes/_index.jsonl           (append)
+#   ~/.openclaw-data/runtime/agent-notes/{TASK_ID}/{ISO8601_timestamp}.json
+#   ~/.openclaw-data/runtime/agent-notes/{TASK_ID}/latest.json  (덮어씀)
+#   ~/.openclaw-data/runtime/agent-notes/_index.jsonl           (append)
 
 set -euo pipefail
 
-BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/jarvis/runtime}"
+BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
 NOTES_DIR="${BOT_HOME}/agent-notes"
 CONTEXT_BUS="${BOT_HOME}/state/context-bus.md"
 
