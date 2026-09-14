@@ -13,7 +13,12 @@ set -uo pipefail
 # 이 스크립트는 <root>/infra/scripts/ 에 있으므로 두 단계 위가 루트다. env 오염과 무관하다.
 _E2E_SELF="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 JARVIS_ROOT="$(cd -- "${_E2E_SELF}/../.." && pwd -P)"
-export BOT_HOME="${BOT_HOME:-${JARVIS_ROOT}/runtime}"
+# [2026-09-14 정정] 위 9/11 수정은 "런타임은 코드 루트 밑에 있다"를 전제했다.
+#   회차 8(9/12)이 런타임을 밖으로 빼면서 그 전제가 깨졌다 — ${JARVIS_ROOT}/runtime 은
+#   이제 읽기전용 장벽 파일이라, 잡은 BOT_HOME 을 넘겨줘서 멀쩡한데 **손으로 돌리면 8건이 무더기 실패**했다.
+#   이틀 전에 고친 병을 방향만 바꿔 내가 다시 만든 것이다.
+#   런타임 위치는 코드 루트에서 유도하지 않는다 — 데이터와 코드는 다른 트리에 산다.
+export BOT_HOME="${BOT_HOME:-${JARVIS_RUNTIME:-$HOME/.openclaw-data/runtime}}"
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${HOME:+${HOME}/.local/bin}:${PATH}"
 PASS=0
 FAIL=0
