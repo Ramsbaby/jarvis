@@ -26,6 +26,15 @@ LIST="$T/list.txt"
 export JARVIS_DEADMAN_LIST="$LIST" JARVIS_DEADMAN_FLOOR="1970-01-01T00:00:00Z" JARVIS_DEADMAN_GRACE_MIN=90
 WED=$(ep '2026-09-09 12:00:00')   # 수요일 정오
 export JARVIS_DEADMAN_NOW=$WED
+# [2026-09-14] 시계를 **둘 다** 고정한다. 감시자 시계(JARVIS_DEADMAN_NOW)만 가짜 날짜로 묶고
+#   사고 원장 시계는 실시간으로 뒀더니, 현실 날짜가 이 가짜 날짜를 따라잡는 순간 깨졌다.
+#   재발 판정 규칙이 `event_ts > closed_at` 인데 close 는 실시간으로 찍히므로,
+#   현실이 2026-09-14 를 넘자 closed_at 이 재발 사건(09-16 기준 expected ≈ 09-14)보다
+#   늦어져 rc=4(재발) 대신 rc=3(무시)이 났다. **제품 결함이 아니라 테스트의 시한폭탄이다.**
+#   가짜 시계를 쓰는 테스트는 그 시나리오가 건드리는 **모든** 시계를 묶어야 한다.
+#   09-01 로 두는 이유: 이 테스트의 모든 가짜 사건(09-07~09-16)보다 앞이어야
+#   close 가 어떤 재발보다 먼저 일어난 것이 되어 시나리오가 성립한다.
+export JARVIS_INCIDENT_NOW="2026-09-01T00:00:00Z"
 
 echo "== 1. 주간·매일·age 판정"
 cat > "$LIST" <<EOF

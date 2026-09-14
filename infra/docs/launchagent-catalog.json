@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-10T11:57:36.589Z",
-  "totalLaunchAgents": 8,
-  "activeCount": 8,
+  "generatedAt": "2026-09-14T00:10:00.533Z",
+  "totalLaunchAgents": 7,
+  "activeCount": 7,
   "inactiveCount": 0,
   "source": "~/Library/LaunchAgents/ai.jarvis.*.plist + launchctl list",
   "agents": [
@@ -12,7 +12,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node ~/jarvis-board/.next/standalone/jarvis-board/server.js",
       "active": true,
-      "pid": "10789",
+      "pid": "25059",
       "lastExitCode": "0"
     },
     {
@@ -22,7 +22,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/cloudflared tunnel",
       "active": true,
-      "pid": "10576",
+      "pid": "25134",
       "lastExitCode": "0"
     },
     {
@@ -42,7 +42,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node ~/projects/jarvis/infra/scripts/interview-verifier-server.mjs",
       "active": true,
-      "pid": "10496",
+      "pid": "49641",
       "lastExitCode": "0"
     },
     {
@@ -52,7 +52,7 @@
       "runAtLoad": true,
       "program": "/bin/bash ~/projects/jarvis/infra/scripts/launchagents-watcher.sh",
       "active": true,
-      "pid": "10422",
+      "pid": "49645",
       "lastExitCode": "0"
     },
     {
@@ -62,17 +62,7 @@
       "runAtLoad": true,
       "program": "/opt/homebrew/bin/node --max-old-space-size=150",
       "active": true,
-      "pid": "10501",
-      "lastExitCode": "0"
-    },
-    {
-      "label": "com.jarvis.memory-sync",
-      "file": "com.jarvis.memory-sync.plist",
-      "schedule": "매주 월요일 04:30 KST",
-      "runAtLoad": false,
-      "program": "/bin/bash ~/.openclaw-data/runtime/scripts/memory-sync.sh",
-      "active": true,
-      "pid": "-",
+      "pid": "86107",
       "lastExitCode": "0"
     },
     {
