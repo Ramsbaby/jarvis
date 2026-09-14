@@ -345,6 +345,60 @@ fi
 
 report_lines+=("")
 
+# --- (5) 고아 청크 비율 (2026-09-14 추가) ---
+# 왜: 2026-09 이관에서 원본 1,173파일이 사라졌는데 색인 조각 25,028개(활성의 19.96%)가
+#     그대로 남아 몇 달간 무경보로 검색 자리를 차지했다. 기존 1~4번 검사는 소스 편향·
+#     discord 색인·개수 불일치·DB 크기만 보고 "원본이 아직 있는가"를 아예 안 봤다.
+#     색인기는 사라진 파일을 index-state.json 에서만 지우고 DB 조각은 안 건드리며,
+#     감시기는 트리를 통째로 옮기면 삭제 이벤트를 못 본다 — 이관이 정확히 그 경로다.
+# 비용: 전수 대조는 무거우므로 하루 1회만 돈다(스탬프 파일). 이 검사기는 30분 주기다.
+report_lines+=("## 5. 고아 청크 비율")
+report_lines+=("")
+
+ORPHAN_STAMP="${INFRA_HOME:-${HOME}/.jarvis}/state/rag-orphan-check.stamp"
+ORPHAN_TOOL="${HOME}/projects/jarvis/rag/bin/rag-repair-dead-sources.mjs"
+mkdir -p "$(dirname "$ORPHAN_STAMP")" 2>/dev/null || true
+
+orphan_due=1
+if [[ -f "$ORPHAN_STAMP" ]]; then
+    stamp_age=$(( $(date +%s) - $(stat -f '%m' "$ORPHAN_STAMP" 2>/dev/null || echo 0) ))
+    [[ "$stamp_age" -lt 86400 ]] && orphan_due=0
+fi
+
+if [[ "$orphan_due" -eq 0 ]]; then
+    report_lines+=("- SKIP: 24시간 내 이미 검사함 (\`$(basename "$ORPHAN_STAMP")\`)")
+elif [[ ! -f "$ORPHAN_TOOL" ]]; then
+    report_lines+=("- WARN: 검사 도구 없음 — \`$ORPHAN_TOOL\`")
+    issues_found=$((issues_found + 1))
+else
+    # BOT_HOME 필수. 없으면 XDG 폴백 경로의 빈 DB를 읽어 "정상"을 오보한다(2026-09-14 실측).
+    orphan_out=$(BOT_HOME="${BOT_HOME:-$HOME/.openclaw-data/runtime}" \
+        node "$ORPHAN_TOOL" --dry-run 2>&1 || true)
+    orphan_active=$(echo "$orphan_out" | grep -o '활성 [0-9]*' | head -1 | awk '{print $2}')
+    orphan_count=$(echo "$orphan_out" | grep -o '고아(원문 없음): *[0-9]*' | head -1 | grep -o '[0-9]*$')
+
+    if [[ -z "$orphan_active" || -z "$orphan_count" || "$orphan_active" -eq 0 ]]; then
+        report_lines+=("- WARN: 고아 판정 불가 — 도구 출력을 못 읽었다")
+        report_lines+=("  \`\`\`")
+        report_lines+=("  $(echo "$orphan_out" | tail -3)")
+        report_lines+=("  \`\`\`")
+        issues_found=$((issues_found + 1))
+    else
+        orphan_pct=$(( orphan_count * 100 / orphan_active ))
+        report_lines+=("- 활성 ${orphan_active} · 고아 ${orphan_count} (${orphan_pct}%)")
+        if [[ "$orphan_pct" -ge 15 ]]; then
+            report_lines+=("- **CRITICAL**: 고아 ${orphan_pct}% — 즉시 \`jarvis-rag-orphan-sweep\` 실행 필요")
+            issues_found=$((issues_found + 1))
+        elif [[ "$orphan_pct" -ge 5 ]]; then
+            report_lines+=("- **WARNING**: 고아 ${orphan_pct}% — 주간 청소 잡이 도는지 확인")
+            issues_found=$((issues_found + 1))
+        fi
+        touch "$ORPHAN_STAMP"
+    fi
+fi
+
+report_lines+=("")
+
 # ============================================================================
 # 결과 저장 및 알림
 # ============================================================================
