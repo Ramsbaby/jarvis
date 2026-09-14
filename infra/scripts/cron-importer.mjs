@@ -97,7 +97,7 @@ function inferOwner(c) {
   if (id.includes('report') || id.includes('weekly') || id.includes('daily')) return 'archive';
   if (id.includes('audit') || id.includes('check')) return 'audit';
   if (id.includes('news') || id.includes('intel') || id.includes('recon')) return 'intel';
-  if (id.includes('boram') || id.includes('reminder')) return 'user';
+  if (id.includes('reminder')) return 'user';
   if (id.includes('vault') || id.includes('backup') || id.includes('cleanup')) return 'infra';
   if (id.includes('mistake') || id.includes('insight')) return 'learning';
   if (id.includes('brand') || id.includes('oss') || id.includes('promo')) return 'brand';

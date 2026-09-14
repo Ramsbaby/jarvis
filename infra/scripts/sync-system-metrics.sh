@@ -163,8 +163,8 @@ if [[ -f "$DISCORD_JSONL" ]]; then
       '1471694919339868190':'jarvis-blog','1469190688083280065':'jarvis-system',
       '1469190686145384513':'jarvis-market','1470559565258162312':'jarvis-lite',
       '1474650972310605886':'jarvis-news-webhook','1475786634510467186':'jarvis-ceo',
-      '1469999923633328279':'jarvis-family','1470011814803935274':'jarvis-preply-tutor',
-      '1472965899790061680':'jarvis-boram','1484008782853050483':'workgroup-board'
+      '1469999923633328279':'jarvis-family',
+      '1484008782853050483':'workgroup-board'
     };
     const channelActivity = {};
     const claudeElapseds = [];

@@ -229,19 +229,9 @@ if [[ "$TASK_ID" == "schedule-coherence" || "$TASK_ID" == *"debug-cron-schedule-
     log_jsonl "info" "schedule-coherence: prompt preprocessed with user-schedule and crontab data" "0"
 fi
 
-# --- Rule Guard PRE-EXECUTION (Cluster cl-e04e4028dd5db00f): 확정 규칙 체크리스트 주입 ---
-# preply/tutor 태스크 시작 시 rule-registry에서 확정 규칙을 로드해 SYSTEM_PROMPT에 주입
-# 목적: 새 세트 작업 전 '예문 3개 고정·문법1장·숙제3종세트' 등 확정 규칙 망각 방지
-_CL_E04E_GUARD="${BOT_HOME}/lib/cluster-guard-cl-e04e4028dd5db00f.sh"
-if [[ -f "$_CL_E04E_GUARD" ]] && [[ "$TASK_ID" =~ preply|tutor|card.news|카드뉴스 ]]; then
-    _RULE_CHECKLIST=$(bash -c "source '${_CL_E04E_GUARD}' 2>/dev/null && guard_new_set_start" 2>/dev/null || true)
-    if [[ -n "$_RULE_CHECKLIST" ]]; then
-        SYSTEM_PROMPT="${SYSTEM_PROMPT}
-<!-- SECTION:rule-guard-cl-e04e4028:DYNAMIC -->
-${_RULE_CHECKLIST}
-<!-- /SECTION:rule-guard-cl-e04e4028 -->"
-    fi
-fi
+# [2026-09-14] Preply/튜터 확정규칙 주입 블록 제거 — 보람님이 더 이상 이 시스템을 쓰지 않는다.
+#   의존하던 rule-registry(preply-rule-registry.json)와 예외 상태도 함께 삭제했다.
+#   복원이 필요하면 ~/backup/preply-removal-20260914-231016/ 를 푼다.
 
 # --- Metacognition Guard PRE-EXECUTION (Cluster cl-5f83b707a075fb13): 메타인지 실패 방어 ---
 # 반복 패턴: '규칙 탓으로 단정 → 실측 없이 재단언' + '다시 확인해봐' 신호 무시
@@ -1162,23 +1152,9 @@ if [[ -f "${BOT_HOME}/lib/file-validator.sh" ]] && command -v jq >/dev/null 2>&1
         bash "${BOT_HOME}/lib/cluster-guard-cl-45670404fa7eb40c.sh" "$RAW_OUTPUT" "$TASK_ID" 2>/dev/null || true
     fi
 
-    # Cluster guard integration (cl-e04e4028dd5db00f): 확정 규칙 검증 (HTML 세트 저장 후)
-    # 규칙 편차 방지: 예문 개수, 문법 슬라이드 장 수, 동반 파일 자동 검증
-    _CL_E04E_GUARD="${BOT_HOME}/lib/cluster-guard-cl-e04e4028dd5db00f.sh"
-    if [[ -f "$_CL_E04E_GUARD" ]] && [[ -n "${SAVED_FILES:-}" ]]; then
-        while IFS= read -r _e04e_file; do
-            [[ -z "$_e04e_file" ]] && continue
-            # 안전 문자 재검증: bash -c 내 싱글쿼트 이스케이프 불가 → 메타문자 포함 경로 차단
-            if ! echo "$_e04e_file" | grep -qE '^[a-zA-Z0-9/_.\-]+$'; then
-                log_jsonl "warn" "Skipping unsafe path from LLM output (metachar detected): $_e04e_file" "0"
-                continue
-            fi
-            if echo "$_e04e_file" | grep -qE '\.(html|pdf)$'; then
-                # bash -c 문자열 보간 대신 subshell + 변수 전달로 인젝션 방어
-                (source "$_CL_E04E_GUARD" 2>/dev/null && guard_validate_set "$_e04e_file") 2>/dev/null || true
-            fi
-        done <<< "$SAVED_FILES"
-    fi
+    # [2026-09-14] 교재 세트 규칙 검증 블록 제거 — 보람님이 더 이상 이 시스템을 쓰지 않는다.
+    #   예문 개수·문법 슬라이드 장 수 검증은 Preply 교재 전용이었다.
+
 fi
 
 # --- Agent Self-Note hook (Dreaming) ---
