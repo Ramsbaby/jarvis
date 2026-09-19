@@ -18,6 +18,10 @@ if (__sc(__sh() + '/.openclaw-data/runtime/state/stopped/mistake-to-checklist') 
 // 효과: 스킬 실행 전 해당 체크리스트를 참조하면 과거 실수 대응책이 바로 보임.
 // 주기: 일 1회 (03:45 KST, 재발 카운터 이후) 또는 수동 실행.
 //
+// 입력 헤더 2형식: 본체 `## YYYY-MM-DD — 제목`, 보관함 `## [Archived YYYY-MM-DD] 제목`(구 compound-review 산출).
+//   [2026-09-19] 보관함 형식도 파싱한다(종전 0건 기여). 보관 항목은 출력에서 `[보관 날짜]`로 표시하고
+//   정렬은 본체 항목 뒤 — 보관일은 '보관한 날'이지 발생일이 아니며 원 발생일은 어느 사본에도 없다.
+//
 // 안전: 기존 파일 덮어쓰기 전 git diff 가능한 형태로만 write. 실패해도 기존 파일 유지.
 
 import fs from 'node:fs';
@@ -45,9 +49,12 @@ if (!fs.existsSync(MISTAKES)) {
 const content = readAllMistakes(); // [2026-07-22] 본체+아카이브 전체 파싱(아카이빙된 옛 대응 누락 방지)
 
 // split 기반 파싱 (matchAll 유니코드 regex 이슈 우회)
-// 결과: [prefix, date1, rest1, date2, rest2, ...]
+// 결과: [prefix, live1, arch1, rest1, live2, arch2, rest2, ...] — 헤더 형식에 따라 live/arch 중 하나만 정의된다.
+//   live_i: 본체 `## YYYY-MM-DD — 제목` 의 날짜(발생일)
+//   arch_i: 보관함 `## [Archived YYYY-MM-DD] 제목` 의 날짜(보관일 — 발생일 아님)
 // rest_i 는 "title\n\n- **패턴**: ...\n- **대응**: ...\n\n---\n" 형태
-const parts = content.split(/^## (\d{4}-\d{2}-\d{2}) — /m);
+const HEADER_RE = /^## (?:(\d{4}-\d{2}-\d{2}) — |\[Archived (\d{4}-\d{2}-\d{2})\] )/m;
+const parts = content.split(HEADER_RE);
 
 // 키워드 → 스킬 매핑 (복수 매칭 시 각 스킬에 복제 등재)
 const SKILL_KEYWORDS = {
@@ -79,10 +86,11 @@ const extractResponse = (body) => {
 };
 
 const blocks = [];
-// parts[0]은 prefix. parts[1,3,5,...]는 날짜, parts[2,4,6,...]는 rest.
-for (let i = 1; i < parts.length - 1; i += 2) {
-  const date = parts[i];
-  const rest = parts[i + 1];
+// parts[0]은 prefix. 이후 3칸 단위: [liveDate, archDate, rest].
+for (let i = 1; i + 2 < parts.length; i += 3) {
+  const archived = parts[i] === undefined;
+  const date = archived ? parts[i + 1] : parts[i];
+  const rest = parts[i + 2];
   // rest의 첫 줄이 title, 그 아래가 body
   const nlIdx = rest.indexOf('\n');
   if (nlIdx < 0) continue;
@@ -90,8 +98,9 @@ for (let i = 1; i < parts.length - 1; i += 2) {
   const body = rest.slice(nlIdx + 1);
   const response = extractResponse(body);
   if (!response || response.length < 20) continue; // 구조적 가드 없는 오답 제외
-  blocks.push({ date, title, skills: classifyBlock(title, body), response });
+  blocks.push({ date, title, skills: classifyBlock(title, body), response, archived });
 }
+const archivedTotal = blocks.filter((b) => b.archived).length;
 
 // 스킬별 그룹화
 const grouped = {};
@@ -108,32 +117,39 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
 const generated = ts();
 let totalWritten = 0;
 for (const [skill, items] of Object.entries(grouped)) {
-  // 최신순 정렬 + 최대 30개
-  items.sort((a, b) => b.date.localeCompare(a.date));
+  // 최신순 정렬 + 최대 30개. 보관 항목은 본체 항목 뒤 — 보관일은 발생일이 아니라 같은 축에서 비교하지 않는다.
+  items.sort((a, b) => (a.archived - b.archived) || b.date.localeCompare(a.date));
   const top = items.slice(0, 30);
+  const archivedInTop = top.filter((it) => it.archived).length;
 
   const lines = [
     '---',
     `category: meta/checklists`,
     `skill: ${skill}`,
     `generated_at: ${generated}`,
-    `source: learned-mistakes.md`,
+    `source: learned-mistakes*.md (본체+보관함)`,
     `item_count: ${top.length}`,
+    `archived_count: ${archivedInTop}`,
     '---',
     '',
     `# ${skill === 'general' ? '일반' : `/${skill}`} 체크리스트 — 과거 오답 기반`,
     '',
     `> 자동 생성 파일. 편집 금지 — 오답노트가 SSoT.`,
     `> 스킬 실행 전 본 체크리스트를 1회 스캔하고, 각 항목의 **대응**을 이번 작업에 적용하는지 확인하십시오.`,
+  ];
+  if (archivedInTop) {
+    lines.push(`> \`[보관 날짜]\` ${archivedInTop}건은 보관함(learned-mistakes.archive.md)에서 왔습니다. 그 날짜는 보관한 날이며 원 발생일은 기록에 없습니다.`);
+  }
+  lines.push(
     '',
-    `생성: ${generated} | 항목 수: ${top.length}`,
+    `생성: ${generated} | 항목 수: ${top.length}${archivedInTop ? ` (보관 ${archivedInTop}건 포함)` : ''}`,
     '',
     '---',
     '',
-  ];
+  );
 
   for (const it of top) {
-    lines.push(`## ${it.date} — ${it.title}`);
+    lines.push(it.archived ? `## [보관 ${it.date}] ${it.title}` : `## ${it.date} — ${it.title}`);
     lines.push('');
     lines.push(`**대응**: ${it.response}`);
     lines.push('');
@@ -151,19 +167,21 @@ const idxLines = [
   '---',
   'category: meta/checklists',
   `generated_at: ${generated}`,
-  'source: learned-mistakes.md',
+  'source: learned-mistakes*.md (본체+보관함)',
   '---',
   '',
   '# 체크리스트 인덱스',
   '',
-  '| 스킬 | 오답 수 | 파일 |',
-  '|---|---:|---|',
+  '| 스킬 | 오답 수 | 그중 보관 | 파일 |',
+  '|---|---:|---:|---|',
 ];
+// 열 순서 고정: weekly-mistake-heatmap.sh 가 `| 스킬 | 숫자 |` 앞 두 열만 정규식으로 읽는다.
 for (const [skill, items] of Object.entries(grouped).sort((a, b) => b[1].length - a[1].length)) {
-  idxLines.push(`| ${skill === 'general' ? '일반' : `/${skill}`} | ${items.length} | \`${skill}.md\` |`);
+  const archivedN = items.filter((it) => it.archived).length;
+  idxLines.push(`| ${skill === 'general' ? '일반' : `/${skill}`} | ${items.length} | ${archivedN} | \`${skill}.md\` |`);
 }
 fs.writeFileSync(path.join(OUT_DIR, 'INDEX.md'), idxLines.join('\n'));
 
-log(`생성 완료 — ${totalWritten}개 스킬 체크리스트, 총 오답 ${blocks.length}건 분류`);
+log(`생성 완료 — ${totalWritten}개 스킬 체크리스트, 총 오답 ${blocks.length}건 분류 (본체 ${blocks.length - archivedTotal}건 + 보관 ${archivedTotal}건)`);
 console.log(`✅ ${totalWritten}개 스킬 체크리스트 생성 (${OUT_DIR})`);
-console.log(`총 오답 ${blocks.length}건 → 스킬별 최대 30건 요약`);
+console.log(`총 오답 ${blocks.length}건 (보관 ${archivedTotal}건 포함) → 스킬별 최대 30건 요약`);
