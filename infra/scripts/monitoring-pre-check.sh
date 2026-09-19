@@ -21,6 +21,11 @@ fi
 
 set -eo pipefail
 
+# [2026-09-19] 결과 임시 파일은 시작 시 비운다. 전에는 append 만 해서, 중간에 죽은 실행의 잔여 줄이
+#   다음 실행 집계에 섞였다(실측: 정상 17건이 80건으로 집계). 종료 시 정리는 trap 으로 보장한다.
+: > /tmp/monitoring-precheck-results.log
+trap 'rm -f /tmp/monitoring-precheck-results.log' EXIT
+
 # 옵션 파싱
 JSON_MODE=false
 VERBOSE=false
@@ -214,8 +219,11 @@ plist_count=0
 plist_disabled_count=0
 
 if [[ -d "$LAUNCHD_DIR" ]]; then
-    plist_count=$(ls -1 "$LAUNCHD_DIR"/*.plist 2>/dev/null | wc -l)
-    plist_disabled_count=$(ls -1 "$LAUNCHD_DIR"/*.plist.disabled 2>/dev/null | wc -l)
+    # [2026-09-19] 전에는 ls 글롭으로 셌다. *.plist.disabled 가 0개면 글롭이 안 풀려 ls 가 rc=1,
+    #   pipefail 이 그걸 대입문 상태로 올리고 set -e 가 여기서 스크립트를 조용히 끊었다(rc=1).
+    #   그래서 4~7번 검사와 최종 요약이 통째로 안 나왔다. find 는 매칭 0건이어도 rc=0 이다.
+    plist_count=$(find "$LAUNCHD_DIR" -maxdepth 1 -name '*.plist' | wc -l | tr -d ' ')
+    plist_disabled_count=$(find "$LAUNCHD_DIR" -maxdepth 1 -name '*.plist.disabled' | wc -l | tr -d ' ')
 
     if [[ $plist_count -gt 0 ]]; then
         log_check "launchd.plist.files" "ok" "발견됨 ($plist_count개, 비활성 $plist_disabled_count개)"
