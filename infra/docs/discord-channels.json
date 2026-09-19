@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-10T11:57:36.521Z",
+  "generatedAt": "2026-09-19T08:53:25.226Z",
   "totalChannels": 14,
   "totalTasks": 112,
-  "source": "runtime/config/tasks.json + infra/config/models.json",
+  "source": "~/.openclaw-data/runtime/config/tasks.json + infra/config/models.json",
   "channels": {
     "jarvis-system": {
       "taskCount": 42,
@@ -623,8 +623,8 @@
           "model": "claude-haiku-4-5-20251001"
         }
       ],
-      "modelOverride": "opusplan",
-      "effortOverride": "high"
+      "modelOverride": null,
+      "effortOverride": null
     },
     "jarvis-lite": {
       "taskCount": 1,

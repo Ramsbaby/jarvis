@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-09-10T11:57:36.455Z",
+  "generatedAt": "2026-09-19T08:53:25.185Z",
   "totalTasks": 112,
-  "source": "runtime/config/tasks.json",
+  "source": "~/.openclaw-data/runtime/config/tasks.json",
   "modelDistribution": {
     "claude-sonnet-5": 16,
     "claude-haiku-4-5-20251001": 33,
