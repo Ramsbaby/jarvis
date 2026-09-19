@@ -252,15 +252,35 @@ while IFS= read -r cmd; do
 done < <(printf '%s\n' "${REGEN_CMDS[@]}" | sort -u)
 _log "재생성: 성공 $REGEN_OK / 실패 $REGEN_FAIL"
 
+# ── 재생성 산출물 커밋 (2026-09-19) ──────────────────────────────
+# 재생성만 하고 커밋하지 않아 타임스탬프 한 줄짜리 M 이 매주 작업 트리에 남았다.
+# 내용이 실제로 바뀐 파일만 커밋하고, 타임스탬프만 바뀐 파일은 HEAD 로 되돌린다.
+# 대상은 이 스크립트가 재생성하는 git 추적 문서 8종 전부 (SYSTEM-OVERVIEW.md 는 gitignore).
+# push 는 하지 않는다 (공개 저장소 — 주인님 결재). 프라이버시 훅은 우회하지 않는다.
+COMMIT_NOTE="완료"
+if ! bash "$SCRIPTS_DIR/docs-generated-commit.sh" \
+        --repo "$JARVIS_HOME" \
+        --message "docs: 자동 생성 사전 문서 갱신 (jarvis-docs-freshness-audit)" \
+        -- infra/docs/TASKS-INDEX.md infra/docs/tasks-index.json \
+           infra/docs/CRON-MATRIX.md infra/docs/cron-matrix.json \
+           infra/docs/LAUNCHAGENT-CATALOG.md infra/docs/launchagent-catalog.json \
+           infra/docs/DISCORD-CHANNELS.md infra/docs/discord-channels.json \
+        2>&1 | tee -a "$LOG_FILE"; then
+    COMMIT_NOTE="실패"
+    _log "커밋 실패 — 작업 트리에 재생성 변경이 남아 있음 (프라이버시 훅 등 확인)"
+fi
+
 # Discord 알림
 if [ -f "$DISCORD_VISUAL" ]; then
     TS=$(date +"%Y-%m-%d %H:%M KST")
     STALE_SUMMARY=$(printf '%s\n' "${STALE[@]}" | head -5 | tr '\n' '|' | sed 's/|$//')
     PAYLOAD=$(cat <<EOF
-{"title":"📚 사전 문서 갱신","data":{"stale 건수":"${#STALE[@]}","stale":"$STALE_SUMMARY","재생성 성공":"$REGEN_OK","재생성 실패":"$REGEN_FAIL","서술형 드리프트":"${DRIFT_COUNT:-0}건"},"timestamp":"$TS"}
+{"title":"📚 사전 문서 갱신","data":{"stale 건수":"${#STALE[@]}","stale":"$STALE_SUMMARY","재생성 성공":"$REGEN_OK","재생성 실패":"$REGEN_FAIL","커밋":"$COMMIT_NOTE","서술형 드리프트":"${DRIFT_COUNT:-0}건"},"timestamp":"$TS"}
 EOF
 )
     discord_route_payload info "$PAYLOAD" 2>&1 | tee -a "$LOG_FILE" || true
 fi
 
+# 커밋 실패는 드리프트가 그대로 남는다는 뜻이므로 잡 실패로 올린다 (failureAlert 대상).
+[ "$COMMIT_NOTE" = "실패" ] && exit 1
 exit 0
