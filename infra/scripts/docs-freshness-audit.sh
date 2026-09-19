@@ -154,13 +154,16 @@ check "$(mtime "$JARVIS_RUNTIME/config/tasks.json")" \
 # ── 서술형 문서 드리프트 (구멍 5 — 2026-08-25) ──────────────────
 # 생성기가 없는 손으로 쓴 문서는 재생성이 불가하니 '보고'만 한다.
 # 근거는 doc-map.json — 코드→문서 매핑의 SSoT 를 그대로 재사용한다.
-DRIFT_REPORT=$(python3 - "$JARVIS_HOME" "$DOC_DRIFT_DAYS" <<'PYDRIFT' 2>/dev/null || true
+# 정본은 $JARVIS_RUNTIME/config/doc-map.json (doc-sync-auditor.sh 와 같은 위치).
+# 저장소의 runtime 은 장벽 파일이라 그 밑에서 찾으면 조용히 빈 결과만 냈다 (2026-09-19 수정).
+DRIFT_REPORT=$(python3 - "$JARVIS_HOME" "$DOC_DRIFT_DAYS" "$JARVIS_RUNTIME" <<'PYDRIFT' 2>/dev/null || true
 import json, os, sys, time
 
 repo = sys.argv[1]
 threshold_days = int(sys.argv[2])
+runtime = sys.argv[3]
 home = os.path.expanduser("~")
-doc_map = os.path.join(repo, "runtime/config/doc-map.json")
+doc_map = os.path.join(runtime, "config/doc-map.json")
 
 try:
     patterns = json.load(open(doc_map)).get("patterns", [])
@@ -183,8 +186,8 @@ def newest(fragment):
                 except OSError:
                     pass
         return best
-    # config/tasks.json 처럼 접두어가 생략된 조각
-    alt = os.path.join(repo, "runtime", fragment)
+    # config/tasks.json 처럼 접두어가 생략된 조각 — 런타임 정본 밑에서 찾는다
+    alt = os.path.join(runtime, fragment)
     return os.path.getmtime(alt) if os.path.isfile(alt) else 0.0
 
 now = time.time()
