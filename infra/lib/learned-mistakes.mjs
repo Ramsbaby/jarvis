@@ -13,8 +13,11 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+// [2026-09-19] 기본값은 정본 런타임이다. 종전 `~/jarvis/runtime` 은 회차8 이관 뒤 장벽 파일이라
+//   BOT_HOME 없이 돌면 existsSync 실패 → 빈 배열 → 호출자가 오답 0건으로 조용히 진행했다
+//   (mistake-to-checklist.mjs 는 65fbfbe 에서 고쳤으나 이 헬퍼는 남아 있었음).
 const META_DIR = join(
-  process.env.BOT_HOME || `${process.env.HOME}/jarvis/runtime`,
+  process.env.BOT_HOME || `${process.env.HOME}/.openclaw-data/runtime`,
   'wiki/meta',
 );
 
