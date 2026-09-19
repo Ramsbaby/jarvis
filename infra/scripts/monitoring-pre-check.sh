@@ -88,12 +88,12 @@ log_check() {
 # 홈 디렉토리 설정
 JARVIS_HOME="${JARVIS_HOME:-${HOME}/.jarvis}"
 JARVIS_INFRA="${JARVIS_HOME}/infra"
-# tasks.json 위치: ~/.openclaw-data/runtime/config/tasks.json 또는 ~/.jarvis 근처
-if [[ -f "${HOME}/.openclaw-data/runtime/config/tasks.json" ]]; then
-    TASKS_CONFIG="${HOME}/.openclaw-data/runtime/config/tasks.json"
-else
-    TASKS_CONFIG="${JARVIS_HOME}/../jarvis/runtime/config/tasks.json"
-fi
+# tasks.json 위치: 런타임 정본(BOT_HOME → ~/.openclaw-data/runtime)에서 직접 읽는다.
+# [2026-09-19] 옛 폴백(JARVIS_HOME 상위의 jarvis 밑 tasks.json) 제거 —
+#   ~/.jarvis/../jarvis 도 저장소의 runtime 도 장벽 파일이라 ENOTDIR 로만 끝나는 죽은 경로였다.
+#   파일이 없으면 아래 5번 검사(tasks.config)가 fail(rc=2) 로 크게 알린다. 조용한 폴백은 두지 않는다.
+JARVIS_RUNTIME="${JARVIS_RUNTIME:-${BOT_HOME:-$HOME/.openclaw-data/runtime}}"  # 회차8: 런타임은 코드 루트 밑이 아니다
+TASKS_CONFIG="${JARVIS_RUNTIME}/config/tasks.json"
 
 # 헤더 출력
 if [[ "$JSON_MODE" == "false" ]]; then

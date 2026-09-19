@@ -15,12 +15,18 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const JARVIS_HOME = process.env.HOME + "/.jarvis";
-const STATE_DIR = path.join(JARVIS_HOME, "runtime/state/cluster-guards");
+// [2026-09-19] 전에는 HOME/.jarvis 밑에 runtime/ 을 다시 붙여 ~/.openclaw-data/runtime/runtime/state/...
+//   (runtime 이중) 으로 풀렸다. ~/.jarvis 는 이미 런타임 정본(~/.openclaw-data/runtime)의 심링크다.
+//   호출자 cluster-guard-cl-0bae9367746da340.sh 의 STATE_DIR 과 같은 곳을 보도록
+//   gen-tasks-index.mjs 와 같은 규칙(BOT_HOME → ~/.openclaw-data/runtime)으로 푼다.
+const RUNTIME_HOME =
+  process.env.BOT_HOME || path.join(os.homedir(), ".openclaw-data", "runtime");
+const STATE_DIR = path.join(RUNTIME_HOME, "state/cluster-guards");
 const VALIDATOR_DB = path.join(STATE_DIR, "slang-validation-db.jsonl");
 
 // 인스턴스 생성
