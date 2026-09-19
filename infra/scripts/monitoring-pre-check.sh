@@ -11,9 +11,13 @@
 # 4. 주요 모니터링 스크립트 파일 존재 여부
 # 5. 모니터링 도구의 의존성 파일 확인
 #
-# [오픈클로 이식 2026-09-10] 오픈클로 jarvis-monitoring-pre-check(04:55)로 이관됐다.
-# 이 스크립트는 crontab 46행에서도 불리는데 crontab 쓰기가 이 환경에서 막혀 있어(rc=124 타임아웃)
-# 스크립트 층에 가드를 둬 이중 실행을 막는다. 재개: rm ~/.openclaw-data/runtime/state/stopped/monitoring-pre-check
+# [오픈클로 이식 2026-09-10] 오픈클로 잡 jarvis-monitoring-pre-check(04:55)로 이관됐다.
+#   당시 crontab 46행에도 남아 있어(crontab 쓰기가 막혀 못 지움) 스크립트 층 가드로 이중 실행을 막았다.
+# [2026-09-13] 그 잡의 명령은 효과 계측기(~/.openclaw/workspace/scripts/effectiveness-check.mjs)로 교체됐다
+#   (이관 장부 P28 — "파일이 있는가"가 아니라 "산출물이 갱신되고 소비자가 있는가"를 재기로 결정).
+#   잡 이름은 2026-09-19 에 실제 명령대로 jarvis-effectiveness-check 로 고쳤다.
+# [2026-09-19] crontab 에서도 이 스크립트 행은 이미 사라졌다(21행 실측). 가드는 중지 플래그가 있을 때만 작동한다.
+#   재개: rm ~/.openclaw-data/runtime/state/stopped/monitoring-pre-check
 if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/monitoring-pre-check" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
     echo "[monitoring-pre-check] 중지 플래그 있음 — 오픈클로 잡으로 이관됨 (state/stopped/monitoring-pre-check)"
     exit 0
@@ -115,7 +119,8 @@ fi
 log_check "crontab.registry" "ok" "확인 중..."
 
 if crontab -l >/dev/null 2>&1; then
-    crontab_line_count=$(crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$' | wc -l)
+    # 같은 결: 주석·빈 줄만 있으면 grep -v 가 rc=1 → pipefail 로 스크립트가 죽는다. -c 로 세고 실패는 0 으로 읽는다.
+    crontab_line_count=$(crontab -l 2>/dev/null | grep -cvE '^\s*(#|$)' || true)
     crontab_exists=true
     log_check "crontab.registry" "ok" "등록됨 (활성 태스크 $crontab_line_count개)"
 else
@@ -161,7 +166,9 @@ log_check "launchd.registry" "ok" "확인 중..."
 
 # launchctl list로 등록된 agent 확인
 launchd_agents=$(launchctl list 2>/dev/null | grep "ai\.jarvis" | cut -f3 | sort || true)
-launchd_count=$(echo "$launchd_agents" | grep -v '^$' | wc -l)
+# `grep -v '^$' | wc -l` 은 입력이 비면 grep 이 rc=1 을 내고 pipefail+set -e 가 여기서 스크립트를 죽인다
+#   (3번 검사의 ls 사고와 같은 결). 0건이면 "0"을 내고 아래 fail 분기로 가야 한다. grep -c 는 공백 패딩도 없다.
+launchd_count=$(printf '%s\n' "$launchd_agents" | grep -c . || true)
 
 if [[ $launchd_count -gt 0 ]]; then
     log_check "launchd.registry" "ok" "등록됨 ($launchd_count개 agent)"
