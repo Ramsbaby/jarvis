@@ -14,6 +14,8 @@ set -euo pipefail
 #   보고 비활성이라 타임스탬프 한 줄짜리 M 이 매일 06:17 마다 작업 트리에 남았다.
 #   타임스탬프만 바뀐 경우는 커밋하지 않고 HEAD 로 되돌린다. push 는 하지 않는다
 #   (공개 저장소 — 주인님 결재). 프라이버시 훅(.githooks/pre-commit)은 우회하지 않는다.
+#   ~/jarvis-board 의 API-INDEX.md 도 같은 규칙으로 처리한다 (husky pre-commit 은 ts/tsx 만
+#   보므로 md 단독 커밋은 "해당 작업 없음"으로 통과 — 2026-09-19 잡 PATH 로 확인).
 
 LOG() { echo "[$(date '+%H:%M:%S')] $*"; }
 
@@ -39,11 +41,17 @@ else
     LOG "[WARN] gen-tasks-index.mjs 없음 — skip"
 fi
 
-# 2) ~/jarvis-board — API-INDEX 생성
+# 2) ~/jarvis-board — API-INDEX 생성 (+ 내용이 바뀐 경우에만 커밋)
 if [[ -f "${BOARD_ROOT}/scripts/gen-api-index.mjs" ]]; then
     LOG "gen-api-index.mjs 실행"
     if ! ( cd "${BOARD_ROOT}" && node scripts/gen-api-index.mjs ); then
         LOG "[ERROR] gen-api-index.mjs 실패"
+        fail=1
+    elif ! bash "${JARVIS_ROOT}/infra/scripts/docs-generated-commit.sh" \
+            --repo "${BOARD_ROOT}" \
+            --message "docs: API 인덱스 자동 갱신 (jarvis-gen-indexes)" \
+            -- docs/API-INDEX.md; then
+        LOG "[ERROR] API 인덱스 커밋 실패 — ~/jarvis-board 작업 트리에 변경이 남아 있음"
         fail=1
     fi
 else
