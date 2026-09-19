@@ -40,17 +40,38 @@ const WEBHOOK_URL = config.webhooks?.[CHANNEL] ?? config.webhook?.url;
 // 복구: monitoring.json 의 _webhook_disabled_20260910 을 webhook 으로 되돌린다.
 if (!WEBHOOK_URL && config._webhook_disabled_20260910) {
   // 억제된 알림은 반드시 한 곳(no-external.log)에 남긴다. 안 남기면 감시 잡 35개의 산출물이
-  // 통째로 사라진다 — 오픈클로 jarvis-suppressed-digest 가 이 파일을 읽어 메인 세션에 배달한다.
-  let title = '';
+  // 통째로 사라진다 — 오픈클로 jarvis-orchestrator 가 suppressed-digest.sh 로 이 파일을 읽어
+  // 디스코드 #jarvis 에 하루 5회 배달한다 (jarvis-suppressed-digest 잡은 09-10 에 흡수·비활성).
+  // 2026-09-19: 제목만 남기면 요약에서 "⚠️ 시스템 경고"가 무엇인지 알 수 없었다. 본문 앞부분을 msg= 로 같이 남긴다.
+  //   stats 카드는 data{k:v}, system-doctor 카드는 summary{red,yellow,findings}. 줄 끝 msg= 는 digest 가 읽는다.
+  let title = '', body = '';
   try {
     const parsed = JSON.parse(DATA_RAW || '{}');
     title = parsed.title || parsed.message || '';
+    if (parsed.data && typeof parsed.data === 'object') {
+      body = Object.entries(parsed.data)
+        .filter(([k]) => k !== 'timestamp')
+        .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+        .join(' / ');
+    } else if (parsed.summary && typeof parsed.summary === 'object') {
+      const s = parsed.summary;
+      const items = (arr) => [].concat(arr || [])
+        .map((f) => (typeof f === 'string' ? f : (f?.title || f?.detail || '')))
+        .filter(Boolean);
+      body = [['red', s.red], ['yellow', s.yellow], ['findings', s.findings]]
+        .map(([k, arr]) => { const it = items(arr); return it.length ? `${k}: ${it.join(', ')}` : ''; })
+        .filter(Boolean).join(' / ');
+    }
+    if (!body && CAPTION) body = CAPTION;
   } catch { /* 제목 없는 페이로드는 type 만으로 식별한다 */ }
+  // 한 줄로 — 줄바꿈이 들어가면 원장 한 줄 = 알림 한 건 규약이 깨진다. 자르기는 문자 단위(이모지 반쪽 방지).
+  const oneLine = (s, n) => Array.from(String(s).replace(/\s+/g, ' ').trim()).slice(0, n).join('');
   try {
     const dir = join(RUNTIME_HOME, 'logs');
     mkdirSync(dir, { recursive: true });
     appendFileSync(join(dir, 'no-external.log'),
-      `${new Date().toISOString()} [NO_EXTERNAL] src=discord-visual.mjs ch=${CHANNEL} type=${TYPE} title=${title || '(제목없음)'} len=${DATA_RAW.length}\n`);
+      `${new Date().toISOString()} [NO_EXTERNAL] src=discord-visual.mjs ch=${CHANNEL} type=${TYPE} title=${oneLine(title, 120) || '(제목없음)'} len=${DATA_RAW.length}`
+      + (body ? ` msg=${oneLine(body, 240)}` : '') + '\n');
   } catch { /* 기록 실패는 무시 — 억제 자체가 목적 */ }
   // 문자열에 [NO_EXTERNAL] 을 유지한다 — test-no-external.sh 가 "외부로 안 나갔다"를 이 토큰으로 판정하고,
   // 토큰을 빼면 억제 경로가 회귀 테스트에서 통째로 안 보인다.

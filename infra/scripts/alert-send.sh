@@ -180,7 +180,7 @@ send_alert() {
         # [2026-09-13] 긴급(critical)만 살아있는 경로로 즉시 내보낸다 — 주인님 결정.
         #   옛 웹훅은 9/10 에 비웠고 되살리지 않는다. 대신 오픈클로가 실제로 쓰는 디스코드
         #   채널로 보낸다. 채널 ID 는 공개 저장소에 박지 않고 monitoring.json 에서 읽는다.
-        #   경고·정보는 그대로 억제되어 orchestrator 요약으로만 나간다(하루 3회).
+        #   경고·정보는 그대로 억제되어 orchestrator 요약으로만 나간다(하루 5회 — 08·11·14·17·20시, 2026-09-19 3회→5회).
         #   실측 근거: discord-send-audit.jsonl 828건 중 9/12 이후 critical 은 1건뿐이라
         #   이 우회가 알림 폭주를 만들지 않는다.
         if [[ "$level" == "critical" ]] && _urgent_bypass_send "$title" "$message"; then
@@ -190,7 +190,17 @@ send_alert() {
             return 0
         fi
         mkdir -p "${BOT_HOME:-${HOME}/.openclaw-data/runtime}/logs" 2>/dev/null || true
-        printf '%s [NO_EXTERNAL] src=alert-send.sh ch=%s title=%s len=%s\n' "$(date -u +%FT%TZ)" "$channel" "${title:0:60}" "${#embed_json}" \
+        # 2026-09-19: 제목 60자만 남기니 요약에서 "이상 2건"이 무엇인지 원장을 열어야 보였다.
+        #   본문 앞 240자를 msg= 로 같이 남긴다(줄바꿈은 " / "). suppressed-digest.sh 가 읽어 요약에 붙인다.
+        #   바이트로 자르면 한글 중간이 잘려 �가 남으므로(위 title 이 그랬다) 문자 단위로 자른다.
+        local msg_excerpt
+        msg_excerpt=$(printf '%s' "$message" | python3 -c '
+import re, sys
+s = sys.stdin.buffer.read().decode("utf-8", "ignore")
+s = " / ".join(p.strip() for p in s.splitlines() if p.strip())
+print(re.sub(r"\s+", " ", s)[:240])' 2>/dev/null) \
+            || msg_excerpt=$(printf '%s' "$message" | tr '\n\r\t' '   ' | cut -c1-240)
+        printf '%s [NO_EXTERNAL] src=alert-send.sh ch=%s title=%s len=%s msg=%s\n' "$(date -u +%FT%TZ)" "$channel" "${title:0:60}" "${#embed_json}" "$msg_excerpt" \
             >> "${BOT_HOME:-${HOME}/.openclaw-data/runtime}/logs/no-external.log" 2>/dev/null || true
         http_code="204"
     else

@@ -161,7 +161,8 @@ if ! discord_route "$_severity_route" "$TITLE" "alerts=${_alerts_text},summary=$
     log "WARN: Discord 라우팅 실패 (로컬 파일만 기록: ${TITLE})"
 elif [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/discord-removed" ]]; then
     # 2026-09-10: 억제된 것을 "전송 완료"라고 적으면 감사에서 "아직 송출 중"으로 오독된다.
-    # 실제 배달은 no-external.log → jarvis-suppressed-digest 가 맡는다.
+    # 실제 배달은 no-external.log → jarvis-orchestrator(suppressed-digest.sh, 08·11·14·17·20시) 가 맡는다.
+    # (jarvis-suppressed-digest 잡은 2026-09-10 오케스트레이터에 흡수되어 비활성 — 켜지 않는다.)
     log "알림 억제됨 — 송출 비활성, 다이제스트로 배달: ${TITLE}"
 fi
 
