@@ -16,10 +16,12 @@
 # [2026-09-13] 그 잡의 명령은 효과 계측기(~/.openclaw/workspace/scripts/effectiveness-check.mjs)로 교체됐다
 #   (이관 장부 P28 — "파일이 있는가"가 아니라 "산출물이 갱신되고 소비자가 있는가"를 재기로 결정).
 #   잡 이름은 2026-09-19 에 실제 명령대로 jarvis-effectiveness-check 로 고쳤다.
-# [2026-09-19] crontab 에서도 이 스크립트 행은 이미 사라졌다(21행 실측). 가드는 중지 플래그가 있을 때만 작동한다.
-#   재개: rm ~/.openclaw-data/runtime/state/stopped/monitoring-pre-check
+# [2026-09-19] crontab 에서도 이 스크립트 행은 이미 사라졌다(21행 실측). 주인님 결정: 스케줄에 다시 올리지 않고
+#   수동 도구로만 남긴다. 중지 플래그는 그 기록이며, 수동 실행은 OPENCLAW_JOB=1 을 붙여 가드를 지난다:
+#     OPENCLAW_JOB=1 BOT_HOME=~/.openclaw-data/runtime bash infra/scripts/monitoring-pre-check.sh [--verbose]
+#   가드 자체를 없애려면: rm ~/.openclaw-data/runtime/state/stopped/monitoring-pre-check
 if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/monitoring-pre-check" ]] && [[ "${OPENCLAW_JOB:-}" != "1" ]]; then
-    echo "[monitoring-pre-check] 중지 플래그 있음 — 오픈클로 잡으로 이관됨 (state/stopped/monitoring-pre-check)"
+    echo "[monitoring-pre-check] 중지 플래그 있음 — 스케줄 없음(2026-09-13 효과 계측기로 대체). 수동 실행은 OPENCLAW_JOB=1 을 붙인다 (state/stopped/monitoring-pre-check)"
     exit 0
 fi
 
