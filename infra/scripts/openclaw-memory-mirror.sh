@@ -17,10 +17,14 @@ mkdir -p "$DST"
 # (runtime/context/claude-memory)로 옮겨 심링크를 남기는 다리가 post-memory-sync.sh 다.
 # 그 훅이 2026-09-02 훅 41개 일괄 제거 때 빠졌고 재배선 8건에도 안 들어갔다.
 # 결과: 9/3부터 새 기억이 자비스 RAG 색인 대상 밖에 머물렀다
-# (rag-index.mjs 는 context/{owner,career,claude-memory} 만 훑는다).
+# (당시 rag-index.mjs 는 context/{owner,career,claude-memory} 만 훑었다).
 # 훅을 되살리는 대신 이미 10분마다 도는 이 미러에 드레인을 얹는다 —
 # 주인님의 9/2 훅 제거 지시를 건드리지 않으면서 다리를 복구하는 경로다.
 # 스크립트 자체 로직을 그대로 쓴다(이전 판 보존·실패 시 원위치 복원이 그 안에 있다).
+# 상태 2026-09-19: 클로드 코드가 09-13 부터 프로젝트별 경로(아래 2단계)에 쓰므로 이 드레인은
+# 09-12 이후 대상 0건이다 — settings.json autoMemoryDirectory 는 여기를 가리키지만 무시된다.
+# 그 경로가 다시 쓰이면 그대로 되살아나므로 남겨 둔다. 신규 기억의 RAG 진입은
+# rag-index.mjs 가 2단계 산출물(PROJ_DST)을 직접 읽는 것으로 대체했다.
 SYNC_HOOK="$HOME/.claude/hooks/post-memory-sync.sh"
 if [ -x "$SYNC_HOOK" ]; then
   find "$SRC" -maxdepth 1 -type f -name '*.md' ! -name 'MEMORY.md' 2>/dev/null |
@@ -41,6 +45,8 @@ CHANGED=$(rsync -aL --delete --itemize-changes --include='*.md' --exclude='*' "$
 # 색인 밖에 머물렀다(실측 2026-09-14: 신규 3건 미색인, memory_search 미검출).
 # 경로를 옮기지 않고 미러 대상만 넓힌다 — 클로드 코드 쪽 동작을 건드리지 않는 경로다.
 # /private/tmp 하위(봇 1회성 작업 디렉토리)는 제외한다. 영속 프로젝트만 담는다.
+# 2026-09-19: 자비스 RAG(rag/bin/rag-index.mjs, "1b" 블록)도 PROJ_DST 를 직접 색인한다.
+# 이 경로를 바꾸면 그쪽 상수도 같이 바꾼다 — 둘은 한 쌍이다.
 PROJ_DST="$HOME/.openclaw/workspace/memory/imports/claude-code/claude-projects"
 mkdir -p "$PROJ_DST"
 for d in "$HOME"/.claude/projects/-Users-ramsbaby*/memory; do

@@ -728,6 +728,45 @@ async function main() {
         }
       } catch { /* dir may not exist */ }
     }
+    // 1b. 클로드 코드 프로젝트별 auto memory — 미러 산출물 경유 (2026-09-19 신설)
+    // 클로드 코드는 2026-09-13 부터 auto memory 를 ~/.claude/projects/<슬러그>/memory/*.md 에 쓴다
+    // (settings.json autoMemoryDirectory 는 runtime/claude-automemory 를 가리키지만 무시된다 —
+    //  그 디렉토리는 09-12 이후 쓰기 0건). post-memory-sync.sh 는 그 파일을 SSoT 로 옮기지 않으므로
+    // 위 claude-memory/ 스캔에 안 잡힌다 — 실측 2026-09-19: 09-19 기억 8건이 rag_search 미검출.
+    // 원본을 SSoT 로 옮기지 않는 이유는 미러 2단계(09-14)와 같다 — 클로드 코드가 기억을 지우거나
+    // 다시 쓰는 동작을 건드리지 않는다(옮기면 지운 기억의 SSoT 사본이 RAG 에 남는다).
+    // 대신 그 미러가 10분마다 rsync --delete 로 만드는 실파일 사본을 읽는다:
+    //   infra/scripts/openclaw-memory-mirror.sh PROJ_DST
+    //   → ~/.openclaw/workspace/memory/imports/claude-code/claude-projects/<슬러그>/*.md
+    // 이 경로는 그 스크립트의 PROJ_DST 와 한 쌍이다 — 한쪽을 바꾸면 다른 쪽도 바꾼다.
+    // 사본은 심링크가 아니라서 아래 realpath 접기로는 SSoT 와의 중복을 못 잡는다. 옛 심링크 배선
+    // (홈 디렉토리 슬러그의 5건)이 rsync -L 로 펼쳐진 사본은 같은 이름·같은 내용이 claude-memory/ 에
+    // 있으니 건너뛴다 — 같은 기억이 두 벌 색인되면 검색 순위가 왜곡된다.
+    try {
+      const projRoot = join(homedir(), '.openclaw', 'workspace', 'memory', 'imports', 'claude-code', 'claude-projects');
+      const ssotDir = join(contextDir, 'claude-memory');
+      const slugs = await readdir(projRoot, { withFileTypes: true });
+      let projAdded = 0, projDeduped = 0;
+      for (const slug of slugs) {
+        if (!slug.isDirectory() || slug.name.startsWith('.')) continue;
+        const slugDir = join(projRoot, slug.name);
+        let files;
+        try { files = await readdir(slugDir, { withFileTypes: true }); } catch { continue; }
+        for (const f of files) {
+          if (f.isDirectory() || extname(f.name) !== '.md') continue;
+          const fp = join(slugDir, f.name);
+          try {
+            const twin = await readFile(join(ssotDir, f.name)); // 없으면 ENOENT → 아래 catch
+            if (twin.equals(await readFile(fp))) { projDeduped++; continue; }
+          } catch { /* SSoT 에 동명 파일 없음 — 신규 기억의 정상 경로 */ }
+          targets.push(fp);
+          projAdded++;
+        }
+      }
+      if (projAdded > 0 || projDeduped > 0) {
+        ragLog(`[rag-index] claude-projects 미러: 대상 ${projAdded}개 · SSoT 동일 사본 ${projDeduped}개 건너뜀`);
+      }
+    } catch { /* 미러 디렉토리 없음 — 미러 잡이 아직 안 돌았거나 워크스페이스가 없다 */ }
     // context/claude-code-sessions/ — 인덱싱 비활성화 (2026-05-31)
     // 사유: 13,870개 파일 / 565MB → LanceDB 658K 청크 편향 (전체 54%) 유발
     // 재활성화 시: 7일 윈도우 + 반드시 age-based prune 추가 필요
