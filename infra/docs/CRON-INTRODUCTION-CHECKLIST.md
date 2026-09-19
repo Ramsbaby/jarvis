@@ -48,7 +48,7 @@
 ## 6️⃣ Production 활성화 (1주 시뮬 후)
 
 - [ ] 7일간 DRYRUN ledger 분석 (가짜 양성 < 10%, 에러 = 0)
-- [ ] `skill-dryrun-auto-activate` 패턴 모방하여 자동 또는 수동 활성화
+- [ ] 자동 또는 수동 활성화 (종전 예시 `skill-dryrun-auto-activate`는 2026-09-19 폐기 — 활성화 표식을 읽는 코드가 없었음)
 - [ ] 활성화 후 첫 24시간 모니터링
 
 ---

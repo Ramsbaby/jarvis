@@ -4,6 +4,7 @@
 # 배경(2026-07-22 Step 1-0 감사): learned-mistakes.md(활성본)를 월별 아카이브로 분할하면,
 #   전체본을 grep/count하던 감사 스크립트들이 아카이브분을 조용히 누락 → 카운트 급락 →
 #   mistake-to-skill-pipeline은 "신규 없음" 영구 침묵. 이 헬퍼로 glob 조회를 단일화한다.
+#   (해당 파이프라인은 2026-09-19 폐기됨 — 위 문단은 도입 배경 기록으로만 유지)
 #
 # 계약(contract): 아카이브 파일은 `learned-mistakes-YYYY-MM.md`(월별) 또는 `learned-mistakes*.md`로
 #   명명하고 **원본 헤더 `## YYYY-MM-DD — 제목`을 유지**한다(형식 변경 금지). 그래야 아래 lm_grep의

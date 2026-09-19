@@ -22,7 +22,7 @@
 |---|---|---|
 | `meta-audit` | tasks.json 자체를 감사 — 자기참조 회피 | `interview-ssot-audit`, `model-version-audit`, `docs-freshness-audit`, `audit-dashboard`, `meta-audit` |
 | `system-monitor` | tasks.json runtime 의존성 외부 — supervisor / health | `supervisor`, `resilience-guard`, `llm-cost-cap-monitor` |
-| `retention/archive` | 시스템 hygiene — Claude API 비호출 | `docs-daily-regen`, `retention`, `skill-dead-archive`, `skill-dryrun-auto-activate` |
+| `retention/archive` | 시스템 hygiene — Claude API 비호출 | `docs-daily-regen`, `retention`, `skill-dead-archive` |
 | `bot-runner` | long-running 데몬 (이미 예외) | `discord-bot`, `nexus`, `interview-verifier` |
 
 **추가 룰**:
