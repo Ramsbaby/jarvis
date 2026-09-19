@@ -5,9 +5,12 @@
 # 매주 월요일 09:10 KST 실행 (ai.jarvis.docs-freshness-audit LaunchAgent)
 #
 # 비교 매트릭스 (원본 → 생성 문서):
-#   runtime/config/tasks.json        → infra/docs/cron-matrix.json + tasks-index.json
-#   ~/Library/LaunchAgents/*.plist   → infra/docs/launchagent-catalog.json
-#   infra/config/models.json         → infra/docs/discord-channels.json
+#   $JARVIS_RUNTIME/config/tasks.json  → infra/docs/cron-matrix.json + tasks-index.json
+#     (JARVIS_RUNTIME = BOT_HOME → ~/.openclaw-data/runtime. 저장소의 runtime 은 장벽 파일이다.)
+#   ~/Library/LaunchAgents/*.plist     → infra/docs/launchagent-catalog.json
+#   infra/config/models.json           → infra/docs/discord-channels.json
+#
+# 종료코드: 재생성 실패 또는 커밋 실패가 1건이라도 있으면 1 (잡 failureAlert 대상).
 
 set -euo pipefail
 
@@ -281,6 +284,12 @@ EOF
     discord_route_payload info "$PAYLOAD" 2>&1 | tee -a "$LOG_FILE" || true
 fi
 
+# 재생성 실패는 문서가 여전히 stale 하다는 뜻이므로 잡 실패로 올린다 (failureAlert 대상).
+# 2026-09-14 09:10 ENOTDIR 로 2건 실패했는데 exit 0 이라 잡 상태가 ok 로 남았다 (2026-09-19 수정).
+if [ "$REGEN_FAIL" -gt 0 ]; then
+    _log "FAIL: 재생성 실패 ${REGEN_FAIL}건 — exit 1"
+    exit 1
+fi
 # 커밋 실패는 드리프트가 그대로 남는다는 뜻이므로 잡 실패로 올린다 (failureAlert 대상).
 [ "$COMMIT_NOTE" = "실패" ] && exit 1
 exit 0

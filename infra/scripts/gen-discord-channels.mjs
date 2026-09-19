@@ -7,16 +7,24 @@
  *   - infra/docs/discord-channels.json
  *
  * 입력:
- *   - runtime/config/tasks.json (discordChannel 필드)
- *   - runtime/config/models.json (channelOverrides — 채널별 모델 강제)
+ *   - ~/.openclaw-data/runtime/config/tasks.json (discordChannel 필드 — BOT_HOME 으로 덮어쓸 수 있다)
+ *   - infra/config/models.json (channelOverrides — 채널별 모델 강제)
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
-const TASKS = JSON.parse(fs.readFileSync(path.join(ROOT, 'runtime/config/tasks.json'), 'utf-8')).tasks;
+const HOME = os.homedir();
+// [2026-09-19] 2026-09-10 이관 뒤 저장소의 runtime 은 디렉터리가 아니라 장벽 파일이다.
+//   ROOT 밑에서 runtime/config 를 파생하면 ENOTDIR 로 죽는다 (2026-09-14 09:10 실패 2건).
+//   gen-tasks-index.mjs 와 같은 규칙으로 런타임 정본(BOT_HOME → ~/.openclaw-data/runtime)을 직접 읽는다.
+const RUNTIME_HOME = process.env.BOT_HOME || path.join(HOME, '.openclaw-data', 'runtime');
+const TASKS_JSON = path.join(RUNTIME_HOME, 'config/tasks.json');
+const TASKS_SOURCE = TASKS_JSON.startsWith(HOME) ? '~' + TASKS_JSON.slice(HOME.length) : TASKS_JSON;
+const TASKS = JSON.parse(fs.readFileSync(TASKS_JSON, 'utf-8')).tasks;
 const MODELS = JSON.parse(fs.readFileSync(path.join(ROOT, 'infra/config/models.json'), 'utf-8'));
 const OUT_MD = path.join(ROOT, 'infra/docs/DISCORD-CHANNELS.md');
 const OUT_JSON = path.join(ROOT, 'infra/docs/discord-channels.json');
@@ -39,7 +47,7 @@ fs.writeFileSync(OUT_JSON, JSON.stringify({
   generatedAt: now,
   totalChannels: sorted.length,
   totalTasks: TASKS.length,
-  source: 'runtime/config/tasks.json + infra/config/models.json',
+  source: `${TASKS_SOURCE} + infra/config/models.json`,
   channels: Object.fromEntries(sorted),
 }, null, 2), 'utf-8');
 
