@@ -82,11 +82,26 @@ set -o pipefail
 [ -z "$ERR_FILES" ] && ERR_FILES='[]'
 
 # 1-D. Discord bot heartbeat
-if [ -f "$DOT_JARVIS/state/bot-heartbeat" ]; then
+# [2026-09-22] 옛 디스코드 봇(별도 프로세스)은 오픈클로 채널로 대체되며 은퇴했다.
+#   은퇴하면 heartbeat 파일은 그 시점에 멈춘 화석으로 남는다. 파일 존재만 보던 기존 조건은
+#   그 화석을 "봇 정지"로 읽어 매 틱 CRITICAL 을 세웠다 — 12일치 오경보, 실측 송출 675회.
+#   경보가 상시 참이면 진짜 장애가 그 소음에 묻힌다. 그래서 '운영 중일 때만' 재도록 바꾼다.
+#   판정은 프로세스가 아니라 LaunchAgent 등록 여부다. 프로세스로 재면 진짜 다운도 침묵시킨다.
+#   봇을 되살리면 plist 가 다시 생기므로 이 검사도 함께 되살아난다.
+BOT_LA_PRESENT=0
+for _la in "$HOME/Library/LaunchAgents/ai.jarvis.discord-bot.plist" \
+           "$HOME/Library/LaunchAgents/com.jarvis.discord-bot.plist"; do
+    if [ -f "$_la" ]; then BOT_LA_PRESENT=1; break; fi
+done
+if [ "$BOT_LA_PRESENT" -eq 1 ] && [ -f "$DOT_JARVIS/state/bot-heartbeat" ]; then
     HEARTBEAT_AGE=$(( $(date +%s) - $(stat -f %m "$DOT_JARVIS/state/bot-heartbeat") ))
 fi
 
-# 1-E. RAG indexer health (last RAG index line within 2h)
+# 1-E. RAG indexer health
+# [2026-09-24 당직] 기준 120분 → 300분. 색인은 crontab 4시간 주기(30 */4)·최대 2700초라
+#   120분 기준은 매 주기 후반 2시간을 "멈춤"으로 읽어 하루 12틱씩 CRITICAL 을 세웠다(09-24 20:30 239분 등).
+#   오케스트레이터 rag.stale(5h)와 같은 기준으로 맞춘다. 주기를 바꾸면 여기도 같이 바꾼다.
+RAG_STALE_MIN=300
 RAG_LAST_AGE_MIN=999
 if [ -f "$DOT_JARVIS/logs/rag-index.log" ]; then
     last_ts=$(grep -E "^\[2026.*RAG index:" "$DOT_JARVIS/logs/rag-index.log" 2>/dev/null | tail -1 | grep -oE "^\[[^]]+" | tr -d "[")
@@ -131,7 +146,7 @@ CRITICAL=()
 if [ "$HEARTBEAT_AGE" -gt 300 ]; then
     CRITICAL+=("Discord 봇 heartbeat ${HEARTBEAT_AGE}s 정지")
 fi
-if [ "$RAG_LAST_AGE_MIN" -gt 120 ]; then
+if [ "$RAG_LAST_AGE_MIN" -gt "$RAG_STALE_MIN" ]; then
     CRITICAL+=("RAG 인덱싱 ${RAG_LAST_AGE_MIN}분 멈춤")
 fi
 
@@ -151,7 +166,7 @@ if [ -f "$FIX_LIB" ]; then
         fix_dispatch "heartbeat_dead" "$HEARTBEAT_AGE" || true
         HEAL_DISPATCHED=$((HEAL_DISPATCHED + 1))
     fi
-    if [ "$RAG_LAST_AGE_MIN" -gt 120 ]; then
+    if [ "$RAG_LAST_AGE_MIN" -gt "$RAG_STALE_MIN" ]; then
         fix_dispatch "rag_stuck" "" || true
         HEAL_DISPATCHED=$((HEAL_DISPATCHED + 1))
     fi

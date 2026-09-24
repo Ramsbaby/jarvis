@@ -55,13 +55,18 @@ else
     log "METRIC: memory_free=50 (default, no tools available)"
 fi
 
-# 크론 실패 (최근 200줄)
+# 크론 실패 (최근 24시간)
 if [[ -f "${LOGS_DIR}/cron.log" ]]; then
     # [2026-08-20 수정] grep -c 는 매칭 0건이면 "0" 을 출력하면서 exit 1 을 낸다.
     # 기존의 `|| echo "0"` 이 그 위에 "0" 을 한 줄 더 붙여 CRON_FAILS 가 "0\n0" 이 됐고,
     # 105번 줄 (( CRON_FAILS >= 3 )) 이 매시간 syntax error 로 터졌다(로그 오염 + JSON 파손 위험).
     # 매칭이 0건일 때만 발현하는 조건부 버그였다.
-    CRON_FAILS=$(tail -200 "${LOGS_DIR}/cron.log" 2>/dev/null | grep -cE 'ABORTED|FAILED' || true)
+    # [2026-09-24 당직] "최근 200줄" → "최근 24시간". 09-10 오픈클로 이식 뒤 cron.log 는 거의 안 자라서
+    #   200줄이 2주 전 실패(mistake-promoter 09-10)를 영원히 담았고, "크론 최근 실패 11건" 이 상시 경보였다.
+    #   줄 수가 아니라 시각으로 자른다. 줄머리 [YYYY-MM-DD HH:MM:SS] 는 문자열 비교로 시간순이다.
+    _cron_cut=$(date -v-24H '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date -d '24 hours ago' '+%Y-%m-%d %H:%M:%S')
+    CRON_FAILS=$(tail -2000 "${LOGS_DIR}/cron.log" 2>/dev/null \
+        | awk -v cut="$_cron_cut" 'substr($0,2,19) >= cut && /ABORTED|FAILED/' | wc -l | tr -d ' ' || true)
     CRON_FAILS="${CRON_FAILS:-0}"
     log "METRIC: cron_fails=${CRON_FAILS}"
 else

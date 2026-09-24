@@ -100,14 +100,29 @@ const lancedb = (await import(process.env.LANCE_MOD)).default;
         return;
     }
     const rows = await table.query().select(['source']).limit(total).toArray();
-    // Count by top-level path prefix
-    const counts = {};
-    rows.forEach(r => {
-        // Normalize: 홈 아래 3단계, 단 jarvis/runtime 은 그 안이 전부라 한 단계 더 본다 (2026-09-10: 항상 100% 오탐 교정)
-        const m = r.source.match(/^(\/Users\/[^/]+\/jarvis\/runtime\/[^/]+)\//) || r.source.match(/^(\/Users\/[^/]+\/[^/]+\/[^/]+)\//);
-        const key = m ? m[1] : r.source;
-        counts[key] = (counts[key] || 0) + 1;
-    });
+    // Count by path prefix — 홈 아래 3단계에서 시작해, 85% 이상 먹는 묶음은 한 단계씩 더 쪼갠다.
+    //   2026-09-10 에 'jarvis/runtime' 경로를 하드코딩해 교정했으나 09-12 데이터가 '.openclaw-data/runtime'
+    //   으로 옮겨가며 같은 오탐(runtime 88%)이 매일 재발했다(2026-09-24 당직). 경로를 박지 않고
+    //   '데이터 뿌리 폴더 하나가 전부를 담는' 구조 자체를 풀어서 본다. 파일 단위까지 내려가도 쏠리면 그게 진짜 편향이다.
+    const prefixAt = (src, depth) => { const p = src.split('/'); return p.length > depth + 1 ? p.slice(0, depth + 1).join('/') : src; };
+    const depthOf = {};
+    let counts = {};
+    rows.forEach(r => { const k = prefixAt(r.source, 4); depthOf[k] = 4; counts[k] = (counts[k] || 0) + 1; });
+    for (let guard = 0; guard < 4; guard++) {
+        const heavy = Object.entries(counts).filter(([k, c]) => c * 100 / total >= 85 && depthOf[k] !== undefined && c > 1);
+        if (!heavy.length) break;
+        const heavySet = new Set(heavy.map(([k]) => k));
+        const next = {};
+        Object.entries(counts).forEach(([k, c]) => { if (!heavySet.has(k)) next[k] = c; });
+        rows.forEach(r => {
+            const parent = Object.keys(depthOf).find(k => heavySet.has(k) && (r.source === k || r.source.startsWith(k + '/')));
+            if (!parent) return;
+            const k = prefixAt(r.source, depthOf[parent] + 1);
+            depthOf[k] = depthOf[parent] + 1;
+            next[k] = (next[k] || 0) + 1;
+        });
+        counts = next;
+    }
     const issues = [];
     const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
     sorted.forEach(([path, count]) => {

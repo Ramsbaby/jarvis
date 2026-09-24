@@ -318,7 +318,7 @@ fix_dispatch() {
     local summary
     case "$defect_type" in
         circuit_open)   summary="Circuit breaker OPEN — name: $target" ;;
-        rag_stuck)      summary="RAG indexer 정지 (last RAG index >120분 전)" ;;
+        rag_stuck)      summary="RAG indexer 정지 (last RAG index >300분 전 — 4시간 주기 기준)" ;;
         heartbeat_dead) summary="Discord 봇 heartbeat ${target}s 정지 (>300s)" ;;
         la_failed)      summary="LaunchAgent failed: $target (status != 0)" ;;
         err_file_new)   summary="신규 .err 파일 발견: $target" ;;

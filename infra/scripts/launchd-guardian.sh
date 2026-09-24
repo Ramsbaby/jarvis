@@ -97,6 +97,33 @@ fi
 
 recovered=0
 trigger_missing=0   # [회차8] 발화조건이 사라진 서비스 수 — 로드 검사로는 안 잡히는 상태
+register_failed=0   # 등록 명령은 성공(rc=0)했는데 실제로는 안 올라온 서비스 수
+
+# [당직 2026-09-24] `launchctl disable` 로 꺼 둔 서비스는 되살리지 않는다.
+#   disable 은 크래시로 생기지 않는 사람의 의도다. 게다가 disable 상태에서 `launchctl load` 는
+#   rc=0 을 내고 아무것도 안 올려서, interview-verifier 를 09-22 부터 15분마다 "registered via load"
+#   라고 거짓 복구 로그만 남겼다(이틀간 222회). 등록 뒤에는 목록에 실제로 떴는지 다시 본다.
+DISABLED_LABELS=$(launchctl print-disabled "gui/${UID_NUM}" 2>/dev/null \
+    | awk -F'"' '/=> (disabled|true)/ {print $2}' || true)
+is_disabled() { [[ -n "$DISABLED_LABELS" ]] && grep -qxF "$1" <<<"$DISABLED_LABELS"; }
+is_listed() { [[ -n "$(launchctl list 2>/dev/null | awk -v s="$1" '$3 == s' || true)" ]]; }
+
+# 미로드 서비스를 등록하고, 실제로 목록에 떴을 때만 성공으로 센다.
+register_service() {
+    local service="$1" plist_file="$2" how=""
+    if launchctl bootstrap "gui/${UID_NUM}" "$plist_file" 2>/dev/null; then
+        how="bootstrap"
+    elif launchctl load "$plist_file" 2>/dev/null; then
+        how="load (fallback)"
+    fi
+    if [[ -n "$how" ]] && is_listed "$service"; then
+        log "RECOVERY: $service registered via $how"
+        recovered=$(( recovered + 1 ))
+    else
+        log "ERROR: Failed to register $service (명령 결과='${how:-실패}', 목록에 없음)"
+        register_failed=$(( register_failed + 1 ))
+    fi
+}
 
 check_loaded() {
     local service="$1"
@@ -108,16 +135,12 @@ check_loaded() {
     # unload된 서비스를 "loaded"로 오판 → bootstrap 경로 미발동 → 1시간 장애.
     status_line=$(launchctl list 2>/dev/null | awk -v s="$service" '$3 == s' || true)
     if [[ -z "$status_line" ]]; then
-        log "RECOVERY: $service not loaded, re-registering"
-        if launchctl bootstrap "gui/${UID_NUM}" "$plist_file" 2>/dev/null; then
-            log "RECOVERY: $service registered via bootstrap"
-        elif launchctl load "$plist_file" 2>/dev/null; then
-            log "RECOVERY: $service registered via load (fallback)"
-        else
-            log "ERROR: Failed to register $service"
+        if is_disabled "$service"; then
+            [[ "$is_heartbeat" == "true" ]] && log "SKIP: $service 는 disable 상태 — 의도적 정지로 보고 되살리지 않는다"
             return 0
         fi
-        recovered=$(( recovered + 1 ))
+        log "RECOVERY: $service not loaded, re-registering"
+        register_service "$service" "$plist_file"
     fi
 }
 
@@ -128,16 +151,12 @@ for service in "${KEEPALIVE_SERVICES[@]}"; do
     # 동일 부분매칭 버그 방지 — awk로 Label 정확 일치만 매칭.
     status_line=$(launchctl list 2>/dev/null | awk -v s="$service" '$3 == s' || true)
     if [[ -z "$status_line" ]]; then
-        log "RECOVERY: $service not loaded, re-registering"
-        if launchctl bootstrap "gui/${UID_NUM}" "$plist_file" 2>/dev/null; then
-            log "RECOVERY: $service registered via bootstrap"
-        elif launchctl load "$plist_file" 2>/dev/null; then
-            log "RECOVERY: $service registered via load (fallback)"
-        else
-            log "ERROR: Failed to register $service"
+        if is_disabled "$service"; then
+            [[ "$is_heartbeat" == "true" ]] && log "SKIP: $service 는 disable 상태 — 의도적 정지로 보고 되살리지 않는다"
             continue
         fi
-        recovered=$(( recovered + 1 ))
+        log "RECOVERY: $service not loaded, re-registering"
+        register_service "$service" "$plist_file"
     else
         pid=$(echo "$status_line" | awk '{print $1}')
         if [[ "$pid" == "-" ]]; then
@@ -261,6 +280,10 @@ fi
 #   조용히 로그만 남기면 2026-04 calendar-alert 처럼 넉 달을 모른 채 지난다.
 if (( trigger_missing > 0 )); then
     echo "[guardian] 발화조건 없는 서비스 ${trigger_missing}건 — launchd 에 로드돼 있어도 실행되지 않는다" >&2
+    exit 1
+fi
+if (( register_failed > 0 )); then
+    echo "[guardian] 재등록했는데 올라오지 않은 서비스 ${register_failed}건 — 로그의 ERROR 줄 확인" >&2
     exit 1
 fi
 exit 0
