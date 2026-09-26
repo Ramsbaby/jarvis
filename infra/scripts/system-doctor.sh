@@ -519,6 +519,9 @@ if command -v jq >/dev/null 2>&1; then
   yellow_items=$(awk -F'\t' '$2=="WARN"{print $1}' "$RESULTS_TMP" | jq -R . | jq -sc .)
   metrics=$(awk -F'\t' '{print $1 "\t" tolower($2)}' "$RESULTS_TMP" \
     | jq -Rn '[inputs | split("\t") | {key: .[0], value: .[1]}] | from_entries')
+  # 2026-09-26: 감지기(orchestrator-scan.py scan_doctor)가 이 원장을 읽어 당직에게 넘긴다 — 무엇이 왜 이상한지도 적는다.
+  notes=$(awk -F'\t' '$2!="OK"{print $1 "\t" $3}' "$RESULTS_TMP" \
+    | jq -Rn '[inputs | split("\t") | {key: .[0], value: (.[1] // "")}] | from_entries')
   if jq -cn \
        --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
        --arg overall "$overall" \
@@ -530,9 +533,10 @@ if command -v jq >/dev/null 2>&1; then
        --argjson red_items "$red_items" \
        --argjson yellow_items "$yellow_items" \
        --argjson metrics "$metrics" \
+       --argjson notes "$notes" \
        '{ts:$ts, type:"cron-scan", runner:"system-doctor.sh", overall:$overall,
          red:$red, yellow:$yellow, ok:$ok, warn:$warn, fail:$fail,
-         red_items:$red_items, yellow_items:$yellow_items, metrics:$metrics}' \
+         red_items:$red_items, yellow_items:$yellow_items, metrics:$metrics, notes:$notes}' \
        >> "$LEDGER" 2>>"$LOG"; then
     log "ledger appended ($overall red=$fail_count yellow=$warn_count ok=$ok) → $LEDGER"
   else
@@ -567,6 +571,16 @@ ${OKSUMMARY}"
 if [[ "${JARVIS_NO_EXTERNAL:-0}" == "1" ]]; then
   log "검증 실행(JARVIS_NO_EXTERNAL=1) — 알림 게이트·송출 생략"
   printf '%s\n' "$REPORT"
+  exit 0
+fi
+
+# ── 2026-09-26: 닥터는 더 이상 주인님께 직접 보내지 않는다 ─────────────────────
+# 기록상 닥터가 직접 보낸 알림은 09-23 긴급 1건뿐이었고 그마저 거짓 경보였다(일부러 끈 서비스를 "죽음"으로 셈).
+# 같은 이상이 이어지면 "무변화"로 입을 닫아, 진짜 문제도 사흘씩 묻혔다. 업계 표준(구글 SRE: 사람을 부르는 알림은
+# 판단이 필요한 것만, 한 통로로 모아 중복 제거)에 맞춰 닥터는 센서가 된다 — 원장만 남기고,
+# 감지기(orchestrator-scan.py scan_doctor)가 읽어 당직 AI 가 진위를 가리고 고친다. 되살리기: DOCTOR_DIRECT_ALERT=1.
+if [[ "${DOCTOR_DIRECT_ALERT:-0}" != "1" ]]; then
+  log "원장 기록 완료 — 판정·수리는 감지기→당직 통로가 맡는다(직접 송출 안 함, ${overall})"
   exit 0
 fi
 
