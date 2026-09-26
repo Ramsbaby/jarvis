@@ -179,7 +179,9 @@ log(`보고서 저장: ${reportPath}`);
 try {
   appendFileSync(
     LEDGER_PATH,
-    JSON.stringify({ ts: ts(), type: 'scan', task: 'age-mem-discard', orphanDeleted, staleCount }) + '\n',
+    // 2026-09-19: type 'scan' → 'event'. 'scan' 은 /doctor 슬래시 점검 전용 스키마(overall/red/yellow 필수)라
+    // 이 행이 섞이면 주간 감사(doctor-ledger-audit.sh)와 신선도 판정이 null 행을 점검 결과로 읽는다.
+    JSON.stringify({ ts: ts(), type: 'event', task: 'age-mem-discard', orphanDeleted, staleCount }) + '\n',
     'utf-8'
   );
 } catch { /* ledger 실패는 무시 */ }

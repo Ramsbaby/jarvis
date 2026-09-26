@@ -34,8 +34,22 @@ audit_mcp() {
     [ -z "$srv" ] && continue
     case "$srv" in
       workgroup|nexus)
-        pid=$(pgrep -f "mcp-${srv}" 2>/dev/null | head -1 || true)
-        if [ -n "$pid" ]; then ok "$srv: PID=$pid"; else warn "$srv: NOT_RUNNING (persistent stdio 기대)"; fi
+        # 2026-09-19 정정: nexus 는 ~/.mcp.json 의 `node ~/.jarvis/lib/mcp-nexus.mjs` — 클로드 코드 세션이
+        # 필요할 때 띄우는 stdio 서버다. 상주 프로세스가 아니므로 PID 부재는 정상이다.
+        # (종전 "persistent stdio 기대"가 세션이 없을 때마다 ⚠️ 를 냈다.)
+        # 대신 "띄울 수 있는가"를 본다: 등록된 스크립트가 실재하고 node 가 파싱하는지.
+        script=$(jq -r --arg s "$srv" '.mcpServers[$s].args[]? | select(endswith(".mjs") or endswith(".js"))' "$MCP_JSON" 2>/dev/null | head -1 || true)
+        script="${script/#\~/$HOME}"
+        if [ -z "$script" ]; then
+          warn "$srv: 실행 스크립트를 .mcp.json 에서 못 찾음"
+        elif [ ! -f "$script" ]; then
+          warn "$srv: 스크립트 없음 — $script"
+        elif command -v node >/dev/null 2>&1 && ! node --check "$script" >/dev/null 2>&1; then
+          warn "$srv: 구문 오류 — $script"
+        else
+          pid=$(pgrep -f "mcp-${srv}" 2>/dev/null | head -1 || true)
+          ok "$srv: stdio on-demand · 스크립트 실재${pid:+ · 현재 세션 PID=$pid}"
+        fi
         ;;
       serena*)
         pid=$(pgrep -f "serena.*start-mcp-server" 2>/dev/null | head -1 || true)

@@ -171,7 +171,17 @@ main() {
         fi
     done
 
-    # 12. 정리 후 메모리 상태
+    # 12. 노드 exec 장시간 실행 기록 retention — 7일 (node-long-run.sh 산출물)
+    local node_long_run="${HOME}/.openclaw-data/runtime/node-long-run"
+    if [[ -d "$node_long_run" ]]; then
+        local nlr_deleted
+        nlr_deleted=$(find "$node_long_run" -mindepth 1 -maxdepth 1 -type d -mtime +7 -print -exec rm -rf {} + 2>/dev/null | wc -l | tr -d ' ')
+        if (( nlr_deleted > 0 )); then
+            _log "노드 장시간 실행 기록 retention: ${nlr_deleted}개 삭제 (7일 기준)"
+        fi
+    fi
+
+    # 13. 정리 후 메모리 상태
     sleep 2
     local mem_after
     mem_after=$(get_mem_free_pct)
