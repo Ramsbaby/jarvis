@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
-# tqqq-monitor.sh — Yahoo Finance v8에서 TQQQ/SOXL/NVDA/VIX 시세 조회
+# market-monitor.sh — Yahoo Finance v8에서 SOXL/NVDA/VIX 시세 조회
 # WebSearch 불필요. python3 + urllib만 사용.
 set -euo pipefail
 
-STOP_LOSS=37
-
-python3 - "$STOP_LOSS" << 'PYEOF'
-import urllib.request, json, sys
+python3 - << 'PYEOF'
+import urllib.request, json
 from datetime import datetime, timezone, timedelta
 
-STOP_LOSS = float(sys.argv[1])
 KST = timezone(timedelta(hours=9))
 now_kst = datetime.now(KST).strftime("%H:%M")
 
@@ -30,7 +27,6 @@ def get_quote(sym):
     return price, chg, pct
 
 try:
-    tqqq_p, tqqq_c, tqqq_pct = get_quote("TQQQ")
     soxl_p, soxl_c, soxl_pct = get_quote("SOXL")
     nvda_p, nvda_c, nvda_pct = get_quote("NVDA")
     vix_p,  vix_c,  vix_pct  = get_quote("%5EVIX")
@@ -53,7 +49,6 @@ else:
 
 lines = [
     f"📊 시세 현황 [{now_kst} KST]",
-    fmt_line("TQQQ", tqqq_p, tqqq_c, tqqq_pct),
     fmt_line("SOXL", soxl_p, soxl_c, soxl_pct),
     fmt_line("NVDA", nvda_p, nvda_c, nvda_pct),
     "",
@@ -63,14 +58,6 @@ lines = [
 
 # 주의사항
 warnings = []
-if tqqq_p > 0 and tqqq_p <= STOP_LOSS:
-    diff = STOP_LOSS - tqqq_p
-    warnings.append(f"🔴 TQQQ 손절선(${STOP_LOSS:.0f}) 하회 — 현재 ${tqqq_p:.2f} (${diff:.2f} 아래). 오너 즉시 판단 필요.")
-elif tqqq_p > 0 and tqqq_p <= STOP_LOSS * 1.05:
-    diff = tqqq_p - STOP_LOSS
-    warnings.append(f"🟡 TQQQ 손절선(${STOP_LOSS:.0f}) 근접 — 여유 ${diff:.2f} (+{diff/STOP_LOSS*100:.1f}%)")
-if abs(tqqq_pct) >= 5:
-    warnings.append(f"⚡ TQQQ {abs(tqqq_pct):.1f}% 급{'등' if tqqq_pct > 0 else '락'} 감지")
 if abs(soxl_pct) >= 5:
     warnings.append(f"⚡ SOXL {abs(soxl_pct):.1f}% 급{'등' if soxl_pct > 0 else '락'} 감지")
 
@@ -80,15 +67,13 @@ if warnings:
 import json as _json
 
 # --- EMBED_DATA: Discord rich embed 카드 ---
-# 색상: 손절선 하회=빨강, 근접=주황, 정상=초록
-if tqqq_p > 0 and tqqq_p <= STOP_LOSS:
-    _color = 15158332   # red
-elif tqqq_p > 0 and tqqq_p <= STOP_LOSS * 1.05:
-    _color = 16744272   # orange
-elif tqqq_pct >= 2:
+# 색상: SOXL 기준
+if soxl_pct >= 2:
     _color = 3066993    # green
-else:
+elif soxl_pct >= 0:
     _color = 10070709   # grey-blue (neutral)
+else:
+    _color = 15158332   # red
 
 def _pct_str(pct):
     arrow = "▲" if pct >= 0 else "▼"
@@ -98,12 +83,11 @@ _embed = {
     "title": f"📊 시세 현황  [{now_kst} KST]",
     "color": _color,
     "fields": [
-        {"name": "TQQQ", "value": f"**${tqqq_p:.2f}**  {_pct_str(tqqq_pct)}", "inline": True},
         {"name": "SOXL", "value": f"**${soxl_p:.2f}**  {_pct_str(soxl_pct)}", "inline": True},
         {"name": "NVDA", "value": f"**${nvda_p:.2f}**  {_pct_str(nvda_pct)}", "inline": True},
         {"name": "VIX", "value": mood, "inline": False},
     ],
-    "footer": {"text": f"손절선 ${STOP_LOSS:.0f}  |  Jarvis Market Monitor"}
+    "footer": {"text": "Jarvis Market Monitor"}
 }
 if warnings:
     _embed["fields"].append({"name": "⚠️ 주의사항", "value": "\n".join(warnings), "inline": False})
@@ -117,11 +101,11 @@ def _bar_color(pct):
 _chart = {
     "type": "bar",
     "data": {
-        "labels": ["TQQQ", "SOXL", "NVDA"],
+        "labels": ["SOXL", "NVDA"],
         "datasets": [{
             "label": "일간 변동률 (%)",
-            "data": [round(tqqq_pct,2), round(soxl_pct,2), round(nvda_pct,2)],
-            "backgroundColor": [_bar_color(tqqq_pct), _bar_color(soxl_pct), _bar_color(nvda_pct)]
+            "data": [round(soxl_pct,2), round(nvda_pct,2)],
+            "backgroundColor": [_bar_color(soxl_pct), _bar_color(nvda_pct)]
         }]
     },
     "options": {
