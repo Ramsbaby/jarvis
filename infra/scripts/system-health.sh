@@ -113,8 +113,9 @@ log "health.json updated successfully"
 ALERTS=()
 SEVERITY="ok"
 
-(( DISK_PCT >= 90 ))      && ALERTS+=("🔴 디스크 ${DISK_PCT}% (임계: 90%)") && SEVERITY="crit" || true
-(( DISK_PCT >= 80 && DISK_PCT < 90 )) && ALERTS+=("⚠️ 디스크 ${DISK_PCT}%") && [[ "$SEVERITY" == "ok" ]] && SEVERITY="warn" || true
+# 2026-09-27 당직: 디스크 경보는 감지기(orchestrator-scan disk.warn 85%·disk.crit 95%)가 맡는다. 여기서도 울리면
+# 90% 이상인 동안 매시간 같은 crit 가 한 번 더 나가 당직을 헛깨우고 억제 알림 최대 소음원이 됐다(09-26 18시~ 12회).
+# 수치는 health.json(disk_percent)에 계속 남긴다 — 읽는 곳이 많다.
 (( MEM_FREE_PCT < 10 ))   && ALERTS+=("🔴 메모리 여유 ${MEM_FREE_PCT}% (임계: 10%)") && SEVERITY="crit" || true
 (( MEM_FREE_PCT < 20 && MEM_FREE_PCT >= 10 )) && ALERTS+=("⚠️ 메모리 여유 ${MEM_FREE_PCT}%") && [[ "$SEVERITY" == "ok" ]] && SEVERITY="warn" || true
 (( CRON_FAILS >= 3 ))     && ALERTS+=("⚠️ 크론 최근 실패 ${CRON_FAILS}건") && [[ "$SEVERITY" == "ok" ]] && SEVERITY="warn" || true
