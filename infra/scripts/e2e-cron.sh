@@ -50,7 +50,10 @@ MAX_RETRIES=2
 RETRY_COUNT=0
 
 while [[ $RETRY_COUNT -le $MAX_RETRIES ]]; do
-  OUTPUT=$("${SCRIPTS_DIR}/e2e-test.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g') || true
+  # [2026-09-26] 예전엔 `$(...) || true` 바로 뒤에서 $? 를 읽어 항상 0 이었고, 그 값은 어디서도 쓰이지 않았다.
+  #   판정은 ❌ 줄 수로만 했으므로 **스위트가 중간에 죽으면 실패 줄 없이 "통과"로 기록**됐다.
+  #   파이프 앞쪽(e2e-test.sh)의 종료코드를 직접 받는다(set -e 가 없어 || true 는 필요 없다).
+  OUTPUT=$("${SCRIPTS_DIR}/e2e-test.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; exit "${PIPESTATUS[0]}")
   E2E_EXIT_CODE=$?
 
   # 실패한 항목에서 "Discord bot running" 만 있으면 봇 재시작 후 재시도
@@ -80,14 +83,37 @@ done
 # 편집 중이던 스크립트 2건이 FAIL 로 잡혀 코더 티켓이 만들어졌고 완성 후 두 스위트 모두 통과했다
 # (inc-20260905-8a26d2b6). jarvis-auditor 는 dirty 표식이 있으면 FAIL 을 SUSPECT 로만 보고하고 티켓을 만들지 않는다.
 # 저장소 루트 기준으로 본다 — 일부 스크립트는 JARVIS_HOME 을 runtime/ 으로 export 하므로 (jarvis-auditor.sh) 그대로 쓰면 pathspec 이 빗나가 fail-open 된다
-REPO_ROOT=$(git -C "$JARVIS_HOME" rev-parse --show-toplevel 2>/dev/null || echo "$JARVIS_HOME")
-DIRTY_FILES=$(git -C "$REPO_ROOT" status --porcelain -- infra 2>/dev/null | awk '{print $2}' || true)
+# [2026-09-26] 위 주의가 경고한 바로 그 일이 이 줄에서 났다 — 앞에서 읽은 runtime/.env 가 JARVIS_HOME 을
+#   ~/.jarvis(런타임, git 아님)로 덮어써 git 이 실패했고, 실패가 빈 목록 = "clean" 으로 읽혔다.
+#   infra 에 미커밋 파일이 4~7개 있던 09-19~26 내내 결과 첫 줄은 "clean" 이었다(보호 장치가 꺼져 있었다).
+#   저장소는 이 스크립트 자신의 위치로 찾고(env 와 무관), git 이 실패하면 clean 이라고 쓰지 않는다.
+SELF_DIR="$(cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT=$(git -C "$SELF_DIR" rev-parse --show-toplevel 2>/dev/null || true)
+DIRTY_FILES=""
+if [[ -n "$REPO_ROOT" ]] && DIRTY_FILES=$(git -C "$REPO_ROOT" status --porcelain -- infra 2>/dev/null); then
+  DIRTY_FILES=$(printf '%s\n' "$DIRTY_FILES" | awk 'NF{print $2}')
+else
+  REPO_ROOT=""
+fi
 DIRTY_COUNT=$(printf '%s' "$DIRTY_FILES" | grep -c . || true)
-if [[ "$DIRTY_COUNT" -gt 0 ]]; then
+if [[ -z "$REPO_ROOT" ]]; then
+  TREE_LINE="# TREE: dirty (?) — 저장소 상태 확인 실패(${SELF_DIR}) — 모르면 편집 중으로 본다"
+  log "TREE: 확인 실패 — dirty 로 기록(FAIL 은 SUSPECT)"
+elif [[ "$DIRTY_COUNT" -gt 0 ]]; then
   TREE_LINE="# TREE: dirty (${DIRTY_COUNT}) — $(printf '%s' "$DIRTY_FILES" | head -5 | tr '\n' ' ')"
   log "TREE: dirty (${DIRTY_COUNT} files in infra/) — FAIL 은 SUSPECT 로 취급됨"
 else
   TREE_LINE="# TREE: clean"
+fi
+
+# 스위트가 끝까지 못 갔으면(요약 줄 없음) 또는 실패 줄 없이 비정상 종료했으면 그 자체를 실패 1건으로 센다.
+#   e2e-test.sh 는 실패가 있을 때만 1 로 끝난다 — 실패 줄이 있는 1 은 정상 경로다.
+if ! grep -q "Results:" <<<"$OUTPUT"; then
+  OUTPUT="${OUTPUT}
+❌ FAIL: e2e suite aborted before summary (rc=${E2E_EXIT_CODE})"
+elif [[ "$E2E_EXIT_CODE" -ne 0 ]] && ! grep -q "❌ FAIL" <<<"$OUTPUT"; then
+  OUTPUT="${OUTPUT}
+❌ FAIL: e2e suite exited rc=${E2E_EXIT_CODE} without a FAIL line"
 fi
 
 # 결과 파일 저장
@@ -105,7 +131,7 @@ if [[ $FAIL_COUNT -gt 0 ]]; then SUMMARY="${SUMMARY}, ${FAIL_COUNT} FAILED"; fi
 
 # Determine exit code (0 if no failures, 1 if there are failures)
 if [[ $FAIL_COUNT -gt 0 ]]; then
-    log "RESULT: ${SUMMARY} (exit: 1)"
+    log "RESULT: ${SUMMARY} (exit: 1, suite rc=${E2E_EXIT_CODE})"
 
     # 실패 항목 추출
     FAILED_ITEMS=$(echo "$OUTPUT" | grep "❌ FAIL" | sed 's/❌ FAIL: //' | tr '\n' ', ' | sed 's/,$//')
@@ -116,7 +142,9 @@ if [[ $FAIL_COUNT -gt 0 ]]; then
     # ntfy 에스컬레이션
     NTFY_SERVER=$(jq -r '.ntfy.server' "$MONITORING" 2>/dev/null || echo "https://ntfy.sh")
     NTFY_TOPIC=$(jq -r '.ntfy.topic' "$MONITORING" 2>/dev/null || echo "")
-    if [[ -n "$NTFY_TOPIC" ]]; then
+    if [[ "${JARVIS_NO_EXTERNAL:-}" == "1" ]]; then
+        log "NO_EXTERNAL — ntfy 에스컬레이션 생략"
+    elif [[ -n "$NTFY_TOPIC" && "$NTFY_TOPIC" != "null" ]]; then
         curl -sf -m 5 \
             -H "Title: ⚠️ E2E 실패" \
             -H "Priority: high" \
@@ -129,7 +157,7 @@ if [[ $FAIL_COUNT -gt 0 ]]; then
     find "$(dirname "$RESULT_FILE")" -name "*.txt" -mtime +30 -delete 2>/dev/null || true
     exit 1
 else
-    log "RESULT: ${SUMMARY} (exit: 0)"
+    log "RESULT: ${SUMMARY} (exit: 0, suite rc=${E2E_EXIT_CODE})"
     log "OK: ${SUMMARY}"
 
     # 오래된 결과 정리 (30일 초과)

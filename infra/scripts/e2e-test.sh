@@ -152,19 +152,23 @@ check "RAG query returns data" bash -c "
   done
   exit 1
 "
+# [2026-09-26] 모듈을 $BOT_HOME/discord/node_modules 에서 읽었는데 그 트리는 2026-09-10 디스코드 제거로 없다 —
+#   import 가 매번 죽어 09-13 부터 "not yet generated" WARN 으로 고정됐다(실측 비율은 335/111402 = 0.3%).
+#   RAG 가 실제로 쓰는 설치 위치(위 "LanceDB package installed" 와 같은 곳)로 옮기고,
+#   예외·테이블 없음을 조용한 통과(exit 0)로 삼키지 않는다 — 측정을 못 했으면 못 했다고 운다.
 warn_check "RAG deleted ratio < 40%" bash -c "
-NODE_PATH=$BOT_HOME/discord/node_modules node --input-type=module <<'JSEOF'
-import ldb from '$BOT_HOME/discord/node_modules/@lancedb/lancedb/dist/index.js';
+node --input-type=module <<'JSEOF'
+import ldb from '${JARVIS_ROOT}/rag/node_modules/@lancedb/lancedb/dist/index.js';
 try {
   const db = await ldb.connect('$BOT_HOME/rag/lancedb');
   const t = await db.openTable('documents').catch(() => null);
-  if (!t) process.exit(0);
+  if (!t) process.exit(1);
   const total = await t.countRows();
   if (total === 0) process.exit(0);
   const deleted = await t.countRows('deleted = true').catch(() => 0);
   const ratio = deleted / (total + deleted);
   process.exit(ratio < 0.4 ? 0 : 1);
-} catch { process.exit(0); }
+} catch { process.exit(1); }
 JSEOF
 "
 
@@ -201,8 +205,19 @@ _SCHED_INVENTORY=""
 _sched_load() {
   local cron_part="" openclaw_part=""
   cron_part="$(crontab -l 2>/dev/null | grep -v '^[[:space:]]*#')" || cron_part=""
+  # [2026-09-26] 표 출력(`cron list`)은 이름을 24자에서 자른다(`jarvis-automation-bro...`) — 긴 이름은 영영 안 맞는다.
+  #   JSON 으로 받아 이름 + 실행 명령을 한 줄씩 편다. 기본 필터가 "켜진 잡만"이다(107건 중 꺼진 것 0 실측).
   if [[ -x "${HOME}/bin/openclaw" ]]; then
-    openclaw_part="$("${HOME}/bin/openclaw" cron list 2>/dev/null)" || openclaw_part=""
+    openclaw_part="$("${HOME}/bin/openclaw" cron list --json 2>/dev/null | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+for j in (d if isinstance(d, list) else d.get("jobs", [])):
+    if j.get("enabled", True) is False:
+        continue
+    p = j.get("payload") or {}
+    cmd = p.get("argv") or p.get("command") or ""
+    print(j.get("name", ""), " ".join(cmd) if isinstance(cmd, list) else cmd)
+' 2>/dev/null)" || openclaw_part=""
   fi
   _SCHED_INVENTORY="${cron_part}
 ${openclaw_part}"
@@ -243,6 +258,60 @@ check_sched() {   # check_sched <표시명> <확장정규식> [tasks.json id]
   fi
   red "❌ FAIL: $name"; ((FAIL++)); return 1
 }
+
+# [2026-09-26] "not yet generated" 경고 10건이 09-13 부터 매일 똑같았다. 가려 보니 죽은 잡은 0건이고
+#   7건은 은퇴(09-09 미등록 고아 정리·09-10 디스코드 중지), 1건은 스크립트 잡으로 이관, 2건은 검사 자체가 깨져 있었다.
+#   고정된 경고는 경고가 아니다 — 진짜 누락이 생겨도 같은 줄에 묻힌다. 그래서 "살아 있는 잡의 산출물만" 요구한다.
+#   은퇴 목록을 여기에 박지 않는다. tasks.json 과 활성 스케줄이 정본이고, 되살리면 검사도 저절로 돌아온다.
+_task_state() {   # <task-id> → "enabled" | "disabled::사유" | "absent" | "unreadable"
+  python3 - "$1" "${E2E_TASKS_JSON:-${BOT_HOME}/config/tasks.json}" <<'PY' 2>/dev/null || echo unreadable
+import json, sys
+tid, path = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(open(path))
+except Exception:
+    print("unreadable")   # 정본을 못 읽으면 "은퇴"로 넘기지 않는다
+    sys.exit(0)
+ts = d.get("tasks", d) if isinstance(d, dict) else d
+if isinstance(ts, dict):
+    ts = list(ts.values())
+for t in ts:
+    if str(t.get("id", "")) == tid:
+        if t.get("enabled") is False:
+            print("disabled::" + str(t.get("_disabled_reason") or "사유 미기재"))
+        else:
+            print("enabled")
+        sys.exit(0)
+print("absent")
+PY
+}
+_retired_note() {   # <task-id> <state> → SKIP 사유
+  case "$2" in
+    disabled*) printf 'tasks.json enabled:false — %s' "${2#disabled::}" ;;
+    *)         printf 'tasks.json 정의 없음 · 활성 스케줄 없음 — 은퇴 (docs/plan/capability-ledger.md)' ;;
+  esac
+}
+# ctx_check <표시명> <task-id> <명령...> — 컨텍스트 파일은 옛 실행기(bot-cron.sh)가 tasks.json 의 켜진 태스크에만 읽는다.
+#   오픈클로 잡은 이 파일을 읽지 않는다(rag-health 는 2026-09-10 스크립트 잡으로 이관). 켜진 태스크인데 없으면 WARN.
+ctx_check() {
+  local name="$1" tid="$2" state; shift 2
+  if "$@" >/dev/null 2>&1; then green "✅ PASS: $name"; ((PASS++)); return 0; fi
+  state="$(_task_state "$tid")"
+  if [[ "$state" == "enabled" || "$state" == "unreadable" ]]; then
+    yellow "⚠️  WARN: $name — ${state/enabled/켜진 태스크(tasks.json $tid)인데 없다}"; ((WARN++)); return 1
+  fi
+  skip "$name ($(_retired_note "$tid" "$state"))"
+}
+# out_check <표시명> <task-id> <스케줄 정규식> <명령...> — 산출물은 어느 실행기든 살아 있으면 요구한다.
+out_check() {
+  local name="$1" tid="$2" pattern="$3" state; shift 3
+  if "$@" >/dev/null 2>&1; then green "✅ PASS: $name"; ((PASS++)); return 0; fi
+  state="$(_task_state "$tid")"
+  if [[ "$state" == "enabled" || "$state" == "unreadable" ]] || sched_has "$pattern"; then
+    yellow "⚠️  WARN: $name — 살아 있는 잡인데 산출물이 없다"; ((WARN++)); return 1
+  fi
+  skip "$name ($(_retired_note "$tid" "$state"))"
+}
 _sched_load
 
 echo ""
@@ -253,7 +322,9 @@ check_sched "e2e-cron.sh registered" 'e2e-cron' 'e2e-cron'
 # [2026-09-11] weekly-kpi 는 라이브 tasks.json·crontab·오픈클로 잡 어디에도 없다.
 # 남은 흔적은 effective-tasks.json 백업(최신 2026-08-12)과 autonomy-levels.md 문서뿐이고,
 # 스크립트(measure-kpi.sh)만 살아 있다. 폐지 기록이 없어 "없앴다"고 단정하지 않고 WARN 으로 남긴다.
-warn_check "weekly-kpi cron exists" sched_has 'weekly-kpi'
+# [2026-09-26] 폐지 기록을 찾았다 — 2026-09-09 tasks.json 에서 "미등록 고아"로 제거(capability-ledger.md),
+#   스크립트를 돌리던 measure-kpi 는 2026-09-10 "1회성 측정일 경과"로 중지. 둘 중 하나라도 되살리면 다시 요구한다.
+out_check "weekly-kpi cron exists" weekly-kpi 'weekly-kpi|measure-kpi' sched_has 'weekly-kpi|measure-kpi'
 check_sched "security-scan cron exists" 'security-scan' 'security-scan'
 check_sched "rag-health cron exists" 'rag-health' 'rag-health'
 
@@ -261,7 +332,7 @@ check_sched "rag-health cron exists" 'rag-health' 'rag-health'
 echo ""
 echo "▶ Phase 3~5 Context Files"
 for task in weekly-kpi monthly-review security-scan rag-health profile-weekly cost-monitor; do
-  warn_check "$task context exists" test -f "$BOT_HOME/context/$task.md"
+  ctx_check "$task context exists" "$task" test -f "$BOT_HOME/context/$task.md"
 done
 check "autonomy-levels.md exists" test -f "$BOT_HOME/config/autonomy-levels.md"
 ci_check "company-dna.md SSoT" test -f "$BOT_HOME/config/company-dna.md"
@@ -284,7 +355,7 @@ check "ask-claude.sh has cross-team context" grep -q "Cross-team Context" "$BOT_
 check "ask-claude.sh has insight filter" grep -q "system-health|rate-limit-check" "$BOT_HOME/lib/insight-recorder.sh"
 check "gen-inventory.sh exists" test -x "$BOT_HOME/scripts/gen-inventory.sh"
 check "cron-catalog.md exists" test -f "${VAULT_DIR:-$HOME/vault}/01-system/cron-catalog.md"
-warn_check "council reads shared-inbox" grep -q "shared-inbox" "$BOT_HOME/context/council-insight.md"
+ctx_check "council reads shared-inbox" council-insight grep -q "shared-inbox" "$BOT_HOME/context/council-insight.md"
 check "pending-tasks atomic write (renameSync)" grep -q "renameSync" "$BOT_HOME/discord/lib/handlers.js"
 check "apology cooldown implemented" grep -q "apologyCooldownFile" "$BOT_HOME/discord/discord-bot.js"
 check "active-session cleanup in finally" grep -q "active-session.*finally\|finally.*active-session\|activeProcesses.size === 0" "$BOT_HOME/discord/lib/handlers.js"
@@ -371,18 +442,35 @@ warn_check "wiki facts no duplicates" bash -c "
 "
 
 # 4. 위키 팩트 source 태그 존재 ([source:*] 없으면 감사 추적 불가)
-warn_check "wiki facts have source tags" bash -c "
-  missing=0
-  for f in '$BOT_HOME/wiki/'*/_facts.md; do
-    [[ -f \"\$f\" ]] || continue
-    no_tag=\$(grep -E '^- ' \"\$f\" | grep -cv '\[source:' || true)
-    missing=\$((missing + no_tag))
-  done
-  [[ \$missing -eq 0 ]]
-"
+# [2026-09-26] 태그는 2026-04-15 에 도입됐다(그날 줄이 섞여 있다). 그 전 날짜 줄 109개(ops, 04-14~15 디스코드 조각)와
+#   날짜 없는 손 메모 7줄(career)이 전체를 영구 WARN 으로 붙잡아, 추출기가 태그를 빠뜨리는 회귀가 나도 안 보였다.
+#   추출기는 항상 "- [YYYY-MM-DD] [source:…]" 로 쓴다 → **도입 뒤 날짜인데 태그 없는 줄만** 회귀로 센다.
+#   유산 줄 수는 통과 줄에 적어 둔다(없어진 게 아니라 알고 넘기는 것이다).
+wiki_untagged() {   # <wiki-dir> → "recent=N legacy=M", recent>0 이면 1
+  python3 - "$1" <<'PY'
+import glob, os, re, sys
+recent = legacy = 0
+for f in glob.glob(os.path.join(sys.argv[1], "*", "_facts.md")):
+    for line in open(f, encoding="utf-8", errors="ignore"):
+        if not line.startswith("- ") or "[source:" in line:
+            continue
+        m = re.match(r"- \[(\d{4}-\d{2}-\d{2})\]", line)
+        if m and m.group(1) > "2026-04-15":
+            recent += 1
+        else:
+            legacy += 1
+print(f"recent={recent} legacy={legacy}")
+sys.exit(1 if recent else 0)
+PY
+}
+if _wt="$(wiki_untagged "$BOT_HOME/wiki")"; then
+  green "✅ PASS: wiki facts have source tags (도입 뒤 누락 0 · 도입 전 유산 ${_wt#*legacy=}줄)"; ((PASS++))
+else
+  yellow "⚠️  WARN: wiki facts have source tags — 도입(2026-04-15) 뒤 태그 없는 줄 ${_wt%% *} · 추출기 회귀 의심"; ((WARN++))
+fi
 
 # 5. bot-quality-check 최근 실행 (24시간 내 로그 갱신 확인)
-warn_check "bot-quality-check ran (last 24h)" bash -c "
+out_check "bot-quality-check ran (last 24h)" bot-quality-check 'bot-quality' bash -c "
   log='$BOT_HOME/logs/bot-quality-check.log'
   [[ -f \"\$log\" ]] && find \"\$log\" -mmin -1440 | grep -q .
 "
@@ -446,6 +534,7 @@ suite_check "context-state gate"           "$BOT_HOME/scripts/test-context-state
 suite_check "hook canary"                  "$BOT_HOME/scripts/hook-canary-test.sh"
 suite_check "agent write boundary hook"    "$_HOOKS_DIR/jarvis-agent-write-boundary.test.sh"
 suite_check "runtime destruction guard"    "$_HOOKS_DIR/jarvis-runtime-guard.test.sh"
+suite_check "e2e harness (retired/abort)"  "$BOT_HOME/scripts/test-e2e-harness.sh"
 
 # --- Tasks Schema Validation ---
 echo ""
