@@ -19,7 +19,7 @@
  *   node owner-judgments-extract.mjs [--dry-run] [--days <n>]
  */
 
-import { readFileSync, readdirSync, existsSync, mkdirSync, appendFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, mkdirSync, appendFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -105,6 +105,57 @@ function collectDiscordHistory(days) {
 }
 
 /**
+ * 최근 N일의 클로드 CLI 대화 inbox(claude-cli-rag-sync.mjs 산출)에서 주인님 발언만 수집.
+ * discord-history 는 옛 디스코드 봇이 쓰던 곳이라 09-10 봇 정지 뒤 끊겼다 — 지금 대화는 여기로 들어온다.
+ * [사용자] 칸에는 크론 프롬프트·세션 요약·세션 간 메시지·슬래시 명령도 섞여 있어 걸러낸다.
+ */
+const NOT_OWNER_TURN = [
+  /^\[cron:/, /^\[Inter-session message\]/, /isUser=false/,
+  /^This session is being continued/, /^Continue the conversation/, /^An async command/,
+  /^<local-command-caveat>/, /^<command-name>/, /^<local-command-stdout>/,
+  /^- /, // 세션 요약의 불릿 조각
+];
+
+function collectClaudeCliInbox(days) {
+  const dir = join(BOT_HOME, 'inbox');
+  if (!existsSync(dir)) return '';
+  const cutoff = Date.now() - days * 24 * 3600 * 1000;
+  const files = readdirSync(dir)
+    .filter(f => /^claude-cli-.*\.md$/.test(f))
+    .map(f => ({ f, mtime: statSync(join(dir, f)).mtimeMs }))
+    .filter(x => x.mtime >= cutoff)
+    .sort((a, b) => b.mtime - a.mtime); // 최신 먼저
+
+  const chunks = [];
+  let total = 0;
+  for (const { f } of files) {
+    if (total >= MAX_INPUT_CHARS / 2) break;
+    const parts = readFileSync(join(dir, f), 'utf-8').split(/^## \*\*\[([^\]]+)\]\*\*.*$/m);
+    const turns = [];
+    for (let i = 1; i < parts.length; i += 2) {
+      if (parts[i] !== '사용자') continue;
+      const text = parts[i + 1]
+        .replace(/<<<EXTERNAL_UNTRUSTED_CONTENT[\s\S]*?<<<END_EXTERNAL_UNTRUSTED_CONTENT[^>]*>>>/g, '')
+        .replace(/<file[\s\S]*?<\/file>/g, '')
+        .replace(/Conversation info:[\s\S]*?```[\s\S]*?```/g, '')
+        .replace(/\[media attached:[^\]]*\]/g, '')
+        .replace(/^OpenClaw resumed this CLI session[^\n]*\n?/m, '')
+        .replace(/\n---\s*$/, '')
+        .trim();
+      if (!text || NOT_OWNER_TURN.some(re => re.test(text))) continue;
+      turns.push(text.replace(/\s+/g, ' ').slice(0, 200));
+    }
+    if (turns.length) {
+      const body = turns.slice(0, 30).join('\n');
+      chunks.push(`=== ${f} ===\n${body}`);
+      total += body.length;
+    }
+  }
+  log('info', `claude-cli inbox: ${files.length}개 파일 중 ${chunks.length}개에서 주인님 발언 수집`);
+  return chunks.join('\n\n');
+}
+
+/**
  * wiki/owner/_facts.md 최근 항목 수집.
  */
 function collectOwnerFacts() {
@@ -153,7 +204,7 @@ function callHaiku(prompt, timeoutMs = HAIKU_TIMEOUT_MS) {
  */
 async function extractJudgmentPatterns(historyText, factsText) {
   const sourceText = [
-    historyText && `## Discord 발화 (최근 ${daysArg}일)\n${historyText.slice(0, MAX_INPUT_CHARS * 0.6)}`,
+    historyText && `## 오너 대화 발화 (최근 ${daysArg}일)\n${historyText.slice(0, MAX_INPUT_CHARS * 0.6)}`,
     factsText && `## 기존 wiki 기록\n${factsText.slice(0, MAX_INPUT_CHARS * 0.4)}`,
   ].filter(Boolean).join('\n\n');
 
@@ -207,7 +258,8 @@ async function main() {
   log('info', `판단 패턴 증류 시작`, { dryRun, days: daysArg });
 
   // 1. 소스 수집
-  const historyText = collectDiscordHistory(daysArg);
+  const historyText = [collectDiscordHistory(daysArg), collectClaudeCliInbox(daysArg)]
+    .filter(Boolean).join('\n\n');
   const factsText   = collectOwnerFacts();
   log('info', '소스 수집 완료', {
     historyChars: historyText.length,
@@ -217,7 +269,7 @@ async function main() {
   // 대화 원천이 비면 멈춘다. _facts.md 만으로 돌리면 적재 대상을 입력으로 다시 증류하는 순환이 되어
   // 근거 없는 재진술만 쌓인다(2026-09-27: 원천이 09-10 봇 정지로 끊긴 채 10건이 그렇게 들어갔다).
   if (!historyText) {
-    log('warn', '대화 원천(discord-history) 비어 있음 — 순환 증류 방지로 종료');
+    log('warn', '대화 원천(discord-history·claude-cli inbox) 비어 있음 — 순환 증류 방지로 종료');
     process.exit(0);
   }
 
