@@ -214,8 +214,10 @@ async function main() {
     factsChars: factsText.length,
   });
 
-  if (!historyText && !factsText) {
-    log('warn', '처리할 소스 없음 — 종료');
+  // 대화 원천이 비면 멈춘다. _facts.md 만으로 돌리면 적재 대상을 입력으로 다시 증류하는 순환이 되어
+  // 근거 없는 재진술만 쌓인다(2026-09-27: 원천이 09-10 봇 정지로 끊긴 채 10건이 그렇게 들어갔다).
+  if (!historyText) {
+    log('warn', '대화 원천(discord-history) 비어 있음 — 순환 증류 방지로 종료');
     process.exit(0);
   }
 
