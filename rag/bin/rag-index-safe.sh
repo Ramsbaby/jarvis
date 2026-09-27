@@ -5,6 +5,12 @@
 
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}"
 export ORT_NUM_THREADS="${ORT_NUM_THREADS:-2}"
+# 임베딩 동시 요청 = 파일 선준비(3) × 파일당 묶음(2) = 최대 6 인데 올라마는 하나씩 처리하고
+# 묶음(50조각·약 10만 자) 하나에 약 15초 걸린다 → 줄 선 마지막 묶음이 60초 대기 시간을 넘겨
+# 큰 파일이 늘 실패했다(2026-09-27 실측: 한가할 때 25조각 4.1초, 그런데 색인 중엔 60초 초과 반복).
+# 예전엔 그 실패가 0벡터로 저장돼 막연한 질문마다 쓰레기가 상위에 올랐다. 파일당 1묶음·대기 5분으로 맞춘다.
+export RAG_EMBED_BATCH_CONCURRENCY="${RAG_EMBED_BATCH_CONCURRENCY:-1}"
+export RAG_EMBED_TIMEOUT_MS="${RAG_EMBED_TIMEOUT_MS:-300000}"
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${HOME}/.local/bin:${PATH}"
 
 # RAG 스크립트 위치 자동 감지 (이 스크립트 기준 상대경로)
