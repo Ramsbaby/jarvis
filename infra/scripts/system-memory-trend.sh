@@ -146,11 +146,18 @@ fi
 # ============================================================
 CRIT_SWAP="${MEMORY_TREND_CRIT_SWAP:-85}"
 CRIT_UNUSED="${MEMORY_TREND_CRIT_UNUSED_MB:-300}"
+#   [2026-09-25] top 의 unused 는 빈 페이지만 센다 — macOS 는 남는 메모리를 캐시로 채우므로
+#     평상시에도 100MB 대로 내려간다(09-21·23·25 경보 때 커널 여유율 67%, swap 증가 0).
+#     그래서 unused 기준은 커널이 보는 여유율(kern.memorystatus_level)도 낮을 때만 울린다.
+#     여유율을 못 읽으면(0) 예전처럼 unused 만으로 판단한다.
+MEM_LEVEL=$(sysctl -n kern.memorystatus_level 2>/dev/null || echo 0)
+[[ "$MEM_LEVEL" =~ ^[0-9]+$ ]] || MEM_LEVEL=0
+CRIT_LEVEL="${MEMORY_TREND_CRIT_LEVEL:-20}"
 CRIT_REASON=""
 (( SWAP_PCT >= CRIT_SWAP )) && CRIT_REASON="swap ${SWAP_PCT}% (임계 ${CRIT_SWAP}%)"
-if (( UNUSED_MB < CRIT_UNUSED )); then
+if (( UNUSED_MB < CRIT_UNUSED )) && (( MEM_LEVEL == 0 || MEM_LEVEL < CRIT_LEVEL )); then
   [[ -n "$CRIT_REASON" ]] && CRIT_REASON="${CRIT_REASON} + "
-  CRIT_REASON="${CRIT_REASON}여유메모리 ${UNUSED_MB}MB (임계 ${CRIT_UNUSED}MB)"
+  CRIT_REASON="${CRIT_REASON}여유메모리 ${UNUSED_MB}MB (임계 ${CRIT_UNUSED}MB) · 커널 여유율 ${MEM_LEVEL}%"
 fi
 if [[ -n "$CRIT_REASON" ]]; then
   TOP3=$(ps -axo rss,comm | sort -nrk1 | head -3 | awk '{printf "%s(%dMB) ", substr($2,length($2)-18), $1/1024}')
