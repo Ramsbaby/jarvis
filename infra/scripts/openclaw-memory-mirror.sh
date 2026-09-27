@@ -58,15 +58,23 @@ for d in "$HOME"/.claude/projects/-Users-ramsbaby*/memory; do
   count=$(find "$d" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
   [ "$count" -gt 0 ] || continue
   slug=$(basename "$(dirname "$d")")
+  # 홈 폴더 기억(-Users-ramsbaby)은 이관 전(02~03월) 목차 하나뿐이고 "OpenClaw → Jarvis 전면 대체"·
+  # "저장소 private" 같은 뒤집힌 결정을 현재형으로 담고 있어 뺀다(2026-09-27). 아래 정리 루프가 기존 사본을 지운다.
+  if [ "$slug" = "-Users-ramsbaby" ]; then continue; fi
   mkdir -p "$PROJ_DST/$slug"
-  c=$(rsync -aL --delete --itemize-changes --include='*.md' --exclude='*' "$d/" "$PROJ_DST/$slug/" | grep -c '^[<>c]' || true)
+  # 실파일만 담는다(2026-09-27). 전에는 실파일이 1개라도 있으면 -L 로 폴더를 통째로 펼쳐,
+  # 홈 폴더 기억의 옛 심링크 5건(3월 기억·카카오 API 키 원문 포함)이 색인에 들어가 틀린 답 1위를 차지했다.
+  # 심링크 이름을 빼고 --delete-excluded 로 이미 들어간 사본도 치운다.
+  SKIP_LINKS=()
+  while IFS= read -r l; do SKIP_LINKS+=(--exclude="/$(basename "$l")"); done < <(find "$d" -maxdepth 1 -type l -name '*.md' 2>/dev/null)
+  c=$(rsync -aL --delete --delete-excluded --itemize-changes ${SKIP_LINKS[@]+"${SKIP_LINKS[@]}"} --include='*.md' --exclude='*' "$d/" "$PROJ_DST/$slug/" | grep -c '^[<>c*]' || true)
   CHANGED=$((CHANGED + c))
 done
 # 사라진 프로젝트의 잔재 정리 — 원본이 없어진 슬러그 디렉토리는 지운다.
 for d in "$PROJ_DST"/*; do
   [ -d "$d" ] || continue
   slug=$(basename "$d")
-  if [ ! -d "$HOME/.claude/projects/$slug/memory" ]; then
+  if [ ! -d "$HOME/.claude/projects/$slug/memory" ] || [ "$slug" = "-Users-ramsbaby" ]; then
     rm -rf "$d"
     CHANGED=$((CHANGED + 1))
   fi

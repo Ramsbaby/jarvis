@@ -755,22 +755,14 @@ export class RAGEngine {
       // Enrich: 첫 번째 청크를 대표 텍스트로 사용 (ENABLE_RAG_ENRICHMENT=1 시만 API 호출)
       const enrichment = await this.enrichDocument(chunks[0].text);
 
-      // Embed all chunks — degrade to zero vectors if OpenAI unavailable (BM25 still works)
+      // Embed all chunks — 실패하면 쓰지 않고 건너뛴다(0벡터 저장 금지, 2026-09-27 — _prepareFileRecords 주석 참조)
       const texts = chunks.map((c) => c.text);
       let embeddings;
       try {
         embeddings = await this.embed(texts);
       } catch (embErr) {
-        console.warn(`[rag] Embedding unavailable (${embErr.message.slice(0, 80)}), storing zero vectors — BM25 only`);
-        embeddings = texts.map(() => new Array(EMBEDDING_DIM).fill(0));
-        // 재시도 대기열에 기록 (429 Rate Limit 등 일시적 오류 시 추후 재인덱싱용)
-        const retryQueuePath = join(INFRA_HOME, 'state', 'embedding-retry-queue.jsonl');
-        try {
-          appendFileSync(
-            retryQueuePath,
-            JSON.stringify({ ts: new Date().toISOString(), filePath, reason: embErr.message.slice(0, 100) }) + '\n'
-          );
-        } catch(_) {}
+        console.warn(`[rag] Embedding unavailable (${embErr.message.slice(0, 80)}), skipping ${filePath} — retry next run`);
+        return 0;
       }
 
       // 심볼릭 링크 경로 정규화 (2026-06-25 [H3] 재발 방지): ~/.jarvis ↔ ~/.openclaw-data/runtime
@@ -873,15 +865,11 @@ export class RAGEngine {
       try {
         embeddings = await this.embed(texts);
       } catch (embErr) {
-        console.warn(`[rag] Embedding unavailable (${embErr.message.slice(0, 80)}), storing zero vectors — BM25 only`);
-        embeddings = texts.map(() => new Array(EMBEDDING_DIM).fill(0));
-        const retryQueuePath = join(INFRA_HOME, 'state', 'embedding-retry-queue.jsonl');
-        try {
-          appendFileSync(
-            retryQueuePath,
-            JSON.stringify({ ts: new Date().toISOString(), filePath, reason: embErr.message.slice(0, 100) }) + '\n'
-          );
-        } catch(_) {}
+        // 0벡터로 저장하지 않는다(2026-09-27). 0벡터는 모든 질의와 거리 1.0 이라 막연한 질문마다
+        // 상위를 차지했다(실제 호출 55건 중 11건). 빈 배열을 돌려주면 rag-index 가 state 를 안 남겨
+        // 다음 회차에 다시 임베딩한다.
+        console.warn(`[rag] Embedding unavailable (${embErr.message.slice(0, 80)}), skipping ${filePath} — retry next run`);
+        return [];
       }
       // 심볼릭 링크 경로 정규화 (2026-06-25 [H3]) — fresh rebuild 경로도 id·source 물리 경로 통일.
       try { filePath = realpathSync(filePath); } catch (_) { /* 파일 부재 시 원본 유지 */ }
@@ -1117,13 +1105,18 @@ export class RAGEngine {
         const tokenizedDocs = candidates.map(c => _bm25Tokenize(c.text || ''));
         const avgDocLen = tokenizedDocs.reduce((s, t) => s + t.length, 0) / tokenizedDocs.length;
         const idfMap = _buildIdfMap(tokenizedDocs);
-        const queryTokens = _bm25Tokenize(query);
+        // 조사 뗀 질의 토큰도 쓴다("한화에너지에" → "한화에너지").
+        const queryTokens = [...new Set([..._bm25Tokenize(query), ..._bm25Tokenize(normalizedQuery)])];
 
+        // 낱말이 하나도 안 맞는 후보는 키워드 순위에서 뺀다(2026-09-27).
+        // 전에는 벡터 후보 전부가 키워드 순위도 받아 RRF 점수를 두 번 챙겼고, 키워드로만 찾은 글은
+        // 구조상 상위 8칸에 들 수 없었다(실제 질의 50개 400칸 중 0칸).
         bm25RankedResults = candidates
           .map((doc, i) => ({
             ...doc,
             _bm25Score: _bm25Score(queryTokens, tokenizedDocs[i], avgDocLen, idfMap),
           }))
+          .filter(doc => doc._bm25Score > 0)
           .sort((a, b) => b._bm25Score - a._bm25Score);
       }
     }
@@ -1179,6 +1172,16 @@ export class RAGEngine {
 
     // ── 6. Cross-encoder reranking (Jina API, 선택적) ──────────────────────────
     results = await this._rerank(query, results);
+
+    // 같은 본문 중복 제거(2026-09-27). 같은 세션이 날짜별 사본으로 여러 벌 색인돼
+    // 상위 8칸이 한 글의 사본으로 채워지곤 했다(실제 질의 50개 기준 15%).
+    const seenText = new Set();
+    results = results.filter(r => {
+      const key = (r.text || '').replace(/\s+/g, ' ').trim();
+      if (!key || seenText.has(key)) return !key;
+      seenText.add(key);
+      return true;
+    });
 
     const sliced = results.slice(0, effectiveLimit);
 

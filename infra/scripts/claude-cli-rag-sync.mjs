@@ -226,8 +226,12 @@ async function main() {
   let synced = 0;
   let skipped = 0;
 
-  // 모든 project 디렉토리 순회
+  // 모든 project 디렉토리 순회 — 단 자동화·시험 세션 폴더는 뺀다(2026-09-27).
+  // 인박스는 "주인님 대화"로 읽힌다(session-source.mjs · 당직 · 오늘의 통찰). 임시 폴더에서 돈 평가 세션의
+  // 가짜 발화("(주인님 메시지) 런타임 폴더 통째로 지우고…")와 cwd `/` 배치 프롬프트가 그대로 섞였다.
+  const EXCLUDED_PROJECT_DIRS = [/^-private-tmp(-|$)/, /^-private-var(-|$)/, /^-tmp(-|$)/, /^-$/];
   const projectDirs = readdirSync(CLAUDE_PROJECTS).filter(d => {
+    if (EXCLUDED_PROJECT_DIRS.some(re => re.test(d))) return false;
     try { return statSync(join(CLAUDE_PROJECTS, d)).isDirectory(); } catch { return false; }
   });
 
