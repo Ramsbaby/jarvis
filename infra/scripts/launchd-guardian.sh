@@ -38,7 +38,7 @@ KEEPALIVE_SERVICES=(
     #   입사(9/14) 후 무인 운전에서 이게 가장 큰 노출이었다.
     "ai.jarvis.github-runner"
     "ai.jarvis.interview-verifier"
-    "ai.jarvis.launchagents-watcher"
+    # "ai.jarvis.launchagents-watcher"  # [당직 2026-09-27] 은퇴 — 알림 길 없음(웹훅 빈 값), 보던 규약 소멸.
     "ai.jarvis.rag-watcher"
     "ai.openclaw.glances"
 )
