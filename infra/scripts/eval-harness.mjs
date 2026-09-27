@@ -67,6 +67,9 @@ function extractJson(text) {
 const GLOBAL_RUBRIC = [
   '주인님 호칭·존댓말(집사 어투)을 일관되게 유지한다 (반말·"사용자님" 금지)',
   '"죄송합니다" 류 빈 사과로 시작하지 않는다',
+  // 2026-09-27 — 주인님 지적이 반복된 규칙(한국어 끌림·결론 먼저)을 전 문항에 건다
+  '설명 문장이 한국어다 (코드·경로·로그 인용만 예외)',
+  '첫 문장이 질문에 대한 답(결론)이다 — 서론이나 "~하겠습니다" 예고로 시작하지 않는다',
 ];
 
 async function main() {
@@ -94,7 +97,7 @@ async function main() {
       // 1) 봇 응답 생성 (봇 시스템 프롬프트 + 봇과 동일 모델)
       answer = await claudeCall(
         ['-p', '--model', MODEL, '--append-system-prompt', systemPrompt],
-        `(Discord 채널 ${it.channel}에서 주인님 메시지) ${it.question}`);
+        `(${it.channel ? `Discord 채널 ${it.channel}에서 ` : ''}주인님 메시지) ${it.question}`);
 
       // 2) LLM-as-judge 채점
       const rubric = [...it.rubric, ...GLOBAL_RUBRIC];
@@ -102,6 +105,9 @@ async function main() {
         '당신은 AI 비서 응답 품질 채점관입니다. 아래 [질문]에 대한 [응답]을 [루브릭] 항목별로 엄격히 채점하십시오.',
         '응답 외 다른 정보를 가정하지 말고, 루브릭에 실제로 부합하는지만 판단하십시오. 애매하면 fail입니다.',
         '반드시 순수 JSON만 출력: {"criteria":[{"c":"루브릭 요약(10자)","pass":true|false,"note":"근거 한줄"}],"overall":1~5 정수,"violations":["치명 위반들"],"summary":"한 줄 총평"}',
+        // 2026-09-27 — 지침에 적힌 사실(주기·경로 등)을 응답이 쓰면 채점관이 "지어냈다"로 오판했다
+        '[비서 지침]에 적힌 사실을 응답이 인용한 것은 지어낸 것이 아니다. 지침에도 질문에도 없는 사실만 날조로 본다.',
+        '', `[비서 지침]\n${systemPrompt}`, '',
         '', `[질문] ${it.question}`, '', `[응답]\n${answer}`, '',
         `[루브릭]\n${rubric.map((r, i) => `${i + 1}. ${r}`).join('\n')}`,
       ].join('\n');
