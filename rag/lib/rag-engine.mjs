@@ -15,7 +15,7 @@ import { homedir } from 'node:os';
 import { appendFileSync, mkdirSync, rmdirSync, statSync, readFileSync, existsSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { LANCEDB_PATH, RAG_LOCK_DIR, INFRA_HOME, ENTITY_GRAPH_PATH, ensureDirs } from './paths.mjs';
+import { LANCEDB_PATH, RAG_LOCK_DIR, INFRA_HOME, ensureDirs } from './paths.mjs';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Owner companies — private/config/owner-companies.txt 에서 로드
@@ -1172,8 +1172,10 @@ export class RAGEngine {
       results = [...ftsResults, ...vecOnly];
     }
 
-    // ── 5. GraphRAG 확장 ────────────────────────────────────────────────────────
-    results = await this._graphExpand(query, results, effectiveLimit);
+    // ── 5. (제거됨) GraphRAG 확장 ───────────────────────────────────────────────
+    // 2026-09-27 제거. 동시출현 그래프 결과를 뒤에 덧붙였는데 리랭커가 꺼져 있으면 아래 slice 에
+    // 늘 잘려 최종 결과를 한 번도 바꾸지 못했다(질의 16개 중 0개). 검색 결과와 그래프 결과를
+    // 미리 섞어 넣는 방식이라 켜도 도움이 안 된다. 그래프가 필요해지면 별도 도구로 준다.
 
     // ── 6. Cross-encoder reranking (Jina API, 선택적) ──────────────────────────
     results = await this._rerank(query, results);
@@ -1213,80 +1215,6 @@ export class RAGEngine {
     const combinedText = results.map(r => (r.text || '')).join(' ').toLowerCase();
     const matched = tokens.filter(t => combinedText.includes(t)).length;
     return Math.round((matched / tokens.length) * 100) / 100;
-  }
-
-  /**
-   * GraphRAG 탐색: entity-graph.json에서 쿼리와 관련된 엔티티를 찾고
-   * 해당 엔티티와 연결된 소스 문서를 추가 검색하여 결과를 보강.
-   * entity-graph가 없거나 관련 엔티티가 없으면 원본 results 그대로 반환.
-   */
-  async _graphExpand(query, results, limit) {
-    try {
-      const { join } = await import('node:path');
-      const { homedir } = await import('node:os');
-      const { readFileSync } = await import('node:fs');
-      const graphPath = ENTITY_GRAPH_PATH;
-      let graph;
-      try {
-        graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
-      } catch {
-        return results; // entity-graph 없으면 패스
-      }
-      if (!graph.nodes || Object.keys(graph.nodes).length === 0) return results;
-
-      // 쿼리에서 graph.nodes 키와 매칭되는 엔티티 찾기 (단순 substring 매칭)
-      const queryLower = query.toLowerCase();
-      const matchedEntities = Object.keys(graph.nodes)
-        .filter(e => queryLower.includes(e.toLowerCase()) || e.toLowerCase().includes(queryLower.slice(0, 4)))
-        .slice(0, 5); // 최대 5개 엔티티
-
-      if (matchedEntities.length === 0) return results;
-
-      // 매칭된 엔티티와 연결된 관련 엔티티도 수집 (1-hop)
-      const relatedEntities = new Set(matchedEntities);
-      for (const e of matchedEntities) {
-        const related = graph.nodes[e]?.topics ?? [];
-        for (const r of related) relatedEntities.add(r);
-        // edge에서 연결된 엔티티 수집
-        for (const [edgeKey, edgeVal] of Object.entries(graph.edges ?? {})) {
-          const [a, b] = edgeKey.split('|');
-          if ((a === e || b === e) && edgeVal.weight >= 3) {
-            relatedEntities.add(a === e ? b : a);
-          }
-        }
-      }
-
-      // 관련 엔티티의 소스 파일 수집
-      const graphSources = new Set();
-      for (const e of relatedEntities) {
-        for (const src of graph.nodes[e]?.sources ?? []) graphSources.add(src);
-      }
-
-      if (graphSources.size === 0) return results;
-
-      // 이미 있는 결과 소스 제외
-      const existingSources = new Set(results.map(r => r.source));
-      const newSources = [...graphSources].filter(s => !existingSources.has(s)).slice(0, 3);
-
-      if (newSources.length === 0) return results;
-
-      // 추가 소스에서 BM25 검색
-      const extraResults = [];
-      for (const src of newSources) {
-        try {
-          const srcRows = await this.table.query()
-            .where(`source = '${src.replace(/'/g, "\\'")}'`)
-            .limit(2)
-            .toArray();
-          extraResults.push(...srcRows);
-        } catch { /* skip */ }
-      }
-
-      console.error(`[rag] GraphRAG: 엔티티 ${matchedEntities.join(',')} → ${extraResults.length}개 보강`);
-      return [...results, ...extraResults];
-    } catch {
-      return results; // GraphRAG 실패는 비치명적
-    }
   }
 
   async _rerank(query, results) {

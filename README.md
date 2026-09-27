@@ -390,8 +390,8 @@ Hybrid search: BM25 full-text + Ollama vector similarity (`snowflake-arctic-embe
 |------|-------|
 | **Vector DB** | LanceDB (local, embedded) |
 | **Embedding** | Ollama snowflake-arctic-embed2 |
-| **Indexing** | Incremental every 4h, entity-graph daily |
-| **Search** | BM25 + vector hybrid (RRF k=60) + GraphRAG expansion |
+| **Indexing** | Incremental every 4h |
+| **Search** | BM25 + vector hybrid (RRF k=60) |
 | **Smart filters** | Auto-excludes dev docs, filters family-sensitive data |
 
 See [`rag/README.md`](rag/README.md) for details.
@@ -426,7 +426,7 @@ Jarvis doesn't just run — it **heals itself**. 418 automation scripts, 181 loa
 | 🔍 | **Dawn Audit** — scans cron health, RAG integrity, bot status. `jarvis-auditor.sh` + `scorecard-enforcer.sh` reports anomalies before you wake up | Daily 06:00 |
 | 📊 | **Insight Report** — behavioural metrics analysis → situational awareness context for every response | Daily 04:15 |
 | 🧪 | **E2E Testing** — `e2e-test.sh` validates 50 system components. `weekly-code-review.sh` runs automated code quality audits | Weekly |
-| 📚 | **RAG Pipeline** — incremental indexing (4h), entity-graph (03:45), weekly compaction (Sun 04:00), file watcher for real-time updates | Scheduled |
+| 📚 | **RAG Pipeline** — incremental indexing (4h), weekly compaction (Sun 04:00), file watcher for real-time updates | Scheduled |
 | 📡 | **Health Monitor** — 10 services monitored, disk/memory alerts. Discord + ntfy.sh push notifications on threshold breach | Every 6h |
 | 📈 | **Cron Failure Tracker** — `cron-failure-tracker.sh` tracks success rates, detects degradation trends | Continuous |
 | 🚀 | **Safe Deployment** — smoke tests, graceful restart, log rotation. Zero-downtime updates | On demand |
