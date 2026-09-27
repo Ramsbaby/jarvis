@@ -36,7 +36,8 @@ fi
 # -L: 심링크를 실파일로 펼친다. 오픈클로 메모리는 심링크를 색인하지 않고
 # memory_get 도 "path must be a regular file" 로 거부한다(2026-09-09 실측).
 # -a 그대로 두면 원본의 심링크 5건이 검색에서 통째로 사라진다.
-CHANGED=$(rsync -aL --delete --itemize-changes --include='*.md' --exclude='*' "$SRC" "$DST" | grep -c '^[<>c]' || true)
+# 삭제(*deleting)도 변경으로 센다 — 안 세면 원본에서 뺀 기억이 색인에 계속 남는다(2026-09-27 실측).
+CHANGED=$(rsync -aL --delete --itemize-changes --include='*.md' --exclude='*' "$SRC" "$DST" | grep -c '^[<>c*]' || true)
 
 # --- 프로젝트별 오토메모리 미러 (2026-09-14 추가) -------------------------------
 # 클로드 코드가 2026-09-13 부터 auto memory 를 프로젝트별 경로에 쓴다:
