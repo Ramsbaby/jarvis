@@ -11,9 +11,10 @@
  * cron: 매 10분 실행 권장
  */
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync, renameSync, realpathSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 import { maskPII } from '../discord/lib/mask-pii.mjs';
 
 const HOME = homedir();
@@ -23,6 +24,20 @@ const INBOX = join(BOT_HOME, 'inbox');
 const STATE_FILE = join(BOT_HOME, 'state', 'cli-rag-sync.json');
 const DUP_QUARANTINE = join(BOT_HOME, 'state', 'quarantine', 'inbox-session-dup');
 const DRY_RUN = process.argv.includes('--dry-run');
+
+// [2026-09-28] 자동화 세션은 첫 사용자 차례의 머리글로 가린다. 워크스페이스 cwd 에서 도는 크론·배치·하위 세션이
+// "주인님 대화"로 인박스에 들어가 실제 질의 결과칸의 33%를 차지했다(09-27 감사). 머리글은 오픈클로가 붙이는 고정 표지다.
+// 게이트웨이 재시작 뒤 "[System] Your previous turn was interrupted" 로 시작하는 세션은 주인님 대화의 이어짐이라 남긴다.
+export const AUTOMATION_FIRST_TURN = [
+  /^\[cron:[0-9a-f-]{8,}/,                                        // 오픈클로 크론 잡
+  /^주인님 상태 스냅샷\(JSON\)/,                                      // 상태 엔진 배치 프롬프트
+  /^\[[^\]\n]*GMT[^\]\n]*\] \[Subagent Context\]/,                  // 하위 에이전트
+  /^System: \[[^\]\n]*\] A scheduled automation delivered/,         // 자동화 배달문
+];
+export function isAutomationSession(firstUserText) {
+  const t = (firstUserText || '').trimStart();
+  return AUTOMATION_FIRST_TURN.some(re => re.test(t));
+}
 
 const MIN_CONTENT_LEN = 30;   // 너무 짧은 메시지 스킵
 const MAX_CONTENT_LEN = 2000; // RAG 청크 크기 (상한이 아니라 분할 단위)
@@ -226,6 +241,7 @@ async function main() {
   const state = loadState();
   let synced = 0;
   let skipped = 0;
+  let automation = 0;
 
   // 모든 project 디렉토리 순회 — 단 자동화·시험 세션 폴더는 뺀다(2026-09-27).
   // 인박스는 "주인님 대화"로 읽힌다(session-source.mjs · 당직 · 오늘의 통찰). 임시 폴더에서 돈 평가 세션의
@@ -263,6 +279,11 @@ async function main() {
         const session = parseSession(filePath);
         if (session.turns.length < 2) {
           state.processed[filePath] = mtime;
+          continue;
+        }
+        if (isAutomationSession(session.turns.find(t => t.role === 'user')?.text)) {
+          state.processed[filePath] = mtime;
+          automation++;
           continue;
         }
 
@@ -306,10 +327,14 @@ async function main() {
   }
 
   if (!DRY_RUN) saveState(state);
-  log(`done — synced: ${synced}, skipped: ${skipped}`);
+  log(`done — synced: ${synced}, skipped: ${skipped}, automation: ${automation}`);
 }
 
-main().catch(err => {
-  console.error('[cli-rag-sync] fatal:', err);
-  process.exit(1);
-});
+// 시험에서 isAutomationSession 만 가져다 쓸 수 있게, 직접 실행될 때만 돈다.
+const _argv1 = (() => { try { return realpathSync(process.argv[1]); } catch { return process.argv[1] || ''; } })();
+if (import.meta.url === pathToFileURL(_argv1).href) {
+  main().catch(err => {
+    console.error('[cli-rag-sync] fatal:', err);
+    process.exit(1);
+  });
+}
