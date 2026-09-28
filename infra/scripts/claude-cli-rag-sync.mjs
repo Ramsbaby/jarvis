@@ -11,7 +11,7 @@
  * cron: 매 10분 실행 권장
  */
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync, renameSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { maskPII } from '../discord/lib/mask-pii.mjs';
@@ -21,6 +21,7 @@ const CLAUDE_PROJECTS = join(HOME, '.claude', 'projects');
 const BOT_HOME = process.env.BOT_HOME || join(HOME, '.openclaw-data/runtime');
 const INBOX = join(BOT_HOME, 'inbox');
 const STATE_FILE = join(BOT_HOME, 'state', 'cli-rag-sync.json');
+const DUP_QUARANTINE = join(BOT_HOME, 'state', 'quarantine', 'inbox-session-dup');
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const MIN_CONTENT_LEN = 30;   // 너무 짧은 메시지 스킵
@@ -273,11 +274,26 @@ async function main() {
           continue;
         }
 
+        // [2026-09-28] 파일명 날짜는 세션 첫 차례 기준으로 고정한다. 수정일을 쓰면 긴 세션이
+        // 날마다 통째로 새 파일에 복사돼 같은 대화가 여러 벌 색인됐다(09-27 감사: 17세션·42벌).
+        const firstTs = session.turns.find(t => t.ts)?.ts;
+        const nameDate = (firstTs && !Number.isNaN(Date.parse(firstTs)))
+          ? new Date(firstTs).toISOString().slice(0, 10)
+          : fileDate;
         const shortId = (session.sessionId || file.replace('.jsonl', '')).slice(0, 8);
-        const outFile = join(INBOX, `claude-cli-${fileDate}-${shortId}.md`);
+        const outName = `claude-cli-${nameDate}-${shortId}.md`;
+        const outFile = join(INBOX, outName);
 
         if (!DRY_RUN) {
           writeFileSync(outFile, maskPII(md), 'utf-8'); // [2026-07-09] RAG 적재 전 PII 마스킹(실명·회사·경로·이메일)
+          // 같은 세션의 옛 날짜별 사본은 방금 쓴 파일의 부분집합이다 — 지우지 않고 격리로 옮긴다(되옮기면 복구).
+          const dupRe = new RegExp(`^claude-cli-\\d{4}-\\d{2}-\\d{2}-${shortId}\\.md$`);
+          for (const other of readdirSync(INBOX)) {
+            if (other === outName || !dupRe.test(other)) continue;
+            mkdirSync(DUP_QUARANTINE, { recursive: true });
+            renameSync(join(INBOX, other), join(DUP_QUARANTINE, other));
+            log(`dedup: ${other} → quarantine (superseded by ${outName})`);
+          }
         }
         log(`${DRY_RUN ? '[dry]' : 'saved'}: ${basename(outFile)} (${session.turns.length} turns)`);
         state.processed[filePath] = mtime;
