@@ -129,24 +129,9 @@ if (( MAIN_EXP_MS > 0 )); then
                 fi
             fi
         fi
-    elif (( MAIN_REMAIN < -43200 )); then
-        # (2) 만료 후 12시간+ 미갱신 — 지연 갱신 정상 창(분~수 시간)과 야간 공백(~10h)은 침묵
-        STALE_CD_FILE="/tmp/jarvis-main-token-stale12h.cooldown"
-        NOW_S2=$(date +%s)
-        LAST_S2=$(cat "$STALE_CD_FILE" 2>/dev/null || echo "0")
-        [[ "$LAST_S2" =~ ^[0-9]+$ ]] || LAST_S2=0   # 쿨다운 파일 오염 시 즉사 방지 — 독립 감사 M-1
-        if (( NOW_S2 - LAST_S2 > 86400 )); then  # 24시간 쿨다운
-            echo "$NOW_S2" > "$STALE_CD_FILE"
-            log "🔑 메인 토큰 만료 후 $(( -MAIN_REMAIN / 3600 ))시간 미갱신"
-            printf '{"ts":"%s","result":"main-token-stale-12h","remainSecs":%s}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MAIN_REMAIN" >> "$LEDGER"
-            if [[ -x "${BOT_HOME}/scripts/alert.sh" ]]; then
-                bash "${BOT_HOME}/scripts/alert.sh" \
-                    info \
-                    "🔑 메인 OAuth 토큰 만료 후 12시간+ 미갱신" \
-                    "CLI 장기 미사용이면 정상 (다음 사용 시 자동 갱신). CLI를 쓰는데도 이 알림이 반복되면 갱신 실패 — \`claude /login\` 점검. 봇·크론(격리 토큰)은 무관." \
-                    2>/dev/null || log "alert.sh 호출 실패"
-            fi
-        fi
+    # 2026-10-01 폐지: "(2) 만료 후 12시간+ 미갱신"(main-token-stale-12h) 검사 제거.
+    #   09-09 이후 안 쓰이는 credentials.json 을 근거로 매일 거짓 행을 썼다. 로그인 만료 판단은
+    #   워크스페이스 감지기(orchestrator-scan.py scan_llm_auth, 키체인 기준)가 전담한다.
     fi
 fi
 
