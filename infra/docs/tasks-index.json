@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-18T21:17:00.437Z",
+  "generatedAt": "2026-09-30T21:17:00.432Z",
   "source": "~/.openclaw-data/runtime/config/tasks.json",
   "totalTasks": 112,
   "teamDistribution": {
@@ -734,7 +734,7 @@
           "logs": {
             "stdout": {
               "path": "~/.openclaw-data/runtime/logs/token-sync.log",
-              "exists": true
+              "exists": false
             },
             "stderr": {
               "path": "~/.openclaw-data/runtime/logs/token-sync-err.log",
@@ -742,7 +742,7 @@
             },
             "claudeStderr": {
               "pattern": "claude-stderr-token-sync-*.log",
-              "exists": true
+              "exists": false
             }
           }
         }
