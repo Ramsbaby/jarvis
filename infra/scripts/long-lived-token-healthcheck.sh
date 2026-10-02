@@ -160,6 +160,16 @@ if [[ "$HTTP_CODE" == "200" ]]; then
     exit 0
 fi
 
+# [2026-10-02] 429 rate_limit_error 는 토큰 고장이 아니다 — 인증은 통과했고 사용량 한도에 걸린 것이다.
+#   실측: 10-02 14:30·15:00 두 회차 429 → 15:30 부터 다시 200. 그 사이 "토큰 UNHEALTHY, 재로그인 필요"
+#   critical 알림이 나갔다 — 틀린 조치를 권한 거짓 경보. 사용량은 워크스페이스 감지기(클로드 사용량 축)가 본다.
+#   원장 result 는 fail 이 아닌 rate_limited 로 남긴다(llm-gateway 폴백은 401/403 fail 만 본다 — 영향 없음).
+if [[ "$HTTP_CODE" == "429" ]]; then
+    log "🟡 token OK but rate-limited (HTTP 429) — 인증 정상, 사용량 한도. 알림 없음"
+    printf '{"ts":"%s","result":"rate_limited","http":429}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LEDGER"
+    exit 0
+fi
+
 # 401/403/기타 — invalid 가능성
 ERR_TYPE=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('error',{}).get('type','unknown'))" 2>/dev/null || echo "parse_error")
 log "❌ token UNHEALTHY (HTTP $HTTP_CODE, err=$ERR_TYPE)"
