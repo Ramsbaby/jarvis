@@ -77,19 +77,25 @@ const alive = (pid, pstart) => {
   return cur == null || cur === pstart;
 };
 
-// 묶음째 끌 수 있는가 — 그 pid 가 우리 껍데기임이 증명될 때만(시작 시각이 기록과 같다). 못 읽거나 다르면 남의 묶음일 수 있다.
+// 신호를 보내도 되는가 — 그 pid 가 기록한 바로 그 프로세스임을 시작 시각으로 증명할 때만. 못 읽거나 다르면 남의 것일 수 있다(pid 재사용).
 // pid 1 이하·자기 자신은 절대 아니다(kill(-1) 은 사용자 프로세스 전부, kill(-0) 은 자기 묶음이다).
-function ownRunner(meta) {
-  const pid = meta?.pid;
-  if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid || !meta.pstart) return false;
-  return pidAlive(pid) && procStart(pid) === meta.pstart;
+function proven(pid, pstart) {
+  if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid || !pstart) return false;
+  return pidAlive(pid) && procStart(pid) === pstart;
+}
+const ownRunner = (meta) => proven(meta?.pid, meta?.pstart); // 껍데기가 우리 것이면 그 묶음(pgid = 껍데기 pid)도 우리 것이다
+const PS_ENV = { LC_ALL: "C", PATH: "/bin:/usr/bin" };
+function procPgid(pid) {
+  const r = allowSpawn(() => spawnSync("/bin/ps", ["-o", "pgid=", "-p", String(pid)], { env: PS_ENV, encoding: "utf8" }));
+  const n = Number(String(r.stdout ?? "").trim());
+  return r.status === 0 && Number.isInteger(n) && n > 1 ? n : null;
 }
 
 // 묶음(pgid = 껍데기 pid)에 살아 있는 프로세스가 남았나. 좀비(끝났지만 부모가 아직 거두지 않음)는 빼고 센다 —
 // 맥은 좀비만 남은 묶음에 EPERM 을 낸다(10-03 실측). 같은 프로세스가 띄운 껍데기는 이 동기 대기 중에 거둬지지 않아 좀비로 남는다.
 function groupLive(pgid) {
   try { process.kill(-pgid, 0); return true; } catch (e) { if (e.code !== "EPERM") return false; }
-  const r = allowSpawn(() => spawnSync("/bin/ps", ["-A", "-o", "pgid=,stat="], { env: { LC_ALL: "C", PATH: "/bin:/usr/bin" }, encoding: "utf8" }));
+  const r = allowSpawn(() => spawnSync("/bin/ps", ["-A", "-o", "pgid=,stat="], { env: PS_ENV, encoding: "utf8" }));
   if (r.status !== 0) return true; // 못 읽으면 남았다고 본다
   return r.stdout.split("\n").some((l) => { const [g, st] = l.trim().split(/\s+/); return Number(g) === pgid && !!st && !st.startsWith("Z"); });
 }
@@ -98,35 +104,39 @@ function waitGone(pgid, ms) {
   for (;;) {
     if (!groupLive(pgid)) return true;
     const left = end - Date.now();
-    if (left <= 0) return false;
+    if (!(left > 0)) return false;
     nap(Math.min(100, left));
   }
 }
-const signalGroup = (pgid, sig) => { try { process.kill(-pgid, sig); } catch { /* 이미 비었음 */ } }; // ownRunner 를 통과한 pid 만
+const signalGroup = (pgid, sig) => { try { process.kill(-pgid, sig); } catch { /* 이미 비었음 */ } }; // 우리 것임을 증명한 묶음만
 
-const timeoutResult = (k) => ({ state: "dead", reason: "timeout", pid: k.pid, startedAt: k.startedAt, maxMs: k.maxMs, killedAt: k.at, signal: k.signal });
+const timeoutResult = (k) => ({ state: "dead", reason: "timeout", pid: k.pid, startedAt: k.startedAt, maxMs: k.maxMs, killedAt: k.at, signal: k.signal, gone: k.gone });
 
 // 최대 시간 초과 — 묶음째 SIGTERM → killGraceMs 안에 안 비면 SIGKILL. 표식(kill.json)을 먼저 남긴다: 끄는 사이 껍데기가 쓰는
-// 결과(신호로 끝남)보다 이 판정이 이기고, 같은 시도를 다시 확인해도 dead(timeout)다. 돌려줄 때는 묶음이 비어 있다(재시도와 겹치지 않게).
+// 결과(신호로 끝남)보다 이 판정이 이기고, 같은 시도를 다시 확인해도 dead(timeout)다.
+// gone: 돌려줄 때 묶음이 비었나(SIGKILL 뒤 5초까지 기다린다). false 면 커널 대기 중인 프로세스 등이 남은 것이다.
+// 끄는 쪽이 유예 중에 죽어도 껍데기가 바깥 SIGTERM 을 받아 남은 것을 SIGKILL 한다(detach-runner).
 // 우리 껍데기임을 증명하지 못하면(시작 시각을 못 읽음) 끄지 않고 null — 다음 확인에서 다시 본다(진척 없는 이어가기는 48시간 만료).
 function killTimedOut(dir, meta, { now, maxMs, killGraceMs }) {
   if (!ownRunner(meta)) return null;
-  const k = { reason: "timeout", at: now, maxMs, pid: meta.pid, startedAt: meta.startedAt, signal: "SIGTERM" };
+  const k = { reason: "timeout", at: now, maxMs, pid: meta.pid, startedAt: meta.startedAt, signal: "SIGTERM", gone: null };
   writeJsonAtomic(dir, "kill.json", k);
   signalGroup(meta.pid, "SIGTERM");
-  if (!waitGone(meta.pid, killGraceMs)) {
+  k.gone = waitGone(meta.pid, killGraceMs);
+  if (!k.gone) {
     k.signal = "SIGKILL";
     signalGroup(meta.pid, "SIGKILL");
-    if (meta.childPid && alive(meta.childPid, meta.childPstart)) { try { process.kill(meta.childPid, "SIGKILL"); } catch { /* 이미 끝남 */ } } // 묶음을 떠난 자식
-    waitGone(meta.pid, 5_000);
-    writeJsonAtomic(dir, "kill.json", k);
+    if (proven(meta.childPid, meta.childPstart)) { try { process.kill(meta.childPid, "SIGKILL"); } catch { /* 이미 끝남 */ } } // 묶음을 떠난 자식
+    k.gone = waitGone(meta.pid, 5_000);
   }
+  writeJsonAtomic(dir, "kill.json", k);
   return timeoutResult(k);
 }
 
 // opts.now 는 시험용 시간 주입(최대 시간 판정·heartbeat 나이). 프로세스는 실제 시간으로 돌므로 기본은 Date.now() — 그래프 시계(LG_NOW)를 쓰지 않는다.
 // opts.killGraceMs 는 SIGTERM 뒤 SIGKILL 까지 기다리는 시간(기본 30초) — 이 동안 check 는 동기로 기다린다(보통은 바로 꺼진다).
-export function check(handle, { now = Date.now(), killGraceMs = KILL_GRACE_MS } = {}) {
+export function check(handle, { now = Date.now(), killGraceMs: grace = KILL_GRACE_MS } = {}) {
+  const killGraceMs = Number.isFinite(grace) && grace >= 0 ? grace : KILL_GRACE_MS; // NaN 이면 Atomics.wait 가 끝없이 잔다
   const dir = typeof handle === "string" ? handle : handle?.dir;
   if (!dir || !fs.existsSync(dir)) return { state: "dead", reason: "작업 폴더가 없다" };
   const killed = readJson(path.join(dir, "kill.json"));
@@ -156,7 +166,10 @@ export function check(handle, { now = Date.now(), killGraceMs = KILL_GRACE_MS } 
   }
   const d2 = done(); // 두 번 읽는 사이에 끝났을 수 있다
   if (d2) return d2;
-  if (meta.childPid && alive(meta.childPid, meta.childPstart)) {
+  // 껍데기 없이 명령이 살아 있다(누가 껍데기를 SIGKILL). 명령이 아직 껍데기 묶음에 있으면 그 묶음은 우리 것이다 — 손주까지 끈다.
+  // 명령도 이미 끝났으면 남은 손주의 묶음이 우리 것임을 증명할 길이 없어 건드리지 않는다(pid 재사용).
+  if (proven(meta.childPid, meta.childPstart)) {
+    if (meta.pid > 1 && procPgid(meta.childPid) === meta.pid) signalGroup(meta.pid, "SIGKILL");
     try { process.kill(meta.childPid, "SIGKILL"); } catch { /* 이미 끝남 */ }
   }
   return { state: "dead", reason: "껍데기 프로세스가 결과 없이 끝남", pid: meta.pid, startedAt: meta.startedAt };

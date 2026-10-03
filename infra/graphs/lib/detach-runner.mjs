@@ -59,15 +59,22 @@ const timer = setTimeout(() => {
   setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* 이미 끝남 */ } }, 5000).unref();
 }, spec.timeoutMs);
 
-for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => { try { child.kill(sig); } catch { /* 이미 끝남 */ } });
+// 멈추라는 신호(확인이 최대 시간으로 묶음째 보낸 SIGTERM 포함)도 시간 제한처럼 다룬다: 명령에 넘기고, 끝나면 남은 것을 SIGKILL.
+// 끄는 쪽(틱)이 30초 유예 중에 죽어도 SIGTERM 을 무시한 손주가 남지 않게 — 그 뒤의 확인은 껍데기가 없어 묶음을 증명하지 못한다(0b 후속 검토 중1).
+let stopping = false;
+for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => { stopping = true; try { child.kill(sig); } catch { /* 이미 끝남 */ } });
 
 child.on("close", (code, signal) => {
   if (finished) return;
   finished = true;
   clearInterval(hb);
   clearTimeout(timer);
-  writeAtomic("result.json", { code, signal, timedOut, startedAt, endedAt: Date.now() });
-  // 시간 제한으로 끝났으면 묶음에 남은 것(SIGTERM 을 무시한 손주)까지 SIGKILL — 결과는 이미 썼다(이 껍데기도 함께 끝난다)
-  if (timedOut) { try { process.kill(-process.pid, "SIGKILL"); } catch { /* 이미 비었음 */ } }
+  try {
+    writeAtomic("result.json", { code, signal, timedOut, startedAt, endedAt: Date.now() });
+  } finally {
+    // 시간 제한·멈춤 신호로 끝났으면 묶음에 남은 것(SIGTERM 을 무시한 손주)까지 SIGKILL. 결과를 못 써도(작업 폴더가 지워짐) 한다(검토 중2).
+    // 이 껍데기도 함께 끝난다 — 결과는 이미 썼다.
+    if (timedOut || stopping) { try { process.kill(-process.pid, "SIGKILL"); } catch { /* 이미 비었음 */ } }
+  }
   process.exit(0);
 });
