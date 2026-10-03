@@ -1,42 +1,49 @@
 #!/usr/bin/env node
-// run.mjs — 그래프 실행기. OpenClaw 명령형 예약 잡과, 대화 중 자비스가 부른다. 고정 Node 로 실행한다(lg.sh).
+// run.mjs — 그래프 실행기. OpenClaw 명령형 예약 잡(lg-tick)과, 대화 중 자비스가 부른다. 고정 Node 로 실행한다(lg.sh).
 //
-//   run.mjs start <그래프> <스레드> [--topic 값] [--llm]   새 스레드를 처음부터 (이미 있는 스레드는 거부)
-//   run.mjs resume <스레드> approved|rejected               승인 대기 중인 스레드에 답한다
-//   run.mjs retry <스레드>                                  고장·보류로 멈춘 스레드를 마지막 체크포인트부터 잇는다
-//   run.mjs status [<스레드>] [--json] [--all]              대기·만료·진행 중(멈춤·보류 포함) 스레드 — 읽기만 한다
-//   run.mjs sweep                                           기한 지난 승인 대기를 자동 취소 — EXPIRED 줄, 없으면 NO_REPLY
-//   run.mjs gc [--days 14]                                  오래된 스레드 삭제 + VACUUM
-//   run.mjs selftest                                        저장 부품(better-sqlite3) 적재 자가 시험
+//   run.mjs tick [--verbose]                                 예약 잡의 정본: 관문 → 진행 가능한 스레드를 틱 예산 안에서 노드 단위로 진행
+//   run.mjs answer <스레드> approved|rejected                 승인 답만 기록한다(1초). 진행은 다음 틱이 한다 — 대화 쪽 경로
+//   run.mjs start <그래프> <스레드> [--topic 값] [--llm] [--queue]   새 스레드(이미 있으면 거부). --queue 면 등록만 하고 다음 틱이 시작
+//   run.mjs resume <스레드> approved|rejected                 답을 바로 적용해 진행(시험·디버그용 — 대화 경로는 answer)
+//   run.mjs retry <스레드>                                    멈춘 스레드를 마지막 체크포인트부터 바로 잇는다(시험·디버그용)
+//   run.mjs status [<스레드>] [--json] [--all]                대기·만료·진행 중 스레드 — 읽기만 한다
+//   run.mjs sweep                                             기한 지난 대기·보류를 자동 취소 — EXPIRED 줄, 없으면 NO_REPLY
+//   run.mjs gc [--days 14]                                    오래된 스레드 삭제 + VACUUM (metrics·effects 원장은 건드리지 않는다)
+//   run.mjs selftest                                          저장 부품 적재·사용자 훅 누수 자가 시험
 //
-// 표준 출력 첫 줄이 결과다: DONE · WAITING · EXPIRED · HELD · ERROR · OK · STATUS 중 하나로 시작한다.
-// 종료 코드: 0 = 끝남·승인 대기·보류·만료 처리 / 1 = 오류(잠김·중복·고장·자가 시험 실패 포함).
-//   OpenClaw 는 0 이 아니면 error·실패 경보로 처리한다 — 승인 대기를 경보 소음으로 만들지 않으려고 대기는 0 이다.
+// 노드 단위 진행: 그래프를 한 번 부를 때 한 단계(superstep)만 돌린다(interruptAfter "*"). 단계 앞마다 틱 예산(기본 8분)을 보고,
+//   넘었으면 다음 노드 앞에서 멈춰 CONTINUE 로 남긴다. 다음 틱은 체크포인트에서 이어 간다(invoke(null)).
+// 표준 출력: tick 은 DONE·WAITING·EXPIRED·GAVE_UP·STUCK 줄만 낸다(낼 것이 없으면 NO_REPLY). 다른 명령은 첫 줄이 결과다.
+// 종료 코드: DONE·WAITING·CONTINUE·HOLD·LOCKED·EXPIRED·GAVE_UP 은 0. 진짜 오류(실행기 고장·자가 시험 실패·잘못된 사용)만 1.
+//   수동 명령(start·resume·retry)은 0a 규약대로 노드 실패도 1 이다(사람이 보고 있다).
+//   OpenClaw 는 0 이 아니면 error 로 적고 2회 연속이면 경보, 10회면 잡을 끈다 — 그래서 정상 상태는 전부 0 이다.
 // 정본은 그래프 체크포인트다. 등록부(lg_threads)는 그래프 상태로 맞춘다(reconcile).
-// 기한은 실행기가 그 질문을 처음 내보인 때부터 48시간. 답이 실제로 적용된 뒤에만 그 대기 기록을 놓는다(다음 질문은 새 기한).
 import "./lib/env-guard.mjs"; // 반드시 첫 import — 추적 변수 삭제·umask 077
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { selftest } from "./lib/selftest.mjs";
+import { selftest, hookLeak } from "./lib/selftest.mjs";
 import { loadConfig, clock, iso } from "./lib/config.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const THREAD_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const GRAPH_RE = /^[a-z][a-z0-9-]{0,40}$/;
 const VALUE_FLAGS = new Set(["days", "topic"]);
-const STATUSES = ["waiting", "expired", "running", "stalled", "held", "failed", "blocked", "done"];
+const STATUSES = ["queued", "running", "continue", "waiting", "held", "failed", "stalled", "gave_up", "expired", "blocked", "done"];
+const NOTIFY = /^(DONE|WAITING|EXPIRED|GAVE_UP|STUCK) /;
 
 class UsageError extends Error {}
+class GraphRuleError extends Error { constructor(m) { super(m); this.codeDefect = true; } }
 
 const lines = [];
 const say = (s) => lines.push(String(s).replace(/\s+/g, " ").trim().slice(0, 400)); // 한 줄 요약(알림용)
 const raw = (s) => lines.push(String(s)); // JSON 은 자르지 않는다
 const warn = (s) => process.stderr.write(`${s}\n`);
 
-// 종료 처리: 노드 실행 중에 프로세스가 끝나면(고장·신호) 장부에 남기고, 잠금을 풀고, 돌던 claude 자식도 끈다.
-const active = { cmd: null, ctx: null, store: null, now: null, thread: null, token: null, running: false, signal: null, killChildren: null };
+// 종료 처리: 노드 실행 중에 프로세스가 끝나면(고장·신호) 장부에 남기고, 잠금을 풀고, 돌던 claude 자식도 끈다(분리 실행은 산다).
+const active = { cmd: null, ctx: null, store: null, now: null, thread: null, token: null, running: false, node: null, signal: null, killChildren: null, metric: null };
 process.on("exit", (code) => {
   active.killChildren?.();
   const { store, thread } = active;
@@ -45,8 +52,12 @@ process.on("exit", (code) => {
     if (active.running) {
       process.exitCode = 1; // 노드가 process.exit(0) 을 불러도 경보가 나게
       const why = active.signal ? `신호 ${active.signal}` : `코드 ${code}`;
-      store.updateThread(thread, { status: "failed", note: `노드 실행 중 프로세스가 끝남(${why})` }, active.now());
-      fs.writeSync(1, `ERROR ${thread} crashed 노드 실행 중 프로세스가 끝남(${why}) — retry 로 이어간다\n`);
+      const row = store.getThread(thread);
+      const sig = `interrupted:${active.node ?? "?"}`;
+      const count = row?.fail_sig === sig ? (row.fail_count ?? 0) + 1 : 1;
+      store.updateThread(thread, { status: "failed", note: `노드 실행 중 프로세스가 끝남(${why})`, fail_sig: sig, fail_count: count }, active.now());
+      active.metric?.("interrupted", { thread, node: active.node, cause: active.signal ? "signal" : "exit", detail: why });
+      fs.writeSync(1, `ERROR ${thread} crashed 노드 실행 중 프로세스가 끝남(${why}) — 다음 틱(또는 retry)이 잇는다\n`);
     }
     if (active.token) store.releaseLock(thread, active.token);
   } catch { /* 끝나는 중 — 할 수 있는 만큼만 */ }
@@ -75,27 +86,80 @@ function checkThread(t) {
   return t;
 }
 
+// ── 그래프 열기 ───────────────────────────────────────────────────
+let REGISTRY = null;
+async function registry(ctx) {
+  if (!REGISTRY) { const { loadRegistry } = await import("./lib/run.mjs"); REGISTRY = loadRegistry(ctx.cfg.cmdRegistryPath); }
+  return REGISTRY;
+}
+
+// 코드 지문 — code_defect 보류는 이 값이 바뀌어야(코드를 고쳐야) 다시 시도한다.
+const hashCache = new Map();
+function codeHash(graph) {
+  if (hashCache.has(graph)) return hashCache.get(graph);
+  const h = createHash("sha1");
+  const files = [path.join(HERE, "run.mjs"), path.join(HERE, "cmd-registry.json"), path.join(HERE, "graphs", `${graph}.mjs`)];
+  for (const d of ["lib", "graphs"]) for (const f of fs.readdirSync(path.join(HERE, d)).sort()) if (/\.(mjs|json)$/.test(f)) files.push(path.join(HERE, d, f));
+  for (const f of [...new Set(files)]) { h.update(f); try { h.update(fs.readFileSync(f)); } catch { h.update("(없음)"); } }
+  const v = h.digest("hex").slice(0, 16);
+  hashCache.set(graph, v);
+  return v;
+}
+
 // 그래프를 연다. check=false 는 읽기(만료 확인)용 — 규칙 위반 그래프라도 기한 처리는 해야 한다.
-async function openGraph(ctx, name, thread, { check = true } = {}) {
+async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = {}) {
   if (!GRAPH_RE.test(name ?? "")) throw new UsageError(`그래프 이름이 이상하다: ${name ?? "(없음)"}`);
   const file = path.join(HERE, "graphs", `${name}.mjs`);
   if (!fs.existsSync(file)) throw new UsageError(`그래프 없음: ${name}`);
+  const reg = await registry(ctx);
   if (check) {
     const { checkFile } = await import("./scripts/check-interrupt-nodes.mjs");
-    const { problems } = checkFile(file, `graphs/${name}.mjs`);
+    const { checkGraphFile } = await import("./scripts/check-graph-rules.mjs");
+    const problems = [...checkFile(file, `graphs/${name}.mjs`).problems, ...checkGraphFile(file, reg, `graphs/${name}.mjs`)];
     if (problems.length) {
       const p = problems[0];
-      throw new Error(`그래프 규칙 위반 ${problems.length}건(${p.file}:${p.line} ${p.rule}) — scripts/check-interrupt-nodes.mjs 로 확인`);
+      throw new GraphRuleError(`그래프 규칙 위반 ${problems.length}건(${p.file}:${p.line} ${p.rule}) — scripts/check-interrupt-nodes.mjs·check-graph-rules.mjs 로 확인`);
     }
   }
   const mod = await import(pathToFileURL(file).href);
   const { Command } = await import("@langchain/langgraph");
   const { SqliteSaver } = await import("@langchain/langgraph-checkpoint-sqlite");
   const { createClaude, killActiveChildren } = await import("./lib/claude.mjs");
+  const { createRun, resolveCommand, CmdNotAllowed } = await import("./lib/run.mjs");
+  const { createEffect, effectScope } = await import("./lib/effects.mjs");
+  const detach = await import("./lib/detach.mjs");
   active.killChildren = killActiveChildren;
-  const llm = createClaude({ store: ctx.store, cfg: ctx.cfg, now: ctx.now, thread });
-  const app = mod.build({ checkpointer: new SqliteSaver(ctx.store.db), llm });
-  return { mod, app, Command, run: { configurable: { thread_id: thread }, durability: "sync" } };
+  const { cfg, now, metric } = ctx;
+  const llm = createClaude({ store: ctx.store, cfg, now, thread, metric });
+  const heartbeatSec = cfg.testMode && process.env.LG_TEST_HEARTBEAT_SEC ? Number(process.env.LG_TEST_HEARTBEAT_SEC) : 30;
+  const scratch = path.join(cfg.jobsDir, thread, "_scratch");
+  const BENCH = new Set(["bench", "reproduced", "diag_match", "hidden_pass", "ai_misjudge", "signal"]);
+  const tools = {
+    mode,
+    run: createRun({ cfg, registry: reg, thread, mode }),
+    // 분리 실행 띄우기. 같은 (노드, 시도)는 한 번만 띄운다. 부수효과 명령은 분리 실행하지 않는다(띄운 순간 '성공'으로 적히면 안 된다).
+    launch(cmdId, params = {}, { node, attempt = 1 } = {}) {
+      const r = resolveCommand(reg, cmdId, params, { mode, inEffect: !!effectScope.getStore(), scratch });
+      if (r.cmd.effect) throw new CmdNotAllowed(`${cmdId} 는 부수효과 명령 — 분리 실행하지 않는다(effect 안에서 run 으로)`);
+      if (r.cwd === scratch) fs.mkdirSync(scratch, { recursive: true, mode: 0o700 });
+      const nodeName = String(node ?? active.node ?? "node").replace(/[^A-Za-z0-9._:-]/g, "_").slice(0, 60);
+      return detach.launch(cfg.jobsDir, { thread, node: nodeName, attempt, cmdId },
+        { bin: r.bin, argv: r.argv, cwd: r.cwd, env: r.env, timeoutMs: r.timeoutMs, heartbeatSec });
+    },
+    check: (handle) => detach.check(handle),
+    output: (handle, which = "stdout") => detach.readOutput(handle, which),
+    effect: createEffect({ cfg, now, thread, mode, metric, nodeRef: () => active.node }),
+    // 노드가 '아직 아니다(분리 실행 진행 중)'를 알릴 때: throw tools.pending() → CONTINUE, 재시도로 세지 않는다
+    pending: (msg = "분리 실행 진행 중") => Object.assign(new Error(msg), { pending: true }),
+    // 노드가 스스로 보류할 때(디스크·대화 작업 표식 등): throw tools.hold("이유")
+    hold: (msg, reason = "node") => Object.assign(new Error(msg), { held: true, holdReason: reason }),
+    // 판정 M8 칸(벤치 결과). 정해진 필드만 남긴다.
+    bench: (fields = {}) => metric("bench", { thread, ...Object.fromEntries(Object.entries(fields).filter(([k]) => BENCH.has(k))) }),
+  };
+  const app = mod.build({ checkpointer: new SqliteSaver(ctx.store.db), llm, tools });
+  // 컴파일에 박힌 정적 중단점은 노드 단위 진행이 지나쳐 버린다 — 이런 그래프는 돌리지 않는다(승인 없이 통과 방지).
+  const blocked = !!(app.interruptBefore?.length || app.interruptAfter?.length);
+  return { mod, app, Command, name, blocked, run: { configurable: { thread_id: thread }, durability: "sync" } };
 }
 
 const pendingInterrupts = (s) => s.tasks?.flatMap((t) => t.interrupts ?? []) ?? [];
@@ -115,7 +179,11 @@ async function withLock(ctx, thread, fn) {
   const startAt = ctx.cfg.testMode ? Number(process.env.LG_TEST_START_AT) : 0;
   if (startAt > Date.now()) await new Promise((r) => setTimeout(r, Math.min(startAt - Date.now(), 10_000)));
   const token = ctx.store.acquireLock(thread);
-  if (!token) { say(`ERROR ${thread} busy 다른 프로세스가 이 스레드를 처리 중`); return 1; }
+  if (!token) {
+    const li = ctx.store.lockInfo(thread);
+    say(`ERROR ${thread} busy 다른 프로세스가 이 스레드를 처리 중${li?.stuck ? `(STUCK: pid ${li.pid}, ${Math.round(li.ageMs / 60_000)}분째 — 넘겨받지 않는다)` : ""}`);
+    return 1;
+  }
   active.thread = thread; active.token = token;
   try { return await fn(); } finally {
     ctx.store.releaseLock(thread, token);
@@ -127,6 +195,7 @@ async function withLock(ctx, thread, fn) {
 // 처음 보는 질문: fresh(방금 이 프로세스가 돌려 나온 것)면 지금부터. 아니면(고장으로 기록이 빠진 것) 마지막 실행 시작과
 // 체크포인트 시각 중 늦은 쪽부터 — 기록이 빠졌다고 기한이 늘지 않게, 옛 체크포인트 때문에 보이기도 전에 만료되지 않게.
 // answered: 방금 답을 적용하고 돌린 직후 — 기록된 대기는 답을 받은 것이니 열쇠가 같아도 새 질문으로 본다.
+// 기한 안에 answer 로 답이 적힌 질문은 기한이 지나도 만료시키지 않는다(틱이 늦게 와도 답은 유효).
 async function reconcile(ctx, g, thread, { fresh = false, answered = false } = {}) {
   const s = await g.app.getState(g.run);
   const intrs = pendingInterrupts(s);
@@ -147,48 +216,64 @@ async function reconcile(ctx, g, thread, { fresh = false, answered = false } = {
     deadline = since + ctx.cfg.approvalTtlMs;
     ctx.store.updateThread(thread, { interrupt_id: key, waiting_since: since, deadline_at: deadline, question: q }, t, { touch: false });
   }
-  if (deadline <= t) {
+  const cur = ctx.store.getThread(thread);
+  const answeredInTime = cur?.answer != null && cur.answer_key === key && cur.answered_at != null && cur.answered_at < deadline;
+  if (deadline <= t && !answeredInTime) {
     ctx.store.updateThread(thread, { status: "expired", note: "승인 기한 초과 — 자동 취소", notified: 0 }, t);
     ctx.expiredNow.push(thread);
-    return { kind: "expired", s, q, deadline };
+    ctx.metric("expired", { thread, graph: row?.graph, kind: "approval" });
+    return { kind: "expired", s, q, deadline, key };
   }
-  return { kind: "waiting", s, q, deadline };
+  return { kind: "waiting", s, q, deadline, key, intr };
 }
 
 const multiLine = (thread, intrs) =>
   `ERROR ${thread} multi-interrupt 승인 대기 ${intrs.length}개가 동시에 생겼다 — 답 하나가 모두를 승인할 수 있어 받지 않는다: ${intrs.map(questionOf).join(" / ")}`;
 
-// 그래프를 돌린 뒤 결과를 장부에 맞추고 첫 줄을 낸다. fresh = 방금 이 프로세스가 그래프를 돌렸다.
+// 그래프를 돌린 뒤 결과를 장부에 맞추고 결과 줄을 낸다. fresh = 방금 이 프로세스가 그래프를 돌렸다.
 async function settle(ctx, g, thread, { fresh = false, answered = false } = {}) {
   const r = await reconcile(ctx, g, thread, { fresh, answered });
   const t = ctx.now();
+  const row = ctx.store.getThread(thread);
   if (r.kind === "multi") {
-    ctx.store.updateThread(thread, { status: "failed", note: `승인 대기 ${r.intrs.length}개 동시 — 지원하지 않는다` }, t);
+    ctx.store.updateThread(thread, { status: "failed", note: `승인 대기 ${r.intrs.length}개 동시 — 지원하지 않는다`, hold_reason: "code_defect", hold_ref: codeHash(g.name) }, t);
+    ctx.metric("held", { thread, graph: g.name, scope: "thread", reasons: ["code_defect"], detail: "multi-interrupt" });
     say(multiLine(thread, r.intrs));
     return 1;
   }
   if (r.kind === "expired") { say(`ERROR ${thread} expired 승인 기한(${iso(r.deadline)})이 지나 자동 취소했다 — 새로 start`); return 1; }
   if (r.kind === "waiting") {
     ctx.store.updateThread(thread, { status: "waiting", question: r.q }, t);
-    say(`WAITING ${thread} ${r.q}`);
-    say(`답: lg.sh resume ${thread} approved|rejected · 기한 ${iso(r.deadline)}`);
+    const first = row?.waiting_notified !== r.key;
+    if (first) {
+      ctx.metric("waiting", { thread, graph: g.name, reason: typeof r.intr?.value?.reason === "string" ? r.intr.value.reason : null });
+    }
+    if (!ctx.isTick) {
+      say(`WAITING ${thread} ${r.q}`);
+      say(`답: lg.sh answer ${thread} approved|rejected · 기한 ${iso(r.deadline)}`);
+    } else if (first) {
+      say(`WAITING ${thread} ${r.q} · 답: lg.sh answer ${thread} approved|rejected · 기한 ${iso(r.deadline)}`);
+    }
+    ctx.store.updateThread(thread, { waiting_notified: r.key }, t, { touch: false });
     return 0;
   }
   if (!r.s.next?.length) {
     const summary = String(g.mod.summarize ? g.mod.summarize(r.s.values ?? {}) : "");
-    ctx.store.updateThread(thread, { status: "done", note: summary.slice(0, 300) }, t);
+    ctx.store.updateThread(thread, { status: "done", note: summary.slice(0, 300), hold_reason: null, fail_sig: null, fail_count: 0 }, t);
+    const v = r.s.values ?? {};
+    ctx.metric("done", { thread, graph: g.name, mode: row?.mode ?? "shadow", verified: typeof v.verify_log === "string" ? v.verify_log : null });
     say(`DONE ${thread} ${summary}`);
     return 0;
   }
-  // interrupt 없이 다음 노드가 남았다 = 정적 중단점(interruptBefore/After) 같은 멈춤. 이어가면 승인 없이 실행될 수 있어 막는다.
-  ctx.store.updateThread(thread, { status: "blocked", note: `interrupt 없이 멈춤(다음: ${r.s.next.join(",")})` }, t);
-  say(`ERROR ${thread} blocked interrupt 없이 ${r.s.next.join(",")} 앞에서 멈췄다(정적 중단점?) — 승인 없이 이어갈 수 있어 retry 를 막는다`);
-  return 1;
+  // interrupt 없이 다음 노드가 남았다 = 노드 단위 진행 도중이다. 여기 오면 안 된다(advance 가 다음 단계를 돈다).
+  ctx.store.updateThread(thread, { status: "continue", note: `다음 노드(${r.s.next.join(",")}) 앞에서 멈춤` }, t);
+  say(`CONTINUE ${thread} 다음 노드(${r.s.next.join(",")}) 앞에서 멈춤`);
+  return 0;
 }
 
 // 노드가 찍는 표준 출력·오류는 스레드 로그(600)로 돌린다 — '첫 줄이 결과' 규약과 stderr 없는 알림을 지키려고.
 function captureOutput(ctx, thread) {
-  let fd = null;
+  let fd = null, restored = false;
   const saved = [process.stdout.write, process.stderr.write];
   const sink = (chunk, enc, cb) => {
     try {
@@ -205,56 +290,194 @@ function captureOutput(ctx, thread) {
   process.stdout.write = sink;
   process.stderr.write = sink;
   return () => {
+    if (restored) return;
+    restored = true;
     [process.stdout.write, process.stderr.write] = saved;
     if (fd !== null) { try { fs.closeSync(fd); } catch { /* 이미 닫힘 */ } fd = null; }
   };
 }
 
-// prev: 돌리기 전 등록부 행. 같은 이유로 되풀이하는 보류·실패는 정리 기준 시각(updated_at)을 늘리지 않는다.
-// answered: 답을 적용하는 실행(resume). 실패하면 대기 기록(기한)을 그대로 두어 sweep 이 만료시킬 수 있게 한다.
-async function drive(ctx, g, thread, invoke, prev, { answered = false } = {}) {
-  const restore = captureOutput(ctx, thread);
-  active.running = true;
-  try {
-    await invoke();
-  } catch (e) {
-    active.running = false;
-    restore();
-    const held = e?.held === true || e?.cause?.held === true; // LLM 상한(LlmBudgetHeld) 또는 노드가 스스로 보류를 낸 경우
-    const status = held ? "held" : "failed";
-    const note = String(e?.message ?? e).split("\n")[0].slice(0, 200);
+// ── 오류 분류 ─────────────────────────────────────────────────────
+// pending: 분리 실행 진행 중 → CONTINUE · held: 상한·로그인·한도·노드 보류 → HOLD · code_defect: 코드 결함 → HOLD(코드가 바뀔 때까지)
+// transient: 그 밖 → 같은 오류 3회까지 다음 틱에 재시도, 그다음에도 같으면 GAVE_UP
+const CODE_DEFECT_NAMES = new Set(["TypeError", "ReferenceError", "SyntaxError", "RangeError", "EvalError", "URIError",
+  "InvalidUpdateError", "EmptyChannelError", "GraphValueError", "InvalidUpdateError", "UnreachableNodeError", "MultipleSubgraphsError"]);
+function classifyError(e) {
+  const pick = (k) => e?.[k] ?? e?.cause?.[k];
+  if (pick("pending") === true) return { kind: "pending" };
+  if (pick("held") === true) return { kind: "held", reason: pick("holdReason") ?? "node" };
+  if (pick("codeDefect") === true || CODE_DEFECT_NAMES.has(e?.name) || e?.code === "ERR_MODULE_NOT_FOUND") return { kind: "code_defect" };
+  return { kind: "transient" };
+}
+const firstLine = (e) => String(e?.message ?? e).split("\n")[0].slice(0, 200);
+const shape = (msg) => msg.replace(/\d+/g, "#").replace(/\s+/g, " ").slice(0, 120);
+// metrics 에는 오류의 머리말만 — 콜론 뒤(모델 출력·경로 조각이 붙는 자리)는 30일 보존 기록에 남기지 않는다(S4)
+const errHead = (msg) => shape(String(msg ?? "").split(/[:—]/)[0]).slice(0, 80);
+
+function giveUp(ctx, thread, graph, node, count, note) {
+  ctx.store.updateThread(thread, { status: "gave_up", note: `같은 오류 ${count}회 — ${note}` }, ctx.now());
+  ctx.metric("gave_up", { thread, graph, node, count, error: errHead(note) });
+  say(`GAVE_UP ${thread} ${node} 같은 오류 ${count}회 — ${note}`);
+  return 0;
+}
+
+const PAUSE_NOTE = {
+  budget: (next) => `틱 예산 소진 — 다음 노드(${next}) 앞에서 멈춤, 다음 틱이 잇는다`,
+  pending: (next) => `분리 실행 진행 중(${next}) — 다음 틱이 확인한다`,
+  paused: (next) => `PAUSED — 다음 노드(${next}) 앞에서 멈춤, 풀리면 다음 틱이 잇는다`,
+};
+function pauseThread(ctx, thread, reason, next) {
+  const note = PAUSE_NOTE[reason](next.join(","));
+  const row = ctx.store.getThread(thread);
+  ctx.store.updateThread(thread, { status: "continue", note }, ctx.now(), { touch: row?.note !== note });
+  ctx.metric("continue", { thread, graph: row?.graph, reason, next: next.join(",") });
+  say(`CONTINUE ${thread} ${note}`);
+  return 0;
+}
+
+// prev: 돌리기 전 등록부 행 — 같은 이유로 되풀이하는 보류·실패는 정리 기준 시각(updated_at)을 늘리지 않는다.
+// cur: 지금 행 — 실패 서명·횟수는 이것으로 센다(이번 실행에서 한 단계라도 끝냈으면 서명이 비워져 있다).
+function onStepError(ctx, g, thread, e, names, prev, cur = prev) {
+  const cls = classifyError(e);
+  const note = firstLine(e);
+  const t = ctx.now();
+  const node = names.join(",");
+  if (cls.kind === "pending") return pauseThread(ctx, thread, "pending", names);
+  if (cls.kind === "held") {
+    const same = prev?.status === "held" && prev?.note === note;
+    ctx.store.updateThread(thread, { status: "held", note, hold_reason: cls.reason }, t, { touch: !same });
+    ctx.metric("held", { thread, graph: g.name, scope: "thread", reasons: [cls.reason], node });
+    say(`HELD ${thread} ${note}`);
+    return 0;
+  }
+  if (cls.kind === "code_defect") {
+    // 재시도해도 같다 — 코드(그래프·실행기·허용 목록)가 바뀔 때까지 틱은 다시 돌리지 않는다. 기한(48시간)이 지나면 만료로 보고한다.
+    const status = ctx.isTick ? "held" : "failed";
     const same = prev?.status === status && prev?.note === note;
-    ctx.store.updateThread(thread, { status, note }, ctx.now(), { touch: !same });
-    if (held) { say(`HELD ${thread} ${note}`); return 0; }
+    ctx.store.updateThread(thread, { status, note, hold_reason: "code_defect", hold_ref: codeHash(g.name) }, t, { touch: !same });
+    ctx.metric("held", { thread, graph: g.name, scope: "thread", reasons: ["code_defect"], node, error: errHead(note) });
+    if (ctx.isTick) { say(`HELD ${thread} 코드 결함 — ${note}`); return 0; }
     say(`ERROR ${thread} failed ${note} — 원인을 고친 뒤 retry`);
     return 1;
   }
-  active.running = false;
-  restore();
-  return settle(ctx, g, thread, { fresh: true, answered });
+  const sig = `${node}:${shape(note)}`;
+  const count = cur?.fail_sig === sig ? (cur.fail_count ?? 0) + 1 : 1;
+  if (count > ctx.cfg.maxRetries) {
+    ctx.store.updateThread(thread, { fail_sig: sig, fail_count: count }, t, { touch: false });
+    return giveUp(ctx, thread, g.name, node, count, note);
+  }
+  const same = prev?.status === "failed" && prev?.note === note;
+  ctx.store.updateThread(thread, { status: "failed", note, fail_sig: sig, fail_count: count, hold_reason: null }, t, { touch: !same });
+  ctx.metric("failed", { thread, graph: g.name, node, count, error: errHead(note) });
+  say(`ERROR ${thread} failed ${note} — ${ctx.isTick ? `다음 틱이 다시 한다(${count}/${ctx.cfg.maxRetries})` : "원인을 고친 뒤 retry"}`);
+  return ctx.isTick ? 0 : 1;
+}
+
+const elapsedMs = () => process.uptime() * 1000; // 틱 예산은 실제 경과 시간(잡의 시간 상한은 프로세스 시작부터 잰다)
+const overBudget = (ctx) => elapsedMs() >= ctx.cfg.tickBudgetMs;
+
+// 한 단계(superstep)만 돈다. 그래프 안 interrupt 와 실행기의 단계 멈춤(interruptAfter "*") 모두 여기서 멈춘다.
+async function stepOnce(g, arg) {
+  const nodes = [];
+  const stream = await g.app.stream(arg, { ...g.run, streamMode: "updates", interruptAfter: "*" });
+  for await (const ch of stream) for (const k of Object.keys(ch ?? {})) if (k !== "__interrupt__") nodes.push(k);
+  return nodes;
+}
+
+// 노드 단위 진행. first: {kind:"input", value} | {kind:"resume", decision} | {kind:"null"}.
+// 단계 앞마다 예산을 본다. 한 단계도 못 돌렸으면 아무것도 바꾸지 않고 skipped 를 돌려준다.
+async function advance(ctx, g, thread, first, prev) {
+  const restore = captureOutput(ctx, thread);
+  let arg = first.kind === "input" ? first.value : first.kind === "resume" ? new g.Command({ resume: first.decision }) : null;
+  let steps = 0;
+  try {
+    for (;;) {
+      const pre = await g.app.getState(g.run);
+      const names = pre.next?.length ? [...pre.next] : ["(start)"];
+      // 한 단계는 꼭 돈다(틱은 예산이 남았을 때만 스레드를 고른다). 그다음부터 단계 앞마다 예산·멈춤 스위치를 본다.
+      if (steps > 0 && overBudget(ctx)) { restore(); return pauseThread(ctx, thread, "budget", names); }
+      if (steps > 0 && fs.existsSync(ctx.cfg.pausedPath)) { restore(); return pauseThread(ctx, thread, "paused", names); }
+      if ((pre.metadata?.step ?? 0) >= ctx.cfg.maxSteps) {
+        restore();
+        return giveUp(ctx, thread, g.name, names.join(","), pre.metadata.step, `단계 상한 ${ctx.cfg.maxSteps}에 닿음(끝없는 되풀이?)`);
+      }
+      const node = names.join(",");
+      ctx.metric("node_start", { thread, graph: g.name, node });
+      active.running = true; active.node = node;
+      const t0 = performance.now();
+      let ran;
+      try {
+        ran = await stepOnce(g, arg);
+      } catch (e) {
+        active.running = false;
+        // 새 스레드의 첫 단계는 돌기 전엔 다음 노드를 모른다 — 실패 뒤 상태(입력은 저장됨)에서 실제 노드 이름을 읽는다(실패 서명이 틱마다 같게)
+        let failed = names;
+        if (names[0] === "(start)") { try { const after = await g.app.getState(g.run); if (after.next?.length) failed = [...after.next]; } catch { /* 이름만 못 얻음 */ } }
+        ctx.metric("node_end", { thread, graph: g.name, node: failed.join(","), ok: false, ms: Math.round(performance.now() - t0) });
+        restore();
+        return onStepError(ctx, g, thread, e, failed, prev, ctx.store.getThread(thread) ?? prev);
+      }
+      active.running = false;
+      ctx.metric("node_end", { thread, graph: g.name, node: ran.length ? ran.join(",") : node, ok: true, ms: Math.round(performance.now() - t0) });
+      const t = ctx.now();
+      const progress = { progress_at: t, fail_sig: null, fail_count: 0, hold_reason: null, hold_ref: null };
+      // 답을 적용한 단계가 끝났다 — 그 대기 기록과 답을 비운다(다음 질문은 새 기한·새 답)
+      if (first.kind === "resume" && steps === 0) Object.assign(progress, { interrupt_id: null, waiting_since: null, deadline_at: null, answer: null, answer_key: null, answered_at: null });
+      ctx.store.updateThread(thread, progress, t);
+      arg = null; steps++;
+      const s = await g.app.getState(g.run);
+      if (pendingInterrupts(s).length || !s.next?.length) { restore(); return settle(ctx, g, thread, { fresh: true }); }
+    }
+  } finally { restore(); active.running = false; active.node = null; }
+}
+
+const codeOf = (r) => (typeof r === "number" ? r : r?.code ?? 0);
+
+// ── 수동 명령 ─────────────────────────────────────────────────────
+function pausedLine(ctx, thread) {
+  if (!fs.existsSync(ctx.cfg.pausedPath)) return false;
+  ctx.metric("held", { thread, scope: "command", reasons: ["paused"], cmd: active.cmd });
+  say(`HELD ${thread ?? "-"} PAUSED 스위치가 켜져 있다 — 진행하지 않는다(답 기록·상태 보기는 된다)`);
+  return true;
 }
 
 async function cmdStart(ctx, [graph, thread], flags) {
   checkThread(thread);
-  const g = await openGraph(ctx, graph, thread);
+  if (pausedLine(ctx, thread)) return 0;
+  const { liveMode } = await import("./lib/gates.mjs");
+  const mode = liveMode(ctx.cfg);
+  const g = await openGraph(ctx, graph, thread, { mode });
   const input = g.mod.input ? g.mod.input(flags) : {};
   return withLock(ctx, thread, async () => {
-    if (ctx.store.hasCheckpoint(thread)) {
-      const row = ctx.store.getThread(thread);
+    const row = ctx.store.getThread(thread);
+    if (ctx.store.hasCheckpoint(thread) || row?.status === "queued") {
       say(`ERROR ${thread} exists 이미 있는 스레드(${row ? ctx.store.effective(row) : "등록 없음"}) — status 로 보고 새 이름으로 start`);
       return 1;
     }
-    ctx.store.registerThread(thread, graph, ctx.now());
-    return drive(ctx, g, thread, () => g.app.invoke(input, g.run), null);
+    if (flags.queue) {
+      ctx.store.registerThread(thread, graph, ctx.now(), { mode, status: "queued", input });
+      ctx.metric("start", { thread, graph, mode, queued: true });
+      say(`OK ${thread} queued ${mode} — 다음 틱이 시작한다`);
+      return 0;
+    }
+    ctx.store.registerThread(thread, graph, ctx.now(), { mode, input });
+    ctx.metric("start", { thread, graph, mode });
+    if (g.blocked) {
+      ctx.store.updateThread(thread, { status: "blocked", note: "컴파일에 정적 중단점(interruptBefore/After)이 있다" }, ctx.now());
+      say(`ERROR ${thread} blocked 정적 중단점(interruptBefore/After)이 박힌 그래프는 승인 없이 지나갈 수 있어 돌리지 않는다 — interrupt() 노드로 고친 뒤 새로 start`);
+      return 1;
+    }
+    return codeOf(await advance(ctx, g, thread, { kind: "input", value: input }, null));
   });
 }
 
 async function cmdResume(ctx, [thread, decision]) {
   checkThread(thread);
   if (!["approved", "rejected"].includes(decision)) throw new UsageError("resume <스레드> approved|rejected");
+  if (pausedLine(ctx, thread)) return 0;
   const row0 = ctx.store.getThread(thread);
   if (!row0) { say(`ERROR ${thread} not-found 없는 스레드`); return 1; }
-  const g = await openGraph(ctx, row0.graph, thread);
+  const g = await openGraph(ctx, row0.graph, thread, { mode: row0.mode ?? "shadow" });
   return withLock(ctx, thread, async () => {
     const row = ctx.store.getThread(thread); // 잠근 뒤 다시 읽는다 — 그 사이 다른 프로세스가 끝냈을 수 있다
     if (row.status === "expired") { say(`ERROR ${thread} expired 승인 기한이 지나 자동 취소된 스레드 — 새로 start`); return 1; }
@@ -262,29 +485,45 @@ async function cmdResume(ctx, [thread, decision]) {
     if (r.kind === "expired") { say(`ERROR ${thread} expired 승인 기한(${iso(r.deadline)})이 지나 자동 취소했다 — 새로 start`); return 1; }
     if (r.kind === "multi") { say(multiLine(thread, r.intrs)); return 1; }
     if (r.kind === "none") { say(`ERROR ${thread} not-waiting 승인 대기 중이 아님(${ctx.store.effective(row)})`); return 1; }
-    // 답을 적용한다. 대기 기록은 실행이 성공한 뒤 settle 이 놓는다(실패하면 기한이 남아 sweep 이 만료시킨다).
+    // 답을 적용한다. 대기 기록은 그 단계가 성공한 뒤 advance 가 놓는다(실패하면 기한이 남아 sweep 이 만료시킨다).
     ctx.store.updateThread(thread, { status: "running", decision, run_started_at: ctx.now() }, ctx.now());
-    return drive(ctx, g, thread, () => g.app.invoke(new g.Command({ resume: decision }), g.run), row, { answered: true });
+    ctx.metric("resumed", { thread, graph: row.graph, from: "answer", via: "resume" });
+    return codeOf(await advance(ctx, g, thread, { kind: "resume", decision }, row));
   });
 }
 
 async function cmdRetry(ctx, [thread]) {
   checkThread(thread);
+  if (pausedLine(ctx, thread)) return 0;
   const row0 = ctx.store.getThread(thread);
   if (!row0) { say(`ERROR ${thread} not-found 없는 스레드`); return 1; }
-  const g = await openGraph(ctx, row0.graph, thread);
+  const g = await openGraph(ctx, row0.graph, thread, { mode: row0.mode ?? "shadow" });
   return withLock(ctx, thread, async () => {
     const row = ctx.store.getThread(thread);
     if (row.status === "expired") { say(`ERROR ${thread} expired 자동 취소된 스레드는 잇지 않는다 — 새로 start`); return 1; }
     if (row.status === "blocked") { say(`ERROR ${thread} blocked interrupt 없이 멈춘 스레드는 승인 없이 지나갈 수 있어 잇지 않는다 — 그래프를 고친 뒤 새로 start`); return 1; }
+    if (row.status === "gave_up") { say(`ERROR ${thread} gave_up 같은 오류로 포기한 스레드 — 원인을 고친 뒤 새로 start`); return 1; }
     if (!ctx.store.hasCheckpoint(thread)) { say(`ERROR ${thread} no-checkpoint 저장된 단계가 없다 — 같은 이름으로 다시 start`); return 1; }
     const r = await reconcile(ctx, g, thread);
     if (r.kind !== "none" || !r.s.next?.length) return settle(ctx, g, thread); // 대기·만료·끝남은 장부만 맞춘다
     ctx.store.updateThread(thread, { status: "running", run_started_at: ctx.now() }, ctx.now(), { touch: false });
-    return drive(ctx, g, thread, () => g.app.invoke(null, g.run), row);
+    ctx.metric("resumed", { thread, graph: row.graph, from: row.status, via: "retry" });
+    return codeOf(await advance(ctx, g, thread, { kind: "null" }, row));
   });
 }
 
+// 답만 적는다 — 그래프를 열지 않고, 잠금도 잡지 않고, 정리(sweep)도 하지 않는다(1초 안에). 진행은 다음 틱이 한다.
+function cmdAnswer(ctx, [thread, decision]) {
+  checkThread(thread);
+  if (!["approved", "rejected"].includes(decision)) throw new UsageError("answer <스레드> approved|rejected");
+  const r = ctx.store.recordAnswer(thread, decision, ctx.now());
+  if (!r.ok) { say(`ERROR ${thread} ${r.kind} ${r.msg}`); return 1; }
+  if (r.kind === "recorded") ctx.metric("answered", { thread, graph: r.row.graph, decision });
+  say(`OK ${thread} answered ${decision} — 다음 틱이 이어 간다${fs.existsSync(ctx.cfg.pausedPath) ? "(지금은 PAUSED — 풀려야 진행)" : ""}`);
+  return 0;
+}
+
+// ── 정리(만료) ────────────────────────────────────────────────────
 // 기한 지난 승인 대기를 취소한다. 등록부로 후보를 고르고 그래프 상태로 확인한다 — 이미 답을 받아 다음 단계로 간 스레드는 취소하지 않는다.
 // 끊긴 스레드(실행 중으로 적혔는데 주인이 없음)도 여기서 그래프 상태로 맞춘다. 알림 줄은 end() 가 붙인다.
 async function sweep(ctx) {
@@ -295,19 +534,21 @@ async function sweep(ctx) {
     const t = ctx.now();
     try {
       let g;
-      try { g = await openGraph(ctx, row.graph, row.thread_id, { check: false }); } catch (e) {
-        if (!(e instanceof UsageError)) throw e;
-        // 그래프 파일이 없어졌다 — 그래프 상태를 못 읽으니 장부 기한으로 처리한다(영원히 대기로 남지 않게)
+      try { g = await openGraph(ctx, row.graph, row.thread_id, { check: false, mode: row.mode ?? "shadow" }); } catch (e) {
+        // 그래프 파일이 없어졌거나 불러오다 죽는다 — 그래프 상태를 못 읽으니 장부 기한으로 처리한다(영원히 대기로 남지 않게)
         if (row.deadline_at != null && row.deadline_at <= t) {
           ctx.store.updateThread(row.thread_id, { status: "expired", note: `${e.message} — 장부 기한으로 만료`, notified: 0 }, t);
           ctx.expiredNow.push(row.thread_id);
+          ctx.metric("expired", { thread: row.thread_id, graph: row.graph, kind: "approval", detail: "graph-missing" });
         } else if (row.status === "running") {
           ctx.store.updateThread(row.thread_id, { status: "failed", note: e.message }, t, { touch: false });
         }
         continue;
       }
       const r = await reconcile(ctx, g, row.thread_id);
-      if (r.kind === "waiting" && row.status !== "waiting") {
+      if (r.kind === "waiting" && !["waiting", "failed", "held"].includes(row.status)) {
+        ctx.store.updateThread(row.thread_id, { status: "waiting", question: r.q }, t, { touch: false });
+      } else if (r.kind === "waiting" && row.status !== "waiting" && row.answer == null) {
         ctx.store.updateThread(row.thread_id, { status: "waiting", question: r.q }, t, { touch: false });
       } else if (r.kind === "none" && row.status === "waiting") { // 장부는 대기인데 그래프엔 대기가 없다(그래프가 바뀜 등)
         const done = !r.s.next?.length;
@@ -322,25 +563,207 @@ async function sweep(ctx) {
   return failures;
 }
 
+// 진척 없이 48시간(LG_HOLD_TTL_HOURS)을 넘긴 보류·이어가기·대기열·실패 스레드를 만료시킨다(S9). 승인 기한이 걸린 것은 sweep 이 본다.
+function expireIdle(ctx) {
+  const t = ctx.now();
+  for (const row of ctx.store.idleCandidates(t, ctx.cfg.holdTtlMs)) {
+    if (row.deadline_at != null) continue; // 승인 대기 기록이 있다 — 승인 기한으로 판단한다
+    const token = ctx.store.acquireLock(row.thread_id);
+    if (!token) continue;
+    try {
+      const cur = ctx.store.getThread(row.thread_id);
+      if (!cur || !["queued", "continue", "held", "failed", "running"].includes(cur.status)) continue;
+      const h = Math.round(ctx.cfg.holdTtlMs / 3_600_000);
+      ctx.store.updateThread(cur.thread_id, { status: "expired", note: `진척 없이 ${h}시간(${cur.status}${cur.hold_reason ? `:${cur.hold_reason}` : ""}) — 보류 기한 초과로 자동 취소`, notified: 0 }, t);
+      ctx.expiredNow.push(cur.thread_id);
+      ctx.metric("expired", { thread: cur.thread_id, graph: cur.graph, kind: "hold", status: cur.status, reason: cur.hold_reason ?? null });
+    } finally {
+      ctx.store.releaseLock(row.thread_id, token);
+    }
+  }
+}
+
+// ── 틱 ────────────────────────────────────────────────────────────
+// 살아 있는 주인이 기준 시간보다 오래 쥔 잠금 — 넘겨받지 않고 STUCK 을 한 번만 알린다(같은 잠금은 다시 알리지 않는다).
+function noteStuck(ctx, row, li) {
+  const key = `${li.pid}:${li.acquiredAt}`;
+  if (row.stuck_key === key) return;
+  ctx.store.updateThread(row.thread_id, { stuck_key: key }, ctx.now(), { touch: false });
+  ctx.metric("stuck", { thread: row.thread_id, graph: row.graph, pid: li.pid, age_min: Math.round(li.ageMs / 60_000) });
+  ctx.metric("held", { thread: row.thread_id, graph: row.graph, scope: "thread", reasons: ["stuck"] });
+  say(`STUCK ${row.thread_id} pid ${li.pid} 가 ${Math.round(li.ageMs / 60_000)}분째 잠금을 쥐고 있다(살아 있음 — 넘겨받지 않고 이 스레드는 보류)`);
+}
+
+function dailyGc(ctx) {
+  const { localDay } = ctx.storeMod;
+  const today = localDay(ctx.now());
+  let last = "";
+  try { last = fs.readFileSync(ctx.cfg.lastGcPath, "utf8").trim(); } catch { /* 처음 */ }
+  if (last === today) return;
+  try {
+    const r = ctx.store.gc(ctx.now(), ctx.cfg.gcDays);
+    ctx.metric("gc", { ok: true, deleted: r.deleted, bytes: r.bytes });
+    fs.writeFileSync(ctx.cfg.lastGcPath, today, { mode: 0o600 });
+  } catch (e) {
+    ctx.metric("gc", { ok: false, error: errHead(firstLine(e)) }); // 다음 틱에 다시
+  }
+}
+
+// 틱이 고를 순서: 답이 적힌 대기 → 끊긴 실행 → 이어가기 → 실패(재시도) → 보류 → 대기열(새 일은 마지막)
+const RANK = { waiting: 0, running: 1, continue: 2, failed: 3, held: 4, queued: 5 };
+function tickCandidates(ctx) {
+  return ctx.store.openThreads()
+    .filter((r) => r.status in RANK && (r.status !== "waiting" || (r.answer != null && r.answer_key === r.interrupt_id)))
+    .sort((a, b) => RANK[a.status] - RANK[b.status] || (a.progress_at ?? a.created_at) - (b.progress_at ?? b.created_at));
+}
+
+async function tickThread(ctx, row0) {
+  const thread = row0.thread_id;
+  current = thread;
+  const li = ctx.store.lockInfo(thread);
+  if (li?.live) return "locked";
+  const token = ctx.store.acquireLock(thread);
+  if (!token) return "locked";
+  active.thread = thread; active.token = token;
+  try {
+    let row = ctx.store.getThread(thread);
+    if (!row || !(row.status in RANK)) return "skip";
+    if (row.status === "waiting" && !(row.answer != null && row.answer_key === row.interrupt_id)) return "skip";
+    if (row.hold_reason === "code_defect" && row.hold_ref === codeHash(row.graph)) return "skip"; // 코드가 그대로면 다시 해도 같다
+    if (row.hold_reason === "effect_unknown") return "skip"; // 결과 모르는 부수효과 — 사람이 확인해야 한다(기한이 지나면 만료 보고)
+    const t = ctx.now();
+    if (row.status === "running") {
+      // 실행 중으로 적혔는데 잠금 주인이 없다 = 끊김(게이트웨이 재시작·SIGKILL). 재시도로 센다.
+      const sig = "interrupted:stalled";
+      const count = row.fail_sig === sig ? (row.fail_count ?? 0) + 1 : 1;
+      ctx.metric("interrupted", { thread, graph: row.graph, cause: "stalled" });
+      ctx.store.updateThread(thread, { status: "failed", note: "실행 중 끊김(주인 없음)", fail_sig: sig, fail_count: count }, t, { touch: false });
+      row = ctx.store.getThread(thread);
+    }
+    if (row.status === "failed" && (row.fail_count ?? 0) > ctx.cfg.maxRetries) {
+      ctx.store.updateThread(thread, { status: "gave_up", note: `같은 오류 ${row.fail_count}회 — ${row.note ?? ""}` }, t);
+      ctx.metric("gave_up", { thread, graph: row.graph, count: row.fail_count, error: errHead(row.note) });
+      say(`GAVE_UP ${thread} 같은 오류 ${row.fail_count}회 — ${row.note ?? ""}`);
+      return "gave_up";
+    }
+    let g;
+    try {
+      g = await openGraph(ctx, row.graph, thread, { mode: row.mode ?? "shadow" });
+      if (g.blocked) throw new GraphRuleError("컴파일에 정적 중단점(interruptBefore/After)이 있다 — 노드 단위 진행이 승인 없이 지나칠 수 있다");
+    } catch (e) {
+      if (!(e instanceof UsageError) && !(e instanceof GraphRuleError) && classifyError(e).kind !== "code_defect") throw e;
+      const note = firstLine(e);
+      const same = row.status === "held" && row.note === note;
+      ctx.store.updateThread(thread, { status: "held", note, hold_reason: "code_defect", hold_ref: codeHash(row.graph) }, t, { touch: !same });
+      ctx.metric("held", { thread, graph: row.graph, scope: "thread", reasons: ["code_defect"], error: errHead(note) });
+      say(`HELD ${thread} 코드 결함 — ${note}`);
+      return "held";
+    }
+    let first;
+    if (!ctx.store.hasCheckpoint(thread)) {
+      if (row.input_json == null) { // 입력을 모르는 옛 스레드 — 시작할 수 없다
+        ctx.store.updateThread(thread, { status: "held", note: "저장된 단계도 시작 입력도 없다 — 같은 이름으로 다시 start", hold_reason: "code_defect", hold_ref: codeHash(row.graph) }, t);
+        return "held";
+      }
+      first = { kind: "input", value: JSON.parse(row.input_json) };
+      if (row.status === "queued") ctx.metric("start", { thread, graph: row.graph, mode: row.mode ?? "shadow", from: "queue" });
+    } else {
+      const r = await reconcile(ctx, g, thread);
+      if (r.kind === "expired") return "expired";
+      if (r.kind === "multi") return codeOf(await settle(ctx, g, thread)) ? "error" : "ok";
+      if (r.kind === "waiting") {
+        const cur = ctx.store.getThread(thread);
+        if (!(cur.answer != null && cur.answer_key === cur.interrupt_id)) { await settle(ctx, g, thread); return "waiting"; }
+        first = { kind: "resume", decision: cur.answer };
+        ctx.store.updateThread(thread, { decision: cur.answer }, t, { touch: false });
+        ctx.metric("resumed", { thread, graph: row.graph, from: "answer" });
+      } else if (!r.s.next?.length) {
+        await settle(ctx, g, thread);
+        return "done";
+      } else {
+        first = { kind: "null" };
+        ctx.metric("resumed", { thread, graph: row.graph, from: row.status });
+      }
+    }
+    const before = ctx.store.getThread(thread);
+    ctx.store.updateThread(thread, { status: "running", run_started_at: t }, t, { touch: false });
+    await advance(ctx, g, thread, first, before);
+    return "ok";
+  } finally {
+    ctx.store.releaseLock(thread, token);
+    active.token = null; active.thread = null;
+  }
+}
+
+async function cmdTick(ctx) {
+  ctx.isTick = true;
+  const t0 = performance.now();
+  const { checkGates } = await import("./lib/gates.mjs");
+  if (fs.existsSync(ctx.cfg.pausedPath)) { // 전체 정지 — 정리·만료도 하지 않는다
+    ctx.metric("held", { scope: "tick", reasons: ["paused"] });
+    ctx.metric("tick", { ms: Math.round(performance.now() - t0), outcome: "paused" });
+    return 0;
+  }
+  const leak = hookLeak(ctx.cfg);
+  if (!leak.ok) { // 사용자 훅이 graphs 쪽 claude 호출에서 돌았다 — 위키·RAG 오염 위험(S6·S7). 사람이 볼 때까지 멈춘다.
+    ctx.metric("held", { scope: "tick", reasons: ["hook_leak"], detail: leak.msg });
+    say(`ERROR - selftest ${leak.msg}`);
+    return 1;
+  }
+  const failures = await sweep(ctx);
+  for (const f of failures) ctx.metric("held", { scope: "sweep", reasons: ["sweep_error"], detail: errHead(f) });
+  expireIdle(ctx);
+  for (const row of ctx.store.openThreads()) {
+    const li = ctx.store.lockInfo(row.thread_id);
+    if (li?.stuck) noteStuck(ctx, row, li);
+  }
+  dailyGc(ctx);
+  const gates = checkGates(ctx.cfg, ctx.store, ctx.now());
+  if (gates.length) {
+    ctx.metric("held", { scope: "tick", reasons: gates.map((x) => x.gate), detail: gates.map((x) => x.detail).join(" / ") });
+    say(`HOLD ${gates.map((x) => `${x.gate}: ${x.detail}`).join(" · ")}`);
+    ctx.metric("tick", { ms: Math.round(performance.now() - t0), outcome: "hold" });
+    failures.forEach(say);
+    return 0;
+  }
+  const seen = new Set();
+  let n = 0, outcome = "idle";
+  for (;;) {
+    if (overBudget(ctx)) { outcome = "budget"; break; }
+    if (fs.existsSync(ctx.cfg.pausedPath)) { outcome = "paused"; break; } // 틱 도중 멈춤 — 다음 스레드를 고르지 않는다
+    const row = tickCandidates(ctx).find((r) => !seen.has(r.thread_id));
+    if (!row) break;
+    seen.add(row.thread_id);
+    const r = await tickThread(ctx, row);
+    if (r !== "locked" && r !== "skip") { n++; outcome = "ran"; }
+  }
+  ctx.metric("tick", { ms: Math.round(performance.now() - t0), threads: n, outcome });
+  failures.forEach(say);
+  return 0;
+}
+
+// ── 상태 보기 ─────────────────────────────────────────────────────
 function view(ctx, r) {
   const t = (ms) => (ms == null ? null : iso(ms));
   let status = ctx.store.effective(r), note = r.note;
-  if (status === "waiting" && r.deadline_at != null && r.deadline_at <= ctx.now()) { status = "expired"; note = "기한 지남 — 다음 명령·sweep 때 취소"; }
+  if (status === "waiting" && r.deadline_at != null && r.deadline_at <= ctx.now() && r.answer == null) { status = "expired"; note = "기한 지남 — 다음 명령·틱 때 취소"; }
   return {
-    thread: r.thread_id, graph: r.graph, status, since: t(r.waiting_since), deadline: t(r.deadline_at),
-    question: r.question, decision: r.decision, note, created: t(r.created_at), updated: t(r.updated_at),
+    thread: r.thread_id, graph: r.graph, status, mode: r.mode ?? "shadow", since: t(r.waiting_since), deadline: t(r.deadline_at),
+    question: r.question, answer: r.answer ?? null, decision: r.decision, note, hold: r.hold_reason ?? null, fails: r.fail_count ?? 0,
+    created: t(r.created_at), updated: t(r.updated_at), progress: t(r.progress_at),
   };
 }
 function viewLine(v) {
   const detail = {
-    waiting: `${v.question ?? ""} · 기한 ${v.deadline}`,
+    waiting: `${v.question ?? ""} · 기한 ${v.deadline}${v.answer ? ` · 답 ${v.answer}(다음 틱이 적용)` : ""}`,
     expired: `${v.question ?? ""} · ${v.note ?? ""}`,
-    stalled: "멈춤(실행 중 끊김) — retry",
+    stalled: "멈춤(실행 중 끊김) — 다음 틱이 잇는다",
+    held: `${v.hold ?? ""} ${v.note ?? ""}`,
   }[v.status] ?? (v.note ?? "");
-  return `${v.status.toUpperCase()} ${v.thread} [${v.graph}] ${detail}`;
+  return `${v.status.toUpperCase()} ${v.thread} [${v.graph}·${v.mode}] ${detail}`;
 }
 
-// 읽기만 한다 — 만료 확정·알림은 다른 명령과 sweep 이 한다(여기서 확정하면 알림이 사라진다).
+// 읽기만 한다 — 만료 확정·알림은 다른 명령과 틱이 한다(여기서 확정하면 알림이 사라진다).
 function cmdStatus(ctx, [thread], flags) {
   if (thread) {
     checkThread(thread);
@@ -354,9 +777,11 @@ function cmdStatus(ctx, [thread], flags) {
   const counts = Object.fromEntries(STATUSES.map((k) => [k, 0]));
   for (const v of all) counts[v.status] = (counts[v.status] ?? 0) + 1;
   const shown = flags.all ? all : all.filter((v) => v.status !== "done");
-  const llm = { today: ctx.store.llmCounts(ctx.now()).day, perDay: ctx.cfg.llm.perDay };
-  if (flags.json) { raw(JSON.stringify({ now: iso(ctx.now()), counts, llm, threads: shown })); return 0; }
-  say(`STATUS ${STATUSES.map((k) => `${k}=${counts[k]}`).join(" ")} llm_today=${llm.today}/${llm.perDay}`);
+  const c = ctx.store.llmCounts(ctx.now());
+  const llm = { today: c.day, perDay: ctx.cfg.llm.perDay, tokensToday: c.tokens, tokenCap: ctx.cfg.llm.dayTokenCap };
+  const switches = { paused: fs.existsSync(ctx.cfg.pausedPath), live: fs.existsSync(ctx.cfg.livePath) };
+  if (flags.json) { raw(JSON.stringify({ now: iso(ctx.now()), counts, llm, switches, threads: shown })); return 0; }
+  say(`STATUS ${STATUSES.map((k) => `${k}=${counts[k]}`).join(" ")} llm_today=${llm.today}/${llm.perDay} tokens_today=${llm.tokensToday}/${llm.tokenCap}${switches.paused ? " PAUSED" : ""}${switches.live ? " LIVE" : " shadow"}`);
   for (const v of shown) say(viewLine(v));
   return 0;
 }
@@ -366,7 +791,7 @@ async function main() {
   const cmd = pos.shift();
   active.cmd = cmd;
   if (!cmd || cmd === "help" || flags.help) {
-    raw("사용: run.mjs start <그래프> <스레드> [--topic 값] [--llm] | resume <스레드> approved|rejected | retry <스레드> | status [<스레드>] [--json] [--all] | sweep | gc [--days N] | selftest");
+    raw("사용: run.mjs tick [--verbose] | answer <스레드> approved|rejected | start <그래프> <스레드> [--topic 값] [--llm] [--queue] | resume <스레드> approved|rejected | retry <스레드> | status [<스레드>] [--json] [--all] | sweep | gc [--days N] | selftest");
     return cmd ? 0 : 1;
   }
   const st = selftest();
@@ -376,17 +801,32 @@ async function main() {
     warn(`실행한 Node: ${process.version} (${process.execPath})`);
     return 1;
   }
-  if (cmd === "selftest") { say(`OK selftest sqlite ${st.sqlite} · node ${st.node}`); return 0; }
-
   const cfg = loadConfig();
-  const now = clock();
-  const { Store } = await import("./lib/store.mjs");
-  const store = new Store(cfg);
-  const ctx = { cfg, now, store, expiredNow: [] };
-  active.ctx = ctx; active.store = store; active.now = now;
-  if (cmd === "status") return cmdStatus(ctx, pos, flags);
+  if (cmd === "selftest") {
+    const leak = hookLeak(cfg);
+    if (!leak.ok) { say(`ERROR - selftest ${leak.msg}`); return 1; }
+    const { loadRegistry } = await import("./lib/run.mjs");
+    let reg;
+    try { reg = loadRegistry(cfg.cmdRegistryPath); } catch (e) { say(`ERROR - selftest ${firstLine(e)}`); return 1; }
+    say(`OK selftest sqlite ${st.sqlite} · node ${st.node} · 훅 누수 0(${leak.checked}개 로그) · 허용 명령 ${Object.keys(reg.commands).length}개`);
+    return 0;
+  }
 
-  const failures = await sweep(ctx);
+  const now = clock();
+  const storeMod = await import("./lib/store.mjs");
+  const { createMetrics } = await import("./lib/metrics.mjs");
+  const store = new storeMod.Store(cfg);
+  const metric = createMetrics({ file: cfg.metricsPath, now });
+  const ctx = { cfg, now, store, storeMod, metric, expiredNow: [], isTick: false };
+  active.ctx = ctx; active.store = store; active.now = now; active.metric = metric;
+  if (cmd === "status") return cmdStatus(ctx, pos, flags);
+  if (cmd === "answer") return cmdAnswer(ctx, pos);
+  if (cmd === "tick") return cmdTick(ctx);
+
+  const paused = fs.existsSync(cfg.pausedPath);
+  if (cmd === "sweep" && paused) return 0; // 전체 정지 — 만료 처리도 하지 않는다(NO_REPLY)
+  const failures = paused ? [] : await sweep(ctx);
+  if (cmd === "sweep") expireIdle(ctx);
   switch (cmd) {
     case "start": return cmdStart(ctx, pos, flags);
     case "resume": return cmdResume(ctx, pos);
@@ -416,12 +856,13 @@ function writeOut(text) {
 
 function end(code) {
   const { store } = active;
+  const ownsNotices = active.cmd === "sweep" || active.cmd === "tick"; // 예약 잡의 알림이 정본 — 대화 중 명령은 가로채지 않는다
   let notices = [];
-  // 만료 알림: sweep 은 아직 알리지 않은 만료를 전부 내고, 찍은 뒤에만 '알림'으로 적는다(예약 잡의 알림이 정본).
-  // 다른 명령은 자기가 이번에 만료시킨 것만 뒤에 붙이고 표시하지 않는다 — 대화 중 명령이 예약 알림을 가로채지 않게. status 는 읽기만.
-  if (store && active.cmd !== "status") {
+  // 만료 알림: 예약 잡(tick·sweep)은 아직 알리지 않은 만료를 전부 내고, 찍은 뒤에만 '알림'으로 적는다.
+  // 다른 명령은 자기가 이번에 만료시킨 것만 뒤에 붙이고 표시하지 않는다. status·answer 는 만료를 다루지 않는다.
+  if (store && !["status", "answer"].includes(active.cmd)) {
     try {
-      notices = active.cmd === "sweep"
+      notices = ownsNotices
         ? store.unnotifiedExpired()
         : [...new Set(active.ctx?.expiredNow ?? [])].map((id) => store.getThread(id)).filter(Boolean);
     } catch (e) {
@@ -429,22 +870,26 @@ function end(code) {
       code = 1;
     }
   }
-  const out = [...lines, ...notices.map((r) => `EXPIRED ${r.thread_id} ${r.question ?? ""} — 승인 기한 초과로 자동 취소`.replace(/\s+/g, " ").slice(0, 400))];
-  if (active.cmd === "sweep" && !out.length) out.push("NO_REPLY");
+  let out = [...lines, ...notices.map((r) => `EXPIRED ${r.thread_id} ${r.question ?? r.note ?? ""} — ${r.note?.includes("보류") ? "보류 기한 초과로 자동 취소" : "승인 기한 초과로 자동 취소"}`.replace(/\s+/g, " ").slice(0, 400))];
+  // 알림 필터: 예약 잡(tick)은 주인님께 갈 줄만 — DONE·WAITING·EXPIRED·GAVE_UP·STUCK(+진짜 오류 ERROR). 낼 것이 없으면 NO_REPLY.
+  if (active.cmd === "tick" && !active.verbose) out = out.filter((l) => NOTIFY.test(l) || (code !== 0 && /^ERROR /.test(l)));
+  if (ownsNotices && !out.length) out.push("NO_REPLY");
   let written = false;
   try { writeOut(out.length ? `${out.join("\n")}\n` : ""); written = true; } catch { code = 1; }
   if (store) {
     try {
-      if (written && active.cmd === "sweep" && notices.length) store.markNotified(notices.map((r) => r.thread_id));
+      if (written && ownsNotices && notices.length) store.markNotified(notices.map((r) => r.thread_id));
       if (active.cmd !== "status") store.writePending();
     } catch (e) { warn(`장부 마무리 실패: ${e.message}`); }
     store.close();
     active.store = null;
   }
+  active.metric?.close?.();
   process.exitCode = code;
   setTimeout(() => process.exit(code), 3000).unref(); // 남은 핸들이 있어도 3초 안에 끝낸다
 }
 
+active.verbose = process.argv.includes("--verbose");
 main().then(end, (e) => {
   const kind = e instanceof UsageError ? "usage" : "internal";
   say(`ERROR ${current} ${kind} ${String(e?.message ?? e).split("\n")[0]}`);

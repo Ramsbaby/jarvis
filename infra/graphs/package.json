@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node scripts/check-interrupt-nodes.mjs graphs",
+    "check": "node scripts/check-interrupt-nodes.mjs graphs && node scripts/check-graph-rules.mjs graphs",
+    "report": "node lg-report.mjs",
     "selftest": "node run.mjs selftest"
   },
   "dependencies": {

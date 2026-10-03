@@ -21,6 +21,7 @@ if ! "$NODE" run.mjs selftest; then
   "$NODE" run.mjs selftest
 fi
 "$NODE" scripts/check-interrupt-nodes.mjs
+"$NODE" scripts/check-graph-rules.mjs
 
 mkdir -p "$(dirname "$STATE")"
 mkdir -p -m 700 "$STATE"

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "note": "그래프 노드가 run(cmdId, 인자)·launch(cmdId, 인자)로 실행할 수 있는 명령의 허용 목록(정본). 모드별 허용(modes), 부수효과 명령은 effect:true(실제 모드 전용, effect() 안에서만). 셸·env·OpenClaw CLI·인터프리터 즉석 코드는 올릴 수 없다(lib/run.mjs 가 거부). 1a 에서 고스톱 명령을 더한다.",
+  "commands": {
+    "sys.true": {
+      "desc": "입구 자가 시험 — 아무것도 하지 않고 0",
+      "bin": "/usr/bin/true",
+      "argv": [],
+      "modes": ["shadow", "live"],
+      "timeoutSec": 10
+    },
+    "sys.sleep": {
+      "desc": "분리 실행·시간 상한 실측용 대기(초)",
+      "bin": "/bin/sleep",
+      "argv": ["{seconds}"],
+      "params": { "seconds": "^[0-9]{1,4}$" },
+      "modes": ["shadow", "live"],
+      "timeoutSec": 3600
+    }
+  }
+}

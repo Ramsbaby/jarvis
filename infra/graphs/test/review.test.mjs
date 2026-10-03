@@ -263,7 +263,7 @@ test("옛 판이 만든 DB(빠진 칸)도 새 판이 칸을 더해 그대로 쓴
   t.after(() => db.close());
   const cols = db.prepare("PRAGMA table_info(lg_locks)").all().map((c) => c.name);
   assert.ok(cols.includes("pstart"), cols.join(","));
-  assert.equal(db.pragma("user_version", { simple: true }), 2);
+  assert.equal(db.pragma("user_version", { simple: true }), 3); // 0b: 칸을 더해 판 3
 });
 
 test("그래프 파일이 없어져도 대기는 장부 기한으로 만료되고(종료 0) 나중에 정리된다", (t) => {

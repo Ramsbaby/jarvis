@@ -28,11 +28,16 @@ test("깨끗한 환경변수·고정 인자·빈 작업 폴더로 부른다 — 
   assert.equal(calls.length, 1);
   const [c] = calls;
   assert.deepEqual(c.args, claudeArgs("haiku"));
-  for (const f of ["--setting-sources", "project", "--strict-mcp-config", "--no-session-persistence", "--output-format", "json"]) assert.ok(c.args.includes(f), f);
+  // 0b: 격리는 --restricted(사용자·프로젝트 설정·훅·사용자 규칙 무시, 파일 도구는 작업 폴더 안). 옛 --setting-sources project 는 규칙이 실렸다(실측)
+  for (const f of ["--restricted", "--strict-mcp-config", "--no-session-persistence", "--output-format", "json"]) assert.ok(c.args.includes(f), f);
+  assert.ok(!c.args.includes("--setting-sources"), "--restricted 와 섞지 않는다");
   const extra = Object.keys(c.env).filter((k) => !ALLOWED_ENV.has(k) && !k.startsWith("__CF"));
   assert.deepEqual(extra, [], "허용 목록 밖의 환경변수가 넘어갔다");
   assert.equal(c.env.HOME, os.userInfo().homedir, "로그인은 진짜 홈에 묶여 있다");
-  assert.equal(fs.realpathSync(c.cwd), fs.realpathSync(path.join(sb.state, "claude-cwd")));
+  // 0b: 작업 폴더는 홈 밖 임시 폴더(TMPDIR 아래 lg-claude-cwd*) — 진짜 홈·시험 홈 어디에도 속하지 않는다
+  const cwd = fs.realpathSync(c.cwd);
+  assert.match(path.basename(cwd), /^lg-claude-cwd/);
+  for (const h of [os.userInfo().homedir, sb.home]) assert.ok(!cwd.startsWith(`${fs.realpathSync(h)}/`), `홈 밖이어야 한다: ${cwd}`);
   assert.deepEqual(fs.readdirSync(c.cwd), [], "작업 폴더는 비어 있다(project 설정·훅 없음)");
   assert.match(c.input, /요약하라/);
   assert.equal(statusJson(sb).llm.today, 1);
