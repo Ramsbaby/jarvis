@@ -44,6 +44,7 @@ const State = Annotation.Root({
   eyeRetry: Annotation({ reducer: last, default: () => false }),
   failed: Annotation({ reducer: last }),
   tokens: Annotation({ reducer: last, default: () => 0 }),
+  costUsd: Annotation({ reducer: last, default: () => 0 }),
   llmCalls: Annotation({ reducer: last, default: () => 0 }),
   posted: Annotation({ reducer: last, default: () => [] }),
   result: Annotation({ reducer: last }),
@@ -241,9 +242,10 @@ export function build({ checkpointer, llm, tools }) {
     fs.writeFileSync(path.join(dir, `llm-${stage}.txt`), String(st.text ?? ""), { mode: 0o600 });
     const r = await tools.run("gostop.qa-eye-record", { batch, stage, day: s.day });
     const j = lastJson(r.stdout) ?? {};
+    // usage 모양은 lib/claude.mjs usageOf: { in, out, cacheCreate, cacheRead, costUsd } — 관문 token_cap 과 같은 합(캐시 포함)
     const u = st.usage ?? {};
-    const tok = (u.input_tokens ?? u.in ?? 0) + (u.output_tokens ?? u.out ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
-    return { h: { ...s.h, eye: null }, eyeRetry: false, tokens: s.tokens + tok, llmCalls: s.llmCalls + 1,
+    const tok = (u.in ?? 0) + (u.out ?? 0) + (u.cacheCreate ?? 0) + (u.cacheRead ?? 0);
+    return { h: { ...s.h, eye: null }, eyeRetry: false, tokens: s.tokens + tok, costUsd: s.costUsd + Number(u.costUsd ?? st.costUsd ?? 0), llmCalls: s.llmCalls + 1,
       log: [`eye_${stage} ${j.parsed ? "" : "(답 형식 못 읽음) "}짚음 ${j.flagged ?? 0} 토큰 ${tok}`] };
   }
 
@@ -299,7 +301,7 @@ export function build({ checkpointer, llm, tools }) {
     }
     const md = [`# 고스톱 실기 QA 묶음 — ${s.base} (${s.day})`, "",
       `- 판 ${s.next}/${s.games} · 커밋 ${String(s.sha ?? "").slice(0, 8)} · 씨앗 ${s.seed0}~ · 난이도 ${s.diffs} · 모드 ${tools.mode}`,
-      `- 확정 발견 ${total}건(상 ${sev.상} · 중 ${sev.중} · 하 ${sev.하}) · 지시함 후보 ${s.posted.length} · AI 호출 ${s.llmCalls}회 토큰 ${s.tokens}`,
+      `- 확정 발견 ${total}건(상 ${sev.상} · 중 ${sev.중} · 하 ${sev.하}) · 지시함 후보 ${s.posted.length} · AI 호출 ${s.llmCalls}회 토큰 ${s.tokens}(캐시 포함) 약 $${s.costUsd.toFixed(2)} · 판당 ${Math.round(s.tokens / Math.max(1, s.next))}토큰`,
       s.failed ? `- 실패: ${s.failed}` : "", "", "| 묶음 | 판 | 결과 | 발견 | 요지 |", "|---|---|---|---|---|", ...rows].join("\n");
     const out = path.join(stateRoot(), s.day, `${s.base}-summary.md`);
     fs.mkdirSync(path.dirname(out), { recursive: true });
