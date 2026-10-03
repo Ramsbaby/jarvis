@@ -16,6 +16,12 @@ import { appendFileSync, mkdirSync, rmdirSync, statSync, readFileSync, existsSyn
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { LANCEDB_PATH, RAG_LOCK_DIR, INFRA_HOME, ensureDirs } from './paths.mjs';
+import { keywordTokens, dropStopwords, stemmedQuery, matchedTermCount } from './korean-keywords.mjs';
+
+// 한국어 키워드 보강(2026-10-03) — 조사·어미를 뗀 줄기로 키워드 쪽을 맞춘다. 질의 시점만 바꾸므로 재색인 불필요.
+// RAG_KO_KEYWORDS=0 이면 예전 동작(공백 자르기)으로 돌아간다. search(opts.koKeywords)로 호출별로도 바꿀 수 있다.
+// 근거: rag/test/eval-keyword-search.mjs (한국어 30 + 영어/코드 10 질의, 2026-10-03 측정).
+const KO_KEYWORDS_DEFAULT = process.env.RAG_KO_KEYWORDS !== '0';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Owner companies — private/config/owner-companies.txt 에서 로드
@@ -984,6 +990,7 @@ export class RAGEngine {
       sourceFilter = opts.sourceFilter, // 기존 하위 호환
       useHyde     = false,          // HyDE: LLM으로 가상 답변 생성 후 임베딩 검색
       llmClient   = null,           // HyDE용 LLM 클라이언트 (외부 주입)
+      koKeywords  = KO_KEYWORDS_DEFAULT, // 한국어 조사·어미 줄기 맞추기 (기본 켜짐, RAG_KO_KEYWORDS=0 으로 끔)
     } = opts;
     const effectiveLimit = topK;
 
@@ -1039,7 +1046,11 @@ export class RAGEngine {
     let ftsResults = [];
     try {
       const episodicExtra = isEpisodic ? episodicFilter : null;
-      const [raw, normalized] = await Promise.allSettled([
+      // 한국어 줄기 질의(2026-10-03): 위 normalizedQuery 는 긴 조사만 뗀다. 여기서는 한 글자 조사·하다/되다 어미까지
+      // 떼고 군말("어떻게·했었지")을 뺀 낱말로 한 번 더 찾는다 — 글에 맨 줄기("벼락치기 학습법")로 적힌 청크가 걸린다.
+      // 색인은 그대로 쓰므로 재색인 불필요. 영어/코드만 있는 질의는 null(기존 경로 그대로).
+      const stemQuery = koKeywords ? stemmedQuery(query) : null;
+      const [raw, normalized, stemmed] = await Promise.allSettled([
         _applyFilters(
           this.table.query().fullTextSearch(query, { columns: ['text'] }),
           episodicExtra
@@ -1050,11 +1061,19 @@ export class RAGEngine {
               episodicExtra
             ).limit(effectiveLimit * 3).toArray()
           : Promise.resolve([]),
+        stemQuery && stemQuery !== query && stemQuery !== normalizedQuery
+          ? _applyFilters(this.table.query().fullTextSearch(stemQuery, { columns: ['text'] }), episodicExtra)
+              .limit(effectiveLimit * 3).toArray()
+          : Promise.resolve([]),
       ]);
       const rawRes  = raw.status       === 'fulfilled' ? raw.value       : [];
       const normRes = normalized.status === 'fulfilled' ? normalized.value : [];
+      const stemRes = stemmed.status    === 'fulfilled' ? stemmed.value    : [];
       const seen = new Set(rawRes.map(r => r.id));
-      ftsResults = [...rawRes, ...normRes.filter(r => !seen.has(r.id))];
+      ftsResults = [...rawRes];
+      for (const r of [...normRes, ...stemRes]) {
+        if (!seen.has(r.id)) { seen.add(r.id); ftsResults.push(r); }
+      }
 
       // episodic 모드 부족 시 전체 fallback
       if (isEpisodic && ftsResults.length < effectiveLimit) {
@@ -1102,11 +1121,19 @@ export class RAGEngine {
       const candidates = [...candidateMap.values()];
 
       if (candidates.length > 0) {
-        const tokenizedDocs = candidates.map(c => _bm25Tokenize(c.text || ''));
+        // koKeywords: 질의·문서 낱말을 모두 줄기로 바꿔 맞춘다("서버에서"="서버가"="서버").
+        const tok = koKeywords ? keywordTokens : _bm25Tokenize;
+        const tokenizedDocs = candidates.map(c => tok(c.text || ''));
         const avgDocLen = tokenizedDocs.reduce((s, t) => s + t.length, 0) / tokenizedDocs.length;
         const idfMap = _buildIdfMap(tokenizedDocs);
-        // 조사 뗀 질의 토큰도 쓴다("한화에너지에" → "한화에너지").
-        const queryTokens = [...new Set([..._bm25Tokenize(query), ..._bm25Tokenize(normalizedQuery)])];
+        // 조사 뗀 질의 토큰도 쓴다("한화에너지에" → "한화에너지"). koKeywords 는 군말("어떻게·했었지")도 뺀다.
+        const queryTokens = koKeywords
+          ? [...new Set(dropStopwords(tok(query)))]
+          : [...new Set([..._bm25Tokenize(query), ..._bm25Tokenize(normalizedQuery)])];
+        // 최소 일치 낱말 수(2026-10-03, koKeywords 일 때만): 질의 낱말이 3개 이상이면 2개 이상 맞은 후보만
+        // 키워드 순위에 넣는다. 흔한 낱말 하나("get")만 걸친 벡터 후보가 RRF 점수를 두 번 챙기던 것을 막는다.
+        // 줄기 맞추기 없이 이것만 켜면 한국어가 오히려 떨어졌다(조사 붙은 꼴은 2개 이상 맞기 어렵다 — 모의 계산 hit@5 20→18).
+        const minMatched = koKeywords && queryTokens.length >= 3 ? 2 : 1;
 
         // 낱말이 하나도 안 맞는 후보는 키워드 순위에서 뺀다(2026-09-27).
         // 전에는 벡터 후보 전부가 키워드 순위도 받아 RRF 점수를 두 번 챙겼고, 키워드로만 찾은 글은
@@ -1116,7 +1143,8 @@ export class RAGEngine {
             ...doc,
             _bm25Score: _bm25Score(queryTokens, tokenizedDocs[i], avgDocLen, idfMap),
           }))
-          .filter(doc => doc._bm25Score > 0)
+          .filter((doc, i) => doc._bm25Score > 0
+            && (minMatched === 1 || matchedTermCount(queryTokens, tokenizedDocs[i]) >= minMatched))
           .sort((a, b) => b._bm25Score - a._bm25Score);
       }
     }
