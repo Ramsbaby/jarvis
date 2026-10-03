@@ -45,6 +45,8 @@ Future<String?> _one(String op, List<String> a) async {
       } else {
         File(a[0]).readAsBytesSync();
       }
+    case 'stat': // 메타데이터만(있는지·크기) — 내용 읽기와 따로 막힌다
+      File(a[0]).lengthSync();
     case 'write':
       File(a[0]).writeAsStringSync('lg-probe');
     case 'append':

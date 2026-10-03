@@ -153,6 +153,11 @@ test("그 밖 우회로: 밖 파일 하드링크 · 밖을 가리키는 바로�
   ]);
   for (const x of r) assert.equal(x.ok, false, `${x.op}: 됐다(격리 실패)`);
   assert.equal(fs.existsSync(path.join(w.copy, "lib/hl.dart")), false);
+  // 홈 아래는 있는지·크기(메타데이터)도 안 보인다 — 본 저장소 파일 이름 짐작으로 정답을 캐는 길을 막는다. 허용 경로(pub 캐시)는 보인다
+  const pubReadme = path.join(H, ".pub-cache", "README.md");
+  const metas = existing(path.join(GOSTOP, "pubspec.yaml"), path.join(H, ".zshrc"), path.join(H, ".gitconfig"));
+  if (metas.length) assertDenied(await probe(w, metas.map((p) => ({ op: "stat", a: [p] }))), "홈 메타데이터");
+  if (fs.existsSync(pubReadme)) assert.equal((await probe(w, [{ op: "stat", a: [pubReadme] }]))[0].ok, true, "pub 캐시는 보여야 한다");
 });
 
 test("함정: 사본 .git 에 fsmonitor·훅·필터를 심어도 패치 추출(git 안 씀) 뒤 표식이 생기지 않는다 — 밖에서 git 을 돌리면 터지는 것을 대조군으로 확인", { skip: SKIP }, async (t) => {

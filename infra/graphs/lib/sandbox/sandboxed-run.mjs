@@ -111,8 +111,25 @@ export function listeningPorts() {
   return [...ports].sort((a, b) => a - b);
 }
 
-export function buildProfile({ template = PROFILE, ports = [] } = {}) {
+// 홈 아래에서 메타데이터(stat — 있는지·크기·시각)를 열어 둘 폴더: 허용 경로(사본·임시·pub 캐시·SDK) 중 홈 아래 것의 조상들.
+// 경로를 따라 내려가려면 조상마다 stat 이 필요하다. 그 밖의 홈 아래는 있는지조차 안 보이게 한다(본 저장소 파일 이름 짐작 막기).
+export function homeAncestors(home, paths) {
+  const out = new Set();
+  for (const p of paths) {
+    if (!inside(p, home)) continue;
+    for (let cur = p; ; cur = path.dirname(cur)) { out.add(cur); if (cur === home || cur === path.dirname(cur)) break; }
+  }
+  return [...out].sort();
+}
+
+// ancestors 는 변수(-D ANC0…)로 넘긴다 — 경로를 프로필 글자에 박지 않으니 따옴표·역슬래시 걱정이 없다.
+export function buildProfile({ template = PROFILE, ports = [], ancestors = 0 } = {}) {
   let text = fs.readFileSync(template, "utf8");
+  const anc = Array.from({ length: ancestors }, (_, i) => `\n  (literal (param "ANC${i}"))`).join("");
+  text += `\n;; 홈 아래 메타데이터도 허용 목록(sandboxed-run.mjs 가 덧붙임). bsd.sb 의 전역 허용을 같은 동작 이름으로 덮고, 허용 경로와 그 조상만 다시 연다.
+(deny file-read-metadata (subpath (param "HOME_DIR")))
+(allow file-read-metadata${anc}
+  (subpath (param "COPY")) (subpath (param "TMP")) (subpath (param "PUB_CACHE")) (subpath (param "FLUTTER_ROOT")))\n`;
   const extra = [...new Set(ports)].filter((p) => Number.isInteger(p) && p > 0 && p < 65536 && !FIXED_DENY_PORTS.includes(p)).sort((a, b) => a - b);
   if (extra.length) {
     text += `\n;; 실행 직전에 열려 있던 포트 ${extra.length}개(sandboxed-run.mjs 가 덧붙임)\n(deny network-outbound\n${extra.map((p) => `  (remote ip "localhost:${p}")`).join("\n")})\n`;
@@ -155,12 +172,15 @@ export function sandboxCommand({ copy, tmp, tool = "flutter", args = [], flutter
   const flutter = locateFlutter({ flutterRoot, env });
   let pc = pubCache || env.PUB_CACHE || path.join(home, ".pub-cache");
   try { pc = real(pc); } catch { throw new SandboxError("no_pub_cache", `pub 캐시가 없다: ${pc}`); }
-  const dirs = checkDirs({ copy, tmp, home: real(home), flutterRoot: flutter.root, pubCache: pc, roots: roots ?? defaultRoots(home) });
+  const h = real(home);
+  const dirs = checkDirs({ copy, tmp, home: h, flutterRoot: flutter.root, pubCache: pc, roots: roots ?? defaultRoots(home) });
   for (const d of ["home", "t"]) fs.mkdirSync(path.join(dirs.tmp, d), { recursive: true, mode: 0o700 });
-  const profile = buildProfile({ ports: ports ?? listeningPorts() });
+  const anc = homeAncestors(h, [dirs.copy, dirs.tmp, pc, flutter.root]);
+  const profile = buildProfile({ ports: ports ?? listeningPorts(), ancestors: anc.length });
   const argv = [
     "-p", profile,
-    "-D", `COPY=${dirs.copy}`, "-D", `TMP=${dirs.tmp}`, "-D", `FLUTTER_ROOT=${flutter.root}`, "-D", `PUB_CACHE=${pc}`,
+    "-D", `COPY=${dirs.copy}`, "-D", `TMP=${dirs.tmp}`, "-D", `FLUTTER_ROOT=${flutter.root}`, "-D", `PUB_CACHE=${pc}`, "-D", `HOME_DIR=${h}`,
+    ...anc.flatMap((a, i) => ["-D", `ANC${i}=${a}`]),
     ...toolArgv(tool, args, flutter, dirs),
   ];
   return { bin: SANDBOX_EXEC, argv, cwd: dirs.copy, env: sandboxEnv({ tmp: dirs.tmp, flutter, pubCache: pc, env }), profile, dirs, flutter, pubCache: pc };
