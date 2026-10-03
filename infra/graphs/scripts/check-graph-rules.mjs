@@ -8,7 +8,11 @@
 //   store          랭그래프 Store(자체 기억 장치)를 쓰면 위반(S15 — 기억층 겹침)
 //   lib-import     실행기 내부 모듈(lib/·scripts/)을 가져오면 위반 — 도구는 build({ tools }) 로 받는다(입구 우회 방지)
 //   network        fetch·http·https·net·tls·dgram·undici·WebSocket 을 쓰면 위반 — 노드는 오픈클로·밖과 직접 말하지 않는다(S15)
-// 한계(정직): 정규식·괄호 짝 수준이다. 그래서 실행기 쪽에도 같은 규칙을 실행 때 한 번 더 건다(run 의 허용 목록·effect 범위 확인).
+//   import-allow   상대 경로가 아닌 가져오기는 허용 목록만(@langchain/langgraph·@langchain/core·zod·node 의 순한 내장) — 프로세스를 띄우는 패키지 차단
+//   escape         우회로: createRequire·process.getBuiltinModule·eval·Function 생성자·.constructor(…)·글자값 아닌 동적 import·
+//                  위험 이름 글자값("child_process"·"constructor"·"binding" 등 — obj["…"] 접근)
+// 한계(정직): 정규식·괄호 짝 수준이다. 그래서 실행 때 한 번 더 막는다 — 프로세스 띄우기는 lib/guard.mjs 가 어떤 길이든 막고,
+//   허용 목록·effect 범위는 run 이 확인한다(0b 검토 상1: 정적 검사만으로는 createRequire 등으로 우회됐다).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -56,6 +60,9 @@ function specsOf(src, code) {
 }
 
 const NET_MODULES = /^(node:)?(http|https|http2|net|tls|dgram|dns)$|^(undici|ws|axios|node-fetch|got)$/;
+// 상대 경로가 아닌 가져오기 허용 목록 — 그 밖(다른 npm 패키지·child_process·module·vm·worker_threads·cluster·inspector…)은 위반
+const IMPORT_ALLOW = /^(@langchain\/langgraph(\/[\w-]+)?|@langchain\/core(\/[\w./-]+)?|zod(\/[\w-]+)?|(node:)?(fs|fs\/promises|path|crypto|util|url|os|events|assert|assert\/strict|buffer|string_decoder|timers|timers\/promises|querystring))$/;
+const ESCAPE_NAMES = /^(child_process|node:child_process|constructor|binding|_linkedBinding|dlopen|execve|getBuiltinModule|createRequire|spawn|spawnSync|exec|execSync|execFile|execFileSync|fork|worker_threads|node:worker_threads|vm|node:vm|module|node:module)$/;
 
 export function checkGraphSource(src, file, registry, { resolveImport } = {}) {
   const code = strip(src);
@@ -70,6 +77,9 @@ export function checkGraphSource(src, file, registry, { resolveImport } = {}) {
   };
 
   for (const im of specsOf(src, code)) {
+    if (!/^\.{1,2}\//.test(im.spec) && !IMPORT_ALLOW.test(im.spec) && !/^(node:)?child_process$/.test(im.spec) && !NET_MODULES.test(im.spec)) {
+      report(im.index, "import-allow", `${im.spec} 가져오기 금지 — 허용: @langchain/langgraph·@langchain/core·zod·순한 node 내장(fs·path·crypto…)`);
+    }
     if (/^(node:)?child_process$/.test(im.spec)) report(im.index, "child-process", "child_process 직접 사용 금지 — 명령은 run(cmdId, 인자) 입구로만(허용 목록)");
     if (NET_MODULES.test(im.spec)) report(im.index, "network", `${im.spec} 금지 — 노드는 네트워크·오픈클로와 직접 말하지 않는다(S15)`);
     if (/^@langchain\//.test(im.spec) && (/store/i.test(im.spec) || /\b\w*Store\b/.test(im.clause))) {
@@ -80,7 +90,19 @@ export function checkGraphSource(src, file, registry, { resolveImport } = {}) {
       report(im.index, "lib-import", `실행기 내부 모듈(${path.relative(HERE, target)}) 가져오기 금지 — 도구는 build({ llm, tools }) 로 받는다`);
     }
   }
-  for (const m of code.matchAll(/\bchild_process\b|\bprocess\s*\.\s*(?:binding|_linkedBinding|dlopen)\s*\(/g)) report(m.index, "child-process", "child_process·process.binding 금지");
+  for (const m of code.matchAll(/\bchild_process\b|\bprocess\s*\.\s*(?:binding|_linkedBinding|dlopen|execve)\s*\(/g)) report(m.index, "child-process", "child_process·process.binding 금지");
+  // 우회로 — 실행 차단층(lib/guard.mjs)이 막지만, 쓰려는 시도 자체를 코드 결함으로 본다
+  for (const m of code.matchAll(/\bcreateRequire\b|\bgetBuiltinModule\b|(?<![\w$.])eval\s*\(|\bnew\s+Function\b|(?<![\w$.])Function\s*\(|\.\s*constructor\s*\(|\bimport\s*\.\s*meta\s*\.\s*resolve\b/g)) {
+    report(m.index, "escape", `우회로 금지(${m[0].replace(/\s+/g, "")}) — 모듈·명령은 정해진 입구로만`);
+  }
+  for (const m of code.matchAll(/\bimport\s*\(/g)) { // 동적 import 는 글자값만(상대 경로·허용 목록은 위 규칙이 본다)
+    if (literalAt(src, m.index + m[0].length) == null) report(m.index, "escape", "글자값이 아닌 동적 import 금지(문자열 조합으로 검사 우회)");
+  }
+  for (const m of src.matchAll(/(["'`])([\w:./-]{2,40})\1/g)) { // 위험 이름 글자값(obj["exec"+…] 같은 접근) — 주석 안은 뺀다
+    if (code[m.index] === m[1] && ESCAPE_NAMES.test(m[2]) && !specsOf(src, code).some((im) => m.index >= im.index && m.index < im.index + 200 && src.slice(im.index, m.index).split("\n").length === 1)) {
+      report(m.index, "escape", `위험 이름 글자값 "${m[2]}" — 동적 접근으로 검사를 피하지 않는다`);
+    }
+  }
   for (const m of code.matchAll(/\b(?:InMemoryStore|BaseStore|AsyncBatchedStore|PostgresStore|SqliteStore|MemoryStore)\b|\bgetStore\s*\(/g)) {
     report(m.index, "store", "랭그래프 Store 금지(S15)");
   }

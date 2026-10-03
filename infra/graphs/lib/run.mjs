@@ -9,6 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { effectScope } from "./effects.mjs";
+import { allowSpawn } from "./guard.mjs";
 
 export class CmdNotAllowed extends Error {
   constructor(msg) { super(msg); this.name = "CmdNotAllowed"; this.codeDefect = true; }
@@ -20,6 +21,9 @@ const MODES = new Set(["shadow", "live"]);
 const BANNED_BIN = /^(sh|bash|zsh|dash|ksh|fish|csh|tcsh|env|osascript|openclaw|sudo|su|launchctl|crontab)$/;
 const INTERP_BIN = /^(node|python[0-9.]*|ruby|perl|php|deno|bun|osascript)$/;
 const EVAL_FLAG = /^(-c|-e|--eval|-p|--print|-r|--require|--import|-m)$/;
+// OpenClaw CLI 자체를 가리키는 항목(파일 이름이 openclaw·openclaw.mjs, 또는 openclaw 패키지 안의 스크립트).
+// 경로에 '.openclaw' 가 든 것(작업 공간·런타임 폴더)은 막지 않는다 — 1a 명령은 그 아래 사본을 인자로 받는다.
+const OPENCLAW_CLI = (a) => /^openclaw(\.[cm]?js)?$/i.test(path.basename(String(a))) || /\/node_modules\/openclaw\//i.test(String(a));
 const BASE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 
 function bad(msg) { throw new Error(`cmd-registry: ${msg}`); }
@@ -38,10 +42,10 @@ export function loadRegistry(file) {
     if (!ID_RE.test(id)) bad(`cmdId 형식(영소문자.점): ${id}`);
     if (typeof c?.bin !== "string" || !path.isAbsolute(c.bin)) bad(`${id}: bin 은 절대경로`);
     const base = path.basename(c.bin);
-    if (BANNED_BIN.test(base) || /openclaw/i.test(c.bin)) bad(`${id}: ${base} 는 목록에 올릴 수 없다(셸·env·OpenClaw CLI 금지)`);
+    if (BANNED_BIN.test(base) || OPENCLAW_CLI(c.bin)) bad(`${id}: ${base} 는 목록에 올릴 수 없다(셸·env·OpenClaw CLI 금지)`);
     const argv = c.argv ?? [];
     if (!Array.isArray(argv) || !argv.every((a) => typeof a === "string")) bad(`${id}: argv 는 글자 배열`);
-    if (argv.some((a) => /openclaw/i.test(a))) bad(`${id}: argv 에 openclaw 금지`);
+    if (argv.some(OPENCLAW_CLI)) bad(`${id}: argv 에 OpenClaw CLI 금지`);
     if (INTERP_BIN.test(base) && (argv.some((a) => EVAL_FLAG.test(a)) || !argv[0] || argv[0].startsWith("{") || !path.isAbsolute(argv[0]))) {
       bad(`${id}: 인터프리터는 고정된 절대경로 스크립트로만(-c·-e 같은 즉석 코드 금지)`);
     }
@@ -62,7 +66,7 @@ export function loadRegistry(file) {
     if (!Array.isArray(modes) || !modes.length || !modes.every((m) => MODES.has(m))) bad(`${id}: modes 는 shadow·live 중 하나 이상`);
     if (c.effect === true && modes.includes("shadow")) bad(`${id}: effect 명령은 그림자 모드에 올리지 않는다(그림자에서는 effect 가 실행하지 않는다)`);
     const envPass = c.envPass ?? [];
-    if (!Array.isArray(envPass) || envPass.some((k) => !/^[A-Z][A-Z0-9_]*$/.test(k) || /TOKEN|SECRET|KEY|PASS|AUTH|COOKIE|ANTHROPIC|CLAUDE|LANGSMITH|LANGCHAIN|OPENCLAW/.test(k))) {
+    if (!Array.isArray(envPass) || envPass.some((k) => !/^[A-Z][A-Z0-9_]*$/.test(k) || /TOKEN|SECRET|KEY|PASS|AUTH|COOKIE|PAT|WEBHOOK|CRED|URL|PRIVATE|SESSION|SIGN|CERT|ANTHROPIC|CLAUDE|LANGSMITH|LANGCHAIN|OPENCLAW/.test(k))) {
       bad(`${id}: envPass 는 대문자 이름이고 비밀류(TOKEN·KEY·SECRET…)는 넘기지 않는다`);
     }
     const timeoutSec = c.timeoutSec ?? 120;
@@ -97,19 +101,26 @@ export function resolveCommand(registry, cmdId, params = {}, { mode, inEffect = 
   return { cmd: c, bin: c.bin, argv, cwd, env, timeoutMs: c.timeoutSec * 1000 };
 }
 
+// 돌고 있는 동기 명령 자식들 — 실행기가 신호로 끝나면 함께 끈다(고아로 남아 틱 밖에서 계속 돌지 않게. 분리 실행은 제외).
+const children = new Set();
+export function killRunChildren() {
+  for (const c of children) { try { c.kill("SIGTERM"); } catch { /* 이미 끝남 */ } }
+}
+
 // 동기 실행(끝날 때까지 기다림). 출력은 받아서 돌려준다(표준 출력에 직접 닿지 않게). 긴 명령은 launch(분리 실행)로.
 function exec({ bin, argv, cwd, env, timeoutMs }) {
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
-    const child = spawn(bin, argv, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = allowSpawn(() => spawn(bin, argv, { cwd, env, stdio: ["ignore", "pipe", "pipe"] }));
+    children.add(child);
     let out = "", err = "", timedOut = false;
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (d) => { if (out.length < 1_000_000) out += d; });
     child.stderr.on("data", (d) => { if (err.length < 200_000) err += d; });
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 5000).unref(); }, timeoutMs);
-    child.on("error", (e) => { clearTimeout(timer); reject(e); });
-    child.on("close", (code, signal) => { clearTimeout(timer); resolve({ code, signal, stdout: out, stderr: err, timedOut, durationMs: Date.now() - t0 }); });
+    child.on("error", (e) => { clearTimeout(timer); children.delete(child); reject(e); });
+    child.on("close", (code, signal) => { clearTimeout(timer); children.delete(child); resolve({ code, signal, stdout: out, stderr: err, timedOut, durationMs: Date.now() - t0 }); });
   });
 }
 

@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pidAlive, procStart } from "./store.mjs";
+import { allowSpawn } from "./guard.mjs";
 
 const RUNNER = path.join(path.dirname(fileURLToPath(import.meta.url)), "detach-runner.mjs");
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
@@ -43,15 +44,21 @@ export function launch(jobsDir, { thread, node, attempt, cmdId }, spec) {
     cmdId, thread, node, attempt, bin: spec.bin, argv: spec.argv ?? [], cwd: spec.cwd, env: spec.env ?? {},
     stdinFile, timeoutMs: spec.timeoutMs ?? 600_000, heartbeatSec: spec.heartbeatSec ?? 30,
   }), { mode: 0o600 });
-  const child = spawn(process.execPath, [RUNNER, dir], {
+  const child = allowSpawn(() => spawn(process.execPath, [RUNNER, dir], {
     detached: true, stdio: "ignore", cwd: dir, env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LANG: process.env.LANG || "en_US.UTF-8" },
-  });
+  }));
   child.on("error", () => { /* meta 가 안 생기면 check 가 dead 로 판정한다 */ });
   child.unref();
   return handle;
 }
 
-const alive = (pid, pstart) => pidAlive(pid) && (pstart == null || procStart(pid) === pstart);
+// 시작 시각을 못 읽으면(ps 실패) 살아 있다고 본다 — store 의 잠금 판정(S1)과 같다. 반대로 보면 살아 있는 일을 죽이고 다시 띄운다.
+const alive = (pid, pstart) => {
+  if (!pidAlive(pid)) return false;
+  if (pstart == null) return true;
+  const cur = procStart(pid);
+  return cur == null || cur === pstart;
+};
 
 export function check(handle) {
   const dir = typeof handle === "string" ? handle : handle?.dir;

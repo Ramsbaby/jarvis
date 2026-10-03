@@ -25,16 +25,23 @@ const byThread = new Map();
 for (const r of ev) if (r.thread) { if (!byThread.has(r.thread)) byThread.set(r.thread, []); byThread.get(r.thread).push(r); }
 const ENDS = new Set(["done", "expired", "gave_up"]);
 
-// M1 끊겨도 끝까지 — 끊긴(interrupted) 스레드 중 다음 틱들이 이어서 끝낸(done) 비율. 아직 진행 중인 것은 분모에서 뺀다.
-const m1 = { interrupted: 0, finished: 0, abandoned: 0, open: 0 };
+// M1 끊겨도 끝까지 — 끊긴(interrupted) 스레드를 다음 틱들이 이어 갔나. '이어 감' = 끊긴 뒤 단계를 하나라도 끝냄(node_end ok).
+//   그 뒤 끝남(done)·사람이 답하지 않은 승인 만료(expired approval)·다른 이유의 포기는 이어 간 것이다(끊김 탓이 아니다).
+//   '버려짐' = 끊긴 뒤 한 단계도 못 끝내고 포기·보류 만료. 끝나지 않고 진척도 없는 것은 진행 중으로 분모에서 뺀다.
+const m1 = { interrupted: 0, continued: 0, finished: 0, abandoned: 0, open: 0 };
 for (const [, rs] of byThread) {
   const i = rs.findIndex((r) => r.ev === "interrupted");
   if (i < 0) continue;
   m1.interrupted++;
-  const end = rs.slice(i).find((r) => ENDS.has(r.ev));
-  if (!end) m1.open++; else if (end.ev === "done") m1.finished++; else m1.abandoned++;
+  const after = rs.slice(i + 1);
+  const progressed = after.some((r) => r.ev === "node_end" && r.ok);
+  const end = after.find((r) => ENDS.has(r.ev));
+  if (end?.ev === "done") m1.finished++;
+  if (progressed) m1.continued++;
+  else if (end) m1.abandoned++;
+  else m1.open++;
 }
-m1.rate = pct(m1.finished, m1.finished + m1.abandoned);
+m1.rate = pct(m1.continued, m1.continued + m1.abandoned);
 
 // M3 중복 부수효과 0 — 실제 모드에서 같은 key 가 두 번 성공(ok)했거나, 시작(started)이 둘 이상인데 앞의 것이 실패가 아닌 경우
 const m3 = { live_runs: 0, keys: 0, duplicates: 0, unknown: 0, retried_after_fail: 0, shadow_would_run: {} };
@@ -55,7 +62,7 @@ for (const [, rs] of keys) {
     let dup = false, lastStart = false;
     for (const r of rs) {
       if (r.status === "started") { if (lastStart) dup = true; lastStart = true; }
-      else if (r.status === "failed") lastStart = false;
+      else if (r.status === "failed" || r.status === "cleared") lastStart = false; // cleared = verify() 가 '안 일어났다'고 확인
       else if (r.status === "ok") lastStart = true; // 성공 뒤의 시작은 중복
     }
     if (dup) m3.duplicates++; else m3.retried_after_fail++;
@@ -63,12 +70,12 @@ for (const [, rs] of keys) {
   if (rs.at(-1)?.status === "started") m3.unknown++;
 }
 
-// M4 버려진 대기·보류 0 — 마지막 기록이 대기·보류·이어가기·실패인데 48시간 넘게 만료 보고가 없는 스레드
+// M4 버려진 대기·보류 0 — 끝나지 않은(done·expired·gave_up 없는) 스레드 중 마지막 기록이 48시간 넘은 것. 대기열·답 받음도 센다.
 const m4 = { expired_reported: ev.filter((r) => r.ev === "expired").length, abandoned_unreported: 0, list: [] };
 for (const [t, rs] of byThread) {
+  if (rs.some((r) => ENDS.has(r.ev))) continue;
   const last = rs.at(-1);
-  const stuck = ["waiting", "held", "continue", "failed", "stuck"].includes(last.ev) && now - last.t > HOLD_MS;
-  if (stuck && !rs.some((r) => r.ev === "expired" && r.t >= last.t)) { m4.abandoned_unreported++; m4.list.push(t); }
+  if (now - last.t > HOLD_MS) { m4.abandoned_unreported++; m4.list.push(t); }
 }
 
 // M6 비용·한도 — llm 줄(응답 usage·total_cost_usd)을 날짜별로. Fable 호출은 0 이어야 한다.
@@ -106,8 +113,8 @@ if (args.includes("--json")) { process.stdout.write(`${JSON.stringify(report, nu
 
 const L = [];
 L.push(`# 랭그래프 판정 집계 — ${iso(now)}`, "", `기록 ${ev.length}줄 · 부수효과 원장 ${fx.length}줄 · 틱 ${ticks.length}회 · 범위 ${flag("since") ?? "처음"} ~ ${flag("until") ?? "지금"}`, "");
-L.push("## M1 끊겨도 끝까지 (기준 100%)", "", "| 끊긴 스레드 | 이어서 끝냄 | 버려짐(만료·포기) | 진행 중 | 비율 |", "|---|---|---|---|---|",
-  `| ${m1.interrupted} | ${m1.finished} | ${m1.abandoned} | ${m1.open} | ${m1.rate} |`, "");
+L.push("## M1 끊겨도 끝까지 (기준 100%)", "", "| 끊긴 스레드 | 이어 감 | 그중 끝냄 | 버려짐 | 진행 중 | 비율(이어 감) |", "|---|---|---|---|---|---|",
+  `| ${m1.interrupted} | ${m1.continued} | ${m1.finished} | ${m1.abandoned} | ${m1.open} | ${m1.rate} |`, "");
 L.push("## M3 중복 부수효과 (기준 0)", "", "| 실제 실행 | key 수 | 중복 | 결과 모름 | 실패 뒤 재시도 | 그림자 '했을 일' |", "|---|---|---|---|---|---|",
   `| ${m3.live_runs} | ${m3.keys} | ${m3.duplicates} | ${m3.unknown} | ${m3.retried_after_fail} | ${Object.entries(m3.shadow_would_run).map(([k, n]) => `${k} ${n}`).join(" · ") || 0} |`, "");
 L.push("## M4 버려진 대기·보류 (기준 0)", "", "| 만료 보고 | 48시간 넘게 보고 없이 남음 |", "|---|---|", `| ${m4.expired_reported} | ${m4.abandoned_unreported}${m4.list.length ? ` (${m4.list.slice(0, 5).join(", ")})` : ""} |`, "");

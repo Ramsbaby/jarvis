@@ -93,7 +93,9 @@ test("허용 목록 검사(S15): OpenClaw CLI·셸·env·인터프리터 즉석 
     return () => loadRegistry(f);
   };
   assert.throws(bad({ bin: "/Users/me/bin/openclaw", argv: ["automations", "list"] }), /OpenClaw/);
-  assert.throws(bad({ bin: "/usr/bin/git", argv: ["-C", "/x", "openclaw"] }), /openclaw 금지/);
+  assert.throws(bad({ bin: "/usr/bin/git", argv: ["-C", "/x", "openclaw"] }), /OpenClaw CLI 금지/);
+  assert.throws(bad({ bin: NODE, argv: ["/usr/local/lib/node_modules/openclaw/dist/cli.js", "cron"] }), /OpenClaw CLI 금지/);
+  assert.doesNotThrow(bad({ bin: "/usr/bin/git", argv: ["-C", "/Users/x/.openclaw-data/runtime/graphs/gostop/sandbox/s1", "status"] }), "경로에 .openclaw 가 든 인자는 정상");
   assert.throws(bad({ bin: "/bin/sh", argv: ["-c", "ls"] }), /셸·env/);
   assert.throws(bad({ bin: "/usr/bin/env", argv: ["node"] }), /셸·env/);
   assert.throws(bad({ bin: NODE, argv: ["-e", "1"] }), /즉석 코드/);
@@ -251,9 +253,9 @@ test("lg-report: 끊김→이어서 끝냄(M1)·부수효과(M3)·만료(M4)·�
   const rep = spawnSync(NODE, [path.join(ROOT, "lg-report.mjs")], { env, encoding: "utf8" });
   assert.equal(rep.status, 0, rep.stderr);
   for (const h of ["## M1", "## M3", "## M4", "## M6", "## M2", "## M5", "## M8"]) assert.ok(rep.stdout.includes(h), h);
-  assert.match(rep.stdout, /\| 1 \| 1 \| 0 \| 0 \| 100% \|/, "M1: 끊긴 1 · 이어서 끝냄 1");
+  assert.match(rep.stdout, /\| 1 \| 1 \| 1 \| 0 \| 0 \| 100% \|/, "M1: 끊긴 1 · 이어 감 1 · 끝냄 1");
   const j = JSON.parse(spawnSync(NODE, [path.join(ROOT, "lg-report.mjs"), "--json"], { env, encoding: "utf8" }).stdout);
-  assert.deepEqual([j.m1.interrupted, j.m1.finished, j.m1.rate], [1, 1, "100%"]);
+  assert.deepEqual([j.m1.interrupted, j.m1.continued, j.m1.finished, j.m1.rate], [1, 1, 1, "100%"]);
   assert.equal(j.m4.expired_reported, 1);
   assert.equal(j.m4.abandoned_unreported, 0);
   assert.equal(j.m6.days[0].total, 1350, "LLM 1회(끊김은 호출 전 — 다시 돌 때 한 번) × 1350 토큰");

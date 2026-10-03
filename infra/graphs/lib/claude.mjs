@@ -15,10 +15,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import * as detach from "./detach.mjs";
+import { allowSpawn } from "./guard.mjs";
 
 // held = true 인 오류는 실행기가 '보류'(HELD, 종료 0)로 처리한다. holdReason 은 보류 까닭(관문·재시도 판단에 쓴다).
+// holdRef: 이 값이 그대로인 동안 틱은 그 스레드를 다시 돌리지 않는다(하루 상한 = 날짜, 스레드 상한 = 상한 값) — 노드 앞부분을 틱마다 되풀이하지 않게
 export class LlmBudgetHeld extends Error {
-  constructor(msg, reason = "llm_budget") { super(msg); this.name = "LlmBudgetHeld"; this.held = true; this.holdReason = reason; }
+  constructor(msg, reason = "llm_day", ref = null) { super(msg); this.name = "LlmBudgetHeld"; this.held = true; this.holdReason = reason; this.holdRef = ref; }
 }
 export class LlmAuthHeld extends Error {
   constructor(msg) { super(msg); this.name = "LlmAuthHeld"; this.held = true; this.holdReason = "login"; }
@@ -93,7 +95,7 @@ let tempBase = null;
 function outsideHomeTemp() {
   if (tempBase) return tempBase;
   const home = fs.realpathSync(os.userInfo().homedir);
-  const r = spawnSync("/usr/bin/getconf", ["DARWIN_USER_TEMP_DIR"], { encoding: "utf8", env: { PATH: "/usr/bin:/bin" } });
+  const r = allowSpawn(() => spawnSync("/usr/bin/getconf", ["DARWIN_USER_TEMP_DIR"], { encoding: "utf8", env: { PATH: "/usr/bin:/bin" } }));
   for (const c of [r.status === 0 ? r.stdout.trim() : "", "/private/tmp", "/tmp"].filter(Boolean)) {
     try { const real = fs.realpathSync(c); if (real !== home && !real.startsWith(`${home}/`)) return (tempBase = real); } catch { /* 다음 후보 */ }
   }
@@ -119,7 +121,7 @@ export function killActiveChildren() {
 
 function run(bin, args, { env, cwd, input, timeoutMs }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { env, cwd, stdio: ["pipe", "pipe", "pipe"] });
+    const child = allowSpawn(() => spawn(bin, args, { env, cwd, stdio: ["pipe", "pipe", "pipe"] }));
     children.add(child);
     let out = "", err = "", timedOut = false;
     child.stdout.setEncoding("utf8"); // 조각 경계에 걸린 한글 바이트를 깨지 않게(문자열 디코더가 이어 붙인다)
@@ -188,7 +190,7 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
   const clearHold = () => { try { fs.rmSync(cfg.llmHoldPath, { force: true }); } catch { /* 없음 */ } };
   const reserve = ({ model, node }) => {
     const r = store.reserveLlmCall({ thread, node, model, now: now(), perThread: cfg.llm.perThread, perDay: cfg.llm.perDay, dayTokenCap: cfg.llm.dayTokenCap });
-    if (!r.ok) throw new LlmBudgetHeld(r.reason, r.kind);
+    if (!r.ok) throw new LlmBudgetHeld(r.reason, r.kind, r.ref);
     return r.id;
   };
   const record = (callId, { node, model, v, ms, detached = false }) => {
@@ -205,6 +207,7 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
   const prep = ({ model, tools, cwd }) => {
     const m = checkModel(model);
     checkTools(tools);
+    if (!cwd && tools.some((t) => t === "Edit" || t === "Write")) throw new LlmModelBlocked("쓰기 도구(Edit·Write)는 작업 폴더(cwd — 사본)를 직접 줘야 한다 — 공용 빈 폴더에 쓰지 않는다");
     const bin = resolveClaudeBin(cfg.llm.bin);
     const dir = cwd ?? defaultClaudeCwd();
     if (!path.isAbsolute(dir) || !fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) throw new LlmModelBlocked(`작업 폴더가 없다: ${dir}`);

@@ -116,10 +116,11 @@ export function build({ checkpointer }) {
   assert.match(lg(env, ["start", "twoq", "q1"]).first, /^WAITING q1 첫 질문\?/);
   assert.equal(lg(env, ["answer", "q1", "approved"]).code, 0);
   const t1 = lg(env, ["tick"]);
-  assert.match(t1.first, /^WAITING q1 원격에 올릴까\? · 답: lg\.sh answer q1 approved\|rejected/);
+  assert.match(t1.first, /^WAITING q1 원격에 올릴까\? · 질문 #2 · 답: lg\.sh answer q1 approved\|rejected 2 · 기한 /);
   assert.equal(statusOf(lg, env, "q1").answer, null, "첫 답은 둘째 질문에 넘어가지 않는다");
   assert.equal(lg(env, ["tick"]).first, "NO_REPLY", "같은 질문은 다시 알리지 않는다");
-  assert.equal(lg(env, ["answer", "q1", "rejected"]).code, 0);
+  assert.match(lg(env, ["answer", "q1", "rejected"]).first, /^ERROR q1 need-qid /, "둘째 질문부터는 번호가 있어야 받는다");
+  assert.equal(lg(env, ["answer", "q1", "rejected", "2"]).code, 0);
   assert.match(lg(env, ["tick"]).first, /^DONE q1 approved\/rejected$/);
 });
 
@@ -389,7 +390,7 @@ test("알리지 못한 대기(정리가 끊긴 실행을 대기로 맞춘 경우
   t.after(() => db.close());
   db.prepare("UPDATE lg_threads SET waiting_notified=NULL WHERE thread_id='u1'").run();
   const r = run(env, ["tick"]);
-  assert.match(r.first, /^WAITING u1 이 초안으로 마무리할까요\? .*· 답: lg\.sh answer u1 approved\|rejected · 기한 /);
+  assert.match(r.first, /^WAITING u1 이 초안으로 마무리할까요\? .*· 질문 #1 · 답: lg\.sh answer u1 approved\|rejected 1 · 기한 /);
   assert.equal(run(env, ["tick"]).first, "NO_REPLY");
 });
 

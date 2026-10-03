@@ -23,7 +23,7 @@ bash infra/graphs/install.sh
 ```bash
 G=~/projects/jarvis/infra/graphs
 sh $G/lg.sh tick                                  # 예약 잡의 정본(30분마다). --verbose 면 CONTINUE·HOLD 줄도 보인다
-sh $G/lg.sh answer <스레드> approved              # 또는 rejected — 대화 중 자비스가 쓰는 길. 답만 적고 끝난다(1초 안)
+sh $G/lg.sh answer <스레드> approved [N]          # 또는 rejected — 대화 중 자비스가 쓰는 길. 답만 적고 끝난다(1초 안). N = WAITING 의 '질문 #N'
 sh $G/lg.sh start smoke smoke-2026-10-04 --queue  # 등록만 — 다음 틱이 시작한다(--topic 주제, --llm: haiku 1회)
 sh $G/lg.sh status [<스레드>] [--json] [--all]    # 읽기만
 node $G/lg-report.mjs [--since 2026-10-07] [--json]   # 판정 집계 M1~M8
@@ -50,10 +50,13 @@ lg-tick(30분마다) → run.mjs tick
 | 같은 오류 | 다음 틱에 다시, 3회까지(`LG_MAX_RETRIES`). 그다음에도 같으면 `GAVE_UP` |
 | 로그인 만료·사용량 한도(호출 오류 문구) | 재시도로 세지 않고 보류 + 표식(`llm-hold.json`). 관문이 6시간(한도는 1시간) 쉰 뒤 한 번 다시 해 본다. 성공하면 표식을 지운다 |
 | 코드 결함(TypeError 등·규칙 위반·허용 목록 밖 명령) | 보류. 코드(그래프·실행기·허용 목록 지문)가 바뀔 때까지 다시 돌리지 않는다 |
-| 노드가 스스로 보류(`throw tools.hold("이유")`)·LLM 상한 | 보류. 다음 틱에 다시 해 본다 |
+| 노드가 스스로 보류(`throw tools.hold("이유")`) | 보류. 다음 틱에 다시 해 본다 |
+| LLM 하루 상한(`llm_day`)·하루 토큰(`token_cap`)·스레드 상한(`llm_thread`) | 보류. 풀릴 수 없는 동안(같은 날·같은 상한 값)은 노드를 다시 돌리지 않는다 |
+| 멈출 때 기록한 다음 노드가 그래프에서 사라짐(배포로 이름이 바뀜) | '끝남'으로 보지 않고 코드 결함 보류 |
 | 결과 모르는 부수효과(시작만 적히고 끝이 없음) | 보류. 사람이 확인해야 한다 |
 | 승인 대기 | 질문을 내보인 때부터 48시간. 그 안에 `answer` 로 적힌 답은 틱이 늦게 와도 유효 |
-| 진척 없는 보류·이어가기·대기열·실패 | 마지막으로 단계를 끝낸 때부터 48시간(`LG_HOLD_TTL_HOURS`) → `EXPIRED` |
+| 답은 질문 번호에 묶인다 | 질문마다 `질문 #N`(같은 문구로 다시 물어도 새 번호). 첫 질문은 번호 없이도 받고, 둘째 질문부터는 번호가 맞아야 받는다 — 되풀이된 옛 답이 못 본 재확인을 승인하지 않게 |
+| 진척 없는 보류·이어가기·대기열·실패, 답을 받고도 진행 못 한 대기 | 마지막 단계 완료·답 기록 중 늦은 때부터 48시간(`LG_HOLD_TTL_HOURS`) → `EXPIRED` |
 | 살아 있는 프로세스가 쥔 잠금 | 나이와 상관없이 넘겨받지 않는다(S1). 30분(`LG_LOCK_STUCK_MIN`) 넘으면 `STUCK` 한 줄(같은 잠금은 한 번), 그 스레드는 건드리지 않는다. 죽은 pid 의 잠금만 넘겨받는다 |
 | 실행 중 끊김(게이트웨이 재시작·SIGKILL) | 다음 틱이 `interrupted` 로 적고 끊긴 노드부터 다시. 같은 끊김도 재시도 횟수에 든다 |
 
@@ -61,11 +64,13 @@ lg-tick(30분마다) → run.mjs tick
 
 `tick`(예약 잡)은 **주인님께 갈 줄만** 낸다: `DONE` · `WAITING` · `EXPIRED` · `GAVE_UP` · `STUCK`. 낼 것이 없으면 `NO_REPLY` 한 줄(OpenClaw가 조용히 처리한다).
 같은 대기·같은 잠금은 한 번만 알린다. `CONTINUE`·`HOLD`·`HELD`·재시도 중 실패는 조용하다(`--verbose`·`status`·`metrics.jsonl`에서 보인다).
+알림 줄은 상태 변경과 같은 트랜잭션으로 알림함(`lg_notices`)에 넣고 틱 끝에서 낸다 — 틱이 도중에 죽어도(게이트웨이 재시작·잡 시간 초과) 다음 틱이 낸다.
+그래프 하나의 예상 밖 오류는 그 스레드만 코드 결함으로 보류하고 틱은 계속 간다(그래프 하나가 잡 전체를 꺼뜨리지 않게).
 
 | 줄 | 뜻 | 종료 코드 |
 |---|---|---|
 | `DONE <스레드> <결과>` | 끝남 | 0 |
-| `WAITING <스레드> <질문> · 답: lg.sh answer …· 기한 …` | 승인 대기(`pending.jsonl`에도 적힌다). 수동 명령은 둘째 줄에 답하는 법 | 0 |
+| `WAITING <스레드> <질문> · 질문 #N · 답: lg.sh answer <스레드> approved\|rejected N · 기한 …` | 승인 대기(`pending.jsonl`에도 `qid`와 함께 적힌다). 수동 명령은 둘째 줄에 답하는 법 | 0 |
 | `EXPIRED <스레드> …` | 승인 기한 또는 보류 기한(48시간) 초과 → 자동 취소 | 0 |
 | `GAVE_UP <스레드> <노드> 같은 오류 N회 — …` | 재시도 끝 | 0 |
 | `STUCK <스레드> pid N 가 M분째 …` | 살아 있는 프로세스가 오래 쥔 잠금 | 0 |
@@ -107,7 +112,7 @@ rm $S/PAUSED           # 다시
 
 | 도구 | 쓰임 |
 |---|---|
-| `llm.ask(프롬프트, { model, node, tools, cwd, timeoutMs })` | 짧은 호출(틱 안에 끝남). 모델은 haiku·sonnet·opus 계열만(Fable 금지). 도구는 Read·Grep·Glob(·Edit·Write)만 |
+| `llm.ask(프롬프트, { model, node, tools, cwd, timeoutMs })` | 짧은 호출(틱 안에 끝남 — 시간 제한은 잡 상한까지 남은 시간 안으로 줄고, 30초도 못 남으면 다음 틱). 모델은 haiku·sonnet·opus 계열만(Fable 금지). 도구는 Read·Grep·Glob(·Edit·Write — 쓰기 도구는 `cwd`(사본)를 꼭 준다)만 |
 | `llm.launchAsk(…, { node, attempt })` → handle / `llm.checkAsk(handle)` | 긴 호출의 분리 실행. `checkAsk`는 던지지 않는다: `done`(text·usage) · `running` · `dead` · `failed`(kind: login·usage_limit·error). 다시 띄울지(시도 + 1)는 그래프가 정한다 |
 | `tools.run(cmdId, 인자)` | 명령은 이것으로만. 허용 목록 밖·모드 밖·형식 밖 인자는 거부(코드 결함) |
 | `tools.launch(cmdId, 인자, { node, attempt })` / `tools.check(handle)` / `tools.output(handle)` | 분리 실행. 상태는 `done`·`running`·`dead` |
@@ -120,7 +125,11 @@ rm $S/PAUSED           # 다시
 **정적 검사**
 - `scripts/check-interrupt-nodes.mjs`(0a): interrupt가 든 노드는 동기·순수 — 상태 읽기 → `interrupt(...)` → 값 반환. LLM·파일·발송·바깥 값 금지. 노드는 `addNode("이름", 함수)` 형식. 정적 중단점(`interruptBefore/After`) 금지 — 컴파일에 박힌 그래프는 노드 단위 진행이 지나쳐 버리므로 실행기가 돌리지 않는다. 승인 대기는 한 번에 하나.
 - `scripts/check-graph-rules.mjs`(0b): 그래프 파일과 그 파일이 상대 경로로 가져오는 모듈 전부에서 `child_process`(정적·동적 import·require)·`process.binding`, 허용 목록에 없는 cmdId, 글자값이 아닌 cmdId, `effect(…)` 밖의 부수효과 명령, 랭그래프 Store(S15), 네트워크(fetch·http·net…), 실행기 내부(`lib/`·`scripts/`) 가져오기를 막는다.
-- 둘 다 정규식·괄호 짝 수준이라 다 막지 못한다. 그래서 실행 때 한 번 더 막는다: 허용 목록은 `run`이, effect 범위는 `AsyncLocalStorage`로, 모드는 등록부 값으로.
+  상대 경로가 아닌 가져오기는 허용 목록만(`@langchain/langgraph`·`@langchain/core`·`zod`·순한 node 내장 fs·path·crypto…), 우회로(`createRequire`·`process.getBuiltinModule`·`eval`·`Function` 생성자·`.constructor(…)`·글자값 아닌 동적 import·위험 이름 글자값)도 위반이다.
+- 둘 다 정규식·괄호 짝 수준이라 다 막지 못한다. 그래서 실행 때 한 번 더 막는다:
+  - **실행 시 차단층 `lib/guard.mjs`:** 실행기가 저장소를 연 직후 `child_process`의 모든 실행 함수·`worker_threads.Worker`·`process.binding("spawn_sync"|"process_wrap")`·`process.dlopen`·`process.execve`를 감싼다. 실행기 내부(`allowSpawn`)가 아니면 던진다(코드 결함). 내보내기 객체를 바꾸므로 import·require·`getBuiltinModule`·npm 패키지 어느 길이든 같다(0b 검토에서 정적 검사만으로는 우회됨을 재현 → 이 층으로 막음, 시험으로 확인).
+  - 허용 목록은 `run`이, effect 범위는 `AsyncLocalStorage`로, 모드는 등록부 값으로.
+  - 한계: 같은 프로세스 안이라 파일 쓰기·네트워크는 실행 때 막지 않는다(정적 검사만). 완전한 격리는 별도 프로세스·sandbox-exec(1b).
 
 **명령 허용 목록 `cmd-registry.json`**
 ```json
@@ -129,7 +138,8 @@ rm $S/PAUSED           # 다시
 ```
 - `bin`은 절대경로, 자리 표시는 항목 전체가 `{이름}`, 정규식은 `^…$`. 셸을 거치지 않는다(배열 spawn). 환경변수는 PATH·HOME·LANG·TMPDIR·USER + `envPass`(비밀류 이름 금지)만.
 - `effect: true` 명령은 실제 모드 전용이고 `effect()` 안에서만 돈다(분리 실행 불가 — 띄운 순간 '성공'으로 적히면 안 된다).
-- 올릴 수 없는 것: 셸·`env`·`osascript`·`sudo`·`launchctl`·`crontab`·**OpenClaw CLI**(S15 — 노드에서 오픈클로를 다시 부르지 않는다), 인터프리터의 즉석 코드(`-c`·`-e`).
+- 올릴 수 없는 것: 셸·`env`·`osascript`·`sudo`·`launchctl`·`crontab`·**OpenClaw CLI**(S15 — 노드에서 오픈클로를 다시 부르지 않는다. 파일 이름이 openclaw 이거나 openclaw 패키지 안 스크립트. 경로에 `.openclaw`가 든 인자는 괜찮다), 인터프리터의 즉석 코드(`-c`·`-e`).
+- `envPass`에 비밀류 이름(TOKEN·KEY·SECRET·PASS·AUTH·COOKIE·PAT·WEBHOOK·CRED·URL·SESSION…)은 올릴 수 없다.
 - 파일이 없으면 빈 목록(아무 명령도 허용하지 않음). 시험만 `LG_CMD_REGISTRY`로 바꿀 수 있다.
 
 ## 분리 실행 `lib/detach.mjs` (설계 §6)
@@ -153,11 +163,11 @@ rm $S/PAUSED           # 다시
 | `node_start` · `node_end` | node · ok · ms |
 | `continue`(reason: budget·pending·paused) · `interrupted`(cause: signal·exit·stalled) · `resumed`(from) | |
 | `waiting`(reason ← interrupt 값의 `reason`, M5) · `answered`(decision) | |
-| `held` | scope(tick·thread·command·sweep) · reasons(관문 이름·llm_budget·token_cap·login·usage_limit·code_defect·node·effect_unknown·stuck·hook_leak) |
+| `held` | scope(tick·thread·command·sweep) · reasons(관문 이름·llm_day·llm_thread·token_cap·login·usage_limit·code_defect·node·effect_unknown·stuck·hook_leak) |
 | `llm` | model · models · in · out · cache_create · cache_read · total · cost_usd · ms · ok · detached |
-| `effect`(outcome: would_run·ran·dedup·failed·unknown·recovered) · `stuck` · `tick` · `gc` · `failed` · `bench`(M8) | |
+| `effect`(outcome: would_run·ran·dedup·failed·unknown·recovered, key 는 지문만 — 원문은 effects.jsonl) · `stuck` · `tick` · `gc` · `failed` · `bench`(M8) | |
 
-`node lg-report.mjs`가 M1(끊긴 스레드 중 이어서 끝낸 비율) · M3(같은 key 중복 실행) · M4(48시간 넘게 보고 없이 남은 대기·보류) · M6(날짜별 호출·토큰·비용, Fable 0) 표와 M2·M5·M8 칸을 낸다.
+`node lg-report.mjs`가 M1(끊긴 스레드 중 다음 틱들이 이어 간 비율 — 끊긴 뒤 단계를 하나라도 끝냄. 그 뒤 사람이 답하지 않은 승인 만료는 '버려짐'이 아니다) · M3(같은 key 중복 실행 — verify 가 '안 일어났다'고 확인한 뒤의 재실행은 중복이 아니다) · M4(끝나지 않은 스레드 중 마지막 기록이 48시간 넘은 것 — 대기열·답 받음 포함) · M6(날짜별 호출·토큰·비용, Fable 0) 표와 M2·M5·M8 칸을 낸다.
 
 ## claude 자식 격리 (0b 실측, 10-03 haiku 4회)
 
@@ -209,7 +219,8 @@ cd infra/graphs && H=$(mktemp -d) && HOME=$H ~/.nvm/versions/node/v24.21.0/bin/n
 RUN_LLM=1 ~/.nvm/versions/node/v24.21.0/bin/node --test test/llm.test.mjs                               # 실제 haiku 1회(한도 사용)
 ```
 
-0a 50개 + 0b 33개(틱·답·관문 9종·토큰 상한·로그인·만료·재시도·코드 결함·STUCK·끊김·알림 필터·PAUSED·분리 실행 그래프 / 분리 실행 판정·이중 실행·heartbeat·부모 죽음·LLM 분리 / 정적 검사 양성·음성·가져오기·실행기 거부·허용 목록·run·effect·모드 고정·훅 누수·gc 보존·관문 해석·집계).
+0a 50개 + 0b 49개(틱·답·관문 9종·토큰 상한·로그인·만료·재시도·코드 결함·STUCK·끊김·알림 필터·PAUSED·분리 실행 그래프·겹친 틱·알림함·고장 격리 / 분리 실행 판정·이중 실행·heartbeat·부모 죽음·LLM 분리 / 정적 검사 양성·음성·가져오기·실행기 거부·허용 목록·run·effect·모드 고정·훅 누수·gc 보존·관문 해석·집계·잡 상한 / 독립 검토 재현 11건).
+0a 시험 기대값 3곳은 의도된 변경으로 바꿨다: 격리 플래그(`--restricted`), claude 작업 폴더(홈 밖), DB 판 번호(4).
 
 ## 걷어내는 법
 

@@ -13,6 +13,8 @@ import { pidAlive, procStart } from "./store.mjs";
 import { readJsonl } from "./metrics.mjs";
 
 export const effectScope = new AsyncLocalStorage();
+// metrics(30일 보존)에는 key 원문 대신 지문만 — 원문은 부수효과 원장(effects.jsonl)에만 둔다(S4)
+const keyHash = (key) => createHash("sha1").update(key).digest("hex").slice(0, 12);
 
 const KEY_RE = /^[^\n\r]{1,200}$/;
 const KIND_RE = /^[a-z][a-z0-9_.-]{0,40}$/;
@@ -38,7 +40,12 @@ async function lockKey(dir, waitMs = 10_000) {
     }
     let owner = null;
     try { owner = JSON.parse(fs.readFileSync(path.join(dir, "owner.json"), "utf8")); } catch { /* 막 만들어지는 중이거나 깨짐 */ }
-    const dead = owner && (!pidAlive(owner.pid) || (owner.pstart && procStart(owner.pid) !== owner.pstart));
+    // 주인이 죽었을 때만 넘겨받는다. 시작 시각을 못 읽으면(ps 실패) 살아 있다고 본다(S1 과 같게)
+    let dead = false;
+    if (owner) {
+      if (!pidAlive(owner.pid)) dead = true;
+      else if (owner.pstart) { const cur = procStart(owner.pid); dead = cur != null && cur !== owner.pstart; }
+    }
     const orphan = !owner && Date.now() - (fs.statSync(dir, { throwIfNoEntry: false })?.mtimeMs ?? Date.now()) > 30_000;
     if (dead || orphan) {
       try { fs.renameSync(dir, `${dir}.dead-${randomUUID()}`); } catch { /* 다른 쪽이 먼저 옮김 */ }
@@ -69,7 +76,7 @@ export function createEffect({ cfg, now, thread, mode, metric, nodeRef = () => n
       // 그림자: 했을 일만 적는다. 같은 key 를 다시 만나면(재시도·재개) 줄을 더하지 않는다.
       const seen = keyRecords(file, key).some((r) => r.status === "would_run");
       if (!seen) append({ key, kind, status: "would_run", wouldRun: true });
-      metric?.("effect", { thread, key, kind, mode, outcome: seen ? "would_run_dup" : "would_run" });
+      metric?.("effect", { thread, key: keyHash(key), kind, mode, outcome: seen ? "would_run_dup" : "would_run" });
       return { ran: false, shadow: true };
     }
     const lockDir = path.join(cfg.stateDir, "effect-locks", createHash("sha1").update(key).digest("hex"));
@@ -78,7 +85,7 @@ export function createEffect({ cfg, now, thread, mode, metric, nodeRef = () => n
       const recs = keyRecords(file, key).filter((r) => r.mode === "live");
       const last = recs.at(-1);
       if (recs.some((r) => r.status === "ok")) {
-        metric?.("effect", { thread, key, kind, mode, outcome: "dedup" });
+        metric?.("effect", { thread, key: keyHash(key), kind, mode, outcome: "dedup" });
         return { ran: false, dedup: true };
       }
       if (last?.status === "started") {
@@ -86,13 +93,14 @@ export function createEffect({ cfg, now, thread, mode, metric, nodeRef = () => n
         const done = verify ? await verify() : undefined;
         if (done === true) {
           append({ key, kind, status: "ok", recovered: true });
-          metric?.("effect", { thread, key, kind, mode, outcome: "recovered" });
+          metric?.("effect", { thread, key: keyHash(key), kind, mode, outcome: "recovered" });
           return { ran: false, recovered: true };
         }
         if (done !== false) {
-          metric?.("effect", { thread, key, kind, mode, outcome: "unknown" });
+          metric?.("effect", { thread, key: keyHash(key), kind, mode, outcome: "unknown" });
           throw new EffectHeld(`부수효과 ${kind} '${key}' 가 시작만 되고 결과가 없다 — 실제로 일어났는지 확인 전에는 다시 내지 않는다`);
         }
+        append({ key, kind, status: "cleared", verified: false }); // verify 가 '안 일어났다'고 확인 — 다음 시작은 정당한 재실행(M3 가 중복으로 세지 않게)
       }
       append({ key, kind, status: "started" });
       let value;
@@ -100,11 +108,11 @@ export function createEffect({ cfg, now, thread, mode, metric, nodeRef = () => n
         value = await effectScope.run({ key, kind, thread }, fn);
       } catch (e) {
         append({ key, kind, status: "failed", error: String(e?.message ?? e).split("\n")[0].slice(0, 200) });
-        metric?.("effect", { thread, key, kind, mode, outcome: "failed" });
+        metric?.("effect", { thread, key: keyHash(key), kind, mode, outcome: "failed" });
         throw e;
       }
       append({ key, kind, status: "ok" });
-      metric?.("effect", { thread, key, kind, mode, outcome: "ran" });
+      metric?.("effect", { thread, key: keyHash(key), kind, mode, outcome: "ran" });
       return { ran: true, value };
     } finally {
       unlock();

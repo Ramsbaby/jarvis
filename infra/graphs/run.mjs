@@ -121,14 +121,17 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
       throw new GraphRuleError(`그래프 규칙 위반 ${problems.length}건(${p.file}:${p.line} ${p.rule}) — scripts/check-interrupt-nodes.mjs·check-graph-rules.mjs 로 확인`);
     }
   }
-  const mod = await import(pathToFileURL(file).href);
+  // 그래프 모듈 최상위·build() 의 console 출력도 스레드 로그로 — 틱 표준 출력(알림)에 새지 않게
+  const restoreOut = captureOutput(ctx, thread);
+  let mod;
+  try { mod = await import(pathToFileURL(file).href); } finally { restoreOut(); }
   const { Command } = await import("@langchain/langgraph");
   const { SqliteSaver } = await import("@langchain/langgraph-checkpoint-sqlite");
   const { createClaude, killActiveChildren } = await import("./lib/claude.mjs");
-  const { createRun, resolveCommand, CmdNotAllowed } = await import("./lib/run.mjs");
+  const { createRun, resolveCommand, CmdNotAllowed, killRunChildren } = await import("./lib/run.mjs");
   const { createEffect, effectScope } = await import("./lib/effects.mjs");
   const detach = await import("./lib/detach.mjs");
-  active.killChildren = killActiveChildren;
+  active.killChildren = () => { killActiveChildren(); killRunChildren(); };
   const { cfg, now, metric } = ctx;
   const timeLeft = ctx.isTick ? () => cfg.jobLimitMs - elapsedMs() : null; // 틱만 — 잡 시간 상한(600초) 안에서
   const llm = createClaude({ store: ctx.store, cfg, now, thread, metric, timeLeft });
@@ -157,7 +160,9 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
     // 판정 M8 칸(벤치 결과). 정해진 필드만 남긴다.
     bench: (fields = {}) => metric("bench", { thread, ...Object.fromEntries(Object.entries(fields).filter(([k]) => BENCH.has(k))) }),
   };
-  const app = mod.build({ checkpointer: new SqliteSaver(ctx.store.db), llm, tools });
+  const restoreBuild = captureOutput(ctx, thread);
+  let app;
+  try { app = mod.build({ checkpointer: new SqliteSaver(ctx.store.db), llm, tools }); } finally { restoreBuild(); }
   // 컴파일에 박힌 정적 중단점은 노드 단위 진행이 지나쳐 버린다 — 이런 그래프는 돌리지 않는다(승인 없이 통과 방지).
   const blocked = !!(app.interruptBefore?.length || app.interruptAfter?.length);
   return { mod, app, Command, name, blocked, run: { configurable: { thread_id: thread }, durability: "sync" } };
@@ -215,7 +220,10 @@ async function reconcile(ctx, g, thread, { fresh = false, answered = false } = {
     const anchor = Math.max(Number.isFinite(created) ? created : 0, row?.run_started_at ?? 0);
     since = fresh || !anchor ? t : Math.min(t, anchor);
     deadline = since + ctx.cfg.approvalTtlMs;
-    ctx.store.updateThread(thread, { interrupt_id: key, waiting_since: since, deadline_at: deadline, question: q }, t, { touch: false });
+    // 새 질문(또는 답을 받은 뒤 같은 문구로 다시 묻는 질문)이면 번호를 올린다 — 답은 이 번호에 묶인다
+    const newQuestion = answered || row?.interrupt_id !== key;
+    ctx.store.updateThread(thread, { interrupt_id: key, waiting_since: since, deadline_at: deadline, question: q,
+      ...(newQuestion ? { question_seq: (row?.question_seq ?? 0) + 1 } : {}) }, t, { touch: false });
   }
   const cur = ctx.store.getThread(thread);
   const answeredInTime = cur?.answer != null && cur.answer_key === key && cur.answered_at != null && cur.answered_at < deadline;
@@ -227,6 +235,9 @@ async function reconcile(ctx, g, thread, { fresh = false, answered = false } = {
   }
   return { kind: "waiting", s, q, deadline, key, intr };
 }
+
+const waitingLine = (thread, q, seq, deadline) =>
+  `WAITING ${thread} ${q ?? "승인 대기"} · 질문 #${seq} · 답: lg.sh answer ${thread} approved|rejected ${seq} · 기한 ${deadline ? iso(deadline) : "?"}`;
 
 // 알림 줄(DONE·WAITING·GAVE_UP·STUCK). 틱은 상태 변경과 같은 트랜잭션으로 알림함에 넣고 끝에서 낸다 — 틱이 도중에 죽어도
 // (게이트웨이 재시작·잡 시간 초과) 다음 틱이 낸다. 수동 명령은 바로 낸다(부른 쪽이 보고 있다).
@@ -261,12 +272,13 @@ async function settle(ctx, g, thread, { fresh = false, answered = false } = {}) 
       ctx.metric("waiting", { thread, graph: g.name, reason: typeof r.intr?.value?.reason === "string" ? r.intr.value.reason : null });
     }
     const mark = () => ctx.store.updateThread(thread, { waiting_notified: r.key }, t, { touch: false });
+    const seq = ctx.store.getThread(thread)?.question_seq ?? 1;
     if (!ctx.isTick) {
       say(`WAITING ${thread} ${r.q}`);
-      say(`답: lg.sh answer ${thread} approved|rejected · 기한 ${iso(r.deadline)}`);
+      say(`답: lg.sh answer ${thread} approved|rejected ${seq} · 질문 #${seq} · 기한 ${iso(r.deadline)}`);
       mark();
     } else if (first) {
-      announce(ctx, thread, `WAITING ${thread} ${r.q} · 답: lg.sh answer ${thread} approved|rejected · 기한 ${iso(r.deadline)}`, mark);
+      announce(ctx, thread, waitingLine(thread, r.q, seq, r.deadline), mark);
     }
     return 0;
   }
@@ -318,7 +330,7 @@ const CODE_DEFECT_NAMES = new Set(["TypeError", "ReferenceError", "SyntaxError",
 function classifyError(e) {
   const pick = (k) => e?.[k] ?? e?.cause?.[k];
   if (pick("pending") === true) return { kind: "pending" };
-  if (pick("held") === true) return { kind: "held", reason: pick("holdReason") ?? "node" };
+  if (pick("held") === true) return { kind: "held", reason: pick("holdReason") ?? "node", ref: pick("holdRef") ?? null };
   if (pick("codeDefect") === true || CODE_DEFECT_NAMES.has(e?.name) || e?.code === "ERR_MODULE_NOT_FOUND") return { kind: "code_defect" };
   return { kind: "transient" };
 }
@@ -332,6 +344,15 @@ function giveUp(ctx, thread, graph, node, count, note) {
     () => ctx.store.updateThread(thread, { status: "gave_up", note: `같은 오류 ${count}회 — ${note}` }, ctx.now()));
   ctx.metric("gave_up", { thread, graph, node, count, error: errHead(note) });
   return 0;
+}
+
+// 멈출 때 기록한 다음 노드가 그래프에서 사라졌다(배포로 이름이 바뀜 등) — '끝남'으로 보고하지 않고 코드 결함으로 보류한다(0b 검토 A중5)
+function holdVanished(ctx, row) {
+  const note = `다음 노드(${row.next_nodes})가 그래프에 없다 — 배포로 노드가 바뀌었나. 끝남으로 보지 않는다`;
+  ctx.store.updateThread(row.thread_id, { status: "held", note, hold_reason: "code_defect", hold_ref: codeHash(row.graph) }, ctx.now(), { touch: row.note !== note });
+  ctx.metric("held", { thread: row.thread_id, graph: row.graph, scope: "thread", reasons: ["code_defect"], error: "vanished-node" });
+  say(`HELD ${row.thread_id} ${note}`);
+  return "held";
 }
 
 const PAUSE_NOTE = {
@@ -358,7 +379,7 @@ function onStepError(ctx, g, thread, e, names, prev, cur = prev) {
   if (cls.kind === "pending") return pauseThread(ctx, thread, "pending", names);
   if (cls.kind === "held") {
     const same = prev?.status === "held" && prev?.note === note;
-    ctx.store.updateThread(thread, { status: "held", note, hold_reason: cls.reason }, t, { touch: !same });
+    ctx.store.updateThread(thread, { status: "held", note, hold_reason: cls.reason, hold_ref: cls.ref ?? null }, t, { touch: !same });
     ctx.metric("held", { thread, graph: g.name, scope: "thread", reasons: [cls.reason], node });
     say(`HELD ${thread} ${note}`);
     return 0;
@@ -433,12 +454,12 @@ async function advance(ctx, g, thread, first, prev) {
       active.running = false;
       ctx.metric("node_end", { thread, graph: g.name, node: ran.length ? ran.join(",") : node, ok: true, ms: Math.round(performance.now() - t0) });
       const t = ctx.now();
-      const progress = { progress_at: t, fail_sig: null, fail_count: 0, hold_reason: null, hold_ref: null };
-      // 답을 적용한 단계가 끝났다 — 그 대기 기록과 답을 비운다(다음 질문은 새 기한·새 답)
-      if (first.kind === "resume" && steps === 0) Object.assign(progress, { interrupt_id: null, waiting_since: null, deadline_at: null, answer: null, answer_key: null, answered_at: null });
+      const s = await g.app.getState(g.run);
+      const progress = { progress_at: t, fail_sig: null, fail_count: 0, hold_reason: null, hold_ref: null, next_nodes: (s.next ?? []).join(",") };
+      // 답을 적용한 단계가 끝났다 — 그 대기 기록과 답을 비운다(다음 질문은 새 번호·새 기한·새 답, 같은 문구여도 다시 알린다)
+      if (first.kind === "resume" && steps === 0) Object.assign(progress, { interrupt_id: null, waiting_since: null, deadline_at: null, answer: null, answer_key: null, answered_at: null, waiting_notified: null });
       ctx.store.updateThread(thread, progress, t);
       arg = null; steps++;
-      const s = await g.app.getState(g.run);
       if (pendingInterrupts(s).length || !s.next?.length) { restore(); return settle(ctx, g, thread, { fresh: true }); }
     }
   } finally { restore(); active.running = false; active.node = null; }
@@ -518,6 +539,7 @@ async function cmdRetry(ctx, [thread]) {
     if (row.status === "gave_up") { say(`ERROR ${thread} gave_up 같은 오류로 포기한 스레드 — 원인을 고친 뒤 새로 start`); return 1; }
     if (!ctx.store.hasCheckpoint(thread)) { say(`ERROR ${thread} no-checkpoint 저장된 단계가 없다 — 같은 이름으로 다시 start`); return 1; }
     const r = await reconcile(ctx, g, thread);
+    if (r.kind === "none" && !r.s.next?.length && row.next_nodes) { holdVanished(ctx, row); return 1; }
     if (r.kind !== "none" || !r.s.next?.length) return settle(ctx, g, thread); // 대기·만료·끝남은 장부만 맞춘다
     ctx.store.updateThread(thread, { status: "running", run_started_at: ctx.now() }, ctx.now(), { touch: false });
     ctx.metric("resumed", { thread, graph: row.graph, from: row.status, via: "retry" });
@@ -526,10 +548,15 @@ async function cmdRetry(ctx, [thread]) {
 }
 
 // 답만 적는다 — 그래프를 열지 않고, 잠금도 잡지 않고, 정리(sweep)도 하지 않는다(1초 안에). 진행은 다음 틱이 한다.
-function cmdAnswer(ctx, [thread, decision]) {
+function cmdAnswer(ctx, [thread, decision, qidArg]) {
   checkThread(thread);
-  if (!["approved", "rejected"].includes(decision)) throw new UsageError("answer <스레드> approved|rejected");
-  const r = ctx.store.recordAnswer(thread, decision, ctx.now());
+  if (!["approved", "rejected"].includes(decision)) throw new UsageError("answer <스레드> approved|rejected [질문번호]");
+  let qid = null;
+  if (qidArg !== undefined) {
+    if (!/^#?\d{1,6}$/.test(qidArg)) throw new UsageError(`질문 번호는 WAITING 의 '질문 #N' 숫자: ${qidArg}`);
+    qid = Number(qidArg.replace("#", ""));
+  }
+  const r = ctx.store.recordAnswer(thread, decision, ctx.now(), qid);
   if (!r.ok) { say(`ERROR ${thread} ${r.kind} ${r.msg}`); return 1; }
   if (r.kind === "recorded") ctx.metric("answered", { thread, graph: r.row.graph, decision });
   say(`OK ${thread} answered ${decision} — 다음 틱이 이어 간다${fs.existsSync(ctx.cfg.pausedPath) ? "(지금은 PAUSED — 풀려야 진행)" : ""}`);
@@ -563,6 +590,8 @@ async function sweep(ctx) {
         ctx.store.updateThread(row.thread_id, { status: "waiting", question: r.q }, t, { touch: false });
       } else if (r.kind === "waiting" && row.status !== "waiting" && row.answer == null) {
         ctx.store.updateThread(row.thread_id, { status: "waiting", question: r.q }, t, { touch: false });
+      } else if (r.kind === "none" && row.status === "waiting" && !r.s.next?.length && row.next_nodes) {
+        holdVanished(ctx, row); // 대기하던 노드가 그래프에서 사라졌다 — 끝남이 아니다
       } else if (r.kind === "none" && row.status === "waiting") { // 장부는 대기인데 그래프엔 대기가 없다(그래프가 바뀜 등)
         const done = !r.s.next?.length;
         ctx.store.updateThread(row.thread_id, { status: done ? "done" : "failed", note: `장부는 대기였으나 그래프에 대기가 없어 ${done ? "끝남" : "멈춤"}으로 맞춤` }, t, { touch: false });
@@ -579,13 +608,13 @@ async function sweep(ctx) {
 // 진척 없이 48시간(LG_HOLD_TTL_HOURS)을 넘긴 보류·이어가기·대기열·실패 스레드를 만료시킨다(S9). 승인 기한이 걸린 것은 sweep 이 본다.
 function expireIdle(ctx) {
   const t = ctx.now();
-  for (const row of ctx.store.idleCandidates(t, ctx.cfg.holdTtlMs)) {
-    if (row.deadline_at != null) continue; // 승인 대기 기록이 있다 — 승인 기한으로 판단한다
+  for (const row of ctx.store.idleCandidates(t, ctx.cfg.holdTtlMs)) { // 답 없는 승인 대기는 후보에서 이미 빠졌다(승인 기한이 정한다)
     const token = ctx.store.acquireLock(row.thread_id);
     if (!token) continue;
     try {
       const cur = ctx.store.getThread(row.thread_id);
-      if (!cur || !["queued", "continue", "held", "failed", "running"].includes(cur.status)) continue;
+      if (!cur || !["queued", "continue", "held", "failed", "running", "waiting"].includes(cur.status)) continue;
+      if (cur.answer == null && cur.deadline_at != null) continue; // 잠그는 사이 바뀌었다 — 승인 기한으로
       const h = Math.round(ctx.cfg.holdTtlMs / 3_600_000);
       ctx.store.updateThread(cur.thread_id, { status: "expired", note: `진척 없이 ${h}시간(${cur.status}${cur.hold_reason ? `:${cur.hold_reason}` : ""}) — 보류 기한 초과로 자동 취소`, notified: 0 }, t);
       ctx.expiredNow.push(cur.thread_id);
@@ -637,6 +666,10 @@ async function tickThread(ctx, row0) {
     return await tickThreadInner(ctx, row0);
   } catch (e) {
     active.running = false;
+    if (/^SQLITE_/.test(e?.code ?? "")) {
+      if (/^SQLITE_(BUSY|LOCKED)/.test(e.code)) { say(`HELD ${row0.thread_id} 저장소가 잠시 바쁨(${e.code}) — 다음 틱에`); return "busy"; } // 일시 — 코드 결함이 아니다
+      throw e; // 저장소 고장은 틱 전체의 진짜 오류
+    }
     const note = `예상 밖 오류 — ${firstLine(e)}`;
     ctx.store.updateThread(row0.thread_id, { status: "held", note, hold_reason: "code_defect", hold_ref: codeHash(row0.graph) }, ctx.now());
     ctx.metric("held", { thread: row0.thread_id, graph: row0.graph, scope: "thread", reasons: ["code_defect"], error: errHead(firstLine(e)) });
@@ -660,6 +693,9 @@ async function tickThreadInner(ctx, row0) {
     if (row.status === "waiting" && !(row.answer != null && row.answer_key === row.interrupt_id)) return "skip";
     if (row.hold_reason === "code_defect" && row.hold_ref === codeHash(row.graph)) return "skip"; // 코드가 그대로면 다시 해도 같다
     if (row.hold_reason === "effect_unknown") return "skip"; // 결과 모르는 부수효과 — 사람이 확인해야 한다(기한이 지나면 만료 보고)
+    // LLM 상한 보류: 풀릴 수 없는 동안은 노드를 다시 돌리지 않는다(앞부분 일을 틱마다 되풀이하지 않게)
+    if ((row.hold_reason === "llm_day" || row.hold_reason === "token_cap") && row.hold_ref === ctx.storeMod.localDay(ctx.now())) return "skip";
+    if (row.hold_reason === "llm_thread" && row.hold_ref === String(ctx.cfg.llm.perThread)) return "skip";
     const t = ctx.now();
     if (row.status === "running") {
       // 실행 중으로 적혔는데 잠금 주인이 없다 = 끊김(게이트웨이 재시작·SIGKILL). 재시도로 센다.
@@ -705,6 +741,7 @@ async function tickThreadInner(ctx, row0) {
         ctx.store.updateThread(thread, { decision: cur.answer }, t, { touch: false });
         ctx.metric("resumed", { thread, graph: row.graph, from: "answer" });
       } else if (!r.s.next?.length) {
+        if (row.next_nodes) return holdVanished(ctx, row); // 멈출 때 다음 노드가 있었는데 그래프에서 사라졌다 — '끝남'이 아니다
         await settle(ctx, g, thread);
         return "done";
       } else {
@@ -744,7 +781,7 @@ async function cmdTick(ctx) {
   // 아직 알리지 못한 대기(끊긴 실행을 정리가 대기로 맞춘 경우 등)는 여기서 알린다 — 주인님이 못 본 질문이 조용히 만료되지 않게
   for (const row of ctx.store.openThreads()) {
     if (row.status !== "waiting" || !row.interrupt_id || row.waiting_notified === row.interrupt_id || row.answer != null) continue;
-    announce(ctx, row.thread_id, `WAITING ${row.thread_id} ${row.question ?? "승인 대기"} · 답: lg.sh answer ${row.thread_id} approved|rejected · 기한 ${row.deadline_at ? iso(row.deadline_at) : "?"}`,
+    announce(ctx, row.thread_id, waitingLine(row.thread_id, row.question, row.question_seq || 1, row.deadline_at),
       () => ctx.store.updateThread(row.thread_id, { waiting_notified: row.interrupt_id }, ctx.now(), { touch: false }));
     ctx.metric("waiting", { thread: row.thread_id, graph: row.graph, reason: null, late: true });
   }
@@ -851,6 +888,8 @@ async function main() {
   const storeMod = await import("./lib/store.mjs");
   const { createMetrics } = await import("./lib/metrics.mjs");
   const store = new storeMod.Store(cfg);
+  // 실행 시 차단층: 이제부터 프로세스는 실행기 내부(allowSpawn)만 띄운다 — 그래프 코드는 어떤 우회로로도 못 띄운다(lib/guard.mjs)
+  (await import("./lib/guard.mjs")).installGuard();
   const metric = createMetrics({ file: cfg.metricsPath, now });
   const ctx = { cfg, now, store, storeMod, metric, expiredNow: [], isTick: false };
   active.ctx = ctx; active.store = store; active.now = now; active.metric = metric;

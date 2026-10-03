@@ -7,6 +7,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { iso } from "./config.mjs";
+import { allowSpawn } from "./guard.mjs";
 
 const require = createRequire(import.meta.url);
 const Database = require("better-sqlite3");
@@ -38,7 +39,9 @@ CREATE TABLE IF NOT EXISTS lg_threads (
   answer_key TEXT,               -- 그 답이 가리키는 질문 열쇠(interrupt_id) — 질문이 바뀌면 옛 답은 쓰지 않는다
   answered_at INTEGER,
   waiting_notified TEXT,         -- WAITING 알림을 낸 질문 열쇠(같은 질문을 틱마다 다시 알리지 않게)
-  stuck_key TEXT                 -- STUCK 알림을 낸 잠금(pid:잡은 때)
+  stuck_key TEXT,                -- STUCK 알림을 낸 잠금(pid:잡은 때)
+  question_seq INTEGER NOT NULL DEFAULT 0,  -- 이 스레드에서 몇 번째 질문인가(WAITING 의 '질문 #N') — 같은 문구로 다시 물어도 번호가 바뀐다
+  next_nodes TEXT                -- 마지막으로 멈춘 때의 다음 노드(배포로 노드가 사라지면 '끝남'으로 오인하지 않게)
 );
 CREATE TABLE IF NOT EXISTS lg_locks (
   thread_id TEXT PRIMARY KEY,
@@ -68,12 +71,12 @@ CREATE INDEX IF NOT EXISTS lg_llm_calls_thread ON lg_llm_calls(thread_id);
 `;
 
 // 판이 오를 때 빠진 칸을 더한다(기존 DB 를 버리지 않고). 칸을 지우거나 바꾸는 변경은 여기서 하지 않는다.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const COLUMNS = {
   lg_threads: [["run_started_at", "INTEGER"], ["interrupt_id", "TEXT"], ["notified", "INTEGER NOT NULL DEFAULT 1"],
     ["mode", "TEXT"], ["input_json", "TEXT"], ["progress_at", "INTEGER"], ["fail_sig", "TEXT"], ["fail_count", "INTEGER NOT NULL DEFAULT 0"],
     ["hold_reason", "TEXT"], ["hold_ref", "TEXT"], ["answer", "TEXT"], ["answer_key", "TEXT"], ["answered_at", "INTEGER"],
-    ["waiting_notified", "TEXT"], ["stuck_key", "TEXT"]],
+    ["waiting_notified", "TEXT"], ["stuck_key", "TEXT"], ["question_seq", "INTEGER NOT NULL DEFAULT 0"], ["next_nodes", "TEXT"]],
   lg_locks: [["pstart", "TEXT"]],
   lg_llm_calls: [["in_tok", "INTEGER"], ["out_tok", "INTEGER"], ["cc_tok", "INTEGER"], ["cr_tok", "INTEGER"], ["cost_usd", "REAL"]],
 };
@@ -81,8 +84,10 @@ const COLUMNS = {
 export const TERMINAL = new Set(["done", "expired", "blocked", "gave_up"]);
 
 // 프로세스 시작 시각(같은 기기·같은 형식으로만 비교한다). 없는 pid 면 null.
+// 못 읽으면(ps 실패) null — 부르는 쪽은 null 을 '살아 있음(넘겨받지 않음)'으로 본다(S1). 시험은 LG_TEST_PS_FAIL=1 로 실패를 흉내 낸다.
 export function procStart(pid) {
-  const r = spawnSync("/bin/ps", ["-o", "lstart=", "-p", String(pid)], { env: { LC_ALL: "C", TZ: "UTC", PATH: "/bin:/usr/bin" }, encoding: "utf8" });
+  if (process.env.LG_TEST_MODE === "1" && process.env.LG_TEST_PS_FAIL === "1") return null;
+  const r = allowSpawn(() => spawnSync("/bin/ps", ["-o", "lstart=", "-p", String(pid)], { env: { LC_ALL: "C", TZ: "UTC", PATH: "/bin:/usr/bin" }, encoding: "utf8" }));
   return r.status === 0 ? r.stdout.trim() || null : null;
 }
 const MY_START = procStart(process.pid);
@@ -103,7 +108,7 @@ function tighten(p, mode) {
 
 const FIELDS = new Set(["status", "run_started_at", "interrupt_id", "waiting_since", "deadline_at", "question", "decision", "note", "notified",
   "mode", "input_json", "progress_at", "fail_sig", "fail_count", "hold_reason", "hold_ref", "answer", "answer_key", "answered_at",
-  "waiting_notified", "stuck_key"]);
+  "waiting_notified", "stuck_key", "question_seq", "next_nodes"]);
 
 export class Store {
   constructor(cfg) {
@@ -155,7 +160,7 @@ export class Store {
         updated_at=excluded.updated_at, run_started_at=excluded.run_started_at, interrupt_id=NULL, waiting_since=NULL,
         deadline_at=NULL, question=NULL, decision=NULL, note=NULL, notified=1, mode=excluded.mode, input_json=excluded.input_json,
         progress_at=excluded.progress_at, fail_sig=NULL, fail_count=0, hold_reason=NULL, hold_ref=NULL, answer=NULL, answer_key=NULL,
-        answered_at=NULL, waiting_notified=NULL, stuck_key=NULL`)
+        answered_at=NULL, waiting_notified=NULL, stuck_key=NULL, question_seq=0, next_nodes=NULL`)
       .run({ id, graph, status, now, run: status === "running" ? now : null, mode, input: input == null ? null : JSON.stringify(input) });
   }
   // touch=false 면 updated_at 을 그대로 둔다(진척 없는 되풀이가 정리 기준 시각을 미루지 않게).
@@ -174,7 +179,9 @@ export class Store {
   // ── 답 기록(answer) ─────────────────────────────────────────────
   // 잠금 없이 즉시 트랜잭션 하나로 끝난다 — 틱이 다른 스레드를 몇 분 돌리고 있어도 대화 쪽 답이 1초 안에 끝나게.
   // 답은 '지금 걸린 질문 열쇠'에 묶는다. 틱은 같은 열쇠일 때만 적용한다(그 사이 질문이 바뀌면 옛 답은 쓰지 않는다).
-  recordAnswer(id, decision, now) {
+  // qid: WAITING 에 보인 '질문 #N'. 첫 질문은 번호 없이도 받는다. 두 번째 질문부터는 번호가 맞아야 받는다 —
+  //   같은 문구로 다시 묻는 재확인에 늦게 도착한(되풀이된) 답이 주인님이 못 본 질문을 승인하지 않게(0b 검토 A중4).
+  recordAnswer(id, decision, now, qid = null) {
     return this.tx(() => {
       const row = this.getThread(id);
       if (!row) return { ok: false, kind: "not-found", msg: "없는 스레드" };
@@ -185,6 +192,9 @@ export class Store {
       if (row.deadline_at != null && row.deadline_at <= now) {
         return { ok: false, kind: "expired", msg: `승인 기한(${iso(row.deadline_at)})이 지났다 — 다음 틱이 취소한다` };
       }
+      const seq = row.question_seq ?? 0;
+      if (qid != null && qid !== seq) return { ok: false, kind: "stale-question", msg: `지금 걸린 질문은 #${seq} 이다(준 번호 #${qid}) — 새 질문을 보고 다시 답한다` };
+      if (qid == null && seq > 1) return { ok: false, kind: "need-qid", msg: `이 스레드는 질문이 여러 번 나왔다(지금 #${seq}) — 번호를 붙여 다시: answer ${id} ${decision} ${seq}` };
       if (row.answer != null && row.answer_key === row.interrupt_id) {
         if (row.answer === decision) return { ok: true, kind: "same", row };
         return { ok: false, kind: "already-answered", msg: `이미 ${row.answer} 로 답했다 — 다음 틱이 적용한다` };
@@ -236,10 +246,12 @@ export class Store {
       AND ((deadline_at IS NOT NULL AND deadline_at <= ?) OR status = 'running') ORDER BY deadline_at, thread_id`).all(now)
       .filter((r) => !this.lockedLive(r.thread_id));
   }
-  // 진척 없이 기한(holdTtl)을 넘긴 보류·이어가기·대기열·실패·끊긴 스레드. 승인 대기는 승인 기한으로 따로 본다.
+  // 진척 없이 기한(holdTtl)을 넘긴 보류·이어가기·대기열·실패·끊긴 스레드와, 답을 받고도 진행되지 못한 대기.
+  // 기준 시각 = 마지막 단계 완료와 답 기록 중 늦은 쪽. 답 없는 승인 대기는 승인 기한으로 따로 본다(run.mjs sweep).
   idleCandidates(now, ttl) {
-    return this.db.prepare(`SELECT * FROM lg_threads WHERE status IN ('queued', 'continue', 'held', 'failed', 'running')
-      AND COALESCE(progress_at, updated_at) + ? <= ? ORDER BY thread_id`).all(ttl, now)
+    return this.db.prepare(`SELECT * FROM lg_threads WHERE status IN ('queued', 'continue', 'held', 'failed', 'running', 'waiting')
+      AND MAX(COALESCE(progress_at, updated_at), COALESCE(answered_at, 0)) + ? <= ? ORDER BY thread_id`).all(ttl, now)
+      .filter((r) => !(r.answer == null && r.deadline_at != null)) // 답 없는 승인 대기 기록 — 승인 기한이 정한다
       .filter((r) => !this.lockedLive(r.thread_id));
   }
   openThreads() {
@@ -276,13 +288,13 @@ export class Store {
     return this.tx(() => {
       const nThread = this.db.prepare("SELECT count(*) AS n FROM lg_llm_calls WHERE thread_id=?").get(thread).n;
       if (nThread >= perThread) {
-        return { ok: false, reason: `LLM 호출 스레드 상한 ${perThread}회에 닿음 — 이 스레드는 상한(LG_LLM_MAX_PER_THREAD)을 올려야 이어진다`, kind: "llm_budget" };
+        return { ok: false, reason: `LLM 호출 스레드 상한 ${perThread}회에 닿음 — 이 스레드는 상한(LG_LLM_MAX_PER_THREAD)을 올려야 이어진다`, kind: "llm_thread", ref: String(perThread) };
       }
       const nDay = this.db.prepare("SELECT count(*) AS n FROM lg_llm_calls WHERE day=?").get(day).n;
-      if (nDay >= perDay) return { ok: false, reason: `LLM 호출 하루 상한 ${perDay}회에 닿음(${day}) — 다음 날 retry`, kind: "llm_budget" };
+      if (nDay >= perDay) return { ok: false, reason: `LLM 호출 하루 상한 ${perDay}회에 닿음(${day}) — 다음 날 retry`, kind: "llm_day", ref: day };
       if (dayTokenCap != null) {
         const tok = this.dayTokens(now);
-        if (tok >= dayTokenCap) return { ok: false, reason: `하루 토큰 상한 ${dayTokenCap}에 닿음(${day}, 오늘 ${tok}) — 다음 날`, kind: "token_cap" };
+        if (tok >= dayTokenCap) return { ok: false, reason: `하루 토큰 상한 ${dayTokenCap}에 닿음(${day}, 오늘 ${tok}) — 다음 날`, kind: "token_cap", ref: day };
       }
       const r = this.db.prepare("INSERT INTO lg_llm_calls(ts, day, thread_id, node, model) VALUES(?, ?, ?, ?, ?)").run(now, day, thread, node, model);
       return { ok: true, id: Number(r.lastInsertRowid) };
@@ -307,10 +319,10 @@ export class Store {
   writePending() {
     this.tx(() => {
       const rows = this.db.prepare(
-        "SELECT thread_id, graph, question, waiting_since, deadline_at, answer FROM lg_threads WHERE status='waiting' ORDER BY waiting_since, thread_id",
+        "SELECT thread_id, graph, question, waiting_since, deadline_at, answer, question_seq FROM lg_threads WHERE status='waiting' ORDER BY waiting_since, thread_id",
       ).all();
       const body = rows.map((r) => JSON.stringify({
-        thread: r.thread_id, graph: r.graph, question: r.question,
+        thread: r.thread_id, graph: r.graph, question: r.question, qid: r.question_seq || 1,
         since: r.waiting_since == null ? null : iso(r.waiting_since), deadline: r.deadline_at == null ? null : iso(r.deadline_at),
         ...(r.answer ? { answered: r.answer } : {}),
       })).join("\n");
