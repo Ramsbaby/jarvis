@@ -5,6 +5,13 @@
 set -euo pipefail
 
 BOT_HOME="${BOT_HOME:-${HOME}/.openclaw-data/runtime}"
+# 작업 대기열 시험은 버리는 BOT_HOME 에서 돈다 — 코드는 진짜 런타임 것을 쓰되 DB 는 임시 폴더에.
+# 2026-10-04: 매일 새벽 e2e 가 이 시험을 돌 때마다 진짜 tasks.db 에 test-* 작업을 넣어
+# 'running' 으로 남겼다(test-legacy-result, 10-04 05:01). task-store.mjs 는 BOT_HOME 으로 DB 경로를 정한다.
+TASK_STORE="${BOT_HOME}/lib/task-store.mjs"
+SCRATCH_HOME="$(mktemp -d "${TMPDIR:-/tmp}/completion-guard.XXXXXX")"
+trap 'rm -rf "$SCRATCH_HOME"' EXIT
+ts() { BOT_HOME="$SCRATCH_HOME" node --experimental-sqlite --no-warnings "$TASK_STORE" "$@"; }
 DISCORD_ROUTE_LIB="${HOME}/projects/jarvis/infra/lib/discord-route.sh"
 
 # ── 테스트 설정 ────────────────────────────────────────────────────────────
@@ -74,7 +81,7 @@ run_tests() {
     # T1: transition 함수가 empty result 거부
     _test_start "transition 함수가 빈 result 필드 거부 (RESULT_REQUIRED)"
     EMPTY_RESULT_ERROR=$(
-        node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+        ts \
             transition "test-empty-result" "done" "test" '{}' 2>&1 || echo "error"
     )
     if echo "$EMPTY_RESULT_ERROR" | grep -q "RESULT_REQUIRED\|not found"; then
@@ -86,14 +93,14 @@ run_tests() {
     # T2: transition 함수가 유효한 result 허용
     _test_start "transition 함수가 유효한 result 필드 허용"
     # 먼저 test-valid-result 태스크 생성
-    node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+    ts \
         enqueue --id "test-valid-result" --title "Test Valid Result" \
         --prompt "Test prompt" --priority medium >/dev/null 2>&1 || true
     # running 상태로 변경 (테스트용)
-    node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+    ts \
         transition "test-valid-result" "running" "test" '{}' >/dev/null 2>&1 || true
     # done으로 전이 시 result 포함
-    if VALID_RESULT=$(node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+    if VALID_RESULT=$(ts \
         transition "test-valid-result" "done" "test" '{"result":"Valid completion"}' 2>&1); then
         _test_assert_contain "$VALID_RESULT" "ok"
     else
@@ -103,14 +110,14 @@ run_tests() {
     # T3: 역호환성: 기존 meta.result 사용 (backward compatibility)
     _test_start "역호환성: extra.result 없으면 meta.result 검색"
     # 태스크 생성
-    node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+    ts \
         enqueue --id "test-legacy-result" --title "Test Legacy Result" \
         --prompt "Test prompt" >/dev/null 2>&1 || true
     # running으로 변경
-    node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+    ts \
         transition "test-legacy-result" "running" "test" '{}' >/dev/null 2>&1 || true
     # done 시도 — result 없음 → 실패 (RESULT_REQUIRED)
-    if ! node --experimental-sqlite --no-warnings "${BOT_HOME}/lib/task-store.mjs" \
+    if ! ts \
         transition "test-legacy-result" "done" "test" '{}' >/dev/null 2>&1; then
         _test_pass
     else
