@@ -98,9 +98,14 @@ export function checkGraphSource(src, file, registry, { resolveImport } = {}) {
   for (const m of code.matchAll(/\bimport\s*\(/g)) { // 동적 import 는 글자값만(상대 경로·허용 목록은 위 규칙이 본다)
     if (literalAt(src, m.index + m[0].length) == null) report(m.index, "escape", "글자값이 아닌 동적 import 금지(문자열 조합으로 검사 우회)");
   }
-  for (const m of src.matchAll(/(["'`])([\w:./-]{2,40})\1/g)) { // 위험 이름 글자값(obj["exec"+…] 같은 접근) — 주석 안은 뺀다
-    if (code[m.index] === m[1] && ESCAPE_NAMES.test(m[2]) && !specsOf(src, code).some((im) => m.index >= im.index && m.index < im.index + 200 && src.slice(im.index, m.index).split("\n").length === 1)) {
-      report(m.index, "escape", `위험 이름 글자값 "${m[2]}" — 동적 접근으로 검사를 피하지 않는다`);
+  // 위험 이름 글자값: 계산된 속성 접근(obj["execFileSync"])일 때만 — 데이터로 쓴 "module"·"exec" 같은 평범한 글자값은 잡지 않는다(0b 재검토 C중1).
+  // child_process 모듈 이름은 데이터로 쓸 일이 없으니 어디서든 잡는다. 주석 안·import 문 안은 뺀다.
+  const imports = specsOf(src, code);
+  for (const m of src.matchAll(/(["'`])([\w:./-]{2,40})\1/g)) {
+    if (code[m.index] !== m[1] || imports.some((im) => m.index >= im.index && src.slice(im.index, m.index).split("\n").length === 1 && m.index < im.index + 200)) continue;
+    const computed = /[\w$)\]]\s*\[\s*$/.test(code.slice(Math.max(0, m.index - 40), m.index)); // obj[ … ] — 배열 글자값 [ … ] 은 아니다
+    if ((computed && ESCAPE_NAMES.test(m[2])) || /^(node:)?child_process$/.test(m[2])) {
+      report(m.index, "escape", `위험 이름 글자값 "${m[2]}"${computed ? " 로 속성 접근" : ""} — 동적 접근으로 검사를 피하지 않는다`);
     }
   }
   for (const m of code.matchAll(/\b(?:InMemoryStore|BaseStore|AsyncBatchedStore|PostgresStore|SqliteStore|MemoryStore)\b|\bgetStore\s*\(/g)) {

@@ -63,7 +63,8 @@ test("B상1: 정적 검사 — createRequire·getBuiltinModule·eval·Function·
   assert.deepEqual(rules(`${H}eval("1");`), ["escape"]);
   assert.deepEqual(rules(`${H}const f = new Function("return 1");`), ["escape"]);
   assert.deepEqual(rules(`${H}const f = (() => {}).constructor("return 1");`), ["escape"]);
-  assert.deepEqual(rules(`${H}const k = "execSync";`), ["escape"]);
+  assert.deepEqual(rules(`${H}const f = cp["execSync"];`), ["escape"]);
+  assert.deepEqual(rules(`${H}const k = "execSync";`), [], "데이터 글자값은 잡지 않는다(실행 차단층이 막는다)");
   assert.deepEqual(rules(`import { Worker } from "node:worker_threads";`), ["import-allow"]);
   assert.deepEqual(rules(`${H}import fs from "node:fs";\nimport path from "node:path";\nimport { z } from "zod";\nconst h = await import("./helper.mjs");\nconst s = "hello";`), []);
 });
@@ -258,4 +259,32 @@ test("A중6: 집계 — M4 는 대기열·답 받은 스레드도 세고, M1 은
   assert.deepEqual(rep.m4.list.sort(), ["ans-old", "q-old"]);
   assert.deepEqual([rep.m1.interrupted, rep.m1.continued, rep.m1.abandoned, rep.m1.rate], [2, 1, 1, "50%"]);
   assert.equal(rep.m3.duplicates, 0);
+});
+
+// ── 재검토 C(10-03): 수정이 만든 결함 ─────────────────────────────────
+test("C중1: 데이터로 쓴 \"module\"·\"exec\"·\"constructor\" 글자값은 위반이 아니다 — 계산된 속성 접근만 잡는다", async () => {
+  const { checkGraphSource } = await import("../scripts/check-graph-rules.mjs");
+  const reg = { commands: {} };
+  const H = `import { StateGraph } from "@langchain/langgraph";\n`;
+  const rules = (src) => checkGraphSource(src, "g.mjs", reg).map((p) => p.rule);
+  assert.deepEqual(rules(`${H}const pkg = { type: "module", step: "exec", mode: "fork" };\nconst bad = ["constructor", "__proto__"];\nif (k === "constructor") skip();`), []);
+  assert.deepEqual(rules(`${H}const f = obj["execFileSync"];`), ["escape"]);
+  assert.deepEqual(rules(`${H}const f = obj[ 'constructor' ];`), ["escape"]);
+  assert.deepEqual(rules(`${H}const name = "child_process";`), ["escape"], "child_process 모듈 이름은 어디서든");
+});
+
+test("C중2: 질문 번호가 생기기 전 판이 남긴 대기도 첫 답(번호 1)을 받는다", async (t) => {
+  const sb = sandbox(t);
+  const env = tickEnv(sb);
+  assert.match(run(env, ["start", "smoke", "m1"]).first, /^WAITING m1 /);
+  const { openDb } = await import("./helpers.mjs");
+  const db = await openDb(sb);
+  t.after(() => db.close());
+  db.prepare("UPDATE lg_threads SET question_seq=0 WHERE thread_id='m1'").run(); // 옛 판 흉내
+  assert.equal(run(env, ["answer", "m1", "approved", "1"]).code, 0, "번호 1 로 받아야 한다");
+  assert.match(run(env, ["tick"]).first, /^DONE m1 /);
+  assert.equal(run(env, ["start", "smoke", "m2"]).code, 0);
+  db.prepare("UPDATE lg_threads SET question_seq=0 WHERE thread_id='m2'").run();
+  assert.match(run(env, ["answer", "m2", "approved", "0"]).first, /^ERROR m2 stale-question /, "0 은 없는 번호");
+  assert.equal(run(env, ["answer", "m2", "approved"]).code, 0, "번호 없이도 첫 질문으로 받는다");
 });

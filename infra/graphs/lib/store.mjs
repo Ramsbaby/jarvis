@@ -192,7 +192,7 @@ export class Store {
       if (row.deadline_at != null && row.deadline_at <= now) {
         return { ok: false, kind: "expired", msg: `승인 기한(${iso(row.deadline_at)})이 지났다 — 다음 틱이 취소한다` };
       }
-      const seq = row.question_seq ?? 0;
+      const seq = row.question_seq || 1; // 번호가 생기기 전 판의 대기(0)는 첫 질문으로 본다
       if (qid != null && qid !== seq) return { ok: false, kind: "stale-question", msg: `지금 걸린 질문은 #${seq} 이다(준 번호 #${qid}) — 새 질문을 보고 다시 답한다` };
       if (qid == null && seq > 1) return { ok: false, kind: "need-qid", msg: `이 스레드는 질문이 여러 번 나왔다(지금 #${seq}) — 번호를 붙여 다시: answer ${id} ${decision} ${seq}` };
       if (row.answer != null && row.answer_key === row.interrupt_id) {

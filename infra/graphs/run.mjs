@@ -224,6 +224,9 @@ async function reconcile(ctx, g, thread, { fresh = false, answered = false } = {
     const newQuestion = answered || row?.interrupt_id !== key;
     ctx.store.updateThread(thread, { interrupt_id: key, waiting_since: since, deadline_at: deadline, question: q,
       ...(newQuestion ? { question_seq: (row?.question_seq ?? 0) + 1 } : {}) }, t, { touch: false });
+  } else if (!(row?.question_seq > 0)) {
+    // 질문 번호가 생기기 전 판이 남긴 대기 — 첫 질문(#1)으로 맞춘다(pending.jsonl 이 qid 1 로 알린다, 0b 재검토 C중2)
+    ctx.store.updateThread(thread, { question_seq: 1 }, t, { touch: false });
   }
   const cur = ctx.store.getThread(thread);
   const answeredInTime = cur?.answer != null && cur.answer_key === key && cur.answered_at != null && cur.answered_at < deadline;
