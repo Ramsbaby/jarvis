@@ -697,11 +697,15 @@ function pruneSandboxes(ctx) {
     let ents = [];
     try { ents = fs.readdirSync(root, { withFileTypes: true }); } catch { continue; }
     for (const e of ents) {
-      if (!e.isDirectory()) continue;
+      if (!e.isDirectory() || [...live].some((t) => t.endsWith(e.name))) continue;
       const p = path.join(root, e.name);
-      const ref = fs.existsSync(path.join(p, ".ready")) ? path.join(p, ".ready") : p;
-      if ([...live].some((t) => t.endsWith(e.name))) continue;
-      if (ctx.now() - fs.statSync(ref).mtimeMs > keepMs) { fs.rmSync(p, { recursive: true, force: true }); removed++; }
+      // 겹친 틱이 먼저 지웠거나 지우는 중일 수 있다 — 정리 실패가 틱을 죽이지 않게(재검토 B 하5). 다음 틱이 다시 본다
+      try {
+        const ref = fs.existsSync(path.join(p, ".ready")) ? path.join(p, ".ready") : p;
+        if (ctx.now() - fs.statSync(ref).mtimeMs > keepMs) { fs.rmSync(p, { recursive: true, force: true }); removed++; }
+      } catch (err) {
+        ctx.metric("gc", { ok: false, sandboxes: 0, error: errHead(firstLine(err)) });
+      }
     }
   }
   if (removed) ctx.metric("gc", { ok: true, sandboxes: removed });
@@ -715,7 +719,9 @@ function pruneRuns(ctx) {
   let n = 0;
   for (const e of ents) {
     const p = path.join(root, e.name);
-    if (e.isDirectory() && ctx.now() - fs.statSync(p).mtimeMs > ctx.cfg.gcDays * 86_400_000) { fs.rmSync(p, { recursive: true, force: true }); n++; }
+    try {
+      if (e.isDirectory() && ctx.now() - fs.statSync(p).mtimeMs > ctx.cfg.gcDays * 86_400_000) { fs.rmSync(p, { recursive: true, force: true }); n++; }
+    } catch { /* 겹친 틱이 먼저 지움 — 다음 날 다시 */ }
   }
   return n;
 }

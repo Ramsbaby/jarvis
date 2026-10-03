@@ -152,18 +152,21 @@ LLM 이 쓴 코드는 실행하지 않는다. 사본에서 도는 것은 사람�
 
 ```
 gostop-intake:<날짜>  (LG_DAILY — 04:30 뒤 첫 틱이 대기열에 올림, LLM 0회)
-  preflight(소크 잠금이면 HOLD · 3일 지난 사본 정리) → collect(어젯밤 소크 summary.json · 직전 접수 뒤 CI 실패 · 없으면 벤치 1건)
-  → dedupe(gostop/intake-state.json) → enqueue(gostop-fix 대기열, 하루 3건)
+  preflight(소크 잠금이면 HOLD) → collect(소크 summary.json 3일 치 · CI 7일 치 지금도 빨간 워크플로 — 늘 다시 보고 장부로 뺀다.
+  씨앗 없는 소크 문제·미커밋 소크는 기록만) → dedupe(gostop/intake-state.json · 새것이 없으면 벤치 1건) → enqueue(gostop-fix 대기열, 하루 3건 — 넘친 것은 다음 접수로)
 gostop-fix:<sigkey>  (meta.serial — 한 번에 하나, S13)
   ① preflight  대화 작업 표식(.jarvis-busy · 모든 가지 30분 안 커밋)이면 HOLD(busy). 대상 커밋을 전체 해시로
   ② sandbox    git archive → gostop/sandbox/<키>/work(사본)·clean(깨끗한 내보내기, 1b 패치 기준). .git 없음(역사 0),
-               .claude·.mcp.json·key.properties·*.jks·*.keystore·google-services.json 제외, pub get --offline
-  ③ reproduce  기존 시험 2회(분리 실행) → reproduced · not_reproduced · flaky. 죽음·시간 초과는 같은 회차를 다시(3회 → gave_up)
-  ④ diagnose   sonnet ×≤2, --restricted, Read·Grep·Glob, 작업 폴더 = 사본, --json-schema(가설·파일·규칙 공백·확신도·근거)
+               .claude·.mcp.json·key.properties·*.jks·*.keystore·google-services.json 제외, 기록 문서(docs 중 rules 외·context·qa·
+               coverage·루트 md 등 — 수정 원장에 정답이 있다) 정리, 벤치면 정답 표지 누설 검사(있으면 진단 없이 gave_up), pub get --offline
+  ③ reproduce  기존 시험 2회(분리 실행) → reproduced · not_reproduced · flaky · tool_error. 죽음·시간 초과·신호 종료는 같은 회차를 다시(3회 → gave_up)
+  ④ diagnose   sonnet ×≤2(형식·호출 오류·죽음 포함), --restricted, Read·Grep·Glob, 작업 폴더 = 사본, --json-schema(가설·파일·규칙 공백·확신도·근거).
+               로그인 만료·사용량 한도는 시도로 세지 않고 6시간·1시간 쉰 뒤 새 실행 번호로(3회까지)
   ⑤ scope_precheck  §4① 허용 목록 밖·AI 영역(lib/domain/ai/**·MCTSConstants)이면 승인 사유
   ⑥ owner_gate 실제 모드 + 사유일 때만(순수 interrupt). 그림자는 plan 이 would_ask 로 적기만
   ⑭ plan       runs/<키>/plan.md·result.json(+haiku 요약 1회). 상태: ready·rule_decision·would_ask·not_reproduced·flaky·gave_up.
-               벤치면 판정 M8(bench). 사본의 build·.dart_tool 은 지우고 사본은 3일 보관
+               벤치면 판정 M8(bench, 스레드당 1회 — 채점: 기대 파일 1~2위 + 근거 '파일:줄'이 정답 자리 ±15줄). 사본의 build·.dart_tool 은 지운다.
+사본은 3일 보관 — 실행기가 관문 앞에서 틱마다 정리한다(끝나지 않은 스레드 것은 남김). runs/ 원문은 gc 14일.
 ```
 
 - 신호 열쇠: `soak:normal:<씨앗>:<head8>` · `soak:problem:<날>:<head8>:<해시>` · `ci:<워크플로>:<sha8>` · `bench:<id>:r<회차>`.

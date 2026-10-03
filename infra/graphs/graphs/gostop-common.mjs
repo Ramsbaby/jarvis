@@ -258,11 +258,19 @@ export function loadBench(file = BENCH_FILE) {
 //   ① 기대 파일이 진단 파일 1~2위 안에 있고 ② 근거('파일:줄')가 정답 자리(수정·주입한 줄 범위) ±NEAR 줄 안을 가리키며
 //   ③ 규칙 공백 판정·최종 상태가 기대와 같을 때만 맞음. 정답 자리 = expect.lines { 파일: [[시작, 끝], …] }(벤치 준비 때 diff 로 계산).
 export const NEAR = 15;
+// 근거 '파일:줄' 을 뽑는다. 폴더 없이 파일 이름만 쓴 것(turn_manager.dart:1572)·'L1572' 꼴도 받고(진단 파일 목록에서 경로를 찾는다),
+// 넓은 범위(40줄 넘게)는 아무 데나 맞으므로 근거로 치지 않는다(재검토 B 하2).
+export const MAX_REF_SPAN = 40;
 export function evidenceRefs(diag) {
   const refs = [];
+  const known = (diag?.files ?? []).map(normRel);
   for (const e of [...(diag?.evidence ?? []), diag?.hypothesis ?? ""]) {
-    for (const m of String(e).matchAll(/((?:lib|test|docs)\/[A-Za-z0-9_./-]+\.(?:dart|md)):(\d+)(?:[-~](\d+))?/g)) {
-      refs.push({ file: normRel(m[1]), from: Number(m[2]), to: Number(m[3] ?? m[2]) });
+    for (const m of String(e).matchAll(/((?:(?:lib|test|docs)\/)?[A-Za-z0-9_./-]*?[A-Za-z0-9_]+\.(?:dart|md)):L?(\d+)(?:[-~]L?(\d+))?/g)) {
+      let file = normRel(m[1]);
+      if (!/^(lib|test|docs)\//.test(file)) file = known.find((k) => k.endsWith(`/${file}`)) ?? file;
+      const from = Number(m[2]), to = Number(m[3] ?? m[2]);
+      if (to < from || to - from > MAX_REF_SPAN) continue;
+      refs.push({ file, from, to });
     }
   }
   return refs;

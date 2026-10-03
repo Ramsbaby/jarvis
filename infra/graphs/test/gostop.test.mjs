@@ -739,3 +739,19 @@ test("재검토 B: 진단 호출 오류(형식·결과 없음)는 sonnet ×≤2 
   assert.equal(r.status, "gave_up");
   assert.equal(y.fc.calls().length, 0, "도구 오류면 진단하지 않는다");
 });
+
+test("재검토 B 하: 채점 근거 — 넓은 범위는 근거가 아니다 · 파일 이름만·L줄 꼴도 받는다 · 사본 정리가 틱을 죽이지 않는다", (t) => {
+  const expect = { files: ["lib/domain/game/turn_manager.dart"], lines: { "lib/domain/game/turn_manager.dart": [[1572, 1572]] } };
+  const base = { hypothesis: "h", rule_gap: false, confidence: 0.5, files: ["lib/domain/game/turn_manager.dart"] };
+  assert.equal(C.diagMatch(expect, { ...base, evidence: ["lib/domain/game/turn_manager.dart:1-3000 — 전부"] }).ok, false, "넓은 범위");
+  assert.equal(C.diagMatch(expect, { ...base, evidence: ["turn_manager.dart:1575 — 승자"] }).ok, true, "파일 이름만");
+  assert.equal(C.diagMatch(expect, { ...base, evidence: ["lib/domain/game/turn_manager.dart:L1570 — 승자"] }).ok, true, "L줄");
+  // 사본 폴더 자리에 파일이 있어도(정리 대상이 이상해도) 틱은 0 으로 끝난다
+  const x = setup(t, { extra: { LG_SANDBOX_KEEP_DAYS: "0" } });
+  const root = path.join(x.sb.state, "gostop", "sandbox");
+  fs.mkdirSync(path.join(root, "a", "work"), { recursive: true });
+  fs.writeFileSync(path.join(root, "not-a-dir"), "x");
+  const r = run(x.env, ["tick"]);
+  assert.equal(r.code, 0, r.out + r.err);
+  assert.ok(!fs.existsSync(path.join(root, "a")));
+});

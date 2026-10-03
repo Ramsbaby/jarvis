@@ -226,7 +226,8 @@ export function build({ checkpointer, llm, tools }) {
       else { status = "gave_up"; note = "주인님 반려"; }
     } else status = "ready";
     const bench = s.signal?.bench ?? null;
-    const match = bench ? diagMatch(bench.expect, s.diag, status) : null;
+    // 누설로 진단을 안 한 사례는 채점하지 않는다(분모에서 뺀다 — 진단 실패와 다르다, 재검토 B 하4)
+    const match = bench && !s.leak ? diagMatch(bench.expect, s.diag, status) : null;
     let summary = null;
     if (s.diag || status === "flaky" || status === "not_reproduced") {
       // 주인님용 요약 — haiku 1회(설계 ⑭). 덤이다: 실패·상한 보류·시간 부족이어도 고칠 안은 남기고 넘어간다(H3 하 — 요약 때문에 대기열을 묶지 않는다)
