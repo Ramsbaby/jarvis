@@ -31,6 +31,9 @@ export function loadConfig(env = process.env) {
   const testMode = env.LG_TEST_MODE === "1";
   // 명령 허용 목록은 저장소 파일이 정본이다. 시험 모드에서만 다른 파일로 바꿀 수 있다(운영에서 환경변수로 목록을 넓히지 못하게).
   if (env.LG_CMD_REGISTRY && !testMode) throw new Error("LG_CMD_REGISTRY 는 시험 모드(LG_TEST_MODE=1)에서만 쓴다");
+  // 목록 timeoutSec 상한(3600)의 1.5배 — 기본값이 어느 명령에서도 껍데기의 시간 제한보다 먼저 걸리지 않는다
+  const detachMaxSec = num(env, "LG_DETACH_MAX_SEC", 5400);
+  if (detachMaxSec <= 0) throw new Error("LG_DETACH_MAX_SEC 는 0보다 커야 한다");
   return {
     home,
     stateDir,
@@ -50,8 +53,11 @@ export function loadConfig(env = process.env) {
     // 살아 있는 pid 의 잠금은 나이와 상관없이 넘겨받지 않는다. 이보다 오래 쥐고 있으면 STUCK 으로 알리고 그 스레드는 건드리지 않는다.
     lockStuckMs: num(env, "LG_LOCK_STUCK_MIN", num(env, "LG_LOCK_STALE_MIN", 30)) * 60_000,
     busyTimeoutMs: num(env, "LG_BUSY_TIMEOUT_MS", 15_000),
-    tickBudgetMs: num(env, "LG_TICK_BUDGET_SEC", 480) * 1000, // 명령형 잡 1회 상한 600초 안에서 다음 노드 앞에 선다
-    jobLimitMs: num(env, "LG_JOB_LIMIT_SEC", 600) * 1000, // 명령형 잡의 실효 상한 — 틱 안의 LLM·명령 시간 제한을 이 안으로 줄인다
+    tickBudgetMs: num(env, "LG_TICK_BUDGET_SEC", 480) * 1000, // 이만큼 지나면 다음 노드 앞에 선다(CONTINUE)
+    // 틱 안의 LLM·명령이 끝나야 하는 시각(틱 시작부터) — 시간 제한을 이 안으로 줄인다. 잡은 --timeout-seconds 900 으로 등록하고
+    // (10-03 실측: 명령형 잡 10분은 기본값이지 상한이 아니다), 남는 5분은 노드 하나가 예산을 넘길 때의 여유로 둔다.
+    jobLimitMs: num(env, "LG_JOB_LIMIT_SEC", 600) * 1000,
+    detachMaxSec, // 분리 실행 최대 시간 기본값 — 목록에 maxSeconds 가 없을 때
     maxRetries: num(env, "LG_MAX_RETRIES", 3), // 같은 오류 재시도 횟수. 그다음에도 같은 오류면 GAVE_UP
     maxSteps: num(env, "LG_MAX_STEPS", 500), // 스레드 하나의 단계 상한(끝없는 되풀이 방지)
     testMode,

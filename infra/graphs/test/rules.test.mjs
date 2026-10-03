@@ -105,6 +105,11 @@ test("허용 목록 검사(S15): OpenClaw CLI·셸·env·인터프리터 즉석 
   assert.throws(bad({ bin: "/bin/echo", argv: [], envPass: ["GITHUB_TOKEN"] }), /비밀류/);
   assert.throws(bad({ bin: "/usr/bin/git", argv: [], effect: true }), /그림자 모드에 올리지 않는다/);
   assert.throws(bad({ bin: "echo", argv: [] }), /절대경로/);
+  assert.throws(bad({ bin: "/bin/echo", argv: [], timeoutSec: 60, maxSeconds: 60 }), /maxSeconds/, "최대 시간은 시간 제한보다 커야 한다");
+  assert.throws(bad({ bin: "/bin/echo", argv: [], maxSeconds: 100_000 }), /maxSeconds/);
+  const withMax = bad({ bin: "/bin/echo", argv: [], timeoutSec: 60, maxSeconds: 90 })();
+  assert.equal(resolveCommand(withMax, "x.cmd", {}, { mode: "shadow", scratch: sb.dir }).maxMs, 90_000);
+  assert.equal(resolveCommand(bad({ bin: "/bin/echo", argv: [] })(), "x.cmd", {}, { mode: "shadow", scratch: sb.dir }).maxMs, null, "없으면 null(실행기가 LG_DETACH_MAX_SEC)");
   assert.equal(Object.keys(loadRegistry(path.join(ROOT, "cmd-registry.json")).commands).every((id) => !/openclaw/i.test(id)), true);
   const { LG_TEST_MODE, ...prod } = sb.env;
   assert.throws(() => loadConfig({ ...prod, LG_CMD_REGISTRY: "/tmp/x.json" }), /시험 모드/);

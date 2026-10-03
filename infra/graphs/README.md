@@ -113,9 +113,9 @@ rm $S/PAUSED           # 다시
 | 도구 | 쓰임 |
 |---|---|
 | `llm.ask(프롬프트, { model, node, tools, cwd, timeoutMs })` | 짧은 호출(틱 안에 끝남 — 시간 제한은 잡 상한까지 남은 시간 안으로 줄고, 30초도 못 남으면 다음 틱). 모델은 haiku·sonnet·opus 계열만(Fable 금지). 도구는 Read·Grep·Glob(·Edit·Write — 쓰기 도구는 `cwd`(사본)를 꼭 준다)만 |
-| `llm.launchAsk(…, { node, attempt })` → handle / `llm.checkAsk(handle)` | 긴 호출의 분리 실행. `checkAsk`는 던지지 않는다: `done`(text·usage) · `running` · `dead` · `failed`(kind: login·usage_limit·error). 다시 띄울지(시도 + 1)는 그래프가 정한다 |
+| `llm.launchAsk(…, { node, attempt, timeoutMs, maxMs })` → handle / `llm.checkAsk(handle)` | 긴 호출의 분리 실행(시간 제한 기본 15분, 최대 시간 기본 그 1.5배 22.5분). `checkAsk`는 던지지 않는다: `done`(text·usage) · `running` · `dead`(최대 시간 초과면 reason `timeout`) · `failed`(kind: login·usage_limit·error). 다시 띄울지(시도 + 1)는 그래프가 정한다 |
 | `tools.run(cmdId, 인자)` | 명령은 이것으로만. 허용 목록 밖·모드 밖·형식 밖 인자는 거부(코드 결함) |
-| `tools.launch(cmdId, 인자, { node, attempt })` / `tools.check(handle)` / `tools.output(handle)` | 분리 실행. 상태는 `done`·`running`·`dead` |
+| `tools.launch(cmdId, 인자, { node, attempt })` / `tools.check(handle)` / `tools.output(handle)` | 분리 실행. 상태는 `done`·`running`·`dead`. 최대 시간(목록 `maxSeconds`)을 넘기면 `check`가 묶음째 끄고 `dead`(reason `timeout`) — 그래프는 다른 `dead`처럼 던져 재시도 규칙(같은 오류 3회 → GAVE_UP)에 맡긴다 |
 | `tools.effect(key, kind, fn, { verify })` | 부수효과는 이것으로만. 그림자면 '했을 일'만 적고 `fn`을 부르지 않는다 |
 | `throw tools.pending("…")` | 분리 실행이 아직 — CONTINUE(재시도로 세지 않음) |
 | `throw tools.hold("이유")` | 스스로 보류(디스크 부족·대화 작업 표식 등) |
@@ -134,9 +134,10 @@ rm $S/PAUSED           # 다시
 **명령 허용 목록 `cmd-registry.json`**
 ```json
 { "version": 1, "commands": {
-  "sys.sleep": { "bin": "/bin/sleep", "argv": ["{seconds}"], "params": { "seconds": "^[0-9]{1,4}$" }, "modes": ["shadow", "live"], "timeoutSec": 3600 } } }
+  "sys.sleep": { "bin": "/bin/sleep", "argv": ["{seconds}"], "params": { "seconds": "^[0-9]{1,4}$" }, "modes": ["shadow", "live"], "timeoutSec": 3600, "maxSeconds": 5400 } } }
 ```
 - `bin`은 절대경로, 자리 표시는 항목 전체가 `{이름}`, 정규식은 `^…$`. 셸을 거치지 않는다(배열 spawn). 환경변수는 PATH·HOME·LANG·TMPDIR·USER + `envPass`(비밀류 이름 금지)만.
+- `timeoutSec`(1~3600, 기본 120)은 명령 시간 제한이다. `maxSeconds`는 분리 실행 최대 시간이다 — `timeoutSec`보다 크고 86400 이하, 첫 값은 알려진 상한의 1.5배(설계 §6). 없으면 `LG_DETACH_MAX_SEC`(5400).
 - `effect: true` 명령은 실제 모드 전용이고 `effect()` 안에서만 돈다(분리 실행 불가 — 띄운 순간 '성공'으로 적히면 안 된다).
 - 올릴 수 없는 것: 셸·`env`·`osascript`·`sudo`·`launchctl`·`crontab`·**OpenClaw CLI**(S15 — 노드에서 오픈클로를 다시 부르지 않는다. 파일 이름이 openclaw 이거나 openclaw 패키지 안 스크립트. 경로에 `.openclaw`가 든 인자는 괜찮다), 인터프리터의 즉석 코드(`-c`·`-e`).
 - `envPass`에 비밀류 이름(TOKEN·KEY·SECRET·PASS·AUTH·COOKIE·PAT·WEBHOOK·CRED·URL·SESSION…)은 올릴 수 없다.
@@ -147,6 +148,13 @@ rm $S/PAUSED           # 다시
 작업 폴더 `jobs/<스레드>/<노드>/<시도>/` — 이 폴더 만들기(원자적)가 `(thread, node, attempt)` 잠금이다. 틱이 겹쳐도 한 번만 띄운다.
 껍데기(`lib/detach-runner.mjs`)가 detached(새 세션)로 떠서 `spec.json`대로 명령을 돌린다. `meta.json`(pid·시작 시각·cmdId) · `stdout`·`stderr`(파일) · `heartbeat`(30초) · `result.json`(임시 파일 → 이름 바꾸기).
 판정: 결과 파일 있음 → `done` / 껍데기 pid 살아 있음 → `running` / 결과 없이 죽음 → `dead`(남은 자식은 끈다 — 재시도와 겹치지 않게). 부모(틱)가 죽어도 산다(시험으로 확인). 게이트웨이 재시작 실측은 아직이다.
+
+**최대 시간(10-03 실측 반영).** 분리 실행은 띄운 잡이 정상 종료해도, 잡이 시간 초과로 SIGTERM을 맞아도 살아서 결과를 썼다 — 오픈클로 잡 시간 상한은 여기에 닿지 않는다. 그래서 스스로 끈다.
+- 껍데기는 detached라 자기 프로세스 묶음의 우두머리다(pgid = 껍데기 pid). 그 아래 명령·손주(시험 프로세스 등)까지 한 신호로 닿는다.
+- `check()`: 껍데기가 살아 있어도 시작 + `maxMs`를 넘겼으면 묶음째 SIGTERM → 30초 안에 안 비면 SIGKILL → `dead`(reason `timeout`). 돌려줄 때 묶음은 비어 있다. 표식 `kill.json`을 먼저 남기므로 같은 시도를 다시 확인해도 `timeout`이다. 30초 유예 동안 `check`는 동기로 기다린다(보통은 바로 꺼진다).
+  - pid가 우리 껍데기임을 증명할 때만(시작 시각이 기록과 같음) 끈다. 못 하면 끄지 않고 `running`(`overdue: true`)으로 두고 다음 확인에서 다시 본다.
+- 껍데기 자신의 시간 제한(`timeoutMs`)도 묶음째다: SIGTERM을 묶음에 보내고, 결과(`timedOut: true`)를 쓴 뒤 남은 것(SIGTERM을 무시한 손주)을 SIGKILL한다.
+- 보통은 `timeoutMs`가 먼저 걸려 `done`(`timedOut`)이 된다. `maxMs`는 껍데기마저 멈췄을 때의 뒷받침이다. `launch` 때 `spec.json`에 적으므로 띄운 뒤 목록을 바꿔도 그 시도에는 닿지 않는다.
 
 ## 부수효과 `effect(key, kind, fn)` (S10)
 
@@ -184,7 +192,7 @@ rm $S/PAUSED           # 다시
 ## 설정(환경변수)
 
 0a: `LG_STATE_DIR` · `LG_DB` · `LG_APPROVAL_TTL_HOURS`(48) · `LG_GC_DAYS`(14) · `LG_LLM_MAX_PER_THREAD`(5) · `LG_LLM_MAX_PER_DAY`(20) · `LG_LLM_MODEL`(sonnet) · `LG_LLM_TIMEOUT_SEC`(300) · `LG_CLAUDE_BIN` · `LG_NODE` · `LG_BUSY_TIMEOUT_MS`(15000).
-0b: `LG_TICK_BUDGET_SEC`(480) · `LG_HOLD_TTL_HOURS`(48) · `LG_MAX_RETRIES`(3) · `LG_MAX_STEPS`(500) · `LG_LOCK_STUCK_MIN`(30, 옛 이름 `LG_LOCK_STALE_MIN`도 받는다) · `LG_DAY_TOKEN_CAP`(3000000) · `LG_DISK_PATH` · `LG_DISK_FLOOR_GIB`(15) · `LG_COPY_EST_GIB`(1) · `LG_DISK_MARGIN_GIB`(1) · `LG_USAGE_FILE` · `LG_USAGE_MAX_PCT`(80) · `LG_USAGE_MAX_AGE_H`(6) · `LG_QUIET`(01:30-04:30, 빈 값이면 끔) · `LG_LOGIN_RECHECK_MIN`(360) · `LG_LIMIT_RECHECK_MIN`(60) · `LG_HOOK_LOGS`(콜론 구분).
+0b: `LG_TICK_BUDGET_SEC`(480) · `LG_JOB_LIMIT_SEC`(600, 틱 안 LLM·명령이 끝나야 하는 시각) · `LG_DETACH_MAX_SEC`(5400, 목록에 `maxSeconds`가 없을 때의 분리 실행 최대 시간) · `LG_HOLD_TTL_HOURS`(48) · `LG_MAX_RETRIES`(3) · `LG_MAX_STEPS`(500) · `LG_LOCK_STUCK_MIN`(30, 옛 이름 `LG_LOCK_STALE_MIN`도 받는다) · `LG_DAY_TOKEN_CAP`(3000000) · `LG_DISK_PATH` · `LG_DISK_FLOOR_GIB`(15) · `LG_COPY_EST_GIB`(1) · `LG_DISK_MARGIN_GIB`(1) · `LG_USAGE_FILE` · `LG_USAGE_MAX_PCT`(80) · `LG_USAGE_MAX_AGE_H`(6) · `LG_QUIET`(01:30-04:30, 빈 값이면 끔) · `LG_LOGIN_RECHECK_MIN`(360) · `LG_LIMIT_RECHECK_MIN`(60) · `LG_HOOK_LOGS`(콜론 구분).
 시험 전용 — `LG_TEST_MODE=1`일 때만 먹는다: `LG_NOW`(시간 주입) · `LG_CMD_REGISTRY` · `LG_TEST_START_AT` · `LG_TEST_HEARTBEAT_SEC` · `LG_SMOKE_TRACE` · `LG_SMOKE_CRASH_ONCE` · `LG_SMOKE_CRASH_CODE`.
 
 ## OpenClaw 연결 예(등록하지 않았다)
@@ -194,11 +202,16 @@ rm $S/PAUSED           # 다시
   --name "graphs: lg-tick" \
   --command 'sh infra/graphs/lg.sh tick' \
   --command-cwd "$HOME/projects/jarvis" \
-  --timeout-seconds 600 \
+  --timeout-seconds 900 \
   --announce
 ```
 
-`--command`는 `sh -lc`로 돈다. 1회 상한은 600초, 틱 예산은 480초다(명령형 잡의 실제 시간 상한 실측은 잡 등록이 필요해 아직이다 — PLAN 0b).
+`--command`는 `sh -lc`로 돈다. 명령형 잡 10분은 기본값이지 상한이 아니다(10-03 실측: `--timeout-seconds 900`에서 700초를 끝까지 돌았다. 900초를 넘는 값은 재지 않았다).
+- 틱 예산은 480초 그대로다. 예산은 다음 노드 앞에서 재므로 노드 하나가 넘칠 수 있다. 900으로 등록하면 그 여유가 2분에서 7분으로 는다.
+- 틱 안 LLM·명령은 `LG_JOB_LIMIT_SEC`(600초) 안에 끝나게 줄인다. 남는 5분은 여유로 둔다.
+- 분리 실행은 잡 시간 상한 밖에서 돈다. 그래서 `maxSeconds`로 스스로 끈다(위 '분리 실행').
+- 실패한 1회성(`--at`) 잡은 30초·1분·5분 뒤 세 번 더 돈다. 그런 잡의 내용은 여러 번 돌아도 안전해야 한다.
+
 야간 금지·관문은 실행기가 스스로 지키므로 잡 일정에 넣지 않는다.
 
 ## 대화 중 승인
@@ -219,7 +232,7 @@ cd infra/graphs && H=$(mktemp -d) && HOME=$H ~/.nvm/versions/node/v24.21.0/bin/n
 RUN_LLM=1 ~/.nvm/versions/node/v24.21.0/bin/node --test test/llm.test.mjs                               # 실제 haiku 1회(한도 사용)
 ```
 
-0a 50개 + 0b 49개(틱·답·관문 9종·토큰 상한·로그인·만료·재시도·코드 결함·STUCK·끊김·알림 필터·PAUSED·분리 실행 그래프·겹친 틱·알림함·고장 격리 / 분리 실행 판정·이중 실행·heartbeat·부모 죽음·LLM 분리 / 정적 검사 양성·음성·가져오기·실행기 거부·허용 목록·run·effect·모드 고정·훅 누수·gc 보존·관문 해석·집계·잡 상한 / 독립 검토 재현 11건).
+0a 50개 + 0b 53개(틱·답·관문 9종·토큰 상한·로그인·만료·재시도·코드 결함·STUCK·끊김·알림 필터·PAUSED·분리 실행 그래프·겹친 틱·알림함·고장 격리 / 분리 실행 판정·이중 실행·heartbeat·부모 죽음·최대 시간 초과(시간 주입, SIGTERM 무시한 손주까지 SIGKILL)·시간 제한 때 묶음째·LLM 분리 / 정적 검사 양성·음성·가져오기·실행기 거부·허용 목록(maxSeconds 포함)·run·effect·모드 고정·훅 누수·gc 보존·관문 해석·집계·잡 상한 / 독립 검토 재현 13건). 실호출 1개는 평소 건너뛴다.
 0a 시험 기대값 3곳은 의도된 변경으로 바꿨다: 격리 플래그(`--restricted`), claude 작업 폴더(홈 밖), DB 판 번호(4).
 
 ## 걷어내는 법

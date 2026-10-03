@@ -324,7 +324,7 @@ test("분리 실행 그래프: 띄우기 → 확인(진행 중이면 CONTINUE, �
   const sb = sandbox(t);
   const lg = appWith(sb, { detached: DETACHED });
   const doneFile = path.join(sb.dir, "slept.txt");
-  const env = { ...tickEnv(sb), LG_CMD_REGISTRY: writeRegistry(sb), LG_TEST_DONE_FILE: doneFile };
+  const env = { ...tickEnv(sb), LG_CMD_REGISTRY: writeRegistry(sb), LG_TEST_DONE_FILE: doneFile, LG_DETACH_MAX_SEC: "777" };
   assert.equal(lg(env, ["start", "detached", "d1", "--topic", "3000", "--queue"]).code, 0);
   assert.equal(lg(env, ["tick"]).first, "NO_REPLY");
   assert.equal(statusOf(lg, env, "d1").status, "continue");
@@ -337,6 +337,7 @@ test("분리 실행 그래프: 띄우기 → 확인(진행 중이면 CONTINUE, �
   assert.equal(fs.readFileSync(doneFile, "utf8"), "slept");
   const jobs = path.join(sb.state, "jobs", "d1", "work");
   assert.deepEqual(fs.readdirSync(jobs), ["1"], "시도 1 하나뿐");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(jobs, "1", "spec.json"), "utf8")).maxMs, 777_000, "목록에 maxSeconds 가 없으면 LG_DETACH_MAX_SEC");
   assert.ok(metrics(sb).filter((e) => e.ev === "continue" && e.reason === "pending").length >= 2);
 });
 

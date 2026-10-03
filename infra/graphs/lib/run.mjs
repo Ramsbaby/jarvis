@@ -71,7 +71,12 @@ export function loadRegistry(file) {
     }
     const timeoutSec = c.timeoutSec ?? 120;
     if (!(Number.isFinite(timeoutSec) && timeoutSec > 0 && timeoutSec <= 3600)) bad(`${id}: timeoutSec 1~3600`);
-    commands[id] = { id, bin: c.bin, argv, params, modes, effect: c.effect === true, cwd: c.cwd ?? null, envPass, timeoutSec,
+    // 분리 실행 최대 시간(설계 §6). 껍데기의 시간 제한(timeoutSec)이 먼저 걸리게 그보다 커야 한다. 없으면 LG_DETACH_MAX_SEC.
+    const maxSeconds = c.maxSeconds ?? null;
+    if (maxSeconds !== null && !(Number.isFinite(maxSeconds) && maxSeconds > timeoutSec && maxSeconds <= 86_400)) {
+      bad(`${id}: maxSeconds 는 timeoutSec(${timeoutSec})보다 크고 86400 이하`);
+    }
+    commands[id] = { id, bin: c.bin, argv, params, modes, effect: c.effect === true, cwd: c.cwd ?? null, envPass, timeoutSec, maxSeconds,
       detach: c.detach === true, desc: String(c.desc ?? "") };
   }
   return { version: 1, file, commands };
@@ -98,7 +103,7 @@ export function resolveCommand(registry, cmdId, params = {}, { mode, inEffect = 
   const cwd = c.cwd ? fill(c.cwd) : scratch;
   const env = { PATH: BASE_PATH, HOME: os.userInfo().homedir, LANG: parentEnv.LANG || "en_US.UTF-8", TMPDIR: os.tmpdir(), USER: os.userInfo().username };
   for (const k of c.envPass) if (parentEnv[k] != null) env[k] = parentEnv[k];
-  return { cmd: c, bin: c.bin, argv, cwd, env, timeoutMs: c.timeoutSec * 1000 };
+  return { cmd: c, bin: c.bin, argv, cwd, env, timeoutMs: c.timeoutSec * 1000, maxMs: c.maxSeconds == null ? null : c.maxSeconds * 1000 };
 }
 
 // 돌고 있는 동기 명령 자식들 — 실행기가 신호로 끝나면 함께 끈다(고아로 남아 틱 밖에서 계속 돌지 않게. 분리 실행은 제외).

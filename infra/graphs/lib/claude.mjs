@@ -230,12 +230,13 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
       throw new Error(v.msg);
     },
     // 분리 실행: 같은 (노드, 시도)는 한 번만 띄운다. 돌려주는 handle 을 상태에 넣고 다음 노드에서 check 한다.
-    launchAsk(prompt, { model = cfg.llm.defaultModel, node, attempt = 1, tools = [], timeoutMs = 15 * 60_000, cwd } = {}) {
+    // 최대 시간(maxMs)은 기본 시간 제한의 1.5배(15분 → 22.5분, 설계 §6) — 넘기면 checkAsk 가 묶음째 끄고 dead(timeout).
+    launchAsk(prompt, { model = cfg.llm.defaultModel, node, attempt = 1, tools = [], timeoutMs = 15 * 60_000, maxMs = detach.defaultMaxMs(timeoutMs), cwd } = {}) {
       const { m, bin, dir } = prep({ model, tools, cwd });
       const ids = { thread, node, attempt, cmdId: "claude.ask" };
       if (fs.existsSync(detach.jobDir(cfg.jobsDir, ids))) return { dir: detach.jobDir(cfg.jobsDir, ids), ...ids, already: true };
       const callId = reserve({ model: m, node });
-      const h = detach.launch(cfg.jobsDir, ids, { bin, argv: claudeArgs(m, tools), cwd: dir, env: cleanEnv(bin), stdinText: String(prompt), timeoutMs });
+      const h = detach.launch(cfg.jobsDir, ids, { bin, argv: claudeArgs(m, tools), cwd: dir, env: cleanEnv(bin), stdinText: String(prompt), timeoutMs, maxMs });
       if (!h.already) fs.writeFileSync(path.join(h.dir, "llm.json"), JSON.stringify({ callId, model: m, node }), { mode: 0o600 });
       return h;
     },

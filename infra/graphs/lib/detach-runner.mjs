@@ -50,10 +50,12 @@ const beat = () => { try { writeAtomic("heartbeat", { t: Date.now() }); } catch 
 beat();
 const hb = setInterval(beat, Math.max(1, spec.heartbeatSec ?? 30) * 1000);
 
+// 시간 제한: 묶음째 SIGTERM — 이 껍데기는 detached 라 묶음의 우두머리다(pgid = 자기 pid). 명령만 끄면 그 아래 손주(시험 프로세스 등)가
+// 고아로 남아 재시도와 겹친다. 껍데기 자신은 아래 신호 처리기가 있어 버티고, 명령이 끝나면 결과를 쓴다.
 let timedOut = false;
 const timer = setTimeout(() => {
   timedOut = true;
-  try { child.kill("SIGTERM"); } catch { /* 이미 끝남 */ }
+  try { process.kill(-process.pid, "SIGTERM"); } catch { try { child.kill("SIGTERM"); } catch { /* 이미 끝남 */ } } // 묶음 우두머리가 아니면(직접 띄움) 명령만
   setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* 이미 끝남 */ } }, 5000).unref();
 }, spec.timeoutMs);
 
@@ -65,5 +67,7 @@ child.on("close", (code, signal) => {
   clearInterval(hb);
   clearTimeout(timer);
   writeAtomic("result.json", { code, signal, timedOut, startedAt, endedAt: Date.now() });
+  // 시간 제한으로 끝났으면 묶음에 남은 것(SIGTERM 을 무시한 손주)까지 SIGKILL — 결과는 이미 썼다(이 껍데기도 함께 끝난다)
+  if (timedOut) { try { process.kill(-process.pid, "SIGKILL"); } catch { /* 이미 비었음 */ } }
   process.exit(0);
 });

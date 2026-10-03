@@ -142,13 +142,14 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
     mode,
     run: createRun({ cfg, registry: reg, thread, mode, timeLeft }),
     // 분리 실행 띄우기. 같은 (노드, 시도)는 한 번만 띄운다. 부수효과 명령은 분리 실행하지 않는다(띄운 순간 '성공'으로 적히면 안 된다).
+    // 최대 시간은 목록의 maxSeconds, 없으면 LG_DETACH_MAX_SEC — 넘기면 check 가 묶음째 끄고 dead(timeout)(설계 §6).
     launch(cmdId, params = {}, { node, attempt = 1 } = {}) {
       const r = resolveCommand(reg, cmdId, params, { mode, inEffect: !!effectScope.getStore(), scratch });
       if (r.cmd.effect) throw new CmdNotAllowed(`${cmdId} 는 부수효과 명령 — 분리 실행하지 않는다(effect 안에서 run 으로)`);
       if (r.cwd === scratch) fs.mkdirSync(scratch, { recursive: true, mode: 0o700 });
       const nodeName = String(node ?? active.node ?? "node").replace(/[^A-Za-z0-9._:-]/g, "_").slice(0, 60);
       return detach.launch(cfg.jobsDir, { thread, node: nodeName, attempt, cmdId },
-        { bin: r.bin, argv: r.argv, cwd: r.cwd, env: r.env, timeoutMs: r.timeoutMs, heartbeatSec });
+        { bin: r.bin, argv: r.argv, cwd: r.cwd, env: r.env, timeoutMs: r.timeoutMs, maxMs: r.maxMs ?? cfg.detachMaxSec * 1000, heartbeatSec });
     },
     check: (handle) => detach.check(handle),
     output: (handle, which = "stdout") => detach.readOutput(handle, which),
