@@ -54,6 +54,7 @@ import {
   upsertProposal, collectEvidence, loadState as loadProposals, findMatch as findProposalMatch,
   MIN_EVIDENCE, MD_FILE as PROPOSALS_MD,
 } from '../lib/rule-proposals.mjs';
+import { taskQueueStatus } from '../lib/task-queue-guard.mjs';
 
 // ─── 경로 상수 (하드코딩 금지 — 환경변수 우선) ───
 const HOME = homedir();
@@ -274,6 +275,10 @@ function applyRuleBlock(cid, title, ruleBlock, cluster) {
 function enqueueDevQueue(cid, title, promptText) {
   const id = `mistake-promoter-${cid}`;
   if (DRY_RUN) { log(`[DRY] dev-queue enqueue 생략: ${id}`); return { action: 'dry' }; }
+  // 소비자(jarvis-dev-task-runner)가 꺼져 있으면 넣지 않는다 — 꺼진 동안 queued 13건이 아무도 안 읽힌 채 쌓였다(2026-10-03).
+  // ledger 상태는 그대로 proposed_dev_queue(dev_queue_action 으로만 구분) — promoter-auto-close 가 읽는 값은 바뀌지 않는다.
+  const queue = taskQueueStatus();
+  if (!queue.enabled) { log(`dev-queue enqueue 생략: ${id} — 개발 큐 꺼짐 (${queue.reason})`); return { action: 'skip-queue-off' }; }
   const out = execFileSync(process.execPath, [
     TASK_STORE_MJS, 'enqueue',
     '--id', id,

@@ -42,6 +42,23 @@ MAX_AUTO_FIXES=5
 # 같은 티켓을 답장마다 다시 받는다 — 2026-09-05 e2e 오탐 티켓 1건으로 코더 4회(각 ~45분) 실행.
 TICKET_COOLDOWN_H="${TICKET_COOLDOWN_H:-72}"
 
+# 개발 큐 생산 관문 (2026-10-03): 큐를 비우는 소비자 잡(jarvis-dev-task-runner)이 꺼져 있으면 티켓을 넣지 않는다.
+# 꺼진 09-10 이후에도 이 감사가 티켓을 계속 넣어 아무도 안 읽는 queued 가 쌓였다. 판정은 lib/task-queue-guard.mjs
+# (JARVIS_TASK_QUEUE_ENABLED 강제값 → 게이트웨이의 소비자 잡 enabled → 모르면 끔). 실행당 한 번만 판정한다.
+TASK_QUEUE_GUARD="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/../lib/task-queue-guard.mjs"
+TASK_QUEUE_STATE=""   # "" = 아직 판정 안 함 / on / off
+TASK_QUEUE_REASON=""
+task_queue_enabled() {
+    if [[ -z "$TASK_QUEUE_STATE" ]]; then
+        local out rc
+        out=$(node "$TASK_QUEUE_GUARD" 2>/dev/null); rc=$?
+        TASK_QUEUE_REASON=$(printf '%s' "$out" | jq -r '.reason // empty' 2>/dev/null || true)
+        [[ -n "$TASK_QUEUE_REASON" ]] || TASK_QUEUE_REASON="관문 실행 실패 rc=$rc"
+        if [[ $rc -eq 0 ]]; then TASK_QUEUE_STATE=on; else TASK_QUEUE_STATE=off; fi
+    fi
+    [[ "$TASK_QUEUE_STATE" == on ]]
+}
+
 # 보호 파일 (자동수정 금지)
 PROTECTED_FILES="discord-bot.js monitoring.json tasks.json company-dna.md autonomy-levels.md .env rag-engine.mjs rag-index.mjs effective-tasks.json calendar.json social.json system.json secrets.json"
 
@@ -256,6 +273,11 @@ enqueue_to_devqueue() {
 
     if [[ "$DRY_RUN" == true ]]; then
         log "DRY-RUN enqueue: $title (priority=$priority)"
+        return 0
+    fi
+
+    if ! task_queue_enabled; then
+        log "SKIP enqueue (개발 큐 꺼짐 — ${TASK_QUEUE_REASON}): $title"
         return 0
     fi
 

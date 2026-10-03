@@ -5,6 +5,8 @@
 #      (task-store enqueue 는 failed 를 queued 로 되돌리므로 Stop 훅마다 코더가 같은 티켓을 다시 받았다 —
 #       2026-09-05 티켓 1건으로 코더 4회 실행, inc-20260905-8a26d2b6)
 #   ③ e2e-cron.sh 가 결과 파일 첫 줄에 `# TREE: clean|dirty` 를 쓴다
+#   ④ 개발 큐 관문(2026-10-03): 큐가 꺼져 있으면(강제값 0 또는 소비자 잡 꺼짐) 티켓을 넣지 않고 보고서는 그대로 쓴다.
+#      켜져 있으면(강제값 1 또는 소비자 잡 켜짐) 넣는다. ①~⑥ 은 관문과 무관한 가드라 강제값 1 로 돌린다.
 # 실행: bash ~/projects/jarvis/infra/scripts/test-auditor-e2e-guard.sh   (외부 송출 없음 — 임시 BOT_HOME, bin/ 비움)
 set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
@@ -24,6 +26,7 @@ mkdir -p "$T/lib" "$T/scripts" "$T/bin" "$T/discord" "$T/config" "$T/state" "$T/
 ln -s "$INFRA/lib/task-store.mjs" "$T/lib/task-store.mjs"
 echo '[]' > "$T/config/anti-patterns.json"
 export BOT_HOME="$T"
+export JARVIS_TASK_QUEUE_ENABLED=1   # ①~⑥ 은 큐가 켜진 전제의 가드 시험 — 관문은 ⑥-b 에서 따로 본다
 TODAY=$(date +%F)
 RESULT="$T/results/e2e-health/$TODAY.txt"
 # slug: BSD sed 는 `-\+` 를 모르므로 ": " → "--" 가 그대로 남는다 (실제 티켓 id 와 동일한 형태)
@@ -74,6 +77,30 @@ assert_eq "다시 queued" "$(status_of "$TICKET")" "queued"
 echo "── ⑥ pending(queued) 은 기존대로 already-pending skip"
 LOG=$(run_auditor)
 assert_has "already pending" "$LOG" "SKIP enqueue (already pending)"
+
+echo "── ⑥-b 개발 큐 관문: 꺼짐 → 티켓 미생성·보고서 유지 / 켜짐 → 티켓 생성"
+REPORT="$T/results/auditor/$TODAY.md"
+reset_queue() { rm -f "$T/state/tasks.db" "$T/state/tasks.db-wal" "$T/state/tasks.db-shm"; }
+# 가짜 게이트웨이 상태 DB — 소비자 잡 enabled 값만 바꿔 가며 본다 (진짜 ~/.openclaw 는 읽지 않는다)
+fake_gateway() { rm -f "$T/gw.sqlite"; sqlite3 "$T/gw.sqlite" "CREATE TABLE cron_jobs(name TEXT, enabled INTEGER); INSERT INTO cron_jobs VALUES('jarvis-dev-task-runner',$1);"; }
+reset_queue; rm -f "$REPORT"
+LOG=$(JARVIS_TASK_QUEUE_ENABLED=0 run_auditor)
+assert_has "꺼짐(강제값) 로그" "$LOG" "SKIP enqueue (개발 큐 꺼짐 — JARVIS_TASK_QUEUE_ENABLED=0): E2E Test Failed: 1 items from $TODAY"
+assert_not "꺼짐 → enqueue 안 함" "$LOG" "ENQUEUED to tasks.db"
+assert_eq "꺼짐 → 티켓 없음" "$(status_of "$TICKET")" "none"
+assert_has "꺼짐 → 보고서는 그대로" "$(cat "$REPORT" 2>/dev/null)" "1 FAIL items (from $TODAY)"
+reset_queue; fake_gateway 0
+LOG=$(unset JARVIS_TASK_QUEUE_ENABLED; OPENCLAW_STATE_DB="$T/gw.sqlite" run_auditor)
+assert_has "소비자 꺼짐 로그" "$LOG" "SKIP enqueue (개발 큐 꺼짐 — 소비자 잡 jarvis-dev-task-runner 꺼짐)"
+assert_eq "소비자 꺼짐 → 티켓 없음" "$(status_of "$TICKET")" "none"
+reset_queue
+LOG=$(unset JARVIS_TASK_QUEUE_ENABLED; OPENCLAW_STATE_DB="$T/no-such.sqlite" run_auditor)
+assert_has "판정 불가 → 꺼짐" "$LOG" "SKIP enqueue (개발 큐 꺼짐 — 소비자 상태 확인 불가"
+assert_eq "판정 불가 → 티켓 없음" "$(status_of "$TICKET")" "none"
+reset_queue; fake_gateway 1
+LOG=$(unset JARVIS_TASK_QUEUE_ENABLED; OPENCLAW_STATE_DB="$T/gw.sqlite" run_auditor)
+assert_has "소비자 켜짐 → ENQUEUED" "$LOG" "ENQUEUED to tasks.db: E2E Test Failed: 1 items from $TODAY"
+assert_eq "소비자 켜짐 → queued" "$(status_of "$TICKET")" "queued"
 
 echo "── ⑦ e2e-cron.sh 가 TREE 표식을 쓴다 (정적)"
 CRON="$INFRA/scripts/e2e-cron.sh"

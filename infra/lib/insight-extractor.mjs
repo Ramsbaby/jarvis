@@ -11,12 +11,14 @@
  * 크론: 30 3 * * * (session-summarizer 30분 후)
  */
 
-import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, statSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync, statSync, appendFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { fileURLToPath } from 'node:url';
 import { addTask } from './task-store.mjs';
 import { collectSessionSources } from './session-source.mjs';
+import { taskQueueStatus } from './task-queue-guard.mjs';
+// SDK 는 Opus 를 부를 때만 불러온다 — 큐·메모리 갱신 경로를 SDK 없이 시험하기 위해서(2026-10-03).
 
 // nested session guard bypass
 delete process.env.CLAUDECODE;
@@ -154,6 +156,7 @@ ${combinedContent}
 
   let result = '';
   try {
+    const { query } = await import('@anthropic-ai/claude-agent-sdk');
     for await (const msg of query({ prompt, options: opts })) {
       if (msg.type === 'assistant' && Array.isArray(msg.message?.content)) {
         for (const block of msg.message.content) {
@@ -311,6 +314,14 @@ async function reindexInsights(filePath) {
 
 async function pushToDevQueue(items) {
   if (!items?.length) return;
+
+  // 소비자(jarvis-dev-task-runner)가 꺼져 있으면 넣지 않는다 — 아무도 안 읽는 pending 이 쌓인다
+  // (2026-09-10 ~ 10-03 에 79건). 소비자를 다시 켜면 다음 실행부터 저절로 다시 넣는다.
+  const queue = taskQueueStatus();
+  if (!queue.enabled) {
+    log('info', `dev-queue 등록 생략 ${items.length}건 — 개발 큐 꺼짐 (${queue.reason})`);
+    return;
+  }
 
   let added = 0;
 
@@ -552,7 +563,7 @@ function saveCrossSessionInsights(today, metaInsights, insightFilePath) {
   } catch { /* non-fatal */ }
 }
 
-async function actionRouter(data, today) {
+export async function actionRouter(data, today) {
   log('info', '--- Action Router 시작 ---');
 
   // 1. high priority open_items → dev-queue 자동 등록
@@ -665,7 +676,14 @@ async function main() {
   log('info', `=== 완료: auto-insights/${today}.md 생성, decisions.md 업데이트 ===`);
 }
 
-main().catch(err => {
-  log('error', `치명적 오류: ${err.message}`);
-  process.exit(1);
-});
+// 직접 실행할 때만 돈다 — 시험이 actionRouter 만 불러 쓸 수 있게 (2026-10-03)
+const isMain = (() => {
+  try { return !!process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url); }
+  catch { return false; }
+})();
+if (isMain) {
+  main().catch(err => {
+    log('error', `치명적 오류: ${err.message}`);
+    process.exit(1);
+  });
+}
