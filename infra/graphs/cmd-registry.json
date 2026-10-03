@@ -244,6 +244,257 @@
       ],
       "timeoutSec": 30,
       "maxSeconds": 45
+    },
+    "gostop.qa-gate": {
+      "desc": "실기 QA 관문 — 에뮬레이터 빈가·디스크 16GiB·부하(우리 에뮬레이터 몫 제외) 10·01:30~04:30",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "gate"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 60,
+      "maxSeconds": 90
+    },
+    "gostop.qa-build": {
+      "desc": "QA 드라이버를 얹은 디버그 APK(커밋·드라이버 지문별 캐시). git archive 로 /tmp 에 풀어 빌드 후 지운다",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "build",
+        "--rev",
+        "{rev}"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 3600,
+      "params": {
+        "rev": "^[A-Za-z0-9._/-]{1,60}$"
+      },
+      "maxSeconds": 5400
+    },
+    "gostop.qa-emu-up": {
+      "desc": "gostop_ads 를 창 없이 띄우고 비행기 모드(외부 송출 0). 남의 에뮬레이터가 있으면 거부",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "emu-up"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 600,
+      "maxSeconds": 900
+    },
+    "gostop.qa-emu-down": {
+      "desc": "우리가 띄운 에뮬레이터만 끈다(표식 pid)",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "emu-down"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 120,
+      "maxSeconds": 180
+    },
+    "gostop.qa-install": {
+      "desc": "APK 설치",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "install",
+        "--apk",
+        "{apk}"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 600,
+      "params": {
+        "apk": "^/[A-Za-z0-9._/-]+\\.apk$"
+      },
+      "maxSeconds": 900
+    },
+    "gostop.qa-play": {
+      "desc": "판 두기 + 녹화(screenrecord 170초 조각) + logcat + 사건 수거. 판당 상한 600초",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "play",
+        "--run",
+        "{run}",
+        "--seed",
+        "{seed}",
+        "--games",
+        "{games}",
+        "--diffs",
+        "{diffs}",
+        "--rev",
+        "{rev}",
+        "--max-game-sec",
+        "600"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 3600,
+      "params": {
+        "run": "^[A-Za-z0-9._-]{1,80}$",
+        "seed": "^[0-9]{1,9}$",
+        "games": "^[0-9]{1,2}$",
+        "diffs": "^[0-2](,[0-2]){0,5}$",
+        "rev": "^[0-9a-f]{7,40}$"
+      },
+      "maxSeconds": 5400
+    },
+    "gostop.qa-analyze": {
+      "desc": "결정적 검사(모든 프레임·사건·logcat) + LLM 눈 검사용 3×3 묶음",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "analyze",
+        "--run",
+        "{run}",
+        "--day",
+        "{day}"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 1800,
+      "params": {
+        "run": "^[A-Za-z0-9._-]{1,80}$",
+        "day": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "maxSeconds": 2700
+    },
+    "gostop.qa-eye-prompt": {
+      "desc": "여러 판 묶음 LLM 프롬프트(그림은 /tmp 묶음 폴더로 복사)",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "eye-batch-prompt",
+        "--batch",
+        "{batch}",
+        "--runs",
+        "{runs}",
+        "--stage",
+        "{stage}",
+        "--day",
+        "{day}"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 300,
+      "params": {
+        "batch": "^[A-Za-z0-9._-]{1,80}$",
+        "runs": "^[A-Za-z0-9._-]{1,80}(,[A-Za-z0-9._-]{1,80}){0,40}$",
+        "stage": "^(first|confirm)$",
+        "day": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "maxSeconds": 450
+    },
+    "gostop.qa-eye-record": {
+      "desc": "그래프가 남긴 LLM 답을 판별로 나눠 적는다",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "eye-batch-record",
+        "--batch",
+        "{batch}",
+        "--stage",
+        "{stage}",
+        "--day",
+        "{day}"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 60,
+      "params": {
+        "batch": "^[A-Za-z0-9._-]{1,80}$",
+        "stage": "^(first|confirm)$",
+        "day": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "maxSeconds": 90
+    },
+    "gostop.qa-clip": {
+      "desc": "확정 발견마다 ±5초 클립·3×3 프레임·재현 순서",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "clip",
+        "--run",
+        "{run}",
+        "--day",
+        "{day}"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 900,
+      "params": {
+        "run": "^[A-Za-z0-9._-]{1,80}$",
+        "day": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "maxSeconds": 1350
+    },
+    "gostop.qa-signal": {
+      "desc": "확정 발견 → 그날 signals.json(1a 접수 형식) + 지시함 줄 후보(쓰기는 그래프 effect)",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "signal",
+        "--run",
+        "{run}",
+        "--day",
+        "{day}"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 60,
+      "params": {
+        "run": "^[A-Za-z0-9._-]{1,80}$",
+        "day": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      },
+      "maxSeconds": 90
+    },
+    "gostop.qa-cleanup": {
+      "desc": "원본 녹화(/tmp/gostop-qa-raw/<run>) 지우기",
+      "bin": "/opt/homebrew/bin/python3",
+      "argv": [
+        "~/.openclaw/workspace/scripts/gostop-qa/gqa.py",
+        "cleanup",
+        "--run",
+        "{run}"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 120,
+      "params": {
+        "run": "^[A-Za-z0-9._-]{1,80}$"
+      },
+      "maxSeconds": 180
     }
   }
 }

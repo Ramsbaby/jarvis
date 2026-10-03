@@ -28,6 +28,13 @@ const BASE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 
 function bad(msg) { throw new Error(`cmd-registry: ${msg}`); }
 
+// 공개 저장소에 사용자 홈 경로가 박히지 않게 bin·argv 의 '~/' 는 이 기기 홈으로 펼친다(펼친 뒤 같은 검사를 받는다).
+const home = (p) => (typeof p === "string" && p.startsWith("~/") ? path.join(os.homedir(), p.slice(2)) : p);
+function expandHome(c) {
+  if (!c || typeof c !== "object") return c;
+  return { ...c, bin: home(c.bin), ...(Array.isArray(c.argv) ? { argv: c.argv.map(home) } : {}) };
+}
+
 // 목록을 읽고 검사한다. 하나라도 어긋나면 전부 거부한다(반쯤 맞는 목록을 쓰지 않는다).
 // 파일이 없으면 빈 목록(아무 명령도 허용하지 않음 — 닫힌 쪽으로 실패)이다. 깨진 파일은 오류다.
 export function loadRegistry(file) {
@@ -38,7 +45,8 @@ export function loadRegistry(file) {
   }
   if (j?.version !== 1 || typeof j.commands !== "object" || !j.commands) bad("version 1 · commands 객체가 있어야 한다");
   const commands = {};
-  for (const [id, c] of Object.entries(j.commands)) {
+  for (const [id, raw] of Object.entries(j.commands)) {
+    const c = expandHome(raw);
     if (!ID_RE.test(id)) bad(`cmdId 형식(영소문자.점): ${id}`);
     if (typeof c?.bin !== "string" || !path.isAbsolute(c.bin)) bad(`${id}: bin 은 절대경로`);
     const base = path.basename(c.bin);
