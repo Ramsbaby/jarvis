@@ -66,6 +66,10 @@ export function claudeArgs(model, tools = [], { jsonSchema = null } = {}) {
     "-p", "--restricted", "--strict-mcp-config", "--no-session-persistence",
     "--output-format", "json", "--model", model, "--disable-slash-commands",
     ...(jsonSchema ? ["--json-schema", typeof jsonSchema === "string" ? jsonSchema : JSON.stringify(jsonSchema)] : []),
+    // 쓰기 도구(1b ⑦·⑨): -p 에서는 쓰기 허락을 물을 사람이 없어 거부된다(10-03 실호출 — Write 거부로 재현 시험 0개, sonnet 2회 허비).
+    // acceptEdits 는 작업 폴더 안 파일 편집만 자동 허락한다. --restricted 가 작업 폴더 밖·설정·git 쓰기는 그대로 막는다(haiku 실측: 밖 쓰기 거부).
+    // bypassPermissions 는 --restricted 가 거부한다 — 쓰지 않는다.
+    ...(tools.some((t) => t === "Edit" || t === "Write") ? ["--permission-mode", "acceptEdits"] : []),
     "--tools", ...(tools.length ? tools : [""]), // 기본은 도구 없음. 프롬프트는 표준 입력으로 준다
   ];
 }

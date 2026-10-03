@@ -178,6 +178,10 @@ test("1b 끝까지(그림자): 3경로 재현 시험 → 패치 전 빨간불 �
   assert.equal(fx.args[fx.args.indexOf("--model") + 1], "opus");
   assert.deepEqual(rt.args.slice(rt.args.indexOf("--tools") + 1), ["Read", "Grep", "Glob", "Edit", "Write"]);
   assert.deepEqual(rv.args.slice(rv.args.indexOf("--tools") + 1), ["Read", "Grep", "Glob"]);
+  // 쓰기 노드만 acceptEdits(-p 에서 쓰기 허락을 물을 사람이 없다 — 10-03 실호출에서 거부됨), 읽기 노드는 없음. bypassPermissions 는 어디에도 없다
+  for (const c of [rt, fx]) assert.equal(c.args[c.args.indexOf("--permission-mode") + 1], "acceptEdits");
+  for (const c of [rv, ...calls(x, "diag")]) assert.ok(!c.args.includes("--permission-mode"));
+  assert.ok(!x.fc.calls().some((c) => c.args.includes("bypassPermissions")));
   assert.ok(rv.args.includes("--json-schema"));
   assert.match(rv.input, /\+\+\+ b\/lib\/domain\/game\/turn_manager\.dart/, "검토는 정본 패치를 본다");
   assert.doesNotMatch(rt.input + fx.input + rv.input, /ANSWER-MARKER-7f3a/, "정답이 프롬프트에 없다");

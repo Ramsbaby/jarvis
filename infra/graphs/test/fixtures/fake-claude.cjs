@@ -21,6 +21,11 @@ module.exports = function fake(log, mode) {
     if (kind === "diag") res.structured_output = sc.diag;
     else if (kind === "review") res.structured_output = pick(sc.review);
     else if (kind === "repro" || kind === "fix") {
+      // 진짜 CLI 처럼: -p 에서 쓰기 허락 모드가 없으면 Write·Edit 는 거부된다(파일을 쓰지 않는다)
+      if (args[args.indexOf("--permission-mode") + 1] !== "acceptEdits" || args.indexOf("--permission-mode") < 0) {
+        process.stdout.write(JSON.stringify({ ...res, result: "쓰기 권한 요청이 승인되지 않아 파일을 만들지 못했다", permission_denials: [{ tool_name: "Write" }] }));
+        return;
+      }
       const step = pick(sc[kind]) ?? {};
       for (const [rel, text] of Object.entries(step.files ?? {})) { fs.mkdirSync(require("node:path").dirname(rel), { recursive: true }); fs.writeFileSync(rel, text); }
       for (const rel of step.remove ?? []) fs.rmSync(rel, { force: true });
