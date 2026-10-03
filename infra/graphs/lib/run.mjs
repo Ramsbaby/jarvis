@@ -114,11 +114,18 @@ function exec({ bin, argv, cwd, env, timeoutMs }) {
 }
 
 // 스레드 하나에 묶인 run(). 그래프 build 에 넘긴다.
-export function createRun({ cfg, registry, thread, mode }) {
+// timeLeft: 틱 안에서만 — 잡 시간 상한까지 남은 ms. 명령 시간 제한을 그 안으로 줄이고(넘으면 끈다), 30초도 못 남으면 다음 틱으로(pending).
+export function createRun({ cfg, registry, thread, mode, timeLeft = null }) {
   const scratch = path.join(cfg.stateDir, "jobs", thread, "_scratch");
   return async function run(cmdId, params = {}) {
     const inEffect = !!effectScope.getStore();
     const r = resolveCommand(registry, cmdId, params, { mode, inEffect, scratch });
+    const left = timeLeft?.();
+    if (left != null) {
+      const room = left - 20_000;
+      if (room < 30_000) throw Object.assign(new Error("잡 시간 상한이 가까워 다음 틱에 실행한다"), { pending: true });
+      r.timeoutMs = Math.min(r.timeoutMs, room);
+    }
     if (r.cwd === scratch) fs.mkdirSync(scratch, { recursive: true, mode: 0o700 }); // 목록이 정한 작업 폴더는 만들지 않는다(있어야 한다)
     return exec(r);
   };

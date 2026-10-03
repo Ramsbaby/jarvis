@@ -171,7 +171,17 @@ export function judge(res) {
 }
 
 // 스레드 하나에 묶인 호출기. 실행기가 그래프를 만들 때 넘긴다.
-export function createClaude({ store, cfg, now, thread, metric = () => {} }) {
+// timeLeft: 틱 안에서만 — 잡 시간 상한까지 남은 ms. 호출 시간 제한을 그 안으로 줄이고, 30초도 못 남으면 다음 틱으로 미룬다(pending).
+//   틱 끝 무렵 시작한 호출이 잡 상한(600초)에 걸려 통째로 죽고 토큰만 쓰는 것을 막는다(R12). 긴 호출은 launchAsk 로.
+export const fitTimeout = (timeoutMs, timeLeft) => {
+  const left = timeLeft?.();
+  if (left == null) return timeoutMs;
+  const room = left - 20_000;
+  if (room < 30_000) throw Object.assign(new Error("잡 시간 상한이 가까워 다음 틱에 부른다"), { pending: true });
+  return Math.min(timeoutMs, room);
+};
+
+export function createClaude({ store, cfg, now, thread, metric = () => {}, timeLeft = null }) {
   const setHold = (reason, msg) => {
     try { fs.writeFileSync(cfg.llmHoldPath, JSON.stringify({ reason, at: now(), detail: String(msg).slice(0, 200) }), { mode: 0o600 }); } catch { /* 관문은 다음 실패 때 다시 */ }
   };
@@ -204,10 +214,11 @@ export function createClaude({ store, cfg, now, thread, metric = () => {} }) {
     // 동기 호출 — 틱 예산 안에 끝나는 짧은 호출(haiku 분류·요약). 긴 것은 launchAsk/checkAsk.
     async ask(prompt, { model = cfg.llm.defaultModel, node = "?", tools = [], timeoutMs = cfg.llm.timeoutMs, cwd } = {}) {
       const { m, bin, dir } = prep({ model, tools, cwd });
+      const tmo = fitTimeout(timeoutMs, timeLeft);
       const callId = reserve({ model: m, node });
       const t0 = Date.now();
-      const res = await run(bin, claudeArgs(m, tools), { env: cleanEnv(bin), cwd: dir, input: String(prompt), timeoutMs });
-      const v = judge({ ...res, timeoutMs });
+      const res = await run(bin, claudeArgs(m, tools), { env: cleanEnv(bin), cwd: dir, input: String(prompt), timeoutMs: tmo });
+      const v = judge({ ...res, timeoutMs: tmo });
       record(callId, { node, model: m, v, ms: Date.now() - t0 });
       if (v.ok) return { text: v.text, models: v.models, costUsd: v.costUsd, durationMs: v.durationMs, usage: v.usage };
       if (v.kind === "fable") throw new LlmModelBlocked(v.msg);

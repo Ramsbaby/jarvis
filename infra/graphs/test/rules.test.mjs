@@ -262,3 +262,17 @@ test("lg-report: 끊김→이어서 끝냄(M1)·부수효과(M3)·만료(M4)·�
   assert.equal(j.m5.requests, 2);
   assert.equal(j.m3.duplicates, 0);
 });
+
+test("R12: 틱 안의 LLM·명령 시간 제한은 잡 상한(600초)까지 남은 시간 안으로 줄고, 30초도 못 남으면 다음 틱으로(pending)", async (t) => {
+  const { fitTimeout } = await import("../lib/claude.mjs");
+  assert.equal(fitTimeout(300_000, null), 300_000, "틱 밖(수동 명령)은 그대로");
+  assert.equal(fitTimeout(300_000, () => 200_000), 180_000, "남은 200초 − 여유 20초");
+  assert.equal(fitTimeout(60_000, () => 500_000), 60_000);
+  assert.throws(() => fitTimeout(300_000, () => 45_000), (e) => e.pending === true);
+  const sb = sandbox(t);
+  const r = loadRegistry(writeRegistry(sb));
+  const tight = createRun({ cfg: { stateDir: sb.state }, registry: r, thread: "r2", mode: "shadow", timeLeft: () => 40_000 });
+  await assert.rejects(tight("test.echo", { word: "hi" }), (e) => e.pending === true);
+  const roomy = createRun({ cfg: { stateDir: sb.state }, registry: r, thread: "r2", mode: "shadow", timeLeft: () => 400_000 });
+  assert.equal((await roomy("test.echo", { word: "hi" })).stdout, "hi\n");
+});

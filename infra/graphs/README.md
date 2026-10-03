@@ -2,7 +2,8 @@
 
 **그래프 모양인 일만** 돌리는 전용 엔진이다. 초안→비평→수정을 되풀이하거나, 모델이 다음 길을 고르거나, 사람 승인을 기다리는 일이 여기에 해당한다.
 모든 자동화의 뼈대가 아니다. 한 줄로 이어지는 작업은 지금처럼 OpenClaw 예약 잡으로 둔다.
-1단계에는 운영과 분리된 뼈대만 있다: 실행기, 안전장치, 연기 시험 그래프(`smoke`), 시험. 첫 실제 대상은 2단계의 고스톱 버그 사냥·수정 루프다.
+지금(0b)은 운영과 분리된 공통 부품만 있다: 실행기(틱 방식), 관문, 분리 실행, 명령·부수효과 입구, 판정 기록, 연기 시험 그래프(`smoke`), 시험.
+첫 실제 대상은 다음 단계(1a)의 고스톱 버그 사냥·수정 루프다.
 
 **왜 이 자리인가:** `packages/`는 따로 배포하는 독립 도구(자체 라이선스)를 두는 자리다. 이것은 이 기기의 OpenClaw 잡이 부르고 런타임 상태 폴더를 쓰는 운영 부품이다.
 `infra/`에는 이미 자기 `package.json`·lockfile을 가진 하위 프로젝트(`infra/discord`, `infra/openclaw-plugins/jarvis-rag`)가 있다.
@@ -21,112 +22,198 @@ bash infra/graphs/install.sh
 
 ```bash
 G=~/projects/jarvis/infra/graphs
-sh $G/lg.sh start smoke smoke-2026-10-03 [--topic 주제] [--llm]   # 승인 대기까지 돌고 멈춘다(--llm: haiku 1회)
-sh $G/lg.sh resume smoke-2026-10-03 approved                     # 또는 rejected
-sh $G/lg.sh retry smoke-2026-10-03          # 고장·보류로 멈춘 스레드를 마지막 저장 단계부터 잇는다
-sh $G/lg.sh status [<스레드>] [--json] [--all]   # 읽기만 한다(만료 확정·알림은 다른 명령과 sweep 이 한다)
-sh $G/lg.sh sweep                           # 기한 지난 승인 대기를 자동 취소
-sh $G/lg.sh gc [--days 14]                  # 오래된 스레드 삭제 + VACUUM
-sh $G/lg.sh selftest
+sh $G/lg.sh tick                                  # 예약 잡의 정본(30분마다). --verbose 면 CONTINUE·HOLD 줄도 보인다
+sh $G/lg.sh answer <스레드> approved              # 또는 rejected — 대화 중 자비스가 쓰는 길. 답만 적고 끝난다(1초 안)
+sh $G/lg.sh start smoke smoke-2026-10-04 --queue  # 등록만 — 다음 틱이 시작한다(--topic 주제, --llm: haiku 1회)
+sh $G/lg.sh status [<스레드>] [--json] [--all]    # 읽기만
+node $G/lg-report.mjs [--since 2026-10-07] [--json]   # 판정 집계 M1~M8
+sh $G/lg.sh selftest                              # 저장 부품·허용 목록·사용자 훅 누수
+# 시험·디버그용(사람이 보고 있을 때): start(바로 돌림)·resume(답을 바로 적용)·retry(바로 이어 감)·sweep·gc
 ```
 
-### 출력·종료 코드 규칙
+### 틱 방식 (PLAN §3)
 
-표준 출력 **첫 줄이 결과**다. 첫 낱말은 정해진 몇 개뿐이다.
+```
+lg-tick(30분마다) → run.mjs tick
+  ├─ PAUSED 면 아무것도 하지 않는다(NO_REPLY)
+  ├─ 정리: 기한 지난 승인 대기·48시간 진척 없는 보류 → EXPIRED / 오래된 잠금 → STUCK / 하루 1회 gc
+  ├─ 관문 하나라도 걸리면 HOLD(종료 0, 사유는 metrics)
+  └─ 진행 가능한 스레드를 노드 단위로: 답이 적힌 대기 → 끊긴 실행 → 이어가기 → 실패(재시도) → 보류 → 대기열
+       ├─ 그래프를 한 번 부를 때 한 단계만(interruptAfter "*"). 단계 앞마다 예산(8분)·PAUSED 를 본다
+       ├─ 예산이 다 되면 다음 노드 앞에서 멈춤 → CONTINUE. 다음 틱이 체크포인트에서 잇는다(invoke(null))
+       ├─ 답이 적힌 대기는 Command({resume: 답}) 으로
+       └─ 긴 일은 '띄우기 → 확인' 두 노드(분리 실행) — 진행 중이면 CONTINUE(재시도로 세지 않는다)
+```
 
-| 첫 줄 | 뜻 | 종료 코드 |
+| 상황 | 처리 |
+|---|---|
+| 같은 오류 | 다음 틱에 다시, 3회까지(`LG_MAX_RETRIES`). 그다음에도 같으면 `GAVE_UP` |
+| 로그인 만료·사용량 한도(호출 오류 문구) | 재시도로 세지 않고 보류 + 표식(`llm-hold.json`). 관문이 6시간(한도는 1시간) 쉰 뒤 한 번 다시 해 본다. 성공하면 표식을 지운다 |
+| 코드 결함(TypeError 등·규칙 위반·허용 목록 밖 명령) | 보류. 코드(그래프·실행기·허용 목록 지문)가 바뀔 때까지 다시 돌리지 않는다 |
+| 노드가 스스로 보류(`throw tools.hold("이유")`)·LLM 상한 | 보류. 다음 틱에 다시 해 본다 |
+| 결과 모르는 부수효과(시작만 적히고 끝이 없음) | 보류. 사람이 확인해야 한다 |
+| 승인 대기 | 질문을 내보인 때부터 48시간. 그 안에 `answer` 로 적힌 답은 틱이 늦게 와도 유효 |
+| 진척 없는 보류·이어가기·대기열·실패 | 마지막으로 단계를 끝낸 때부터 48시간(`LG_HOLD_TTL_HOURS`) → `EXPIRED` |
+| 살아 있는 프로세스가 쥔 잠금 | 나이와 상관없이 넘겨받지 않는다(S1). 30분(`LG_LOCK_STUCK_MIN`) 넘으면 `STUCK` 한 줄(같은 잠금은 한 번), 그 스레드는 건드리지 않는다. 죽은 pid 의 잠금만 넘겨받는다 |
+| 실행 중 끊김(게이트웨이 재시작·SIGKILL) | 다음 틱이 `interrupted` 로 적고 끊긴 노드부터 다시. 같은 끊김도 재시도 횟수에 든다 |
+
+### 출력·종료 코드
+
+`tick`(예약 잡)은 **주인님께 갈 줄만** 낸다: `DONE` · `WAITING` · `EXPIRED` · `GAVE_UP` · `STUCK`. 낼 것이 없으면 `NO_REPLY` 한 줄(OpenClaw가 조용히 처리한다).
+같은 대기·같은 잠금은 한 번만 알린다. `CONTINUE`·`HOLD`·`HELD`·재시도 중 실패는 조용하다(`--verbose`·`status`·`metrics.jsonl`에서 보인다).
+
+| 줄 | 뜻 | 종료 코드 |
 |---|---|---|
 | `DONE <스레드> <결과>` | 끝남 | 0 |
-| `WAITING <스레드> <질문 요약>` | 승인 대기. `pending.jsonl`에 적힌다. 둘째 줄은 답하는 법과 기한 | 0 |
-| `HELD <스레드> <이유>` | LLM 호출 상한에 닿아 보류. 풀리면 `retry` | 0 |
-| `EXPIRED <스레드> <질문>` | 승인 기한(기본 48시간) 초과 → 자동 취소 | 0 |
-| `NO_REPLY` | `sweep`에서 치울 것이 없음. OpenClaw가 아무것도 보내지 않는다 | 0 |
-| `ERROR <스레드> <종류> <설명>` | 종류: `busy`·`exists`·`expired`·`not-waiting`·`failed`·`crashed`·`multi-interrupt`·`blocked`·`selftest`·`usage` 등 | 1 |
+| `WAITING <스레드> <질문> · 답: lg.sh answer …· 기한 …` | 승인 대기(`pending.jsonl`에도 적힌다). 수동 명령은 둘째 줄에 답하는 법 | 0 |
+| `EXPIRED <스레드> …` | 승인 기한 또는 보류 기한(48시간) 초과 → 자동 취소 | 0 |
+| `GAVE_UP <스레드> <노드> 같은 오류 N회 — …` | 재시도 끝 | 0 |
+| `STUCK <스레드> pid N 가 M분째 …` | 살아 있는 프로세스가 오래 쥔 잠금 | 0 |
+| `NO_REPLY` | tick·sweep 에서 낼 것이 없음 | 0 |
+| `ERROR <스레드> <종류> <설명>` | 진짜 오류(실행기 고장·자가 시험 실패·잘못된 사용). 수동 명령(start·resume·retry)은 0a 규약대로 노드 실패도 1 | 1 |
 
-**대기를 0으로 끝내는 이유:** OpenClaw는 0이 아닌 종료 코드를 error로 적고 실패 경보를 낸다. 승인 대기는 정상 상태이므로 경보 소음이 되면 안 된다.
-그 대신 첫 줄을 `WAITING`으로 시작해 알림에 그대로 보이게 했다. 평소 실행에서는 stderr에 아무것도 쓰지 않는다(stderr가 섞이면 OpenClaw 알림이 `stdout:`/`stderr:` 묶음으로 바뀐다).
+OpenClaw는 0이 아니면 error로 적고 2회 연속이면 경보, 10회면 잡을 끈다 — 그래서 정상 상태(대기·보류·이어가기)는 전부 0이다.
+평소 실행에서는 stderr에 아무것도 쓰지 않는다(stderr가 섞이면 OpenClaw 알림이 `stdout:`/`stderr:` 묶음으로 바뀐다). 노드의 `console` 출력은 `logs/<스레드>.log`(600)로 간다.
 
-`pending.jsonl`은 지금 대기 중인 스레드만 한 줄씩 담는다: `{"thread","graph","question","since","deadline"}`. 명령마다 등록부에서 다시 만든다.
-만료 알림: 어느 명령이든 자기가 이번에 만료시킨 것을 결과 줄 뒤에 `EXPIRED` 줄로 붙인다(명령이 실패해도). '알렸음' 표시는 `sweep`만 한다 — 예약 sweep 잡의 알림이 정본이고, 대화 중 명령이 그 알림을 가로채지 않는다.
-노드가 찍는 `console` 출력은 표준 출력에 섞이지 않고 `state/graphs/logs/<스레드>.log`(600)로 간다. gc 가 스레드와 함께 지운다.
+## 스위치 (S11)
 
-## 안전장치
+| 파일(상태 폴더) | 뜻 |
+|---|---|
+| `PAUSED` | 전체 정지. 틱은 정리·만료도 하지 않는다. 진행 중인 노드는 끝까지 가고 다음 노드 앞에서 선다. `answer`·`status`는 된다 |
+| `LIVE` | 실제 모드. **없으면 그림자.** 모드는 스레드를 시작(또는 대기열 등록)할 때 고정되고 등록부에 저장된다 — 도중에 켜도 그 스레드는 그대로 |
 
-| 장치 | 막는 것 | 시험 |
+```bash
+S=~/.openclaw-data/runtime/state/graphs
+touch $S/PAUSED        # 멈춤("랭그래프 멈춰") — 잡도 끈다(PLAN §8)
+rm $S/PAUSED           # 다시
+```
+
+## 관문 (틱마다, 하나라도 걸리면 HOLD)
+
+| 관문 | 기준 | 출처·설정 |
 |---|---|---|
-| 스레드별 잠금(SQLite 즉시 트랜잭션), 죽은 pid의 잠금은 인계 | 동시 재개 때 승인·반려가 둘 다 실행(위험 1) | 3스레드×5회 동시 재개 → 스레드당 finalize 1회 |
-| 이미 있는 스레드에 start 거부 | 대기 중 스레드가 처음부터 다시 돌아 LLM 반복(위험 2) | 중복 start |
-| 시작하자마자 `LANGSMITH_*`·`LANGCHAIN_*` 삭제 | 추적 변수 하나로 데이터가 밖으로 나감(위험 3) | 닫힌 프록시 + `NODE_USE_ENV_PROXY=1` → 연결 시도 0 |
-| DB는 공개 저장소 밖 `~/.openclaw-data/runtime/state/graphs/checkpoints.db`(폴더 700·파일 600, umask 077), `secure_delete=ON`, `gc` 14일 + VACUUM | 체크포인트에 평문이 쌓이고 지워도 남음(위험 4) | gc 뒤 가짜 표식 0, 권한 |
-| interrupt 노드 정적 검사(`scripts/check-interrupt-nodes.mjs`). 실행기도 그래프를 열 때마다 검사 | 재개 때 노드가 처음부터 다시 돌아 LLM·발송이 두 번(위험 5) | 양성·음성 |
-| 시작할 때 better-sqlite3 자가 시험 | 설치 스크립트 누락으로 생기는 조용한 고장(위험 6) | 네이티브 파일을 뺀 사본 → 원인·처방을 말하고 1 |
-| `claude -p`를 project 설정만·빈 폴더·깨끗한 환경변수로 부름. 로그인은 이 맥의 것 그대로 | 사용자 훅이 운영 위키·RAG에 씀(위험 7·8) | 가짜 claude로 인자·환경 확인 |
-| LLM 상한 스레드당 5회·하루 20회 → `HELD`, Fable 차단, 기본 sonnet | 구독 한도 잠식 | 상한·차단 |
-| 승인 기한 48시간 → `EXPIRED` 자동 취소(그래프 코드는 돌리지 않음). 기한은 실행기가 그 질문을 내보인 때부터, 답을 적용하면 대기 기록을 비운다. 고장으로 기록이 빠지면 마지막 실행 시작·체크포인트 시각 중 늦은 쪽부터(기한이 늘지 않게). sweep 은 장부로 후보를 고르고 그래프 상태로 확인한다(그래프 파일이 없으면 장부 기한으로) | 영원히 멈춘 일, 기한 연장, 보이기도 전 만료 | 시간 주입·장부 훼손·변이 |
-| 승인 대기가 동시에 2개 이상이면 받지 않음(`multi-interrupt`) | 답 하나가 사람이 못 본 질문까지 승인 | 병렬 interrupt 그래프 |
-| interrupt 없이 멈춘 스레드는 `blocked` — retry 거부 | 정적 중단점을 retry 가 승인 없이 통과 | 중단점 그래프 |
-| gc: 1일 이상만, 기한 전 대기·잠긴 스레드는 안 지움, VACUUM 뒤 `-wal` 이 비워졌는지 확인해 못 비우면 ERROR | 승인 대기 삭제·하루 상한 초기화·평문 잔존을 OK 로 보고 | 빈 값·0일·읽기 연결 |
-| 노드 출력은 스레드 로그로(자식 프로세스 `stdio: "inherit"`·fd 1 직접 쓰기는 검사기가 막음), 노드가 `process.exit(0)` 해도 종료 1, 잠금에 프로세스 시작 시각 | 첫 줄 규약 깨짐·경보 묻힘·pid 재사용 | 각 시험 |
-| 판이 오르면 빠진 칸을 더한다(`PRAGMA user_version`) | 옛 DB 에서 새 판이 죽음 | 옛 표 구조 |
+| `paused` | `PAUSED` 있음 | |
+| `disk` | 여유 < 15GiB + 사본 예상 + 1GiB(기본 17GiB) | 감지기와 같은 재는 법(statvfs bavail, `/System/Volumes/Data`). `LG_DISK_FLOOR_GIB`·`LG_COPY_EST_GIB`(1a 실측으로 바꾼다)·`LG_DISK_MARGIN_GIB` |
+| `usage_high`·`usage_unreadable`·`usage_stale` | 주간 사용량 ≥ 80% · 못 읽음 · 6시간 넘게 묵음 | 감지기(`orchestrator-scan.py` `scan_usage` → `usage_findings`)가 `claude -p /usage`로 받아 `state/orchestrator/latest.md`의 '클로드 사용량' 줄에 쓰는 값을 **읽기만** 한다. 주간 범위 중 Fable(금지 모델)은 뺀다. 스냅샷은 정규 회차(08·11·14·17·20시)에만 새로 쓰이므로 **밤 02시 무렵부터 08시까지는 '묵음'으로 쉰다** |
+| `login`·`usage_limit` | 호출 오류 문구로 판정한 표식 | 로그인은 감지기 `LLM_AUTH_FAIL`과 같은 문구 + CLI 문구. 429·사용량 한도는 로그인 고장이 아니다(09-30 오판 전례) |
+| `token_cap` | 오늘 토큰(입력·출력·캐시 생성·캐시 읽기 합) ≥ `LG_DAY_TOKEN_CAP`(기본 3,000,000) | 10-28 '그림자 ② 하루 최댓값 × 1.5'로 다시 정한다 |
+| `quiet` | 01:30~04:30(`LG_QUIET`) | 야간 소크 시간 |
+
+## 그래프를 쓰는 규칙
+
+`graphs/<이름>.mjs`는 `build({ checkpointer, llm, tools })`, `input(flags)`, `summarize(values)`를 내보낸다. 실행기가 그래프를 열 때마다 두 검사를 건다(위반이면 수동 명령은 ERROR, 틱은 코드 결함 보류).
+
+**도구(실행기가 스레드에 묶어 넘긴다)**
+
+| 도구 | 쓰임 |
+|---|---|
+| `llm.ask(프롬프트, { model, node, tools, cwd, timeoutMs })` | 짧은 호출(틱 안에 끝남). 모델은 haiku·sonnet·opus 계열만(Fable 금지). 도구는 Read·Grep·Glob(·Edit·Write)만 |
+| `llm.launchAsk(…, { node, attempt })` → handle / `llm.checkAsk(handle)` | 긴 호출의 분리 실행. `checkAsk`는 던지지 않는다: `done`(text·usage) · `running` · `dead` · `failed`(kind: login·usage_limit·error). 다시 띄울지(시도 + 1)는 그래프가 정한다 |
+| `tools.run(cmdId, 인자)` | 명령은 이것으로만. 허용 목록 밖·모드 밖·형식 밖 인자는 거부(코드 결함) |
+| `tools.launch(cmdId, 인자, { node, attempt })` / `tools.check(handle)` / `tools.output(handle)` | 분리 실행. 상태는 `done`·`running`·`dead` |
+| `tools.effect(key, kind, fn, { verify })` | 부수효과는 이것으로만. 그림자면 '했을 일'만 적고 `fn`을 부르지 않는다 |
+| `throw tools.pending("…")` | 분리 실행이 아직 — CONTINUE(재시도로 세지 않음) |
+| `throw tools.hold("이유")` | 스스로 보류(디스크 부족·대화 작업 표식 등) |
+| `tools.bench({ bench, reproduced, diag_match, hidden_pass, ai_misjudge })` | 판정 M8 기록 |
+| `tools.mode` | `shadow` · `live` |
+
+**정적 검사**
+- `scripts/check-interrupt-nodes.mjs`(0a): interrupt가 든 노드는 동기·순수 — 상태 읽기 → `interrupt(...)` → 값 반환. LLM·파일·발송·바깥 값 금지. 노드는 `addNode("이름", 함수)` 형식. 정적 중단점(`interruptBefore/After`) 금지 — 컴파일에 박힌 그래프는 노드 단위 진행이 지나쳐 버리므로 실행기가 돌리지 않는다. 승인 대기는 한 번에 하나.
+- `scripts/check-graph-rules.mjs`(0b): 그래프 파일과 그 파일이 상대 경로로 가져오는 모듈 전부에서 `child_process`(정적·동적 import·require)·`process.binding`, 허용 목록에 없는 cmdId, 글자값이 아닌 cmdId, `effect(…)` 밖의 부수효과 명령, 랭그래프 Store(S15), 네트워크(fetch·http·net…), 실행기 내부(`lib/`·`scripts/`) 가져오기를 막는다.
+- 둘 다 정규식·괄호 짝 수준이라 다 막지 못한다. 그래서 실행 때 한 번 더 막는다: 허용 목록은 `run`이, effect 범위는 `AsyncLocalStorage`로, 모드는 등록부 값으로.
+
+**명령 허용 목록 `cmd-registry.json`**
+```json
+{ "version": 1, "commands": {
+  "sys.sleep": { "bin": "/bin/sleep", "argv": ["{seconds}"], "params": { "seconds": "^[0-9]{1,4}$" }, "modes": ["shadow", "live"], "timeoutSec": 3600 } } }
+```
+- `bin`은 절대경로, 자리 표시는 항목 전체가 `{이름}`, 정규식은 `^…$`. 셸을 거치지 않는다(배열 spawn). 환경변수는 PATH·HOME·LANG·TMPDIR·USER + `envPass`(비밀류 이름 금지)만.
+- `effect: true` 명령은 실제 모드 전용이고 `effect()` 안에서만 돈다(분리 실행 불가 — 띄운 순간 '성공'으로 적히면 안 된다).
+- 올릴 수 없는 것: 셸·`env`·`osascript`·`sudo`·`launchctl`·`crontab`·**OpenClaw CLI**(S15 — 노드에서 오픈클로를 다시 부르지 않는다), 인터프리터의 즉석 코드(`-c`·`-e`).
+- 파일이 없으면 빈 목록(아무 명령도 허용하지 않음). 시험만 `LG_CMD_REGISTRY`로 바꿀 수 있다.
+
+## 분리 실행 `lib/detach.mjs` (설계 §6)
+
+작업 폴더 `jobs/<스레드>/<노드>/<시도>/` — 이 폴더 만들기(원자적)가 `(thread, node, attempt)` 잠금이다. 틱이 겹쳐도 한 번만 띄운다.
+껍데기(`lib/detach-runner.mjs`)가 detached(새 세션)로 떠서 `spec.json`대로 명령을 돌린다. `meta.json`(pid·시작 시각·cmdId) · `stdout`·`stderr`(파일) · `heartbeat`(30초) · `result.json`(임시 파일 → 이름 바꾸기).
+판정: 결과 파일 있음 → `done` / 껍데기 pid 살아 있음 → `running` / 결과 없이 죽음 → `dead`(남은 자식은 끈다 — 재시도와 겹치지 않게). 부모(틱)가 죽어도 산다(시험으로 확인). 게이트웨이 재시작 실측은 아직이다.
+
+## 부수효과 `effect(key, kind, fn)` (S10)
+
+원장 `effects.jsonl`(추가 전용). 그림자: `{key, kind, wouldRun}`만(같은 key는 한 줄). 실제: `started` → `fn` → `ok`/`failed`.
+같은 key가 `ok`면 다시 하지 않는다(다른 스레드라도). `started`만 있고 끝이 없으면 결과를 모르니 보류 — `verify()`가 일어났다고 확인하면 `ok`로 적고 넘어간다. 같은 key를 두 프로세스가 동시에 내지 않게 key별 잠금(죽은 주인 것만 넘겨받는다).
+
+## 기록·집계 (S17)
+
+`metrics.jsonl`(추가 전용, 600). **gc 대상이 아니다** — 판정일(11-26) + 30일까지 보존. 원문(질문·프롬프트·출력)은 적지 않는다(오류는 머리말만).
+
+| 사건 | 필드 |
+|---|---|
+| `start` · `done` · `gave_up` · `expired`(kind: approval·hold) | thread · graph · mode · (done) `verified` ← 그래프 상태의 `verify_log`(M2) |
+| `node_start` · `node_end` | node · ok · ms |
+| `continue`(reason: budget·pending·paused) · `interrupted`(cause: signal·exit·stalled) · `resumed`(from) | |
+| `waiting`(reason ← interrupt 값의 `reason`, M5) · `answered`(decision) | |
+| `held` | scope(tick·thread·command·sweep) · reasons(관문 이름·llm_budget·token_cap·login·usage_limit·code_defect·node·effect_unknown·stuck·hook_leak) |
+| `llm` | model · models · in · out · cache_create · cache_read · total · cost_usd · ms · ok · detached |
+| `effect`(outcome: would_run·ran·dedup·failed·unknown·recovered) · `stuck` · `tick` · `gc` · `failed` · `bench`(M8) | |
+
+`node lg-report.mjs`가 M1(끊긴 스레드 중 이어서 끝낸 비율) · M3(같은 key 중복 실행) · M4(48시간 넘게 보고 없이 남은 대기·보류) · M6(날짜별 호출·토큰·비용, Fable 0) 표와 M2·M5·M8 칸을 낸다.
+
+## claude 자식 격리 (0b 실측, 10-03 haiku 4회)
+
+`claude -p --restricted --strict-mcp-config --no-session-persistence --output-format json --model <m> --disable-slash-commands --tools <…>`, 작업 폴더는 **홈 밖** 빈 폴더(맥 사용자 임시 폴더 `/var/folders/…/T/lg-claude-cwd-<uid>` — OpenClaw는 TMPDIR을 홈 아래로 잡으니 TMPDIR은 쓰지 않는다), 키·토큰 없는 깨끗한 환경변수.
+
+| 방식 | 작업 폴더 | 입력 맥락 토큰 | 사용자 규칙·`~/CLAUDE.md` | 훅 로그 |
+|---|---|---|---|---|
+| 0a `--setting-sources project` | 홈 아래 | 9,161 | 실림 | 0 |
+| `--restricted` | 홈 밖 | 3,695 | 안 실림 | 0 |
+| `--restricted` | 홈 아래 | 3,700 | 안 실림 | 0 |
+
+`--restricted` + 읽기 도구: 작업 폴더 안 파일은 읽고, 홈 아래·`/etc` 파일은 거부(`permission_denials`). 키 없는 환경에서 성공 = 구독 로그인. 자가 시험(`selftest`·틱)은 사용자 훅 로그에 graphs 쪽 작업 폴더 흔적이 생기면 ERROR로 멈춘다(S6 — 클로드 판이 오르며 훅이 되살아나는 것을 잡는다).
 
 ## 설정(환경변수)
 
-`LG_STATE_DIR`(상태 폴더, 전용 폴더여야 한다) · `LG_DB` · `LG_APPROVAL_TTL_HOURS`(48) · `LG_GC_DAYS`(14) · `LG_LLM_MAX_PER_THREAD`(5) · `LG_LLM_MAX_PER_DAY`(20) · `LG_LLM_MODEL`(sonnet) · `LG_LLM_TIMEOUT_SEC`(300) · `LG_CLAUDE_BIN` · `LG_LOCK_STALE_MIN`(360) · `LG_NODE`.
-`LG_BUSY_TIMEOUT_MS`(15000).
-시험 전용 — `LG_TEST_MODE=1`일 때만 먹는다: `LG_NOW`(시간 주입, 시험 모드 밖이면 오류로 멈춘다) · `LG_TEST_START_AT`(동시성 시험 출발선) · `LG_SMOKE_TRACE` · `LG_SMOKE_CRASH_ONCE` · `LG_SMOKE_CRASH_CODE`.
-
-## 그래프를 쓰는 규칙(2단계용)
-
-- `graphs/<이름>.mjs`는 `build({ checkpointer, llm })`, `input(flags)`, `summarize(values)`를 내보낸다.
-- **interrupt가 든 노드는 동기·순수다:** 상태 읽기 → `interrupt(...)` → 값 반환. LLM·파일·발송은 앞뒤 노드로 뺀다. 그 안의 호출은 허용 목록(문자열·배열 메서드, `JSON`·`Math`·`Object` 등)만 통과한다.
-- 노드는 `addNode("이름", 함수)` 형식으로 쓴다(같은 파일 함수만 따라가 검사한다). `interrupt`는 그래프 파일 안에서 직접 부르기만 한다 — 별칭·다른 모듈에 감추기 금지(가져오는 모듈까지 따라가 검사한다).
-- 노드 안에서 하위 그래프·모델을 `.invoke()`/`.stream()` 하지 않는다. 정적 중단점(`interruptBefore/After`)은 쓰지 않는다. 승인 대기는 한 번에 하나.
-- 자식 프로세스 출력은 받아서 다룬다(`stdio: "inherit"` 금지) — 실행기의 첫 줄을 차지한다.
-- interrupt 노드는 자기 인자·지역 값·안전한 내장(`JSON`·`Math`·`String` 등)·같은 파일 함수만 쓴다. 바깥(모듈 수준) 값이나 다른 모듈의 것을 쓰면 위반이다(상수도) — 필요한 값은 앞 노드에서 상태에 넣는다. 허용 목록 메서드도 그런 값에서만 통과한다.
-- 같은 꾸러미 모듈은 상대 경로로 가져온다(`#별칭`은 검사가 따라가지 못해 위반).
-- 검사기는 정규식·괄호 짝 수준의 정적 검사다. 다 막지 못한다 — 2단계에선 부수효과를 `effect(key, fn)` 같은 한 입구로 모으는 것을 함께 쓴다.
-- LLM은 `llm.ask(prompt, { model, node, timeoutMs })`로만 부른다. 상태에는 원문 대신 참조(경로·id)를 둔다.
-- 노드가 스스로 멈춰야 하면(디스크 부족·잠금 등) `throw Object.assign(new Error("이유"), { held: true })`. 실행기가 `HELD`(0)로 두고, `retry`로 그 노드부터 잇는다.
-- 실행기가 시간 초과 신호(SIGTERM)로 끝나면 장부에 `failed`를 남기고, 잠금을 풀고, 돌던 claude 자식도 끈다.
+0a: `LG_STATE_DIR` · `LG_DB` · `LG_APPROVAL_TTL_HOURS`(48) · `LG_GC_DAYS`(14) · `LG_LLM_MAX_PER_THREAD`(5) · `LG_LLM_MAX_PER_DAY`(20) · `LG_LLM_MODEL`(sonnet) · `LG_LLM_TIMEOUT_SEC`(300) · `LG_CLAUDE_BIN` · `LG_NODE` · `LG_BUSY_TIMEOUT_MS`(15000).
+0b: `LG_TICK_BUDGET_SEC`(480) · `LG_HOLD_TTL_HOURS`(48) · `LG_MAX_RETRIES`(3) · `LG_MAX_STEPS`(500) · `LG_LOCK_STUCK_MIN`(30, 옛 이름 `LG_LOCK_STALE_MIN`도 받는다) · `LG_DAY_TOKEN_CAP`(3000000) · `LG_DISK_PATH` · `LG_DISK_FLOOR_GIB`(15) · `LG_COPY_EST_GIB`(1) · `LG_DISK_MARGIN_GIB`(1) · `LG_USAGE_FILE` · `LG_USAGE_MAX_PCT`(80) · `LG_USAGE_MAX_AGE_H`(6) · `LG_QUIET`(01:30-04:30, 빈 값이면 끔) · `LG_LOGIN_RECHECK_MIN`(360) · `LG_LIMIT_RECHECK_MIN`(60) · `LG_HOOK_LOGS`(콜론 구분).
+시험 전용 — `LG_TEST_MODE=1`일 때만 먹는다: `LG_NOW`(시간 주입) · `LG_CMD_REGISTRY` · `LG_TEST_START_AT` · `LG_TEST_HEARTBEAT_SEC` · `LG_SMOKE_TRACE` · `LG_SMOKE_CRASH_ONCE` · `LG_SMOKE_CRASH_CODE`.
 
 ## OpenClaw 연결 예(등록하지 않았다)
 
 ```bash
-~/bin/openclaw automations create "0 9 * * *" --tz "Asia/Seoul" \
-  --name "graphs: smoke" \
-  --command 'sh infra/graphs/lg.sh start smoke "smoke-$(date +%F)"' \
+~/bin/openclaw automations create "*/30 * * * *" --tz "Asia/Seoul" \
+  --name "graphs: lg-tick" \
+  --command 'sh infra/graphs/lg.sh tick' \
   --command-cwd "$HOME/projects/jarvis" \
   --timeout-seconds 600 \
   --announce
-~/bin/openclaw automations create "30 9 * * *" --tz "Asia/Seoul" \
-  --name "graphs: sweep" \
-  --command 'sh infra/graphs/lg.sh sweep' \
-  --command-cwd "$HOME/projects/jarvis" \
-  --announce
 ```
 
-`--command`는 `sh -lc`로 돌기 때문에 `$(date +%F)`가 실행할 때마다 풀린다. 1회 상한은 600초다. 스레드 이름은 흐름+날짜로 고정한다.
+`--command`는 `sh -lc`로 돈다. 1회 상한은 600초, 틱 예산은 480초다(명령형 잡의 실제 시간 상한 실측은 잡 등록이 필요해 아직이다 — PLAN 0b).
+야간 금지·관문은 실행기가 스스로 지키므로 잡 일정에 넣지 않는다.
 
-## 대화 중 재개
+## 대화 중 승인
 
-자비스는 `WAITING` 알림이나 `status`에서 스레드 이름을 읽는다. 주인님의 답을 받으면 아래 명령을 실행한다.
+자비스는 `WAITING` 알림·`status`·`pending.jsonl`에서 스레드 이름을 읽는다. 주인님 답을 받으면:
 
 ```bash
-sh ~/projects/jarvis/infra/graphs/lg.sh resume <스레드> approved   # 또는 rejected
+sh ~/projects/jarvis/infra/graphs/lg.sh answer <스레드> approved   # 또는 rejected — 답만 적고 끝난다. 진행은 다음 틱
 ```
 
-첫 줄이 `DONE`이면 끝난 것이다. `ERROR … busy`는 다른 쪽이 처리 중이라는 뜻이고, `ERROR … expired`는 기한이 지나 이미 취소됐다는 뜻이다. 둘 다 같은 명령을 되풀이하지 않는다.
-LLM 노드가 많은 그래프는 맥 노드 exec 20초 함정에 걸릴 수 있다. 그럴 때는 하네스 셸이나 `host=gateway`로 부른다.
+`OK … answered`면 끝이다. `ERROR … expired`는 기한이 지나 취소된 것, `ERROR … already-answered`는 이미 다른 답이 적힌 것이다.
+`resume`(답을 바로 적용해 진행)은 시험·디버그용으로 남겨 두었다 — LLM 노드가 많으면 맥 노드 exec 20초 함정에 걸린다.
 
 ## 시험
 
 ```bash
-cd infra/graphs && ~/.nvm/versions/node/v24.21.0/bin/node --test test/*.test.mjs        # 임시 HOME·임시 상태 폴더, 실호출 없음
-RUN_LLM=1 ~/.nvm/versions/node/v24.21.0/bin/node --test test/llm.test.mjs               # 실제 haiku 1회(한도 사용)
+cd infra/graphs && H=$(mktemp -d) && HOME=$H ~/.nvm/versions/node/v24.21.0/bin/node --test test/*.test.mjs   # 임시 HOME·임시 상태 폴더, 실호출 없음
+RUN_LLM=1 ~/.nvm/versions/node/v24.21.0/bin/node --test test/llm.test.mjs                               # 실제 haiku 1회(한도 사용)
 ```
+
+0a 50개 + 0b 33개(틱·답·관문 9종·토큰 상한·로그인·만료·재시도·코드 결함·STUCK·끊김·알림 필터·PAUSED·분리 실행 그래프 / 분리 실행 판정·이중 실행·heartbeat·부모 죽음·LLM 분리 / 정적 검사 양성·음성·가져오기·실행기 거부·허용 목록·run·effect·모드 고정·훅 누수·gc 보존·관문 해석·집계).
 
 ## 걷어내는 법
 
 1. 이 실행기를 부르는 잡을 끈다: `~/bin/openclaw automations list --all`에서 찾아 `~/bin/openclaw automations disable <jobId>`.
-2. 폴더를 버린다: `trash ~/projects/jarvis/infra/graphs` 후 커밋.
-3. 상태도 필요 없으면 `trash ~/.openclaw-data/runtime/state/graphs`.
+2. 기록을 내보낸다: `node infra/graphs/lg-report.mjs --json > <보관 위치>`.
+3. 폴더를 버린다: `trash ~/projects/jarvis/infra/graphs` 후 커밋.
+4. 상태도 필요 없으면 `trash ~/.openclaw-data/runtime/state/graphs`.

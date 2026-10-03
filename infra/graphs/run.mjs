@@ -130,13 +130,14 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
   const detach = await import("./lib/detach.mjs");
   active.killChildren = killActiveChildren;
   const { cfg, now, metric } = ctx;
-  const llm = createClaude({ store: ctx.store, cfg, now, thread, metric });
+  const timeLeft = ctx.isTick ? () => cfg.jobLimitMs - elapsedMs() : null; // 틱만 — 잡 시간 상한(600초) 안에서
+  const llm = createClaude({ store: ctx.store, cfg, now, thread, metric, timeLeft });
   const heartbeatSec = cfg.testMode && process.env.LG_TEST_HEARTBEAT_SEC ? Number(process.env.LG_TEST_HEARTBEAT_SEC) : 30;
   const scratch = path.join(cfg.jobsDir, thread, "_scratch");
   const BENCH = new Set(["bench", "reproduced", "diag_match", "hidden_pass", "ai_misjudge", "signal"]);
   const tools = {
     mode,
-    run: createRun({ cfg, registry: reg, thread, mode }),
+    run: createRun({ cfg, registry: reg, thread, mode, timeLeft }),
     // 분리 실행 띄우기. 같은 (노드, 시도)는 한 번만 띄운다. 부수효과 명령은 분리 실행하지 않는다(띄운 순간 '성공'으로 적히면 안 된다).
     launch(cmdId, params = {}, { node, attempt = 1 } = {}) {
       const r = resolveCommand(reg, cmdId, params, { mode, inEffect: !!effectScope.getStore(), scratch });

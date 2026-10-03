@@ -338,3 +338,23 @@ test("분리 실행 그래프: 띄우기 → 확인(진행 중이면 CONTINUE, �
   assert.deepEqual(fs.readdirSync(jobs), ["1"], "시도 1 하나뿐");
   assert.ok(metrics(sb).filter((e) => e.ev === "continue" && e.reason === "pending").length >= 2);
 });
+
+test("틱 두 개가 겹쳐 돌아도 노드는 한 번씩 — 스레드 잠금이 나눠 갖는다", async (t) => {
+  const sb = sandbox(t);
+  const lg = appWith(sb, { steps: STEPS });
+  const env = { ...tickEnv(sb), LG_TEST_STEP_MS: "200" };
+  for (const th of ["c1", "c2", "c3"]) assert.equal(lg(env, ["start", "steps", th, "--queue"]).code, 0);
+  const tickOnce = () => new Promise((resolve) => {
+    const child = spawn(NODE, [path.join(sb.dir, "app", "run.mjs"), "tick"], { env });
+    let out = "";
+    child.stdout.on("data", (d) => { out += d; });
+    child.on("close", (code) => resolve({ code, out }));
+  });
+  const rs = await Promise.all([tickOnce(), tickOnce()]);
+  for (const r of rs) assert.equal(r.code, 0, r.out);
+  const dones = rs.flatMap((r) => r.out.split("\n").filter((l) => l.startsWith("DONE ")).map((l) => l.split(" ")[1])).sort();
+  assert.deepEqual(dones, ["c1", "c2", "c3"], "각 스레드의 DONE 은 한 번만");
+  const per = {};
+  for (const l of fs.readFileSync(sb.env.LG_SMOKE_TRACE, "utf8").split("\n").filter(Boolean)) { const n = l.split(" ")[1]; per[n] = (per[n] ?? 0) + 1; }
+  assert.deepEqual(per, { a: 3, b: 3, c: 3, d: 3 }, "노드마다 스레드 수만큼(3)만");
+});

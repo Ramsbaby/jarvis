@@ -51,6 +51,7 @@ export function loadConfig(env = process.env) {
     lockStuckMs: num(env, "LG_LOCK_STUCK_MIN", num(env, "LG_LOCK_STALE_MIN", 30)) * 60_000,
     busyTimeoutMs: num(env, "LG_BUSY_TIMEOUT_MS", 15_000),
     tickBudgetMs: num(env, "LG_TICK_BUDGET_SEC", 480) * 1000, // 명령형 잡 1회 상한 600초 안에서 다음 노드 앞에 선다
+    jobLimitMs: num(env, "LG_JOB_LIMIT_SEC", 600) * 1000, // 명령형 잡의 실효 상한 — 틱 안의 LLM·명령 시간 제한을 이 안으로 줄인다
     maxRetries: num(env, "LG_MAX_RETRIES", 3), // 같은 오류 재시도 횟수. 그다음에도 같은 오류면 GAVE_UP
     maxSteps: num(env, "LG_MAX_STEPS", 500), // 스레드 하나의 단계 상한(끝없는 되풀이 방지)
     testMode,
