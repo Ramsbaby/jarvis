@@ -115,7 +115,7 @@ rm $S/PAUSED           # 다시
 | `llm.ask(프롬프트, { model, node, tools, cwd, timeoutMs })` | 짧은 호출(틱 안에 끝남 — 시간 제한은 잡 상한까지 남은 시간 안으로 줄고, 30초도 못 남으면 다음 틱). 모델은 haiku·sonnet·opus 계열만(Fable 금지). 도구는 Read·Grep·Glob(·Edit·Write — 쓰기 도구는 `cwd`(사본)를 꼭 준다)만 |
 | `llm.launchAsk(…, { node, attempt, timeoutMs, maxMs })` → handle / `llm.checkAsk(handle)` | 긴 호출의 분리 실행(시간 제한 기본 15분, 최대 시간 기본 그 1.5배 22.5분). `checkAsk`는 던지지 않는다: `done`(text·usage) · `running` · `dead`(최대 시간 초과면 reason `timeout`) · `failed`(kind: login·usage_limit·error). 다시 띄울지(시도 + 1)는 그래프가 정한다 |
 | `tools.run(cmdId, 인자)` | 명령은 이것으로만. 허용 목록 밖·모드 밖·형식 밖 인자는 거부(코드 결함) |
-| `tools.launch(cmdId, 인자, { node, attempt })` / `tools.check(handle)` / `tools.output(handle)` | 분리 실행. 상태는 `done`·`running`·`dead`. 최대 시간(목록 `maxSeconds`)을 넘기면 `check`가 묶음째 끄고 `dead`(reason `timeout`) — 그래프는 다른 `dead`처럼 던져 재시도 규칙(같은 오류 3회 → GAVE_UP)에 맡긴다 |
+| `tools.launch(cmdId, 인자, { node, attempt })` / `tools.check(handle)` / `tools.output(handle)` | 분리 실행. 상태는 `done`·`running`·`dead`. 최대 시간(목록 `maxSeconds`)을 넘기면 `check`가 묶음째 끄고 `dead`(reason `timeout`) — 그래프는 다른 `dead`처럼 던져 재시도 규칙(같은 오류 3회 → GAVE_UP)에 맡긴다. 던지는 문구 머리에 `st.reason`을 넣으면(예: `` `분리 실행 ${st.reason}` ``) metrics `failed`·`gave_up`의 error 칸에 사유가 남는다(R21 지표) |
 | `tools.effect(key, kind, fn, { verify })` | 부수효과는 이것으로만. 그림자면 '했을 일'만 적고 `fn`을 부르지 않는다 |
 | `throw tools.pending("…")` | 분리 실행이 아직 — CONTINUE(재시도로 세지 않음) |
 | `throw tools.hold("이유")` | 스스로 보류(디스크 부족·대화 작업 표식 등) |
@@ -151,7 +151,7 @@ rm $S/PAUSED           # 다시
 
 **최대 시간(10-03 실측 반영).** 분리 실행은 띄운 잡이 정상 종료해도, 잡이 시간 초과로 SIGTERM을 맞아도 살아서 결과를 썼다 — 오픈클로 잡 시간 상한은 여기에 닿지 않는다. 그래서 스스로 끈다.
 - 껍데기는 detached라 자기 프로세스 묶음의 우두머리다(pgid = 껍데기 pid). 그 아래 명령·손주(시험 프로세스 등)까지 한 신호로 닿는다.
-- `check()`: 껍데기가 살아 있어도 시작 + `maxMs`를 넘겼으면 묶음째 SIGTERM → 30초 안에 안 비면 SIGKILL → `dead`(reason `timeout`). 돌려줄 때 묶음은 비어 있다. 표식 `kill.json`을 먼저 남기므로 같은 시도를 다시 확인해도 `timeout`이다. 30초 유예 동안 `check`는 동기로 기다린다(보통은 바로 꺼진다).
+- `check()`: 껍데기가 살아 있어도 시작 + `maxMs`를 넘겼으면 묶음째 SIGTERM → 30초 안에 안 비면 SIGKILL → `dead`(reason `timeout`). 돌려줄 때 묶음은 비어 있다(SIGKILL 뒤에도 5초까지 비기를 기다린다). 표식 `kill.json`을 먼저 남기므로 같은 시도를 다시 확인해도 `timeout`이다. 30초 유예 동안 `check`는 동기로 기다린다(보통은 바로 꺼진다).
   - pid가 우리 껍데기임을 증명할 때만(시작 시각이 기록과 같음) 끈다. 못 하면 끄지 않고 `running`(`overdue: true`)으로 두고 다음 확인에서 다시 본다.
 - 껍데기 자신의 시간 제한(`timeoutMs`)도 묶음째다: SIGTERM을 묶음에 보내고, 결과(`timedOut: true`)를 쓴 뒤 남은 것(SIGTERM을 무시한 손주)을 SIGKILL한다.
 - 보통은 `timeoutMs`가 먼저 걸려 `done`(`timedOut`)이 된다. `maxMs`는 껍데기마저 멈췄을 때의 뒷받침이다. `launch` 때 `spec.json`에 적으므로 띄운 뒤 목록을 바꿔도 그 시도에는 닿지 않는다.
