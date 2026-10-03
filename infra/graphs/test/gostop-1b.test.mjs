@@ -141,8 +141,12 @@ async function runFix(t, opts = {}) {
 }
 
 // ── 끝까지 ─────────────────────────────────────────────────────────
-test("1b 끝까지(그림자): 3경로 재현 시험 → 패치 전 빨간불 → 수정 → 격리 검증 9단계 → 검토 → ready · ⑯ 은 would_run 만 · 본 저장소·가짜 원격·소크 결과 불변", async (t) => {
-  const { x, st, before } = await runFix(t);
+test("1b 끝까지(그림자, CI 신호): 3경로 재현 시험 → 패치 전 빨간불 → 수정 → 격리 검증 9단계 → 검토 → ready · ⑯ 은 would_run 만 · 본 저장소·가짜 원격·소크 결과 불변", async (t) => {
+  const x = setup(t);
+  const before = repoState(x.repo);
+  const { bench, ...ci } = signal(x);
+  assert.equal(start(x, { ...ci, source: "ci", rev: x.base }).code, 0);
+  const st = await drive(x);
   assert.equal(st.status, "done", JSON.stringify(st));
   const res = result(x);
   assert.equal(res.status, "ready", JSON.stringify({ note: res.note, steps: res.steps }));
@@ -163,11 +167,13 @@ test("1b 끝까지(그림자): 3경로 재현 시험 → 패치 전 빨간불 �
   // 격리 실행: 사본(work·base)·사본 옆 tmp 에서만. 미니 대조 30판 = 차분 20 + 소크 어려움 6 + 쉬움 4. nightly-soak.sh 없음
   const sbt = traceOf(x.sb, "sb-trace.jsonl");
   const root = C.sandboxDir(x.sb.state, SIG);
-  assert.ok(sbt.length >= 10 && sbt.every((c) => c.copy.startsWith(root) && c.tmp === path.join(root, "tmp")), JSON.stringify(sbt.slice(0, 2)));
+  assert.ok(sbt.length >= 10 && sbt.every((c) => c.copy.startsWith(root) && c.tmp.startsWith(path.join(root, "tmp") + "/")), JSON.stringify(sbt.slice(0, 2)));
   const flat = sbt.map((c) => c.args.join(" "));
   assert.ok(flat.some((a) => a.includes("REPLAY_GAMES=20")) && flat.some((a) => a.includes("SOAK_DIFFICULTY=hard") && a.includes("SOAK_GAMES=6")) && flat.some((a) => a.includes("SOAK_DIFFICULTY=easy") && a.includes("SOAK_GAMES=4")));
   assert.ok(sbt.some((c) => c.copy.endsWith("/base") && c.args[0] === "analyze"), "분석 기준은 기준 사본(base)");
-  assert.equal(fs.readdirSync(x.soak).length, 0, "소크 결과 폴더 불변");
+  // 미니 대조 전용 출력: 소크 결과 자리(LG_GOSTOP_SOAK_DIR)를 가리키는 인자가 없고, 모든 격리 실행은 그 실행 전용 임시 폴더(tmp/<번호>)
+  assert.ok(sbt.every((c) => !JSON.stringify(c).includes(x.soak)), "소크 결과 자리를 쓰지 않는다");
+  assert.equal(new Set(sbt.filter((c) => !c.canary).map((c) => c.tmp)).size, sbt.filter((c) => !c.canary).length, "실행마다 새 임시 폴더");
   // LLM 이 쓴 뒤 격리 밖 시험(1a flutter.*)은 사본에 안 돈다: 가짜 flutter 는 재현 2회 + pub get 2회(work·base)뿐
   const fl = traceOf(x.sb, "flutter-trace.jsonl");
   assert.deepEqual(fl.map((c) => c.sub).sort(), ["pub", "pub", "test", "test"]);
@@ -340,16 +346,19 @@ test("AI 결정 비교(§4②): 사본에 test/ai_policy 가 있으면 기준 �
   assert.ok(result(w).scopeFinal.byReason.ai_boundary, "AI 파일은 비교가 같아도 승인");
 });
 
-test("실제 모드(가짜 원격): ⑮ 최신 master 내보내기에 패치 적용 → 격리 재검증 → ⑯ effect 로 커밋(LG-Key)·push · 본 저장소 작업 트리 불변", async (t) => {
+test("실제 모드(가짜 원격, CI 신호): ⑮ 최신 master 에 재현 시험만 얹어 빨강 확인 → 수정 적용 → 격리 재검증 → ⑯ effect 로 커밋(LG-Key)·push(훅 끔) · 본 저장소 작업 트리 불변", async (t) => {
   const x = setup(t, { live: true });
   const before = repoState(x.repo);
-  assert.equal(start(x).code, 0);
+  const { bench, ...ci } = signal(x);
+  assert.equal(start(x, { ...ci, source: "ci", rev: x.base }).code, 0);
   const st = await drive(x);
   assert.equal(st.status, "done", JSON.stringify(st));
   const res = result(x);
   assert.equal(res.status, "ready", res.note);
   assert.equal(res.merge.ok, true);
-  assert.deepEqual(res.steps.filter((s) => s.phase === "merge").map((s) => s.id), ["three_path", "target"]);
+  assert.deepEqual(res.steps.filter((s) => s.phase === "merge").map((s) => s.id), ["master_red", "three_path", "target", "full"]);
+  const pushes = traceOf(x.sb, "sb-trace.jsonl").filter((c) => c.copy.endsWith("/merge"));
+  assert.ok(pushes.length >= 4, "반영 사본에서 격리 실행");
   const head = git(x.remote, ["rev-parse", "master"]);
   assert.notEqual(head, x.base, "가짜 원격에 커밋이 올라갔다");
   const msg = git(x.remote, ["log", "-1", "--format=%B", "master"]);
@@ -361,6 +370,102 @@ test("실제 모드(가짜 원격): ⑮ 최신 master 내보내기에 패치 적
   const after = repoState(x.repo);
   assert.equal(after.status, before.status, "본 저장소 작업 트리 불변(출시 작업 폴더에서만)");
   assert.equal(git(x.repo, ["worktree", "list"]).split("\n").length, 1, "출시 작업 폴더 정리");
+});
+
+test("실제 모드 벤치: 검증·검토를 통과해도 반영·push 하지 않는다(정답이 이미 master 에 있는 옛 결함) — ready + 메모", async (t) => {
+  const { x, st } = await runFix(t, { live: true });
+  assert.equal(st.status, "done", JSON.stringify(st));
+  const res = result(x);
+  assert.equal(res.status, "ready");
+  assert.match(res.note, /벤치 — 반영·커밋하지 않는다/);
+  assert.equal(res.merge, null);
+  assert.equal(effects(x).length, 0);
+  assert.equal(git(x.remote, ["rev-parse", "master"]), x.base);
+});
+
+test("같은 sigkey 로 다시 시작: LLM 이 손댄 사본은 버리고 새로 만든다 — ③ 재현(격리 밖)은 깨끗한 사본에서만", async (t) => {
+  const { x } = await runFix(t);
+  assert.equal(result(x).status, "ready");
+  assert.ok(fs.existsSync(path.join(work(x), RT)), "앞 스레드가 남긴 재현 시험");
+  const n0 = traceOf(x.sb, "flutter-trace.jsonl").length;
+  const r = run(x.env, ["start", "gostop-fix", "gostop-fix:again", `--sigkey=${SIG}`, `--signal=${JSON.stringify(signal(x))}`]);
+  assert.equal(r.code, 0, r.out + r.err);
+  for (let i = 0; i < 150 && !["done", "gave_up"].includes(JSON.parse(run(x.env, ["status", "gostop-fix:again", "--json"]).out).status); i++) { run(x.env, ["tick"]); await new Promise((q) => setTimeout(q, 120)); }
+  const again = traceOf(x.sb, "flutter-trace.jsonl").slice(n0).filter((c) => c.sub === "test");
+  assert.equal(again.length, 2);
+  assert.ok(again.every((c) => c.repro === false), "재현은 test/repro 가 없는(새로 만든) 사본에서");
+});
+
+test("AI 호출부(callsites): 수정이 규칙 처리부에 AI 호출을 더하면 결정 비교가 같아도 승인 사유 ai_callsite", async (t) => {
+  const fix = [{ files: { "lib/domain/game/turn_manager.dart": TM_FIX, "lib/presentation/providers/game_provider.dart": GP.replace("print(x);", "print(x);\n    AIPlayer().pick();") } }];
+  const { x } = await runFix(t, { aiPolicy: true, script: { fix }, sbCtl: { aiVerdict: "same" } });
+  const res = result(x);
+  assert.equal(res.aiCheck, "pass");
+  assert.equal(res.status, "would_ask");
+  assert.deepEqual(res.scopeFinal.byReason.ai_callsite, ["lib/presentation/providers/game_provider.dart"]);
+});
+
+test("빨간불의 질: 파일을 싣다 죽은 재현 시험(loading [E])은 빨간불이 아니다 → 두 번이면 no_red · opus 0", async (t) => {
+  const { x, st } = await runFix(t, { script: { repro: [{ files: { [RT]: `${REPRO_OK}// LOAD_FAIL\n` } }] } });
+  assert.equal(st.status, "done");
+  const res = result(x);
+  assert.equal(res.status, "no_red");
+  assert.match(calls(x, "repro")[1].input, /파일을 싣다 죽음/);
+  assert.equal(calls(x, "fix").length, 0);
+});
+
+test("컴파일 안 되는 재현 시험도 빨간불이 아니다 · 격리 점검 실패면 시험 없이 보류(sandbox_canary)", async (t) => {
+  const { x } = await runFix(t, { script: { repro: [{ files: { [RT]: `${REPRO_OK}// COMPILE_ERR\n` } }] } });
+  assert.equal(result(x).status, "no_red");
+  assert.match(calls(x, "repro")[1].input, /컴파일되지 않는다/);
+  const y = setup(t, { sbCtl: { canary: "fail" } });
+  assert.equal(start(y).code, 0);
+  const st = await drive(y, { until: ["done", "gave_up", "held"] });
+  assert.equal(st.status, "held", JSON.stringify(st));
+  assert.equal(st.hold, "sandbox_canary");
+  assert.equal(traceOf(y.sb, "sb-trace.jsonl").filter((c) => !c.canary).length, 0, "격리 점검이 실패하면 LLM 시험을 돌리지 않는다");
+});
+
+test("실행 증명: 바뀐 lib 줄을 라이브 AI 시험이 안 지나면(lcov 0) 재수정 → 3회 끝 gave_up · 재현 시험의 분석 경고는 세지 않는다", async (t) => {
+  const { x } = await runFix(t, { sbCtl: { covMiss: true, analyze: { warnings: 3, file: RT } } });
+  const res = result(x);
+  assert.equal(res.status, "gave_up");
+  assert.deepEqual(res.steps.filter((s) => !s.ok).map((s) => s.id), ["coverage", "coverage", "coverage"]);
+  assert.match(res.steps.find((s) => s.id === "coverage").detail, /not_executed/);
+  assert.equal(calls(x, "review").length, 0);
+});
+
+test("실제 모드 ⑩ 승인: 반려면 gave_up(반려), 승인이면 검증으로 이어 간다", async (t) => {
+  const fix = [{ files: { "lib/domain/game/turn_manager.dart": TM_FIX, "lib/data/services/iap_service.dart": "class IapService { int x = 1; }\n" } }];
+  for (const [ans, want] of [["rejected", "gave_up"], ["approved", "would_ask_live"]]) {
+    const y = setup(t, { script: { fix }, live: true });
+    assert.equal(start(y).code, 0);
+    assert.equal((await drive(y)).status, "waiting");
+    const a = run(y.env, ["answer", THREAD, ans]);
+    assert.equal(a.code, 0, a.out + a.err);
+    const st = await drive(y, { until: ["done", "gave_up", "expired"] });
+    assert.equal(st.status, "done", JSON.stringify(st));
+    const res = result(y);
+    if (want === "gave_up") { assert.equal(res.status, "gave_up"); assert.match(res.note, /반려\(수정 패치\)/); assert.equal(res.verifyOk, null); }
+    else { assert.equal(res.status, "ready", res.note); assert.equal(res.verifyOk, true); assert.equal(res.merge, null, "벤치라 반영 안 함"); }
+  }
+});
+
+test("사본 쓰기 안전: 조상 폴더가 바로가기면 거부, 마지막 자리가 바로가기면 그 이름만 지우고 쓴다(가리키는 곳 불변)", (t) => {
+  const sb = sandbox(t);
+  const root = path.join(sb.dir, "work"), outside = path.join(sb.dir, "outside");
+  fs.mkdirSync(path.join(root, "lib"), { recursive: true }); fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, "secret.txt"), "SECRET");
+  fs.symlinkSync(outside, path.join(root, "evil"));
+  assert.throws(() => C.safeTarget(root, "evil/x.dart"), /조상이 폴더가 아니다/);
+  fs.symlinkSync(path.join(outside, "secret.txt"), path.join(root, "lib", "a.dart"));
+  const src = path.join(sb.dir, "clean.dart");
+  fs.writeFileSync(src, "clean");
+  C.copyNoFollow(src, root, "lib/a.dart");
+  assert.equal(fs.readFileSync(path.join(outside, "secret.txt"), "utf8"), "SECRET");
+  assert.equal(fs.lstatSync(path.join(root, "lib", "a.dart")).isFile(), true);
+  fs.symlinkSync(path.join(outside, "secret.txt"), path.join(root, "lib", "b.dart"));
+  assert.equal(C.readNoFollow(path.join(root, "lib", "b.dart")), null, "읽기도 따라가지 않는다");
 });
 
 // ── 허용 목록·도구 ─────────────────────────────────────────────────
@@ -399,8 +504,13 @@ void main() {
   assert.equal(r.ok, true, JSON.stringify(r));
   const noHard = checkThreePaths(src.replace("threePathAiDifficulties", "[AIDifficulty.easy]"), { markers: { ...DEFAULT_MARKERS, ...mk } });
   assert.deepEqual(noHard.missing, ["liveAiHard"]);
+  const empty = checkThreePaths(src.replace("void _expectPuk(r) { expect(r, 1); }", "void _expectPuk(r) {}"), { markers: { ...DEFAULT_MARKERS, ...mk } });
+  assert.deepEqual(empty.missing.sort(), ["engine", "liveAi", "liveHuman"], "빈 _expectX 도우미는 단언이 아니다");
   const helperless = checkThreePaths(src.replace(/_expectPuk\(1\);/g, "print(1);"), { markers: { ...DEFAULT_MARKERS, ...mk } });
   assert.ok(helperless.missing.includes("engine"), "expect 가 없으면 세지 않는다");
+  const use = C.h5FrameUse("import 'three_path_support.dart';\nrunEnginePath(a); h.runHuman(a); h.runAi(a, d);", ["const threePathAiDifficulties = [AIDifficulty.easy];"]);
+  assert.equal(use.ok, false);
+  assert.match(use.why.join(), /다시 정의/);
 });
 
 // ── release: 서명 지문 ─────────────────────────────────────────────

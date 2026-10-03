@@ -187,12 +187,15 @@ LLM 이 사본에 쓴 뒤에는 그 사본에 격리 밖 시험 명령(`flutter.
 ⑦ repro_test     sonnet ×≤2, --restricted + Read·Grep·Glob·Edit·Write, 작업 폴더 = 사본. 결과(정본 패치)가 test/repro/ 새 .dart 뿐인지 다시 본다
                  (시험 1개 + 도우미 2개까지, 밖은 되돌리고 실패로 센다) → repro.three-path(-h5): 엔진·라이브 사람·라이브 AI(어려움) 묶음
                  → redbase = 깨끗한 내보내기 + 재현 시험(이후 '이번 수정만' 패치의 기준)
-⑧ verify_red     격리 점검(sandbox.canary) → sandbox.flutter-test 로 패치 전 빨간불(실패한 시험 이름이 있고 컴파일 오류 아님).
+⑧ verify_red     격리 점검(sandbox.canary) → sandbox.flutter-test 로 패치 전 빨간불(표식 붙은 경로 시험이 Expected/Actual 단언으로 실패 —
+                 컴파일 오류·파일 싣다 죽음(loading [E])·예외만은 빨간불이 아니다).
                  시험 실행 뒤 사본이 redbase 와 같아야(다르면 격리 위반). 아니면 ⑦ 다시, 2회면 no_red(수정하지 않는다)
 ⑨ fix            opus ×1 + 재수정 ×≤2. 정본 패치는 git 없이(patch.extract): fix-N.diff(redbase 대비) · patch-N.diff(clean 대비 — 반영할 것)
-   [AI 결정 비교] 사본에 고스톱 test/ai_policy(H5)가 있고 lib 를 바꿨을 때만: 기준 사본(base)에서 gen → 패치 사본에서 compare(sandbox.ai-policy).
-                 비교기 두 파일이 깨끗한 쪽과 같아야 믿는다. 없으면 폴백(aiCheck unavailable — AI 영역·MCTSConstants·규칙 처리부는 승인 사유)
-⑩ scope_check    patch.allowlist(이번 수정, --frozen test/repro/). 재현 시험을 건드렸으면 되돌리고 재수정. 사유가 있으면 실제는 scope_gate(순수 interrupt),
+   [AI 결정 비교] 사본에 고스톱 test/ai_policy(H5)가 있고 lib 를 바꿨을 때만: 기준 사본(base)에서 gen(결과는 격리 밖 runs/ai-gen 에 지문과 함께)
+                 → 패치 사본에서 compare(sandbox.ai-policy, 종료 코드와 판정이 맞아야 pass). 비교기 두 파일이 깨끗한 쪽과 같아야 믿는다.
+                 없으면 폴백(aiCheck unavailable — AI 영역·MCTSConstants·규칙 처리부는 승인 사유)
+⑩ scope_check    patch.allowlist(이번 수정, --frozen test/repro/) + AI 호출부(고스톱 callsites 규칙의 옮김 — 결정 비교가 같아도 AI 호출을 더하거나
+                 바꾸면 ai_callsite). 재현 시험을 건드렸으면 되돌리고 재수정. 사유가 있으면 실제는 scope_gate(순수 interrupt),
                  그림자는 끝까지 검증하고 would_ask
 ⑪ verify         단계 묶음 앞 격리 점검. 대상 시험(신호 재현 명령) · 3경로 시험 · 실행 증명(라이브 AI 묶음 --coverage → cov.check) ·
                  분석(오류·경고 수가 기준 사본보다 늘지 않음) · 전체 시험 · 미니 대조 30판(차분 대조 20 + 라이브 소크 어려움 6·쉬움 4, 씨앗 = sigkey).
@@ -200,22 +203,31 @@ LLM 이 사본에 쓴 뒤에는 그 사본에 격리 밖 시험 명령(`flutter.
                  끝나면 '이번 수정' 패치를 다시 뽑아 지문이 같아야 한다(시험 코드가 lib 를 고쳐 놓는 길 → 격리 위반)
 ⑫ review         sonnet ×1, 새 맥락, 읽기 도구, --json-schema(승인·3경로·무관한 변경·규칙 일치·고칠 점)
 ⑬                ⑩(재현 시험 건드림)·⑪·⑫ 실패 → ⑨(실패 내용을 피드백으로), 수정 통틀어 3회 → gave_up
-⑮ merge_prep     실제 전용. 최신 master 를 git archive 로 내보내 pub get(패치 전) → patch.apply-copy → 격리 재검증(3경로·대상)
-⑯ commit_push    effect('gostop-commit:<sigkey>:<패치 지문>') 안에서만: worktree add → git apply --index → commit(LG-Key 트레일러) → push → worktree remove
+⑮ merge_prep     실제 전용·벤치 제외(벤치는 정답이 이미 master 에 있다 — ready 로 끝). 최신 master 를 git archive 로 내보내 pub get(LLM 코드 전)
+                 → 재현 시험만 얹어 격리 실행 빨강(master_red — 이미 고쳐졌으면 반영하지 않는다) → 수정 패치 적용 → 3경로·대상·전체 시험 초록
+⑯ commit_push    effect('gostop-commit:<sigkey>:<패치 지문>') 안에서만: worktree add → git apply --index → commit(LG-Key 트레일러) → push → worktree remove.
+                 훅은 끈다(core.hooksPath=/dev/null·--no-verify) — 본 저장소 훅이 LLM 코드를 격리 밖에서 돌리므로. 설계 §5.2⑯ 'pre-push 관문 그대로'와
+                 다르다(실제 모드 켜기 전 주인님 결정). verify: 원격 master 가 남겨 둔 커밋 해시면 '일어남'(틱이 push 중에 죽어도 이어 간다)
 ⑭ plan           상태 ready · no_red · would_ask · gave_up(격리 위반·재현 시험 실패·수정 3회·반려) · rule_decision · not_reproduced · flaky.
                  plan.md 에 재현 시험 자리·빨간불 로그·정본 패치·검증 표·검토·커밋 기록, result.json 에 전부
 ```
 
-- 사본 셋: `work`(LLM 작업 폴더) · `clean`(패치 기준 — pub get·시험을 돌리지 않는다. 돌리면 생성 파일이 '바뀐 파일'로 섞인다) · `base`(기준 실행용, pub get 함). 임시 폴더는 사본 옆 `tmp`.
+- 사본 셋: `work`(LLM 작업 폴더) · `clean`(패치 기준 — pub get·시험을 돌리지 않는다. 돌리면 생성 파일이 '바뀐 파일'로 섞인다) · `base`(기준 실행용, pub get 함).
+  격리 실행마다 새 임시 폴더 `tmp/<실행 번호>`(앞 실행의 시험 코드가 심은 바로가기를 밟지 않게). 그래프가 사본에 쓰거나 읽을 때는 바로가기를 따라가지 않는다(safeTarget·readNoFollow).
+- ⑦ 을 띄우기 직전 사본 뿌리에 `.llm-touched` 를 남긴다. 같은 sigkey 로 다시 시작하면 ② 가 사본을 새로 만들고, ③(격리 밖 재현)은 표식이 있으면 코드 결함으로 멈춘다.
 - 예산: 진단 2 + 재현 시험 2 + 수정 3 + 검토 3 + 요약 1 = 11, 스레드 상한 12(그래프 `meta.llmPerThread` — 실행기가 `LG_LLM_MAX_PER_THREAD` 보다 크면 이 값을 쓴다, 12 이하). 모델별 상한 `LG_GOSTOP_SONNET_CAP`(7)·`LG_GOSTOP_OPUS_CAP`(3). Fable 금지.
 - 격리 위반(종료 98·사본 무단 변경)은 gave_up + 지표 `sandbox_violation`(§8). 준비 오류(97)는 던져 재시도(3회 → GAVE_UP). 격리 점검 실패는 보류(`sandbox_canary`).
 - 명령(cmd-registry, 1b): `sandbox.canary`·`sandbox.flutter-test`·`sandbox.flutter-test-defines`·`sandbox.flutter-test-all`·`sandbox.flutter-analyze`·`sandbox.flutter-cov-ai`·`sandbox.ai-policy`
   · `patch.extract`·`patch.allowlist`·`repro.three-path`·`repro.three-path-h5`·`cov.check`(그림자·실제) · `patch.apply-copy`·`apk.cert-fingerprint`(실제) · effect(실제): `git.worktree-add`·`git.apply-index`·`git.commit-file`·`git.push-master`·`git.worktree-remove`·`fad.distribute`.
   홈 경로를 목록에 박지 않는다: `bin: "@node"`(이 실행기의 고정 Node) · `argv: "@graphs/<경로>"`(이 폴더 아래 파일, `..` 금지).
-- `gostop-release:<versionCode>`(실제 전용, 최소판): APK 서명 인증서 SHA-256(`keytool -printcert`, 비밀번호 불필요)을 `LG_RELEASE_CERT_SHA256` 과 대조 — 다르면 `signing_mismatch` 로 멈추고 배포 effect 를 내지 않는다. 맞으면 `fad.distribute`(effect, `LG_FAD_APP_ID`). 버전 올리기·빌드·설치는 다음 판.
-- 한계: push 는 effect 안 동기 명령이라 틱 잡 상한(600초) 안에 pre-push 관문이 끝나야 한다(실제 모드 켜기 전 확인). AI 결정 비교 결과 파일은 패치 코드가 같은 프로세스에서 쓸 수 있다(격리는 유출을 막지 판정 위조는 못 막는다 — 검토·사람 승인이 뒤에 있다).
+- `gostop-release:<versionCode>`(실제 전용, 최소판): APK 를 상태 폴더 비공개 복사본으로 옮겨 해시를 고정 → `apksigner verify --print-certs`(v1·v2·v3 서명 검사)
+  서명자 SHA-256 을 `LG_RELEASE_CERT_SHA256` 과 대조 — 다르면 `signing_mismatch` 로 멈추고 배포 effect 를 내지 않는다. 맞으면 복사본 해시를 다시 보고
+  `fad.distribute`(effect, `LG_FAD_APP_ID`). 버전 올리기·빌드·설치는 다음 판. `bin: "@android-sdk/<경로>"` = ANDROID_HOME·ANDROID_SDK_ROOT(없으면 ~/Library/Android/sdk).
+- 한계: AI 결정 비교 결과 파일은 패치 코드가 같은 프로세스에서 쓸 수 있다(격리는 유출을 막지 판정 위조는 못 막는다 — 정적 호출부 검사·검토가 함께 본다).
+  검증은 정본 패치가 아니라 work 전체에서 돈다(맨 위 build·.dart_tool 은 지문 밖). 로그인·한도 뒤 다시 띄운 호출도 스레드 상한 12 에 든다.
 - 실호출: `LG_GOSTOP_STAGE=1b node test/gostop-bench-live.mjs <출력> hist-69a0144` — 상태는 /private/tmp 아래(격리 실행 뿌리), 끝나면 숨긴 정답 시험으로 채점(대조군 빨강 → 패치 뒤 초록). `LG_BENCH_STATE` 로 이어 돌릴 수 있다.
-- 시험: `test/gostop-1b.test.mjs` 16개(가짜 claude script 모드·가짜 격리 실행기 `fake-sandboxed.mjs`·가짜 keytool).
+- 쓰기 노드(⑦·⑨)는 `--permission-mode acceptEdits`(-p 에서는 쓰기 허락을 물을 사람이 없어 Write 가 거부된다 — 10-03 실호출). --restricted 가 작업 폴더 밖 쓰기를 막는다(haiku 실측).
+- 시험: `test/gostop-1b.test.mjs` 24개(가짜 claude script 모드 — 허락 모드 없으면 쓰기 거부, 가짜 격리 실행기 `fake-sandboxed.mjs`, 가짜 apksigner·firebase).
 
 ## 분리 실행 `lib/detach.mjs` (설계 §6)
 

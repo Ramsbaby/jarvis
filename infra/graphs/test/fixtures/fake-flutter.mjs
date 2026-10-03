@@ -8,7 +8,7 @@ import fs from "node:fs";
 
 const [ctlFile, sub, ...rest] = process.argv.slice(2);
 const ctl = JSON.parse(fs.readFileSync(ctlFile, "utf8"));
-if (ctl.trace) fs.appendFileSync(ctl.trace, `${JSON.stringify({ pid: process.pid, sub, args: rest, cwd: process.cwd() })}\n`);
+if (ctl.trace) fs.appendFileSync(ctl.trace, `${JSON.stringify({ pid: process.pid, sub, args: rest, cwd: process.cwd(), repro: fs.existsSync("test/repro") })}\n`);
 
 if (sub === "pub") {
   fs.mkdirSync(".dart_tool", { recursive: true });

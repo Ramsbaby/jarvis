@@ -509,7 +509,7 @@
       ],
       "params": {
         "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$",
-        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$"
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}$"
       },
       "modes": [
         "shadow",
@@ -538,7 +538,7 @@
       ],
       "params": {
         "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$",
-        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}$",
         "test": "^test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$"
       },
       "modes": [
@@ -574,7 +574,7 @@
       ],
       "params": {
         "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$",
-        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}$",
         "test": "^test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$",
         "d1": "^(?:REPLAY_GAMES|REPLAY_SEED_BASE|SOAK_GAMES|SOAK_SEED_BASE|SOAK_DIFFICULTY|COACH_SOAK_GAMES|COACH_SOAK_SEED_BASE|LG_NOOP)=[A-Za-z0-9_]{1,16}$",
         "d2": "^(?:REPLAY_GAMES|REPLAY_SEED_BASE|SOAK_GAMES|SOAK_SEED_BASE|SOAK_DIFFICULTY|COACH_SOAK_GAMES|COACH_SOAK_SEED_BASE|LG_NOOP)=[A-Za-z0-9_]{1,16}$",
@@ -605,8 +605,8 @@
         "expanded"
       ],
       "params": {
-        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base)$",
-        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$"
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}$"
       },
       "modes": [
         "shadow",
@@ -633,7 +633,7 @@
       ],
       "params": {
         "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base)$",
-        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$"
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}$"
       },
       "modes": [
         "shadow",
@@ -665,7 +665,7 @@
       ],
       "params": {
         "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|merge)$",
-        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}$",
         "test": "^test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$",
         "name": "^(?:라이브 AI|3경로/라이브-AI)$"
       },
@@ -698,7 +698,7 @@
       ],
       "params": {
         "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base)$",
-        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}$",
         "out": "^ai-(?:gen|cmp-[0-9]{1,2})$",
         "test": "^test/ai_policy/ai_policy_(?:gen|compare)_test\\.dart$"
       },
@@ -812,7 +812,7 @@
       ],
       "params": {
         "patch": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,60}\\.(?:diff|txt)$",
-        "lcov": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/coverage/lcov\\.info$",
+        "lcov": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}/coverage/lcov\\.info$",
         "root": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|merge)$"
       },
       "modes": [
@@ -846,12 +846,14 @@
       "maxSeconds": 45
     },
     "git.worktree-add": {
-      "desc": "⑯ commit_push(effect, 실제 전용) — 본 저장소에 출시 작업 폴더(분리 HEAD)를 만든다",
+      "desc": "⑯ commit_push(effect, 실제 전용) — 본 저장소에 출시 작업 폴더(분리 HEAD)를 만든다. 훅(post-checkout)은 끈다",
       "effect": true,
       "bin": "/usr/bin/git",
       "argv": [
         "-C",
         "{repo}",
+        "-c",
+        "core.hooksPath=/dev/null",
         "worktree",
         "add",
         "--detach",
@@ -892,14 +894,17 @@
       "maxSeconds": 90
     },
     "git.commit-file": {
-      "desc": "⑯ effect — 커밋(메시지 파일, 트레일러 LG-Key). 저장소 설정의 이름·전자우편을 쓴다",
+      "desc": "⑯ effect — 커밋(메시지 파일, 트레일러 LG-Key). 훅을 끈다 — 본 저장소 훅이 LLM 코드를 격리 밖에서 돌리지 않게(H10 중9). 저장소 설정의 이름·전자우편을 쓴다",
       "effect": true,
       "bin": "/usr/bin/git",
       "argv": [
         "-C",
         "{wt}",
+        "-c",
+        "core.hooksPath=/dev/null",
         "commit",
         "-q",
+        "--no-verify",
         "-F",
         "{msg}"
       ],
@@ -914,13 +919,16 @@
       "maxSeconds": 180
     },
     "git.push-master": {
-      "desc": "⑯ effect — origin master 로 push. 본 저장소의 pre-push 관문(전체 시험)이 그대로 돈다 — 그래서 30분",
+      "desc": "⑯ effect — origin master 로 push. 훅을 끈다(pre-push 관문은 LLM 코드를 격리 밖에서 돌린다 — 대신 ⑮ 가 격리 안에서 최신 master+패치 전체 시험). 설계 §5.2⑯ 과 다름 — 실제 모드 전 결정",
       "effect": true,
       "bin": "/usr/bin/git",
       "argv": [
         "-C",
         "{wt}",
+        "-c",
+        "core.hooksPath=/dev/null",
         "push",
+        "--no-verify",
         "origin",
         "HEAD:refs/heads/master"
       ],
@@ -930,8 +938,8 @@
       "modes": [
         "live"
       ],
-      "timeoutSec": 1800,
-      "maxSeconds": 2700
+      "timeoutSec": 300,
+      "maxSeconds": 450
     },
     "git.worktree-remove": {
       "desc": "⑯ effect — 출시 작업 폴더 정리",
@@ -956,21 +964,22 @@
       "maxSeconds": 90
     },
     "apk.cert-fingerprint": {
-      "desc": "release(실제 전용) — APK 서명 인증서 지문(읽기만, 비밀번호 필요 없음). SHA-256 을 기대값과 대조",
-      "bin": "/usr/bin/keytool",
+      "desc": "release(실제 전용) — APK 서명 검증과 서명자 인증서 SHA-256(apksigner verify --print-certs: v1·v2·v3 모두 검사). 비밀번호 필요 없음. 상태 폴더의 비공개 복사본만",
+      "bin": "@android-sdk/build-tools/35.0.0/apksigner",
       "argv": [
-        "-printcert",
-        "-jarfile",
+        "verify",
+        "--print-certs",
+        "-v",
         "{apk}"
       ],
       "params": {
-        "apk": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+\\.apk$"
+        "apk": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/app\\.apk$"
       },
       "modes": [
         "live"
       ],
-      "timeoutSec": 60,
-      "maxSeconds": 90
+      "timeoutSec": 120,
+      "maxSeconds": 180
     },
     "fad.distribute": {
       "desc": "release effect(실제 전용) — Firebase App Distribution 배포(테스터 묶음). 지문이 맞을 때만",
@@ -985,7 +994,7 @@
         "{groups}"
       ],
       "params": {
-        "apk": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+\\.apk$",
+        "apk": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/app\\.apk$",
         "app": "^1:[0-9]{6,20}:android:[0-9a-f]{8,40}$",
         "groups": "^[a-z0-9-]{1,40}$"
       },
@@ -994,6 +1003,43 @@
       ],
       "timeoutSec": 600,
       "maxSeconds": 900
+    },
+    "git.wt-head": {
+      "desc": "⑯ — 출시 작업 폴더의 커밋 해시(읽기만). push 결과 확인(verify)용으로 남긴다",
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{wt}",
+        "rev-parse",
+        "HEAD"
+      ],
+      "params": {
+        "wt": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/release-wt/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "git.ls-remote-master": {
+      "desc": "⑯ verify(실제 전용) — origin master 의 해시(읽기만, 네트워크). 시작만 적히고 끝이 없는 커밋·push 가 실제로 일어났는지 본다",
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{repo}",
+        "ls-remote",
+        "origin",
+        "refs/heads/master"
+      ],
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 60,
+      "maxSeconds": 90
     }
   }
 }

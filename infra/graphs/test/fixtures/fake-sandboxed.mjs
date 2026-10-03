@@ -43,9 +43,10 @@ const isBase = path.basename(o.copy) === "base";
 
 if (tool === "flutter" && args[0] === "analyze") {
   const a = isBase ? { errors: 0, warnings: 0 } : { errors: 0, warnings: 0, ...(ctl.analyze ?? {}) };
+  const af = (ctl.analyze ?? {}).file ?? "lib/domain/game/turn_manager.dart";
   if (!a.errors && !a.warnings) { out("Analyzing work...\n   info • 정렬 • lib/main.dart:1:1 • directives_ordering\n1 issue found.\n"); process.exit(0); }
-  for (let k = 0; k < a.errors; k++) out(`  error • 없는 이름 • lib/domain/game/turn_manager.dart:${k + 1}:1 • undefined_identifier\n`);
-  for (let k = 0; k < a.warnings; k++) out(`warning • 안 쓰는 변수 • lib/domain/game/turn_manager.dart:${k + 1}:1 • unused_local_variable\n`);
+  for (let k = 0; k < a.errors; k++) out(`  error • 없는 이름 • ${af}:${k + 1}:1 • undefined_identifier\n`);
+  for (let k = 0; k < a.warnings; k++) out(`warning • 안 쓰는 변수 • ${af}:${k + 1}:1 • unused_local_variable\n`);
   process.exit(1);
 }
 if (tool !== "flutter" || args[0] !== "test") { process.stderr.write(`LG-SANDBOX bad_args: ${tool} ${args[0]}\n`); process.exit(97); }
@@ -65,11 +66,12 @@ if (o.ai) {
   process.exit(0);
 }
 const pass = (n = 3) => { out(`00:01 +0: loading ${file ?? "전체"}\n00:04 +${n}: All tests passed!\n`); process.exit(0); };
-const fail = (names) => { out(`00:01 +0: loading ${file ?? "전체"}\n${names.map((n, k) => `00:0${k + 2} +1 -${k + 1}: ${n} [E]\n`).join("")}00:09 +1 -${names.length}: Some tests failed.\n`); process.exit(1); };
+const fail = (names) => { out(`00:01 +0: loading ${file ?? "전체"}\n${names.map((n, k) => `00:0${k + 2} +1 -${k + 1}: ${n} [E]\n  Expected: <6>\n    Actual: <4>\n`).join("")}00:09 +1 -${names.length}: Some tests failed.\n`); process.exit(1); };
 fs.mkdirSync(path.join(o.copy, "build"), { recursive: true }); // 시험이 남기는 것(패치 추출이 맨 위 build 는 뺀다)
 if (file && file.startsWith("test/repro/")) {
   const src = read(file);
   if (src == null) { out("Error: No tests ran.\n"); process.exit(1); }
+  if (src.includes("LOAD_FAIL")) { out(`00:01 +0 -1: loading ${file} [E]\n  Bad state: 시작하다 죽음\n00:01 +0 -1: Some tests failed.\n`); process.exit(1); }
   if (src.includes("COMPILE_ERR")) { out(`${file}:3:1: Error: Expected ';' after this.\n00:01 +0 -1: Some tests failed.\n`); process.exit(1); }
   if (fixed && ctl.mutate) fs.appendFileSync(path.join(o.copy, g.file), "// 시험이 몰래 남긴 줄\n");
   if (args.includes("--coverage")) {

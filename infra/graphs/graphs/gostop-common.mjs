@@ -363,22 +363,96 @@ export function judgeReproFiles(files) {
   if (support.length > 2) why.push(`도우미 파일이 ${support.length}개 — 2개까지`);
   return { ok: why.length === 0, test: tests[0] ?? null, tests, support, bad, why };
 }
-// 허용 밖 변경을 되돌린다: 바뀐·지운 파일은 깨끗한 내보내기에서 다시 복사, 새로 생긴 파일은 지운다(우리 사본 안만).
+// 사본 안 쓰기 자리 — 격리 안 시험 코드가 사본에 바로가기를 심었을 수 있다(독립 검토 H10 상1). 조상 폴더가 바로가기면 거부하고,
+// 마지막 자리가 바로가기·특수 파일이면 그 이름만 지운다(가리키는 곳은 건드리지 않는다). 돌려주는 값: 절대경로(그 자리는 비었거나 일반 파일).
+export class UnsafePath extends Error { constructor(m) { super(m); this.name = "UnsafePath"; this.unsafe = true; } }
+export function safeTarget(root, rel) {
+  const parts = String(rel).split("/");
+  if (!parts.length || parts.some((x) => !x || x === "." || x === ".." || x.toLowerCase() === ".git")) throw new UnsafePath(`경로 형식: ${rel}`);
+  let cur = root;
+  for (const part of parts.slice(0, -1)) {
+    cur = path.join(cur, part);
+    let st = null;
+    try { st = fs.lstatSync(cur); } catch { /* 없음 — 만든다 */ }
+    if (!st) fs.mkdirSync(cur, { mode: 0o700 });
+    else if (!st.isDirectory()) throw new UnsafePath(`조상이 폴더가 아니다(바로가기 등): ${path.relative(root, cur)}`);
+  }
+  const dst = path.join(root, rel);
+  let st = null;
+  try { st = fs.lstatSync(dst); } catch { /* 없음 */ }
+  if (st && !st.isFile()) { if (st.isDirectory()) throw new UnsafePath(`폴더 자리: ${rel}`); fs.unlinkSync(dst); }
+  return dst;
+}
+// 바로가기를 따라가지 않고 일반 파일만 읽는다(크기 상한). 아니면 null.
+export function readNoFollow(file, max = 64 << 20) {
+  try {
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    try { const st = fs.fstatSync(fd); if (!st.isFile() || st.size > max) return null; return fs.readFileSync(fd); } finally { fs.closeSync(fd); }
+  } catch { return null; }
+}
+// 일반 파일 하나를 바로가기 없이 복사(읽기·쓰기 둘 다 따라가지 않는다)
+export function copyNoFollow(src, root, rel) {
+  const buf = readNoFollow(src);
+  if (buf == null) throw new UnsafePath(`일반 파일이 아니다: ${src}`);
+  const dst = safeTarget(root, rel);
+  const fd = fs.openSync(dst, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW, 0o600);
+  try { fs.writeSync(fd, buf); } finally { fs.closeSync(fd); }
+  return dst;
+}
+// 허용 밖 변경을 되돌린다: 바뀐·지운 파일은 깨끗한 쪽에서 다시 복사, 새로 생긴 파일은 지운다(우리 사본 안만, 바로가기 따라가지 않음).
 export function restoreFiles(work, clean, files) {
   for (const f of files) {
-    const rel = f.path;
-    if (rel.split("/").some((x) => x === ".." || x.toLowerCase() === ".git")) continue;
-    const dst = path.join(work, rel);
+    const dst = safeTarget(work, f.path);
     if (f.status === "added") fs.rmSync(dst, { force: true });
-    else { mkdirp(path.dirname(dst)); fs.copyFileSync(path.join(clean, rel), dst); }
+    else copyNoFollow(path.join(clean, f.path), work, f.path);
   }
 }
 
-// flutter analyze 출력의 오류·경고·정보 수
-export function analyzeCounts(raw) {
-  const s = strip(raw);
-  const n = (k) => (s.match(new RegExp(`^\\s*${k} • `, "gm")) ?? []).length;
+// flutter analyze 출력의 오류·경고·정보 수. 재현 시험(test/repro/)의 지적은 뺀다 — 기준 사본에는 그 파일이 없고 수정 단계는 그 파일을
+// 고칠 수 없다(⑩ frozen). 거기 경고 하나로 수정 3회를 날리지 않게(독립 검토 H10 중5).
+export function analyzeCounts(raw, { exclude = /^test\/repro\// } = {}) {
+  const lines = strip(raw).split("\n");
+  const n = (k) => lines.filter((l) => {
+    const m = new RegExp(`^\\s*${k} • .* • ([^ ]+?):\\d+:\\d+ • `).exec(l) ?? new RegExp(`^\\s*${k} • `).exec(l);
+    return m && !(m[1] && exclude.test(m[1]));
+  }).length;
   return { errors: n("error"), warnings: n("warning"), infos: n("info") };
+}
+
+// ⑧ 빨간불의 질: 표식 붙은 경로 시험이 단언(Expected/Actual)으로 실패해야 한다. 파일을 싣다 죽음(loading … [E])·예외만은 빨간불이 아니다(H10 중6).
+export const MARKED_TEST_RE = /(?:엔진|라이브\s*사람|라이브\s*AI|engine|live[\s_-]*(?:human|ai))\s*[:：\]]|3경로\/|\[(?:engine|live-human|live-ai)\]/i;
+export function redQuality(out, raw) {
+  const marked = out.failed.filter((n) => MARKED_TEST_RE.test(n));
+  const loading = out.failed.some((n) => /^loading /.test(n));
+  const assertion = /^\s*Expected: /m.test(strip(raw));
+  return { ok: marked.length > 0 && !loading && assertion && !out.compileError, marked, loading, assertion };
+}
+
+// AI 호출부(고스톱 scripts/ai-policy.sh callsites 의 옮김 — test/ai_policy/README: 결정 비교는 호출부 변경을 못 잡는다).
+// 패치 덩어리(맥락 줄 포함)에 이 글자가 있거나 lib/domain/ai/** 를 건드리면 AI 변경 의심 → 승인 사유(H10 상4).
+export const AI_CALL_RE = /AIPlayer|aiPlayerProvider|aiDifficultyProvider|_getAIDifficulty|getAIDifficultyBomb|selectCard[(]|selectMatch[(]|shouldGo[(]|selectGukjinChoice|weakeningFactor|aiAdjusterProvider|getWeakeningFactor|difficultyAdjusterProvider|getRecommendedDifficulty|AIDifficultyAdjuster|AIAdjuster|MCTSEngine|MCTSConfig|MCTSConstants|soakRng|AIPersona|mctsEnabled/;
+export function aiCallsites(patchText) {
+  const hits = [];
+  let file = "", minus = "", hunk = "";
+  const rel = (p) => { const q = `/${String(p).replace(/\t.*$/, "")}`; const i = q.lastIndexOf("/lib/"); return i >= 0 ? q.slice(i + 1) : ""; };
+  for (const line of String(patchText ?? "").split("\n")) {
+    if (line.startsWith("--- ")) { minus = rel(line.slice(4)); continue; }
+    if (line.startsWith("+++ ")) { const p = line.slice(4); file = /^\/dev\/null/.test(p) ? minus : rel(p); continue; }
+    if (line.startsWith("@@")) { hunk = line; continue; }
+    if (/^(diff|Only in|Binary) /.test(line) || !file) continue;
+    if (file.startsWith("lib/domain/ai/")) { if (!hits.some((h) => h.file === file)) hits.push({ file, hunk: "(AI 파일)" }); continue; }
+    if (AI_CALL_RE.test(line) && !hits.some((h) => h.file === file && h.hunk === hunk)) hits.push({ file, hunk });
+  }
+  return hits;
+}
+
+// 고스톱 3경로 틀(H5) 쓰임새 — 시험이 틀의 도우미를 실제로 부르고, LLM 도우미 파일이 틀의 이름을 다시 정의하지 않는다(H10 중7)
+export function h5FrameUse(testSrc, supportSrcs = []) {
+  const why = [];
+  if (!/import\s+['"][^'"]*three_path_support\.dart['"]/.test(testSrc)) why.push("three_path_support.dart 를 가져오지 않는다");
+  for (const [re, name] of [[/\brunEnginePath\s*\(/, "runEnginePath("], [/\.runHuman\s*\(/, ".runHuman("], [/\.runAi\s*\(/, ".runAi("]]) if (!re.test(testSrc)) why.push(`${name} 호출이 없다`);
+  for (const s of supportSrcs) if (/\b(threePathAiDifficulties|runEnginePath|ThreePathHarness)\b/.test(s)) why.push("도우미 파일이 3경로 틀의 이름을 다시 정의한다");
+  return { ok: why.length === 0, why };
 }
 // 실패 항목(불일치 블록 첫 줄 + 실패한 시험 이름) — 기준(깨끗한 내보내기)과 견줄 때 쓴다
 export const failureItems = (out) => [...new Set([...out.blocks.map((b) => b[0]), ...out.failed])];

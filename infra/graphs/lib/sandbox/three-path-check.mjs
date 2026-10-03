@@ -118,7 +118,18 @@ const hasSeq = (toks, a, b, [x, y]) => {
   return false;
 };
 const hasId = (toks, a, b, names) => { for (let i = a; i < b; i++) if (toks[i].t === "id" && names.includes(toks[i].v)) return true; return false; };
-const hasExpectHelper = (toks, a, b) => { for (let i = a; i < b - 1; i++) if (toks[i].t === "id" && /^_?expect[A-Z0-9_]\w*$/.test(toks[i].v) && toks[i + 1].v === "(") return true; return false; };
+// expect 도우미: 같은 파일 안에 정의가 있고 그 몸통에 expect·expectLater 가 있어야 센다(H10 중7 — 이름만 _expectX 인 빈 함수로 통과 막기)
+export function expectHelpers(src) {
+  const text = String(src).replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+  const ok = new Set();
+  for (const m of text.matchAll(/\b(_?expect[A-Z0-9_]\w*)\s*\([^()]*\)\s*(?:async\s*)?\{/g)) {
+    let depth = 0, i = m.index + m[0].length - 1, end = -1;
+    for (; i < text.length; i++) { if (text[i] === "{") depth++; else if (text[i] === "}" && --depth === 0) { end = i; break; } }
+    if (end > 0 && /\bexpect(?:Later)?\s*\(/.test(text.slice(m.index + m[0].length, end))) ok.add(m[1]);
+  }
+  return ok;
+}
+const hasExpectHelper = (toks, a, b, helpers) => { for (let i = a; i < b - 1; i++) if (toks[i].t === "id" && helpers.has(toks[i].v) && toks[i + 1].v === "(") return true; return false; };
 // 어려움 낱말: [이름] 하나면 그 식별자, [앞, 뒤] 면 '앞.뒤'
 const hasHard = (toks, a, b, h) => (h.length === 1 ? hasId(toks, a, b, h) : hasSeq(toks, a, b, h));
 
@@ -132,6 +143,7 @@ export function checkThreePaths(sources, { markers = DEFAULT_MARKERS, requireHar
   let liveAiHard = false;
   for (const src of [].concat(sources)) {
     const toks = lex(src);
+    const helpers = expectHelpers(src);
     const calls = findCalls(toks);
     const groups = calls.filter((c) => c.kind === "group");
     const tag = (name) => Object.keys(paths).filter((p) => name && re[p].test(name));
@@ -145,7 +157,7 @@ export function checkThreePaths(sources, { markers = DEFAULT_MARKERS, requireHar
       const inherited = enclosing.flatMap((g) => tag(g.name));
       const pathsOf = own.length ? own : [...new Set(inherited)];
       // expect·expectLater, 또는 expect 로 시작하는 도우미 호출(_expectPuk(…) 처럼 — 고스톱 3경로 틀이 쓰는 꼴, 1b 통합 실측)
-      const expects = hasId(toks, c.start, c.end, ["expect", "expectLater"]) || hasExpectHelper(toks, c.start, c.end);
+      const expects = hasId(toks, c.start, c.end, ["expect", "expectLater"]) || hasExpectHelper(toks, c.start, c.end, helpers);
       tests.push({ name: c.name, paths: pathsOf, expects });
       if (!expects) continue;
       for (const p of pathsOf) paths[p].push(c.name);

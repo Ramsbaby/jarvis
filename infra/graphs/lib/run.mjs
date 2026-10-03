@@ -45,6 +45,13 @@ function expandTokens(id, c) {
   if (!c || typeof c !== "object") return c;
   const out = { ...c };
   if (out.bin === "@node") out.bin = process.execPath;
+  // "@android-sdk/<경로>" → 안드로이드 SDK(ANDROID_HOME·ANDROID_SDK_ROOT, 없으면 ~/Library/Android/sdk). 있는지는 보지 않는다(없으면 실행 때 실패 — 목록 전체를 막지 않게)
+  if (typeof out.bin === "string" && out.bin.startsWith("@android-sdk/")) {
+    const rel = out.bin.slice("@android-sdk/".length);
+    if (!/^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(rel) || rel.split("/").some((x) => x === ".." || x === "." || x === "")) bad(`${id}: @android-sdk/ 경로 형식: ${out.bin}`);
+    const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || path.join(os.userInfo().homedir, "Library", "Android", "sdk");
+    out.bin = path.join(path.resolve(sdk), rel);
+  }
   if (Array.isArray(out.argv)) {
     out.argv = out.argv.map((a) => {
       if (typeof a !== "string" || !a.startsWith("@graphs/")) return a;
