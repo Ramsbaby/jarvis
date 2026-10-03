@@ -24,3 +24,4 @@
 | ADR-020 | Langfuse 자체 호스팅 LLM 옵저버빌리티 | accepted | 2026-03-31 |
 | ADR-021 | 자기진화 루프 (Self-Evolution Loop) | accepted | 2026-03-31 |
 | ADR-022 | Adaptive Model 비용 재산정 및 라우팅 룰 업데이트 | accepted | 2026-05-25 |
+| ADR-023 | LangGraph.js — 그래프 모양 워크플로 전용 실행 엔진 (시범, 2026-11-26 판정) | accepted | 2026-10-03 |
