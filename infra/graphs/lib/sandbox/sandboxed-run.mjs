@@ -298,7 +298,8 @@ export async function canary(opts) {
     { op: "net", a: ["1.1.1.1", "443"], why: "공인 IP" },
     { op: "net", a: ["127.0.0.1", "18789"], why: "게이트웨이 포트" },
     { op: "write", a: [path.join(home, `.lg-canary-${tag}`)], why: "홈 쓰기" },
-    { op: "write", a: [path.join(real(opts.copy), ".git", `lg-canary-${tag}`)], why: ".git 쓰기" },
+    // .git 이 없는 사본(1a·1b 사본은 역사가 없다)은 '.git' 이름 자체를 만들어 본다 — 같은 규칙(subpath …/.git)이 막아야 한다(1b 통합 실측: 없던 폴더 아래 쓰기는 ENOENT 라 판정 불가였다)
+    { op: "write", a: [fs.existsSync(path.join(real(opts.copy), ".git")) ? path.join(real(opts.copy), ".git", `lg-canary-${tag}`) : path.join(real(opts.copy), ".git")], why: ".git 쓰기" },
     { op: "read", a: [home], why: "홈 목록 읽기" },
     { op: "exec", a: ["/usr/bin/git", "--version"], why: "git 실행" },
   ];
@@ -312,6 +313,8 @@ export async function canary(opts) {
   });
   ok.forEach((m, i) => { const r = res[must.length + i]; if (!r?.ok) failures.push(`${m.why}: 안 됐다(${r?.err ?? "결과 없음"})`); });
   for (const f of [path.join(home, `.lg-canary-${tag}`), path.join(tmp, "t", `lg-canary-${tag}`)]) { try { fs.unlinkSync(f); } catch { /* 없음 */ } }
+  // 막혀야 할 '.git' 만들기가 됐다면(격리 고장) 그 파일은 치운다 — 폴더(진짜 .git)는 건드리지 않는다
+  try { const g = path.join(real(opts.copy), ".git"); if (fs.lstatSync(g).isFile()) fs.unlinkSync(g); } catch { /* 없음 */ }
   return { ok: failures.length === 0, failures, results: res };
 }
 
