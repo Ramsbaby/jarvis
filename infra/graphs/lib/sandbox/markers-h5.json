@@ -1,0 +1,6 @@
+{
+  "engine": "3경로/엔진",
+  "liveHuman": "3경로/라이브-사람",
+  "liveAi": "3경로/라이브-AI",
+  "hardTokens": [["threePathAiDifficulties"]]
+}

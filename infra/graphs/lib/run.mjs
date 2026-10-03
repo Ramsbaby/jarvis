@@ -8,6 +8,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { effectScope } from "./effects.mjs";
 import { allowSpawn } from "./guard.mjs";
 
@@ -35,6 +36,28 @@ function expandHome(c) {
   return { ...c, bin: home(c.bin), ...(Array.isArray(c.argv) ? { argv: c.argv.map(home) } : {}) };
 }
 
+// 홈 경로를 목록에 박지 않는 자리 표시(1b — 저장소가 공개라 사용자 이름이 새지 않게, H4 권고).
+//   bin "@node"          → 이 실행기를 돌리는 고정 Node(lg.sh 가 고른 것 — process.execPath)
+//   argv "@graphs/<경로>" → 이 폴더(infra/graphs) 아래 파일의 절대경로. '..'·이상한 글자·없는 파일은 거부
+// 펼친 뒤에는 보통 항목과 똑같이 검사한다(인터프리터는 고정 절대경로 스크립트만 등).
+export const GRAPHS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+function expandTokens(id, c) {
+  if (!c || typeof c !== "object") return c;
+  const out = { ...c };
+  if (out.bin === "@node") out.bin = process.execPath;
+  if (Array.isArray(out.argv)) {
+    out.argv = out.argv.map((a) => {
+      if (typeof a !== "string" || !a.startsWith("@graphs/")) return a;
+      const rel = a.slice("@graphs/".length);
+      if (!/^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(rel) || rel.split("/").some((x) => x === ".." || x === "." || x === "")) bad(`${id}: @graphs/ 경로 형식: ${a}`);
+      const abs = path.join(GRAPHS_ROOT, rel);
+      if (!fs.existsSync(abs)) bad(`${id}: @graphs/ 파일이 없다: ${rel}`);
+      return abs;
+    });
+  }
+  return out;
+}
+
 // 목록을 읽고 검사한다. 하나라도 어긋나면 전부 거부한다(반쯤 맞는 목록을 쓰지 않는다).
 // 파일이 없으면 빈 목록(아무 명령도 허용하지 않음 — 닫힌 쪽으로 실패)이다. 깨진 파일은 오류다.
 export function loadRegistry(file) {
@@ -46,8 +69,8 @@ export function loadRegistry(file) {
   if (j?.version !== 1 || typeof j.commands !== "object" || !j.commands) bad("version 1 · commands 객체가 있어야 한다");
   const commands = {};
   for (const [id, raw] of Object.entries(j.commands)) {
-    const c = expandHome(raw);
     if (!ID_RE.test(id)) bad(`cmdId 형식(영소문자.점): ${id}`);
+    const c = expandTokens(id, expandHome(raw));
     if (typeof c?.bin !== "string" || !path.isAbsolute(c.bin)) bad(`${id}: bin 은 절대경로`);
     const base = path.basename(c.bin);
     if (BANNED_BIN.test(base) || OPENCLAW_CLI(c.bin)) bad(`${id}: ${base} 는 목록에 올릴 수 없다(셸·env·OpenClaw CLI 금지)`);

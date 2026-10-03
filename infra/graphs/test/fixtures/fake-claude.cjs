@@ -7,7 +7,28 @@ const fs = require("node:fs");
 module.exports = function fake(log, mode) {
   const env = { ...process.env };
   const input = fs.readFileSync(0, "utf8");
-  fs.appendFileSync(log, `${JSON.stringify({ args: process.argv.slice(2), env, cwd: process.cwd(), input })}\n`);
+  // 1b: 프롬프트 종류(script 모드가 몇 번째 호출인지 센다)
+  const kind = /진단가/.test(input) ? "diag" : /결함을 재현하는 시험만/.test(input) ? "repro" : /규칙 결함을 고치는/.test(input) ? "fix" : /검토자/.test(input) ? "review" : "other";
+  const prior = fs.existsSync(log) ? fs.readFileSync(log, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((r) => r.kind === kind).length : 0;
+  fs.appendFileSync(log, `${JSON.stringify({ args: process.argv.slice(2), env, cwd: process.cwd(), input, kind })}\n`);
+  // script (1b): '<log>.script.json' = { diag, repro:[{files,remove}], fix:[…], review:[…] } — 같은 종류 n 번째 호출은 n 번째 항목(넘치면 마지막)
+  if (mode === "script") {
+    const sc = JSON.parse(fs.readFileSync(`${log}.script.json`, "utf8"));
+    const args = process.argv.slice(2);
+    const model = args[args.indexOf("--model") + 1] ?? "sonnet";
+    const pick = (a) => (Array.isArray(a) && a.length ? a[Math.min(prior, a.length - 1)] : null);
+    const res = { type: "result", subtype: "success", is_error: false, result: "끝", modelUsage: { [`claude-${model}-5-5`]: { inputTokens: 1000, outputTokens: 100 } }, total_cost_usd: 0, duration_ms: 3 };
+    if (kind === "diag") res.structured_output = sc.diag;
+    else if (kind === "review") res.structured_output = pick(sc.review);
+    else if (kind === "repro" || kind === "fix") {
+      const step = pick(sc[kind]) ?? {};
+      for (const [rel, text] of Object.entries(step.files ?? {})) { fs.mkdirSync(require("node:path").dirname(rel), { recursive: true }); fs.writeFileSync(rel, text); }
+      for (const rel of step.remove ?? []) fs.rmSync(rel, { force: true });
+      if (step.fail) { process.stdout.write(JSON.stringify({ ...res, is_error: true, subtype: "error_during_execution", result: "가짜 실패" })); return; }
+    } else res.result = "가짜 요약 문장";
+    process.stdout.write(JSON.stringify(res));
+    return;
+  }
   if (mode === "fail") {
     process.stderr.write("가짜 실패: 인증 오류 흉내\n");
     process.exit(1);

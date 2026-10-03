@@ -4,6 +4,7 @@
 //
 //   node sandboxed-run.mjs --copy <사본> --tmp <임시> [--timeout-sec N] -- flutter test test/x_test.dart
 //   node sandboxed-run.mjs --copy <사본> --tmp <임시> --canary        # 격리가 실제로 막는지 1초 점검(JSON 한 줄)
+//   --ai-policy-dir <이름>: 고스톱 AI 결정 비교 시험의 출력 자리(AI_POLICY_DIR = <임시>/<이름>, 1b 통합)
 //
 // 하는 일
 // - 프로필 틀(lg-test.sb)에 경로 변수(-D)를 실제 경로로 채우고, 지금 열려 있는 로컬 포트를 막는 줄을 덧붙여 sandbox-exec 로 띄운다.
@@ -156,9 +157,10 @@ export function toolArgv(tool, args, flutter, dirs) {
   return [flutter.dart, `--packages=${flutter.packages}`, flutter.snapshot, "--suppress-analytics", "--no-version-check", ...a];
 }
 
-function sandboxEnv({ tmp, flutter, pubCache, env }) {
+function sandboxEnv({ tmp, flutter, pubCache, env, aiPolicyDir = null }) {
   const lang = /^[A-Za-z0-9_.@-]{1,40}$/.test(env.LANG ?? "") ? env.LANG : "en_US.UTF-8";
   return {
+    ...(aiPolicyDir ? { AI_POLICY_DIR: aiPolicyDir } : {}), // 고스톱 AI 결정 비교(§4②) 출력 자리 — 임시 폴더 안만(아래 검사)
     HOME: path.join(tmp, "home"),
     TMPDIR: `${path.join(tmp, "t")}/`,
     PATH: "/usr/bin:/bin", // flutter 도구가 which 로 찾는다(aapt). 찾아도 실행은 프로필이 막는다
@@ -171,7 +173,7 @@ function sandboxEnv({ tmp, flutter, pubCache, env }) {
 }
 
 // 격리 실행 명세를 만든다(아직 띄우지 않는다). 시험은 이것으로 argv·env·프로필을 확인한다.
-export function sandboxCommand({ copy, tmp, tool = "flutter", args = [], flutterRoot, pubCache, home = realHome(), roots, ports, env = process.env } = {}) {
+export function sandboxCommand({ copy, tmp, tool = "flutter", args = [], flutterRoot, pubCache, home = realHome(), roots, ports, env = process.env, aiPolicyDir = null } = {}) {
   if (process.platform !== "darwin") throw new SandboxError("not_darwin", "sandbox-exec 는 맥 전용이다");
   if (!fs.existsSync(SANDBOX_EXEC)) throw new SandboxError("no_sandbox_exec", `${SANDBOX_EXEC} 가 없다`);
   const flutter = locateFlutter({ flutterRoot, env });
@@ -180,6 +182,13 @@ export function sandboxCommand({ copy, tmp, tool = "flutter", args = [], flutter
   const h = real(home);
   const dirs = checkDirs({ copy, tmp, home: h, flutterRoot: flutter.root, pubCache: pc, roots: roots ?? defaultRoots(home) });
   for (const d of ["home", "t"]) fs.mkdirSync(path.join(dirs.tmp, d), { recursive: true, mode: 0o700 });
+  // AI 결정 비교 출력 자리: 임시 폴더 아래의 이름 하나(만들어 준다). 사본·홈 쪽을 가리키지 못하게 이름만 받는다.
+  let aiDir = null;
+  if (aiPolicyDir != null) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,40}$/.test(String(aiPolicyDir))) throw new SandboxError("bad_args", `--ai-policy-dir 는 임시 폴더 아래 이름 하나: ${aiPolicyDir}`);
+    aiDir = path.join(dirs.tmp, String(aiPolicyDir));
+    fs.mkdirSync(aiDir, { recursive: true, mode: 0o700 });
+  }
   const anc = homeAncestors(h, [dirs.copy, dirs.tmp, pc, flutter.root]);
   const profile = buildProfile({ ports: ports ?? listeningPorts(), ancestors: anc.length });
   const argv = [
@@ -188,7 +197,7 @@ export function sandboxCommand({ copy, tmp, tool = "flutter", args = [], flutter
     ...anc.flatMap((a, i) => ["-D", `ANC${i}=${a}`]),
     ...toolArgv(tool, args, flutter, dirs),
   ];
-  return { bin: SANDBOX_EXEC, argv, cwd: dirs.copy, env: sandboxEnv({ tmp: dirs.tmp, flutter, pubCache: pc, env }), profile, dirs, flutter, pubCache: pc };
+  return { bin: SANDBOX_EXEC, argv, cwd: dirs.copy, env: sandboxEnv({ tmp: dirs.tmp, flutter, pubCache: pc, env, aiPolicyDir: aiDir }), profile, dirs, flutter, pubCache: pc };
 }
 
 // pid 아래 자손 전부(ps 한 번으로 나무를 만든다). 격리 안 프로세스는 우리 자식의 자손뿐이다.
@@ -316,6 +325,7 @@ function parseCli(argv) {
     else if (a === "--tmp") o.tmp = argv[++i];
     else if (a === "--timeout-sec") o.timeoutSec = Number(argv[++i]);
     else if (a === "--canary") o.canary = true;
+    else if (a === "--ai-policy-dir") o.aiPolicyDir = argv[++i];
     else throw new SandboxError("bad_args", `모르는 인자: ${a}`);
   }
   if (!o.copy || !o.tmp) throw new SandboxError("bad_args", "--copy·--tmp 가 있어야 한다");
@@ -333,7 +343,7 @@ async function main() {
       process.stdout.write(`${JSON.stringify({ ok: r.ok, failures: r.failures })}\n`);
       process.exit(r.ok ? 0 : 3);
     }
-    const cmd = sandboxCommand({ copy: o.copy, tmp: o.tmp, tool: o.tool, args: o.args });
+    const cmd = sandboxCommand({ copy: o.copy, tmp: o.tmp, tool: o.tool, args: o.args, aiPolicyDir: o.aiPolicyDir ?? null });
     const r = await runSandboxed(cmd, { timeoutMs: o.timeoutSec * 1000, stdio: "inherit" });
     if (r.violation) { process.stderr.write(`LG-SANDBOX violation: ${r.violation} — 격리 안 프로세스를 모두 껐다\n`); process.exit(EXIT_VIOLATION); }
     if (r.timedOut) { process.stderr.write(`LG-SANDBOX timeout: ${o.timeoutSec}초를 넘겨 격리 안 프로세스를 모두 껐다\n`); process.exit(EXIT_TIMEOUT); }

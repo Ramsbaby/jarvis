@@ -90,7 +90,7 @@ function setup(t, { flutter, gh, over, claudeMode = "diag", diag, extra = {} } =
     rule_gap: false, confidence: 0.8, evidence: ["lib/presentation/providers/game_provider.dart:1 — 국진 선택 누락"] }));
   const soak = path.join(sb.dir, "soak");
   fs.mkdirSync(soak);
-  const env = tickEnv(sb, { over: { LG_CMD_REGISTRY: reg.file, LG_CLAUDE_BIN: fc.bin, LG_GOSTOP_REPO: fr.repo, LG_GOSTOP_SOAK_DIR: soak, LG_TICK_BUDGET_SEC: "60", ...extra } });
+  const env = tickEnv(sb, { over: { LG_CMD_REGISTRY: reg.file, LG_CLAUDE_BIN: fc.bin, LG_GOSTOP_REPO: fr.repo, LG_GOSTOP_SOAK_DIR: soak, LG_TICK_BUDGET_SEC: "60", LG_GOSTOP_STAGE: "1a", ...extra } });
   return { sb, ...fr, reg, fc, soak, env };
 }
 const benchSig = (fr, over = {}) => ({ source: "bench", kind: "seed", rev: `${fr.answer.slice(0, 12)}^`, test: C.DIFF_TEST,

@@ -42,7 +42,7 @@
       ],
       "params": {
         "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$",
-        "rev": "^(?:[0-9a-f]{7,40}|HEAD)\\^?$"
+        "rev": "^(?:[0-9a-f]{7,40}|HEAD|master)\\^?$"
       },
       "modes": [
         "shadow",
@@ -121,7 +121,7 @@
       ],
       "params": {
         "tar": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/src\\.tar$",
-        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|clean)$"
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|clean|base|merge)$"
       },
       "modes": [
         "shadow",
@@ -140,7 +140,7 @@
       ],
       "cwd": "{dir}",
       "params": {
-        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|clean)$"
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$"
       },
       "modes": [
         "shadow",
@@ -495,6 +495,505 @@
         "run": "^[A-Za-z0-9._-]{1,80}$"
       },
       "maxSeconds": 180
+    },
+    "sandbox.canary": {
+      "desc": "1b 격리 점검(설계 §3) — 시험을 돌리기 전 격리가 이 기기에서 실제로 막는지 1초 안팎(공인 IP·게이트웨이 포트·홈·.git 쓰기·홈 읽기·git 실행). JSON 한 줄, 실패 3 → 그래프 보류",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/sandboxed-run.mjs",
+        "--copy",
+        "{dir}",
+        "--tmp",
+        "{tmp}",
+        "--canary"
+      ],
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 60,
+      "maxSeconds": 90
+    },
+    "sandbox.flutter-test": {
+      "desc": "1b 격리 시험(lg-test.sb) — 사본의 시험 파일 하나. 재현 시험 빨간불(⑧)·초록(⑪①②). 종료 0·1(시험 실패)·97(준비)·98(격리 위반)·124(시간). 실측 13~50초(H4) — 안쪽 상한 900초, 최대 시간 1440초",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/sandboxed-run.mjs",
+        "--copy",
+        "{dir}",
+        "--tmp",
+        "{tmp}",
+        "--timeout-sec",
+        "900",
+        "--",
+        "flutter",
+        "test",
+        "--timeout",
+        "none",
+        "{test}"
+      ],
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$",
+        "test": "^test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 960,
+      "maxSeconds": 1440
+    },
+    "sandbox.flutter-test-defines": {
+      "desc": "1b 격리 시험 — 씨앗(dart-define 3자리)으로. 대상 시험(⑪①, 씨앗 신호)·미니 대조(⑪④ 차분 대조 20판 + 라이브 소크 어려움·쉬움 10판). 안쪽 상한 1800초(부하 중 미니 대조 여유), 최대 시간 2790초",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/sandboxed-run.mjs",
+        "--copy",
+        "{dir}",
+        "--tmp",
+        "{tmp}",
+        "--timeout-sec",
+        "1800",
+        "--",
+        "flutter",
+        "test",
+        "--timeout",
+        "none",
+        "{test}",
+        "--dart-define",
+        "{d1}",
+        "--dart-define",
+        "{d2}",
+        "--dart-define",
+        "{d3}"
+      ],
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$",
+        "test": "^test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$",
+        "d1": "^(?:REPLAY_GAMES|REPLAY_SEED_BASE|SOAK_GAMES|SOAK_SEED_BASE|SOAK_DIFFICULTY|COACH_SOAK_GAMES|COACH_SOAK_SEED_BASE|LG_NOOP)=[A-Za-z0-9_]{1,16}$",
+        "d2": "^(?:REPLAY_GAMES|REPLAY_SEED_BASE|SOAK_GAMES|SOAK_SEED_BASE|SOAK_DIFFICULTY|COACH_SOAK_GAMES|COACH_SOAK_SEED_BASE|LG_NOOP)=[A-Za-z0-9_]{1,16}$",
+        "d3": "^(?:REPLAY_GAMES|REPLAY_SEED_BASE|SOAK_GAMES|SOAK_SEED_BASE|SOAK_DIFFICULTY|COACH_SOAK_GAMES|COACH_SOAK_SEED_BASE|LG_NOOP)=[A-Za-z0-9_]{1,16}$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 1860,
+      "maxSeconds": 2790
+    },
+    "sandbox.flutter-test-all": {
+      "desc": "1b 격리 전체 시험(⑪③). 기본 시험별 시간 제한 그대로. 실측 173~241초(격리 밖, 부하 낮을 때) — 부하 20 이상에서 늘어난다. 안쪽 상한 2400초, 최대 시간 3600초. 기준 사본(base)은 실패 비교 기준용",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/sandboxed-run.mjs",
+        "--copy",
+        "{dir}",
+        "--tmp",
+        "{tmp}",
+        "--timeout-sec",
+        "2400",
+        "--",
+        "flutter",
+        "test",
+        "--reporter",
+        "expanded"
+      ],
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base)$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 2460,
+      "maxSeconds": 3600
+    },
+    "sandbox.flutter-analyze": {
+      "desc": "1b 격리 분석(⑪③) — infos 는 치명 아님. 오류·경고 수를 깨끗한 내보내기와 견준다. 실측 2초(H4)",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/sandboxed-run.mjs",
+        "--copy",
+        "{dir}",
+        "--tmp",
+        "{tmp}",
+        "--timeout-sec",
+        "600",
+        "--",
+        "flutter",
+        "analyze",
+        "--no-fatal-infos"
+      ],
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base)$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 660,
+      "maxSeconds": 990
+    },
+    "sandbox.flutter-cov-ai": {
+      "desc": "1b 실행 증명(⑪⑤) — 재현 시험의 라이브 AI 묶음만 --coverage 로(lcov 는 임시 폴더). name 은 표식 두 가지 중 하나",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/sandboxed-run.mjs",
+        "--copy",
+        "{dir}",
+        "--tmp",
+        "{tmp}",
+        "--timeout-sec",
+        "900",
+        "--",
+        "flutter",
+        "test",
+        "--timeout",
+        "none",
+        "--coverage",
+        "--name",
+        "{name}",
+        "{test}"
+      ],
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|merge)$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$",
+        "test": "^test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$",
+        "name": "^(?:라이브 AI|3경로/라이브-AI)$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 960,
+      "maxSeconds": 1440
+    },
+    "sandbox.ai-policy": {
+      "desc": "1b AI 결정 비교(§4②, 고스톱 test/ai_policy — 있을 때만). gen 은 기준 사본(base)에서, compare 는 패치 사본에서. 출력은 임시 폴더 아래 이름(AI_POLICY_DIR). 실측 gen 58초·compare 14초(H5, 격리 밖)",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/sandboxed-run.mjs",
+        "--copy",
+        "{dir}",
+        "--tmp",
+        "{tmp}",
+        "--ai-policy-dir",
+        "{out}",
+        "--timeout-sec",
+        "900",
+        "--",
+        "flutter",
+        "test",
+        "--timeout",
+        "none",
+        "{test}"
+      ],
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base)$",
+        "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp$",
+        "out": "^ai-(?:gen|cmp-[0-9]{1,2})$",
+        "test": "^test/ai_policy/ai_policy_(?:gen|compare)_test\\.dart$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 960,
+      "maxSeconds": 1440
+    },
+    "patch.extract": {
+      "desc": "1b 정본 패치(git 없이, 설계 §2 · L2 위험 A) — 깨끗한 쪽(clean·redbase)과 사본(work·merge) 파일 단위 diff. 바로가기·특수 파일·.git 경로 거부. JSON 한 줄, 거부 3. 1초 안팎",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/patch-extract.mjs",
+        "--clean",
+        "{clean}",
+        "--copy",
+        "{copy}",
+        "--out",
+        "{out}"
+      ],
+      "params": {
+        "clean": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:clean|redbase)$",
+        "copy": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|merge)$",
+        "out": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,60}\\.(?:diff|txt)$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 60,
+      "maxSeconds": 90
+    },
+    "patch.allowlist": {
+      "desc": "1b 수정 범위(⑩, 설계 §4①) — 허용 목록 밖·AI·기존 시험 수정·재현 시험(test/repro/) 건드림 → 승인 사유. JSON 한 줄, 사유 있으면 3",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/patch-allowlist.mjs",
+        "--patch",
+        "{patch}",
+        "--clean",
+        "{clean}",
+        "--copy",
+        "{copy}",
+        "--ai-check",
+        "{ai}",
+        "--frozen",
+        "test/repro/"
+      ],
+      "params": {
+        "patch": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,60}\\.(?:diff|txt)$",
+        "clean": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:clean|redbase)$",
+        "copy": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work)$",
+        "ai": "^(?:pass|fail|unavailable)$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "repro.three-path": {
+      "desc": "1b 3경로 시험 틀 확인(⑦, 정적) — 엔진·라이브 사람·라이브 AI(어려움) 표식 기본판. JSON 한 줄, 빠지면 3",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/three-path-check.mjs",
+        "{file}"
+      ],
+      "params": {
+        "file": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/work/test/repro/[A-Za-z0-9_]+_test\\.dart$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "repro.three-path-h5": {
+      "desc": "1b 3경로 시험 틀 확인 — 고스톱 3경로 틀(test/repro/three_path_support.dart, '3경로/엔진' 묶음)이 사본에 있을 때의 표식",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/three-path-check.mjs",
+        "--markers",
+        "@graphs/lib/sandbox/markers-h5.json",
+        "{file}"
+      ],
+      "params": {
+        "file": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/work/test/repro/[A-Za-z0-9_]+_test\\.dart$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "cov.check": {
+      "desc": "1b 실행 증명 판정(⑪⑤) — 패치가 바꾼 lib 줄을 라이브 AI 시험이 실제로 지났는지(lcov). 출처 닻 포함. JSON 한 줄, 실패 3",
+      "bin": "@node",
+      "argv": [
+        "@graphs/lib/sandbox/coverage-check.mjs",
+        "--patch",
+        "{patch}",
+        "--lcov",
+        "{lcov}",
+        "--root",
+        "{root}"
+      ],
+      "params": {
+        "patch": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,60}\\.(?:diff|txt)$",
+        "lcov": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/coverage/lcov\\.info$",
+        "root": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|merge)$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "patch.apply-copy": {
+      "desc": "⑮ merge_prep(실제 전용) — 최신 master 내보내기(merge)에 정본 패치를 적용(git 없이). 상태 폴더 안 사본만 바꾼다",
+      "bin": "/usr/bin/patch",
+      "argv": [
+        "-p1",
+        "-N",
+        "-t",
+        "-s",
+        "-d",
+        "{dir}",
+        "-i",
+        "{patch}"
+      ],
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:merge)$",
+        "patch": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,60}\\.(?:diff|txt)$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "git.worktree-add": {
+      "desc": "⑯ commit_push(effect, 실제 전용) — 본 저장소에 출시 작업 폴더(분리 HEAD)를 만든다",
+      "effect": true,
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{repo}",
+        "worktree",
+        "add",
+        "--detach",
+        "{wt}",
+        "{rev}"
+      ],
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$",
+        "wt": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/release-wt/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$",
+        "rev": "^[0-9a-f]{40}$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 60,
+      "maxSeconds": 90
+    },
+    "git.apply-index": {
+      "desc": "⑯ effect — 출시 작업 폴더에 정본 패치 적용(index 포함)",
+      "effect": true,
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{wt}",
+        "apply",
+        "--index",
+        "--whitespace=nowarn",
+        "{patch}"
+      ],
+      "params": {
+        "wt": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/release-wt/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$",
+        "patch": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,60}\\.(?:diff|txt)$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 60,
+      "maxSeconds": 90
+    },
+    "git.commit-file": {
+      "desc": "⑯ effect — 커밋(메시지 파일, 트레일러 LG-Key). 저장소 설정의 이름·전자우편을 쓴다",
+      "effect": true,
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{wt}",
+        "commit",
+        "-q",
+        "-F",
+        "{msg}"
+      ],
+      "params": {
+        "wt": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/release-wt/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$",
+        "msg": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,60}\\.(?:diff|txt)$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 120,
+      "maxSeconds": 180
+    },
+    "git.push-master": {
+      "desc": "⑯ effect — origin master 로 push. 본 저장소의 pre-push 관문(전체 시험)이 그대로 돈다 — 그래서 30분",
+      "effect": true,
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{wt}",
+        "push",
+        "origin",
+        "HEAD:refs/heads/master"
+      ],
+      "params": {
+        "wt": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/release-wt/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 1800,
+      "maxSeconds": 2700
+    },
+    "git.worktree-remove": {
+      "desc": "⑯ effect — 출시 작업 폴더 정리",
+      "effect": true,
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{repo}",
+        "worktree",
+        "remove",
+        "--force",
+        "{wt}"
+      ],
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$",
+        "wt": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/release-wt/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 60,
+      "maxSeconds": 90
+    },
+    "apk.cert-fingerprint": {
+      "desc": "release(실제 전용) — APK 서명 인증서 지문(읽기만, 비밀번호 필요 없음). SHA-256 을 기대값과 대조",
+      "bin": "/usr/bin/keytool",
+      "argv": [
+        "-printcert",
+        "-jarfile",
+        "{apk}"
+      ],
+      "params": {
+        "apk": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+\\.apk$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 60,
+      "maxSeconds": 90
+    },
+    "fad.distribute": {
+      "desc": "release effect(실제 전용) — Firebase App Distribution 배포(테스터 묶음). 지문이 맞을 때만",
+      "effect": true,
+      "bin": "/opt/homebrew/bin/firebase",
+      "argv": [
+        "appdistribution:distribute",
+        "{apk}",
+        "--app",
+        "{app}",
+        "--groups",
+        "{groups}"
+      ],
+      "params": {
+        "apk": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+[A-Za-z0-9._-]+\\.apk$",
+        "app": "^1:[0-9]{6,20}:android:[0-9a-f]{8,40}$",
+        "groups": "^[a-z0-9-]{1,40}$"
+      },
+      "modes": [
+        "live"
+      ],
+      "timeoutSec": 600,
+      "maxSeconds": 900
     }
   }
 }

@@ -194,7 +194,7 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
   const clearHold = () => { try { fs.rmSync(cfg.llmHoldPath, { force: true }); } catch { /* 없음 */ } };
   const reserve = ({ model, node }) => {
     const r = store.reserveLlmCall({ thread, node, model, now: now(), perThread: cfg.llm.perThread, perDay: cfg.llm.perDay, dayTokenCap: cfg.llm.dayTokenCap });
-    if (!r.ok) throw new LlmBudgetHeld(r.reason, r.kind, r.ref);
+    if (!r.ok) throw new LlmBudgetHeld(r.reason, r.kind, r.kind === "llm_thread" && cfg.llm.perThreadRef != null ? String(cfg.llm.perThreadRef) : r.ref);
     return r.id;
   };
   const record = (callId, { node, model, v, ms, detached = false }) => {

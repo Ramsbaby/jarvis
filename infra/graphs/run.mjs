@@ -135,7 +135,11 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
   active.killChildren = () => { killActiveChildren(); killRunChildren(); };
   const { cfg, now, metric } = ctx;
   const timeLeft = ctx.isTick ? () => cfg.jobLimitMs - elapsedMs() : null; // 틱만 — 잡 시간 상한(600초) 안에서
-  const llm = createClaude({ store: ctx.store, cfg, now, thread, metric, timeLeft });
+  // 그래프가 스레드당 LLM 상한을 더 크게 둘 수 있다(meta.llmPerThread, 12 이하 — gostop-fix 1b 예산 11/상한 12, 설계 §5.2).
+  // 보류 표식(hold_ref)은 환경 손잡이(LG_LLM_MAX_PER_THREAD) 값 그대로 — 그 값을 올려야 풀리는 것은 같다.
+  const perThread = Math.max(cfg.llm.perThread, Math.min(12, Math.floor(Number(mod.meta?.llmPerThread)) || 0));
+  const llmCfg = perThread === cfg.llm.perThread ? cfg : { ...cfg, llm: { ...cfg.llm, perThread, perThreadRef: cfg.llm.perThread } };
+  const llm = createClaude({ store: ctx.store, cfg: llmCfg, now, thread, metric, timeLeft });
   const heartbeatSec = cfg.testMode && process.env.LG_TEST_HEARTBEAT_SEC ? Number(process.env.LG_TEST_HEARTBEAT_SEC) : 30;
   const scratch = path.join(cfg.jobsDir, thread, "_scratch");
   const BENCH = new Set(["bench", "reproduced", "diag_match", "hidden_pass", "ai_misjudge", "signal"]);
@@ -161,6 +165,8 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
     hold: (msg, reason = "node") => Object.assign(new Error(msg), { held: true, holdReason: reason }),
     // 판정 M8 칸(벤치 결과). 정해진 필드만 남긴다.
     bench: (fields = {}) => metric("bench", { thread, ...Object.fromEntries(Object.entries(fields).filter(([k]) => BENCH.has(k))) }),
+    // 판정 §8 '격리 위반 시도'(1b): 격리 실행이 위반으로 끝남(종료 98)·검증 중 사본이 바뀜 등. 종류 낱말과 짧은 설명만 남긴다.
+    sandboxViolation: (kind, detail = "") => metric("sandbox_violation", { thread, kind: String(kind).replace(/[^a-z0-9_]/g, "").slice(0, 40), detail: String(detail).replace(/\s+/g, " ").slice(0, 160) }),
     // 다른 그래프의 스레드를 대기열에 올린다(접수 → 수정, S13). 다음 틱이 시작한다. 이미 있는 스레드면 다시 올리지 않는다(멱등).
     // 모드는 이 스레드 모드와 지금 LIVE 스위치 중 낮은 쪽 — 그림자 접수가 실제 수정을 낳지 않게.
     enqueue(graphName, threadName, input = {}) {

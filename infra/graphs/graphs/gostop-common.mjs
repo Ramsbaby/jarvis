@@ -318,3 +318,178 @@ export function benchSignal(c, round = 1) {
 // ── 그 밖 ────────────────────────────────────────────────────────
 export const short = (s, n = 200) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 export const kstDay = (ms) => new Date(ms).toLocaleDateString("sv-SE"); // 이 기기 시간대 YYYY-MM-DD(실행기 localDay 와 같은 식)
+
+// ── 1b: 쓰기 루프(설계 §5.2 ⑦~⑯) ─────────────────────────────────
+// 그래프가 판정·파일 정리에 쓰는 순수 도우미. 명령은 여기서 돌리지 않는다(노드가 tools.run/launch 로만).
+export const REPRO_DIR = "test/repro";
+export const H5_SUPPORT = "test/repro/three_path_support.dart"; // 고스톱 3경로 틀(H5) — 있으면 그 표식('3경로/엔진' 묶음)을 쓴다
+export const AI_POLICY = { gen: "test/ai_policy/ai_policy_gen_test.dart", compare: "test/ai_policy/ai_policy_compare_test.dart",
+  trusted: ["test/ai_policy/ai_policy_core.dart", "test/ai_policy/ai_policy_compare_test.dart"] };
+export const hasH5Frame = (dir) => fs.existsSync(path.join(dir, H5_SUPPORT));
+export const hasAiPolicy = (dir) => [AI_POLICY.gen, ...AI_POLICY.trusted].every((rel) => fs.existsSync(path.join(dir, rel)));
+// 비교기(AI 결정 비교 시험)가 깨끗한 쪽과 바이트까지 같은가 — 패치가 비교기를 고쳤으면 그 비교는 믿지 않는다(ai-policy.sh 와 같은 규칙)
+export function sameFiles(a, b, rels) {
+  for (const rel of rels) {
+    let x, y;
+    try { x = fs.readFileSync(path.join(a, rel)); y = fs.readFileSync(path.join(b, rel)); } catch { return false; }
+    if (!x.equals(y)) return false;
+  }
+  return true;
+}
+
+// 사본 복제(재현 시험을 쓴 직후의 '빨간 기준' redbase). 맨 위 build·.dart_tool 은 뺀다. 바로가기는 따라가지 않고 그대로.
+export function copyTree(src, dst) {
+  fs.rmSync(dst, { recursive: true, force: true });
+  fs.cpSync(src, dst, { recursive: true, verbatimSymlinks: true, filter: (p) => !["build", ".dart_tool"].includes(path.relative(src, p)) });
+  return dst;
+}
+
+// 명령이 낸 JSON 한 줄(표준 출력 끝 줄). 없거나 깨지면 null.
+export function lastJson(stdout) {
+  const lines = String(stdout ?? "").trim().split("\n").reverse();
+  for (const l of lines) { try { const j = JSON.parse(l); if (j && typeof j === "object") return j; } catch { /* 다음 줄 */ } }
+  return null;
+}
+
+// ⑦ 재현 시험이 바꾼 것(깨끗한 내보내기 대비): test/repro/ 아래 새 .dart 파일만. 시험 파일(_test.dart)은 정확히 하나, 도우미는 2개까지.
+export const REPRO_FILE_RE = /^test\/repro\/[A-Za-z0-9_]+\.dart$/;
+export function judgeReproFiles(files) {
+  const bad = files.filter((f) => f.status !== "added" || !REPRO_FILE_RE.test(f.path) || f.path === H5_SUPPORT);
+  const tests = files.filter((f) => !bad.includes(f) && f.path.endsWith("_test.dart")).map((f) => f.path);
+  const support = files.filter((f) => !bad.includes(f) && !f.path.endsWith("_test.dart")).map((f) => f.path);
+  const why = [];
+  if (bad.length) why.push(`test/repro/ 밖이거나 새 파일이 아닌 변경: ${bad.map((f) => `${f.path}(${f.status})`).join(", ")}`);
+  if (tests.length !== 1) why.push(`재현 시험 파일(test/repro/*_test.dart)이 ${tests.length}개 — 정확히 1개여야 한다`);
+  if (support.length > 2) why.push(`도우미 파일이 ${support.length}개 — 2개까지`);
+  return { ok: why.length === 0, test: tests[0] ?? null, tests, support, bad, why };
+}
+// 허용 밖 변경을 되돌린다: 바뀐·지운 파일은 깨끗한 내보내기에서 다시 복사, 새로 생긴 파일은 지운다(우리 사본 안만).
+export function restoreFiles(work, clean, files) {
+  for (const f of files) {
+    const rel = f.path;
+    if (rel.split("/").some((x) => x === ".." || x.toLowerCase() === ".git")) continue;
+    const dst = path.join(work, rel);
+    if (f.status === "added") fs.rmSync(dst, { force: true });
+    else { mkdirp(path.dirname(dst)); fs.copyFileSync(path.join(clean, rel), dst); }
+  }
+}
+
+// flutter analyze 출력의 오류·경고·정보 수
+export function analyzeCounts(raw) {
+  const s = strip(raw);
+  const n = (k) => (s.match(new RegExp(`^\\s*${k} • `, "gm")) ?? []).length;
+  return { errors: n("error"), warnings: n("warning"), infos: n("info") };
+}
+// 실패 항목(불일치 블록 첫 줄 + 실패한 시험 이름) — 기준(깨끗한 내보내기)과 견줄 때 쓴다
+export const failureItems = (out) => [...new Set([...out.blocks.map((b) => b[0]), ...out.failed])];
+
+// 씨앗 — sigkey 로 정해진 수(같은 스레드는 같은 판)
+export function seedFor(sigkey, base = 20261000) {
+  let h = 2166136261;
+  for (const ch of String(sigkey)) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return base + (h % 900_000);
+}
+
+// ⑫ 검토 JSON
+export const REVIEW_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["approve", "three_path", "unrelated_changes", "rule_match", "issues", "summary"],
+  properties: {
+    approve: { type: "boolean", description: "이 패치를 그대로 반영해도 되면 true" },
+    three_path: { type: "boolean", description: "엔진·라이브 사람·라이브 AI 세 경로가 같은 규칙으로 고쳐졌거나 원래 맞았으면 true" },
+    unrelated_changes: { type: "boolean", description: "결함과 무관한 변경(정리·이름 바꾸기·다른 기능)이 있으면 true" },
+    rule_match: { type: "boolean", description: "규칙서(docs/rules)와 맞으면 true" },
+    issues: { type: "array", items: { type: "string" }, maxItems: 10, description: "고쳐야 할 점 — '파일:줄 — 설명'" },
+    summary: { type: "string", description: "한국어 2~4문장" },
+  },
+};
+const Review = z.object({ approve: z.boolean(), three_path: z.boolean(), unrelated_changes: z.boolean(), rule_match: z.boolean(),
+  issues: z.array(z.string().max(500)).max(10), summary: z.string().max(3000) }).strip();
+export function parseReview(structured, text) {
+  const cands = [];
+  if (structured && typeof structured === "object") cands.push(structured);
+  const s = String(text ?? "");
+  const a = s.indexOf("{"), b = s.lastIndexOf("}");
+  if (a >= 0 && b > a) cands.push(s.slice(a, b + 1));
+  for (const c of cands) {
+    try { const r = Review.safeParse(typeof c === "string" ? JSON.parse(c) : c); if (r.success) return r.data; } catch { /* 다음 */ }
+  }
+  return null;
+}
+// 검토 통과 = 승인 + 3경로 + 무관한 변경 없음 + 규칙 일치
+export const reviewPass = (r) => !!r && r.approve && r.three_path && !r.unrelated_changes && r.rule_match;
+
+// ── 1b 프롬프트(정답·수정 커밋은 사본에 없다 — §2) ───────────────────
+function signalLines(sg) {
+  const out = [`출처: ${sg.source ?? "?"} · 종류: ${sg.kind ?? "?"}`];
+  if (sg.kind === "seed") out.push(`재현 명령: flutter test ${sg.test ?? DIFF_TEST} ${(sg.defines ?? []).map((d) => `--dart-define=${d}`).join(" ")}`);
+  if (sg.kind === "test" || sg.kind === "inject") out.push(`빨간불이 난 기존 시험: ${sg.test}`);
+  if (sg.report) out.push(`제보:\n${String(sg.report).slice(0, 2000)}`);
+  return out;
+}
+function diagLines(d) {
+  if (!d) return ["(진단 없음)"];
+  return [`가설: ${d.hypothesis}`, `파일: ${d.files.join(", ") || "-"}`, ...d.evidence.slice(0, 8).map((e) => `근거: ${e}`)];
+}
+export function reproTestPrompt({ signal, repro, diag, h5, feedback, existing }) {
+  const name = h5
+    ? ["묶음 이름은 반드시 '3경로/엔진 — …' · '3경로/라이브-사람 — …' · '3경로/라이브-AI — …' 로 시작한다(test/repro/three_path_template.dart 를 본떠라).",
+      "도우미는 test/repro/three_path_support.dart 의 것(runEnginePath·runHuman·runAi·threePathAiDifficulties)을 쓴다. 라이브 AI 묶음은 threePathAiDifficulties(어려움 포함)를 돈다.",
+      "파일 첫 줄은 '// 3경로 시험 v1' 이다."]
+    : ["시험(또는 그것을 감싼 group) 이름에 표식을 붙인다: '엔진: …' · '라이브 사람: …' · '라이브 AI: …'.",
+      "라이브 AI 시험은 AIDifficulty.hard 를 반드시 포함한다(AIDifficulty.values 로 셋 다 돌아도 된다).",
+      "엔진·라이브를 몰아 보는 법은 기존 시험에서 찾는다: Grep 으로 'GameStateNotifier'·'ProviderContainer'·'_live_test.dart'·'live_soak_core' 를 찾아 본뜬다."];
+  return [
+    "너는 고스톱 앱(Flutter/Dart) 저장소 사본에서 **결함을 재현하는 시험만** 쓰는 사람이다. 작업 폴더가 그 사본이다(커밋 역사 없음, 명령 실행 도구 없음).",
+    "코드(lib/)는 고치지 않는다. 기존 파일도 고치지 않는다. test/repro/ 아래 **새 파일만** 만든다:",
+    `- 시험 파일 정확히 1개: test/repro/<짧은_영문_이름>_three_path_test.dart${existing ? ` — 이미 있는 ${existing} 를 고쳐 쓴다(새 시험 파일을 더 만들지 않는다)` : ""}`,
+    "- 필요하면 도우미 .dart 파일 2개까지(test/repro/ 아래)",
+    "",
+    "[신호]", ...signalLines(signal ?? {}),
+    "", "[재현 결과(사람이 쓴 기존 시험)]", repro ?? "(없음)",
+    "", "[진단]", ...diagLines(diag),
+    "",
+    "[시험 틀 — 3경로를 다 둔다(설계 §5.2⑦)]",
+    "같은 국면·같은 수를 세 경로로 돌려 같은 규칙 결과가 나와야 함을 expect 로 확인한다: ① 엔진(순수 규칙) ② 라이브 사람(앱이 사람 입력을 처리하는 길) ③ 라이브 AI(AI 차례를 처리하는 길).",
+    ...name,
+    "- skip 을 쓰지 않는다. 각 경로 시험 안에 expect(또는 expect 로 시작하는 도우미 호출)가 있어야 한다.",
+    "- **지금 코드에서는 결함 때문에 하나 이상이 실패**해야 하고, 결함을 고치면 전부 통과해야 한다. 컴파일 오류가 나면 안 된다(import·이름을 사본에서 확인).",
+    "- 시간이 오래 걸리지 않게 한 국면을 직접 만든다(판 전체를 여러 번 돌리지 않는다).",
+    ...(feedback ? ["", "[지난 시도에서 고칠 점]", feedback] : []),
+    "", "다 쓰면 만든 파일 경로와 각 경로가 무엇을 확인하는지 한국어로 짧게 답한다.",
+  ].join("\n");
+}
+export function fixPrompt({ signal, diag, reproTest, redExcerpt, feedback, attempt }) {
+  return [
+    "너는 고스톱 앱(Flutter/Dart) 저장소 사본에서 **규칙 결함을 고치는** 사람이다. 작업 폴더가 그 사본이다(커밋 역사 없음, 명령 실행 도구 없음 — 시험은 밖에서 돌린다).",
+    "",
+    "[신호]", ...signalLines(signal ?? {}),
+    "", "[진단]", ...diagLines(diag),
+    "", `[재현 시험] ${reproTest} — 지금 코드에서 실패한다(빨간불):`, redExcerpt || "(발췌 없음)",
+    "",
+    "[규칙]",
+    "- 고칠 수 있는 곳: lib/domain/game/** · lib/presentation/providers/game_provider.dart · lib/presentation/providers/bomb_handler.dart 의 규칙 처리 부분.",
+    "- 고치지 않는다: test/ 아래 모든 파일(재현 시험 포함 — 시험을 바꿔 통과시키지 않는다), lib/domain/ai/**(게임 AI 판단), MCTSConstants, pubspec, 플랫폼·자산·결제·송출 코드.",
+    "- 규칙서(docs/rules/)를 따른다. 엔진·라이브 사람·라이브 AI 세 경로가 같은 규칙 결과를 내게 한다.",
+    "- 결함과 무관한 정리·이름 바꾸기·서식 변경을 하지 않는다. 바꾸는 줄은 적을수록 좋다.",
+    ...(feedback ? ["", `[지난 시도(${attempt - 1}회째)에서 고칠 점]`, feedback] : []),
+    "", "다 고치면 무엇을 왜 바꿨는지 한국어로 짧게 답한다.",
+  ].join("\n");
+}
+export function reviewPrompt({ signal, diag, patch, verify }) {
+  return [
+    "너는 고스톱 앱 저장소의 **검토자**다. 아래 패치는 이미 사본(작업 폴더)에 적용돼 있다. 도구는 Read·Grep·Glob 뿐이다. 코드를 고치지 않고 판정만 한다.",
+    "",
+    "[신호]", ...signalLines(signal ?? {}),
+    "", "[진단]", ...diagLines(diag),
+    "", "[자동 검증 결과]", verify,
+    "", "[패치(정본, diff -ruN 꼴)]", "```diff", String(patch ?? "").slice(0, 60_000), "```",
+    "",
+    "[볼 것]",
+    "1. 3경로: 엔진·라이브 사람·라이브 AI 가 같은 규칙 결과를 내는가(한 경로만 고치고 다른 경로를 놓치지 않았나). 재현 시험(test/repro/)이 세 경로를 다 확인하는가.",
+    "2. 무관한 변경이 없는가(정리·이름·다른 기능·시험 약화).",
+    "3. 규칙서(docs/rules/GAME_MECHANICS.md 등)와 맞는가. AI 판단 코드(lib/domain/ai/**)를 건드리지 않았나.",
+    "정해진 JSON 으로만 답한다. 고칠 점이 하나라도 있으면 approve=false.",
+  ].join("\n");
+}

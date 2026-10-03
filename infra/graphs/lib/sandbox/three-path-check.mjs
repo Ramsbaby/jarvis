@@ -118,9 +118,15 @@ const hasSeq = (toks, a, b, [x, y]) => {
   return false;
 };
 const hasId = (toks, a, b, names) => { for (let i = a; i < b; i++) if (toks[i].t === "id" && names.includes(toks[i].v)) return true; return false; };
+const hasExpectHelper = (toks, a, b) => { for (let i = a; i < b - 1; i++) if (toks[i].t === "id" && /^_?expect[A-Z0-9_]\w*$/.test(toks[i].v) && toks[i + 1].v === "(") return true; return false; };
+// 어려움 낱말: [이름] 하나면 그 식별자, [앞, 뒤] 면 '앞.뒤'
+const hasHard = (toks, a, b, h) => (h.length === 1 ? hasId(toks, a, b, h) : hasSeq(toks, a, b, h));
 
 export function checkThreePaths(sources, { markers = DEFAULT_MARKERS, requireHard = true } = {}) {
-  const re = Object.fromEntries(Object.entries(markers).map(([k, v]) => [k, new RegExp(v, "iu")]));
+  // markers.hardTokens(선택): 어려움을 뜻하는 낱말 줄을 더한다 — 고스톱 3경로 틀(H5)의 threePathAiDifficulties(쉬움·보통·어려움 목록)
+  const { hardTokens = [], ...marks } = markers;
+  const HARD = [...HARD_TOKENS, ...hardTokens.map((t) => [].concat(t).map(String))];
+  const re = Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, new RegExp(v, "iu")]));
   const paths = { engine: [], liveHuman: [], liveAi: [] };
   const tests = [];
   let liveAiHard = false;
@@ -130,7 +136,7 @@ export function checkThreePaths(sources, { markers = DEFAULT_MARKERS, requireHar
     const groups = calls.filter((c) => c.kind === "group");
     const tag = (name) => Object.keys(paths).filter((p) => name && re[p].test(name));
     for (const g of groups) {
-      if (tag(g.name).includes("liveAi") && HARD_TOKENS.some((h) => hasSeq(toks, g.start, g.end, h))) liveAiHard = true;
+      if (tag(g.name).includes("liveAi") && HARD.some((h) => hasHard(toks, g.start, g.end, h))) liveAiHard = true;
     }
     for (const c of calls.filter((x) => x.kind !== "group")) {
       const enclosing = groups.filter((g) => g.start < c.start && g.end > c.end);
@@ -138,11 +144,12 @@ export function checkThreePaths(sources, { markers = DEFAULT_MARKERS, requireHar
       const own = tag(c.name);
       const inherited = enclosing.flatMap((g) => tag(g.name));
       const pathsOf = own.length ? own : [...new Set(inherited)];
-      const expects = hasId(toks, c.start, c.end, ["expect", "expectLater"]);
+      // expect·expectLater, 또는 expect 로 시작하는 도우미 호출(_expectPuk(…) 처럼 — 고스톱 3경로 틀이 쓰는 꼴, 1b 통합 실측)
+      const expects = hasId(toks, c.start, c.end, ["expect", "expectLater"]) || hasExpectHelper(toks, c.start, c.end);
       tests.push({ name: c.name, paths: pathsOf, expects });
       if (!expects) continue;
       for (const p of pathsOf) paths[p].push(c.name);
-      if (pathsOf.includes("liveAi") && HARD_TOKENS.some((h) => hasSeq(toks, c.start, c.end, h))) liveAiHard = true;
+      if (pathsOf.includes("liveAi") && HARD.some((h) => hasHard(toks, c.start, c.end, h))) liveAiHard = true;
     }
   }
   const missing = Object.entries(paths).filter(([, v]) => !v.length).map(([k]) => k);

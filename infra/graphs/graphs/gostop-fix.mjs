@@ -1,25 +1,43 @@
-// gostop-fix.mjs — 고스톱 결함 하나(sigkey)를 사본에서 재현하고 진단해 '고칠 안'을 남긴다. 1a판: ①~⑥ + ⑭ (설계 §5.2).
+// gostop-fix.mjs — 고스톱 결함 하나(sigkey)를 사본에서 재현·진단하고(1a), 빨간 시험 → 수정 → 3경로 검증 → 검토까지 해(1b) '고칠 안'을 남긴다(설계 §5.2).
 //   ① preflight → ② sandbox → ③ reproduce_launch ⇄ reproduce_check(2회, 흔들림 판정) → ④ diagnose_launch ⇄ diagnose_check
-//   → ⑤ scope_precheck → (실제 모드 + 승인 사유) ⑥ owner_gate → ⑭ plan
-// 1a 는 LLM 이 쓴 코드를 실행하지 않는다. 사본에서 도는 것은 사람이 쓴 기존 시험뿐이다(벤치 회귀 주입도 사람이 적은 변형).
+//   → ⑤ scope_precheck → (실제 모드 + 승인 사유) ⑥ owner_gate
+//   1b: → ⑦ repro_test(sonnet ×≤2, test/repro/ 새 파일만, 3경로 틀) → ⑧ verify_red(격리 실행, 패치 전 빨간불 — 2회 실패면 no_red)
+//       → ⑨ fix(opus ×1 + 재수정 ×≤2, 정본 패치는 git 없이) → [AI 결정 비교 — 고스톱 test/ai_policy 가 있을 때만] → ⑩ scope_check(허용 목록)
+//       → (실제 + 사유) scope_gate → ⑪ verify(격리 실행: 대상·3경로·실행 증명·분석·전체·미니 대조 30판) → ⑫ review(sonnet, 읽기만)
+//       ⑬ ⑩(재현 시험 건드림)·⑪·⑫ 실패 → ⑨ 로(수정 통틀어 3회) → (실제 전용) ⑮ merge_prep → ⑯ commit_push(effect) → ⑭ plan
+//   그림자: ⑮ 는 건너뛰고 ⑯ 은 effect 가 '했을 일'만 적는다.
+// 1a 단계(LG_GOSTOP_STAGE=1a)는 LLM 이 쓴 코드를 실행하지 않는다. 1b 의 LLM 코드는 lg-test.sb 격리 안(sandbox.* 명령)에서만 돈다 —
+// LLM 이 사본에 쓴 뒤에는 격리 밖 시험 명령(flutter.*)을 그 사본에 쓰지 않는다.
 // 본 저장소는 읽기만 한다(git 읽기 명령 · 표식 파일 확인). 사본은 상태 폴더 gostop/sandbox/<sigkey>/ 에 역사 없이 푼다(§2).
 // 규칙: interrupt 가 든 노드(owner_gate)는 동기·순수다 — 상태만 읽는다(scripts/check-interrupt-nodes.mjs).
 import fs from "node:fs";
 import path from "node:path";
 import { StateGraph, Annotation, START, END, interrupt } from "@langchain/langgraph";
 import {
-  repoPath, sandboxDir, runDir, mkdirp, writeAtomic, dirBytes, forbiddenPresent, applyInject, busyReason, pruneHistoryDocs, leakScan,
-  readTestOutput, judgeRepro, reproExcerpt, DIAG_SCHEMA, parseDiag, scopeOf, diagMatch, reproCommand, short, DIFF_TEST,
+  repoPath, sandboxDir, runDir, gostopDir, keyDir, mkdirp, writeAtomic, dirBytes, forbiddenPresent, applyInject, busyReason, pruneHistoryDocs, leakScan,
+  readTestOutput, judgeRepro, reproExcerpt, DIAG_SCHEMA, parseDiag, scopeOf, diagMatch, reproCommand, short, DIFF_TEST, SOAK_TEST,
+  hasH5Frame, hasAiPolicy, sameFiles, AI_POLICY, copyTree, lastJson, judgeReproFiles, restoreFiles, analyzeCounts, failureItems, seedFor,
+  REVIEW_SCHEMA, parseReview, reviewPass, reproTestPrompt, fixPrompt, reviewPrompt, readJson,
 } from "./gostop-common.mjs";
 
 // 한 번에 하나(S13) — 실행기가 같은 그래프의 시작된 미완 스레드가 있으면 대기열 것을 미룬다
-export const meta = { name: "gostop-fix", description: "고스톱 결함 재현·진단(1a 읽기 전용)", serial: true };
+// llmPerThread: 1b 최악 2(진단)+2(재현 시험)+3(수정)+3(검토)+1(요약)=11, 스레드 상한 12(설계 §5.2 예산). Fable 은 claude.mjs 가 막는다.
+export const meta = { name: "gostop-fix", description: "고스톱 결함 재현·진단(1a)·빨간 시험·수정·3경로 검증·검토(1b)", serial: true, llmPerThread: 12 };
 
 const MAX_REPRO_ATTEMPTS = 3; // 분리 실행이 결과 없이 죽거나 최대 시간을 넘긴 경우의 다시 띄우기(같은 run 번호)
 const MAX_DIAG_ATTEMPTS = 2; // sonnet ×≤2 (설계 §5.2④) — 답이 형식에 안 맞을 때
 const MAX_DIAG_INFRA = 3; // 로그인 만료·사용량 한도로 다시 띄우는 횟수 — 이 둘은 모델 일을 쓰지 않아 시도와 따로 센다(H3 상3)
 const DIAG_WAIT_MS = { login: 6 * 3_600_000, usage_limit: 3_600_000 }; // 관문(llm-hold)과 같은 쉼
 const DIAG_TIMEOUT_MS = 15 * 60_000; // 분리 실행 — 최대 시간은 1.5배(22.5분)
+// 1b
+const MAX_RT_ATTEMPTS = 2; // ⑦ sonnet ×≤2 — 3경로 틀·파일 규칙·빨간불(⑧) 실패를 함께 센다
+const MAX_FIX_ATTEMPTS = 3; // ⑨ opus ×1 + 재수정 ×≤2(⑬)
+const MAX_RELAUNCH = 3; // 분리 실행이 결과 없이 죽었을 때 같은 일을 다시 띄우는 횟수
+const FIX_TIMEOUT_MS = 15 * 60_000; // opus 수정 — 최대 시간 23분(설계 §6, 1.5배)
+const RT_TIMEOUT_MS = 12 * 60_000;
+const REVIEW_TIMEOUT_MS = 10 * 60_000;
+const RW_TOOLS = ["Read", "Grep", "Glob", "Edit", "Write"]; // --restricted 가 작업 폴더(사본) 안에 가둔다. 범위는 결과(정본 패치)로 다시 본다
+const modelCap = (m) => { const v = Number(process.env[m === "opus" ? "LG_GOSTOP_OPUS_CAP" : "LG_GOSTOP_SONNET_CAP"]); return Number.isFinite(v) && v > 0 ? v : (m === "opus" ? 3 : 7); };
 
 const last = (a, b) => (b === undefined ? a : b);
 const State = Annotation.Root({
@@ -47,6 +65,54 @@ const State = Annotation.Root({
   approval: Annotation({ reducer: last, default: () => null }),
   status: Annotation({ reducer: last, default: () => null }),
   planPath: Annotation({ reducer: last, default: () => null }),
+  // ── 1b ──
+  stage: Annotation({ reducer: last, default: () => "1b" }), // 스레드 시작 때 고정(LG_GOSTOP_STAGE)
+  route: Annotation({ reducer: last, default: () => null }), // 갈림길 노드가 고른 다음 노드
+  seq: Annotation({ reducer: last, default: () => 0 }), // 분리 실행 번호(LLM·명령 공통, 띄울 때마다 +1)
+  calls: Annotation({ reducer: last, default: () => ({}) }), // 모델별 호출 수(진단 제외) — LG_GOSTOP_SONNET_CAP·OPUS_CAP
+  llmInfra: Annotation({ reducer: last, default: () => 0 }),
+  llmWaitUntil: Annotation({ reducer: last, default: () => null }),
+  tmp: Annotation({ reducer: last, default: () => null }), // 격리 실행 임시 폴더(사본 옆 tmp)
+  baseDir: Annotation({ reducer: last, default: () => null }), // 기준 실행용 사본(pub get 함, LLM 손 안 탐)
+  redbase: Annotation({ reducer: last, default: () => null }), // 재현 시험을 쓴 직후의 사본 복제 — ⑨ 패치(fixPatch) 기준
+  markers: Annotation({ reducer: last, default: () => "default" }), // default · h5(고스톱 3경로 틀)
+  rtAttempt: Annotation({ reducer: last, default: () => 0 }),
+  rtHandle: Annotation({ reducer: last, default: () => null }),
+  rtFeedback: Annotation({ reducer: last, default: () => null }),
+  rtError: Annotation({ reducer: last, default: () => null }),
+  reproTest: Annotation({ reducer: last, default: () => null }),
+  reproSupport: Annotation({ reducer: last, default: () => [] }),
+  threePath: Annotation({ reducer: last, default: () => null }),
+  redHandle: Annotation({ reducer: last, default: () => null }),
+  redRelaunch: Annotation({ reducer: last, default: () => 0 }),
+  redRuns: Annotation({ reducer: last, default: () => [] }),
+  noRed: Annotation({ reducer: last, default: () => false }),
+  fixAttempt: Annotation({ reducer: last, default: () => 0 }),
+  fixHandle: Annotation({ reducer: last, default: () => null }),
+  fixFeedback: Annotation({ reducer: last, default: () => null }),
+  fixError: Annotation({ reducer: last, default: () => null }),
+  fixPatch: Annotation({ reducer: last, default: () => null }), // { file, sha256, files } — redbase 대비(이번 수정만)
+  fullPatch: Annotation({ reducer: last, default: () => null }), // clean 대비(재현 시험 + 수정 — 반영할 정본)
+  aiCheck: Annotation({ reducer: last, default: () => "unavailable" }), // pass · fail · unavailable(폴백)
+  aiDetail: Annotation({ reducer: last, default: () => null }),
+  aiGenOk: Annotation({ reducer: last, default: () => false }),
+  scopeFinal: Annotation({ reducer: last, default: () => null }),
+  scopeApproval: Annotation({ reducer: last, default: () => null }),
+  phase: Annotation({ reducer: last, default: () => null }), // ai · verify · merge
+  stepsDone: Annotation({ reducer: last, default: () => [] }),
+  stepHandle: Annotation({ reducer: last, default: () => null }),
+  stepId: Annotation({ reducer: last, default: () => null }),
+  stepRelaunch: Annotation({ reducer: last, default: () => 0 }),
+  steps: Annotation({ reducer: last, default: () => [] }), // 단계 기록(모든 시도)
+  needBase: Annotation({ reducer: last, default: () => ({}) }), // 실패한 단계의 실패 항목 — 깨끗한 내보내기에서도 실패하는지 본다
+  analyzeBase: Annotation({ reducer: last, default: () => null }),
+  verifyOk: Annotation({ reducer: last, default: () => null }),
+  verifyFail: Annotation({ reducer: last, default: () => null }),
+  review: Annotation({ reducer: last, default: () => null }),
+  reviewHandle: Annotation({ reducer: last, default: () => null }),
+  violation: Annotation({ reducer: last, default: () => null }),
+  merge: Annotation({ reducer: last, default: () => null }),
+  commit: Annotation({ reducer: last, default: () => null }),
   log: Annotation({ reducer: (a, b) => a.concat(b), default: () => [] }),
 });
 
@@ -71,36 +137,45 @@ export function build({ checkpointer, llm, tools }) {
     const r = await tools.run("git.rev-parse", { repo, rev });
     const base = r.code === 0 ? r.stdout.trim() : "";
     if (!/^[0-9a-f]{40}$/.test(base)) throw new Error(`대상 커밋을 찾지 못함: ${rev}(코드 ${r.code})`);
-    return { mode: tools.mode, base, log: [`preflight ${base.slice(0, 8)} ${tools.mode}`] };
+    const stage = process.env.LG_GOSTOP_STAGE === "1a" ? "1a" : "1b";
+    return { mode: tools.mode, base, stage, log: [`preflight ${base.slice(0, 8)} ${tools.mode} ${stage}`] };
   }
 
   // ② 역사 없는 사본(설계 §2): git archive → work(사본)·clean(깨끗한 내보내기)에 비밀·설정을 빼고 푼다 → pub get --offline.
   async function sandbox(s) {
     const root = sandboxDir(tools.stateDir, s.sigkey);
     const work = path.join(root, "work"), clean = path.join(root, "clean"), tar = path.join(root, "src.tar"), ready = path.join(root, ".ready");
+    // 1b: base = 기준 실행용 셋째 사본(pub get 함 — 분석·전체 시험·미니 대조의 기준, AI 결정 기준 생성). clean 은 패치 기준이라 손대지 않는다
+    //   (clean 에 pub get·시험을 돌리면 생성 파일이 '바뀐 파일'로 패치에 섞인다 — 1b 통합 때 찾음).
+    const base = path.join(root, "base");
+    const dirs = s.stage === "1a" ? [work, clean] : [work, clean, base];
     const prev = fs.existsSync(ready) ? fs.readFileSync(ready, "utf8").trim() : "";
     if (prev !== s.base) { // 처음이거나, 도중에 끊긴 사본 — 처음부터 다시 만든다(상태 폴더 안 우리 사본만)
       fs.rmSync(root, { recursive: true, force: true });
-      mkdirp(work); mkdirp(clean);
+      for (const d of dirs) mkdirp(d);
       const a = await tools.run("git.archive", { repo, out: tar, rev: s.base });
       if (a.code !== 0) throw new Error(`git archive 실패(코드 ${a.code}): ${short(a.stderr)}`);
-      for (const dir of [work, clean]) {
+      for (const dir of dirs) {
         const x = await tools.run("tar.extract-sandbox", { tar, dir });
         if (x.code !== 0) throw new Error(`tar 풀기 실패(코드 ${x.code}): ${short(x.stderr)}`);
       }
       fs.rmSync(tar, { force: true });
-      for (const dir of [work, clean]) pruneHistoryDocs(dir); // 수정 원장·작업 기록·QA 보고 — 정답이 적혀 있다(H3 상1)
-      if (s.signal?.kind === "inject") { applyInject(work, s.signal.inject); applyInject(clean, s.signal.inject); }
-      const bad = [...forbiddenPresent(work), ...forbiddenPresent(clean)];
+      for (const dir of dirs) pruneHistoryDocs(dir); // 수정 원장·작업 기록·QA 보고 — 정답이 적혀 있다(H3 상1)
+      if (s.signal?.kind === "inject") for (const dir of dirs) applyInject(dir, s.signal.inject);
+      const bad = dirs.flatMap((d) => forbiddenPresent(d));
       if (bad.length) throw Object.assign(new Error(`사본에 있으면 안 되는 것이 있다: ${bad.join(", ")}`), { codeDefect: true });
-      const pg = await tools.run("flutter.pub-get-offline", { dir: work });
-      if (pg.code !== 0) throw new Error(`pub get --offline 실패(코드 ${pg.code}): ${short(pg.stdout + pg.stderr, 300)}`);
+      // 의존성은 LLM 이 손대기 전 여기서만(격리 안 pub get 은 불가 — H4). clean 에는 하지 않는다(패치 기준).
+      for (const dir of s.stage === "1a" ? [work] : [work, base]) {
+        const pg = await tools.run("flutter.pub-get-offline", { dir });
+        if (pg.code !== 0) throw new Error(`pub get --offline 실패(코드 ${pg.code}): ${short(pg.stdout + pg.stderr, 300)}`);
+      }
       fs.writeFileSync(ready, s.base, { mode: 0o600 });
     }
+    const tmp = mkdirp(path.join(root, "tmp"));
     const sizes = { work: dirBytes(work), clean: dirBytes(clean) };
     // 벤치면 정답 표지(수정 커밋 해시·정답 시험 이름 등)가 사본 글 파일에 없는지 — 있으면 이 사례는 진단하지 않는다(plan: gave_up)
     const leak = s.signal?.bench ? leakScan(work, s.signal.bench.leakTerms) : [];
-    return { work, clean, sizes, leak: leak.length ? leak : null, log: [`sandbox ${Math.round((sizes.work + sizes.clean) / 1e6)}MB${leak.length ? ` · 누설 ${leak.length}` : ""}`] };
+    return { work, clean, baseDir: s.stage === "1a" ? null : base, tmp, sizes, markers: hasH5Frame(work) ? "h5" : "default", leak: leak.length ? leak : null, log: [`sandbox ${Math.round((sizes.work + sizes.clean) / 1e6)}MB${leak.length ? ` · 누설 ${leak.length}` : ""}`] };
   }
 
   // ③ 재현 — 사람이 쓴 기존 시험을 같은 조건으로 2회(흔들림 판정). 분리 실행이라 띄우기/확인 두 노드다.
@@ -204,12 +279,437 @@ export function build({ checkpointer, llm, tools }) {
     return { scope, log: [`scope_precheck 사유 ${scope.reasons.length}`] };
   }
   // 실제 모드이고 사유가 있을 때만 사람에게 묻는다. 그림자는 묻지 않고 plan 이 '물었을 것'(would_ask)으로 적는다.
-  const afterScope = (s) => (s.mode === "live" && !s.diag?.rule_gap && s.scope?.reasons?.length ? "owner_gate" : "plan");
+  // 1b: 규칙 공백이 아니면 ⑦ 로 간다 — 그림자는 사유가 있어도 끝까지 해 본다(물었을 것은 plan 에 남는다).
+  const afterScope = (s) => {
+    if (s.diag?.rule_gap) return "plan";
+    if (s.mode === "live" && s.scope?.reasons?.length) return "owner_gate";
+    return s.stage === "1b" ? "repro_test_launch" : "plan";
+  };
+  const afterOwner = (s) => (s.stage === "1b" && s.approval === "approved" ? "repro_test_launch" : "plan");
 
   // ⑥ 승인(순수 interrupt) — 상태만 읽고 묻는다
   function ownerGate(s) {
     const decision = interrupt({ question: `고스톱 ${s.sigkey} 수정에 승인이 필요합니다`, reason: s.scope.reasons.join(" / ") });
     return { approval: decision, log: [`owner_gate ${decision}`] };
+  }
+
+  // ════════════════ 1b — ⑦~⑬ · ⑮⑯ ════════════════
+  const rdir = (s) => runDir(tools.stateDir, s.sigkey);
+  const rel = (s, file) => path.relative(rdir(s), file);
+  const sonnetUsed = (s) => (s.calls.sonnet ?? 0) + (s.diag || s.diagError ? s.diagAttempt : 0);
+  const used = (s, m) => (m === "sonnet" ? sonnetUsed(s) : (s.calls[m] ?? 0));
+
+  // LLM 분리 실행 띄우기 — 쉼 중이면 보류, 모델 상한이면 null(그래프가 gave_up 으로)
+  function launchLlm(s, node, model, prompt, { tools: tl, jsonSchema = null, timeoutMs }) {
+    if (s.llmWaitUntil && tools.now() < s.llmWaitUntil) throw tools.hold(`${node} 호출 쉼 — ${new Date(s.llmWaitUntil).toISOString()} 뒤 다시`, "llm_wait");
+    if (used(s, model) >= modelCap(model)) return null;
+    const seq = s.seq + 1;
+    const handle = llm.launchAsk(prompt, { model, node, attempt: seq, tools: tl, cwd: s.work, jsonSchema, timeoutMs });
+    return { seq, handle, llmWaitUntil: null };
+  }
+  // 판정: 진행 중이면 pending. done → { st, upd } · 로그인·한도 → { infra } · 그 밖 → { fail }
+  function checkLlm(s, handle, model, label) {
+    const st = llm.checkAsk(handle);
+    if (st.state === "running") throw tools.pending(`${label} 진행 중`);
+    const plus = { calls: { ...s.calls, [model]: (s.calls[model] ?? 0) + 1 } };
+    if (st.state === "done") return { st, upd: { ...plus, llmInfra: 0 } };
+    const why = `${st.state} ${st.reason ?? st.kind ?? ""} ${short(st.error ?? "", 120)}`.trim();
+    if (st.state === "failed" && (st.kind === "login" || st.kind === "usage_limit")) {
+      const n = s.llmInfra + 1;
+      if (n > MAX_DIAG_INFRA) return { fatal: `${label} 실행 실패 ${MAX_DIAG_INFRA}회 — ${why}`, upd: { llmInfra: n } };
+      const wait = DIAG_WAIT_MS[st.kind] ?? 0;
+      return { infra: why, upd: { llmInfra: n, llmWaitUntil: wait ? tools.now() + wait : null } };
+    }
+    return { fail: why, upd: plus };
+  }
+  // 격리 실행 결과 읽기: 진행 중 pending · 결과 없이 죽음 { dead } · 그 밖 { code, raw, out, secs, timedOut }
+  function checkCmd(h, label) {
+    const st = tools.check(h);
+    if (st.state === "running") throw tools.pending(`${label} 진행 중`);
+    if (st.state === "dead" || st.error || (st.code == null && !st.timedOut)) {
+      return { dead: st.state === "dead" ? `분리 실행 ${st.reason}` : st.error ? `띄우기 오류 ${short(st.error, 80)}` : `신호로 끝남(${st.signal ?? "코드 없음"})` };
+    }
+    const raw = tools.output(h, "stdout") + tools.output(h, "stderr");
+    const code = st.timedOut ? 124 : st.code;
+    return { code, raw, out: readTestOutput(raw, code, null), secs: Math.round(((st.endedAt ?? 0) - (st.startedAt ?? 0)) / 1000), timedOut: !!st.timedOut };
+  }
+  const saveLog = (s, name, raw) => writeAtomic(path.join(rdir(s), `${name}.log`), String(raw).slice(-200_000));
+  // 격리 위반(종료 98·사본 무단 변경): 지표를 남기고 고칠 안은 gave_up
+  const violate = (s, kind, detail) => { tools.sandboxViolation(kind, detail); return { violation: `${kind} — ${short(detail, 200)}`, route: "plan", log: [`격리 위반 ${kind}`] }; };
+  // 격리 점검 — 이 기기에서 격리가 실제로 막는지(실패하면 시험을 돌리지 않고 보류)
+  async function canary(s, dir) {
+    const r = await tools.run("sandbox.canary", { dir, tmp: s.tmp });
+    const j = lastJson(r.stdout);
+    if (r.code !== 0 || !j?.ok) throw tools.hold(`격리 점검 실패(코드 ${r.code}): ${short((j?.failures ?? []).join("; ") || r.stderr, 200)}`, "sandbox_canary");
+  }
+  // 정본 패치(git 없이). which: fix(redbase 대비) · full(clean 대비) · 그 밖 이름
+  async function extract(s, base, name) {
+    const out = path.join(rdir(s), `${name}.diff`);
+    mkdirp(rdir(s));
+    const r = await tools.run("patch.extract", { clean: base, copy: s.work, out });
+    const j = lastJson(r.stdout);
+    if (!j) throw new Error(`patch.extract 출력 없음(코드 ${r.code}): ${short(r.stderr, 200)}`);
+    return { ...j, file: out, files: j.files ?? [] };
+  }
+  // ⑬ 재수정 — 수정 통틀어 3회. 남았으면 ⑨ 로, 아니면 gave_up
+  const refix = (s, feedback, upd = {}) => (s.fixAttempt < MAX_FIX_ATTEMPTS
+    ? { ...upd, fixFeedback: short(feedback, 3000), route: "fix_launch", log: [`재수정으로(${s.fixAttempt + 1}/${MAX_FIX_ATTEMPTS}) — ${short(feedback, 100)}`] }
+    : { ...upd, fixError: `수정 ${MAX_FIX_ATTEMPTS}회 끝 — ${short(feedback, 300)}`, route: "plan", log: [`수정 ${MAX_FIX_ATTEMPTS}회 끝`] });
+
+  // ⑦ 재현 시험 — sonnet, 작업 폴더 = 사본, 쓰기 도구. 결과로 test/repro/ 새 파일만 남았는지 다시 본다(아래 check).
+  function reproTestLaunch(s) {
+    const first = s.reproRuns[0];
+    const prompt = reproTestPrompt({ signal: s.signal, repro: s.repro === "skipped" ? "재현 수단 없음(제보만)" : `판정 ${s.repro}\n${reproExcerpt(first)}`,
+      diag: s.diag, h5: s.markers === "h5", feedback: s.rtFeedback, existing: s.reproTest });
+    const l = launchLlm(s, "repro_test", "sonnet", prompt, { tools: RW_TOOLS, timeoutMs: RT_TIMEOUT_MS });
+    if (!l) return { rtError: `sonnet 상한 ${modelCap("sonnet")}회에 닿음`, route: "plan", log: ["repro_test 상한"] };
+    return { seq: l.seq, rtHandle: l.handle, llmWaitUntil: null, rtAttempt: s.rtAttempt + (s.rtHandle ? 0 : 1), route: "repro_test_check", log: [`repro_test_launch 시도 ${s.rtAttempt + 1} · 실행 ${l.seq}`] };
+  }
+  async function reproTestCheck(s) {
+    const c = checkLlm(s, s.rtHandle, "sonnet", "재현 시험 작성");
+    if (c.fatal) return { ...c.upd, rtHandle: null, rtError: c.fatal, route: "plan", log: [c.fatal] };
+    // 로그인·한도: 시도를 세지 않고 다시 띄운다(rtHandle 을 비우되 rtAttempt 는 그대로 — launch 가 +1 하지 않게 표시)
+    if (c.infra) return { ...c.upd, rtHandle: null, rtAttempt: s.rtAttempt - 1, route: "repro_test_launch", log: [`repro_test 실행 실패 — ${c.infra}`] };
+    const retryOrStop = (why, extra = {}) => (s.rtAttempt < MAX_RT_ATTEMPTS
+      ? { ...c.upd, ...extra, rtHandle: null, rtFeedback: short(why, 2000), route: "repro_test_launch", log: [`repro_test 다시 — ${short(why, 100)}`] }
+      : { ...c.upd, ...extra, rtHandle: null, rtError: `재현 시험 ${MAX_RT_ATTEMPTS}회 실패 — ${short(why, 300)}`, route: "plan", log: [`repro_test 실패 끝 — ${short(why, 100)}`] });
+    if (c.fail) return retryOrStop(`호출 실패: ${c.fail}`);
+    // 바뀐 것(깨끗한 내보내기 대비)이 test/repro/ 새 파일뿐인지 — 밖은 되돌리고 실패로 센다
+    const px = await extract(s, s.clean, `repro-${s.rtAttempt}`);
+    if (!px.ok) return { ...c.upd, rtHandle: null, rtError: `재현 시험 뒤 패치 추출 거부(${px.reason}) — 사본을 믿을 수 없다`, route: "plan", log: [`repro_test 추출 거부 ${px.reason}`] };
+    const jr = judgeReproFiles(px.files);
+    if (jr.bad.length) restoreFiles(s.work, s.clean, jr.bad);
+    if (!jr.ok) return retryOrStop(jr.why.join(" / "));
+    const file = path.join(s.work, jr.test);
+    const tp = s.markers === "h5" ? await tools.run("repro.three-path-h5", { file }) : await tools.run("repro.three-path", { file });
+    const tj = lastJson(tp.stdout);
+    if (!tj) throw new Error(`3경로 확인 출력 없음(코드 ${tp.code}): ${short(tp.stderr, 200)}`);
+    if (!tj.ok) return retryOrStop(`3경로 시험 틀이 모자란다 — 빠진 것: ${tj.missing.join(", ")}(엔진·라이브 사람·라이브 AI 묶음마다 expect 가 있는 시험, 라이브 AI 는 어려움 포함)`, { reproTest: jr.test });
+    // 빨간 기준 redbase = 깨끗한 내보내기 + 재현 시험 파일 — 이후 ⑨ 패치(이번 수정만)는 여기 대비
+    const rb = copyTree(s.clean, path.join(path.dirname(s.work), "redbase"));
+    for (const f of [jr.test, ...jr.support]) { mkdirp(path.dirname(path.join(rb, f))); fs.copyFileSync(path.join(s.work, f), path.join(rb, f)); }
+    return { ...c.upd, rtHandle: null, reproTest: jr.test, reproSupport: jr.support, threePath: tj.paths, redbase: rb,
+      redRelaunch: 0, route: "verify_red_launch", log: [`repro_test_check ${jr.test} · 3경로 ${JSON.stringify(tj.paths)}`] };
+  }
+
+  // ⑧ 패치 전 빨간불 — 격리 실행. 띄우기 전 격리 점검.
+  async function verifyRedLaunch(s) {
+    await canary(s, s.work);
+    const seq = s.seq + 1;
+    const h = tools.launch("sandbox.flutter-test", { dir: s.work, tmp: s.tmp, test: s.reproTest }, { node: "verify_red", attempt: seq });
+    return { seq, redHandle: h, route: "verify_red_check", log: [`verify_red_launch ${s.reproTest} · 실행 ${seq}`] };
+  }
+  async function verifyRedCheck(s) {
+    const r = checkCmd(s.redHandle, "빨간불 확인");
+    if (r.dead) {
+      if (s.redRelaunch + 1 >= MAX_RELAUNCH) return { redHandle: null, rtError: `빨간불 확인 실행 실패 ${MAX_RELAUNCH}회 — ${r.dead}`, route: "plan", log: [`verify_red ${r.dead} 끝`] };
+      return { redHandle: null, redRelaunch: s.redRelaunch + 1, route: "verify_red_launch", log: [`verify_red ${r.dead} — 다시 띄움`] };
+    }
+    const logFile = saveLog(s, `red-${s.rtAttempt}`, r.raw);
+    if (r.code === 98) return violate(s, "exit98", `빨간불 확인 — ${short(r.raw.split("LG-SANDBOX").pop(), 160)}`);
+    if (r.code === 97) throw new Error(`격리 실행 준비 오류(97): ${short(r.raw.split("LG-SANDBOX").pop(), 200)}`);
+    // 시험이 사본을 바꿨나(LLM 시험 코드가 lib 를 고쳐 놓는 길) — redbase 대비 변경이 없어야 한다
+    const px = await extract(s, s.redbase, `red-check-${s.rtAttempt}`);
+    if (!px.ok || px.files.length) return violate(s, "copy_changed", `빨간불 확인 중 사본이 바뀜: ${px.ok ? px.files.map((f) => f.path).join(", ") : px.reason}`);
+    const out = r.out;
+    const red = r.code === 1 && !out.compileError && out.failed.length > 0;
+    const run = { attempt: s.rtAttempt, rc: r.code, red, failed: out.failed.slice(0, 20), compileError: out.compileError, secs: r.secs, log: rel(s, logFile) };
+    const runs = [...s.redRuns, run];
+    if (red) return { redRuns: runs, redHandle: null, route: "fix_launch", log: [`verify_red 빨간불 — 실패 ${out.failed.length}`] };
+    const why = r.code === 0 ? "패치 전인데 재현 시험이 모두 통과했다 — 결함을 드러내지 못한다(국면·기대값을 다시 보라)"
+      : out.compileError ? `재현 시험이 컴파일되지 않는다:\n${short(r.raw.split("\n").filter((l) => /Error:/.test(l)).slice(0, 6).join("\n"), 1200)}`
+      : r.code === 124 ? "재현 시험이 시간 상한(900초)을 넘었다 — 한 국면만 직접 만들어라" : `시험 도구 오류(코드 ${r.code}) — 실패한 시험 이름이 없다`;
+    if (s.rtAttempt < MAX_RT_ATTEMPTS) return { redRuns: runs, redHandle: null, rtFeedback: why, route: "repro_test_launch", log: [`verify_red 빨간불 아님 — 재현 시험 다시`] };
+    return { redRuns: runs, redHandle: null, noRed: true, route: "plan", log: ["verify_red 2회 실패 → no_red"] };
+  }
+
+  // ⑨ 수정 — opus, 쓰기 도구, 작업 폴더 = 사본. 정본 패치는 git 없이.
+  function fixLaunch(s) {
+    const lastRed = s.redRuns.at(-1);
+    const red = lastRed ? [`실패한 시험(${lastRed.failed.length}): ${lastRed.failed.slice(0, 8).join(" | ")}`].join("\n") : "";
+    const attempt = s.fixHandle ? s.fixAttempt : s.fixAttempt + 1;
+    const l = launchLlm(s, "fix", "opus", fixPrompt({ signal: s.signal, diag: s.diag, reproTest: s.reproTest, redExcerpt: red, feedback: s.fixFeedback, attempt }),
+      { tools: RW_TOOLS, timeoutMs: FIX_TIMEOUT_MS });
+    if (!l) return { fixError: `opus 상한 ${modelCap("opus")}회에 닿음`, route: "plan", log: ["fix 상한"] };
+    return { seq: l.seq, fixHandle: l.handle, llmWaitUntil: null, fixAttempt: attempt, route: "fix_check", log: [`fix_launch 시도 ${attempt} · 실행 ${l.seq}`] };
+  }
+  async function fixCheck(s) {
+    const c = checkLlm(s, s.fixHandle, "opus", "수정");
+    if (c.fatal) return { ...c.upd, fixHandle: null, fixError: c.fatal, route: "plan", log: [c.fatal] };
+    if (c.infra) return { ...c.upd, fixHandle: null, fixAttempt: s.fixAttempt - 1, route: "fix_launch", log: [`fix 실행 실패 — ${c.infra}`] };
+    if (c.fail) return refix({ ...s, ...c.upd }, `수정 호출 실패: ${c.fail}`, { ...c.upd, fixHandle: null });
+    const fx = await extract(s, s.redbase, `fix-${s.fixAttempt}`);
+    if (!fx.ok) return { ...c.upd, fixHandle: null, fixError: `수정 패치 추출 거부(${fx.reason}) — ${short(fx.detail ?? "", 200)}`, route: "plan", log: [`fix 추출 거부 ${fx.reason}`] };
+    if (!fx.files.length) return refix(s, "아무 파일도 바꾸지 않았다 — 재현 시험이 통과하도록 lib 코드를 고쳐라", { ...c.upd, fixHandle: null });
+    const full = await extract(s, s.clean, `patch-${s.fixAttempt}`);
+    if (!full.ok) return { ...c.upd, fixHandle: null, fixError: `전체 패치 추출 거부(${full.reason})`, route: "plan", log: [`full 추출 거부 ${full.reason}`] };
+    const pick = (x) => ({ file: x.file, sha256: x.sha256, bytes: x.bytes, files: x.files.map((f) => ({ path: f.path, status: f.status, added: f.added, removed: f.removed })) });
+    // AI 결정 비교(§4②): 고스톱 test/ai_policy 가 사본에 있고 lib 를 바꿨을 때만. 없으면 폴백(AI 영역·MCTSConstants 무조건 승인, 규칙 처리부는 ai_check_unavailable 승인)
+    const touchesLib = fx.files.some((f) => f.path.startsWith("lib/"));
+    const ai = touchesLib && hasAiPolicy(s.clean);
+    return { ...c.upd, fixHandle: null, fixPatch: pick(fx), fullPatch: pick(full), aiCheck: "unavailable", aiDetail: ai ? null : (touchesLib ? "AI 결정 비교 시험 없음(폴백)" : "lib 변경 없음"),
+      phase: ai ? "ai" : null, stepsDone: [], route: ai ? "steps_launch" : "scope_check",
+      log: [`fix_check 파일 ${fx.files.map((f) => f.path).join(", ")} · ${fx.bytes}B`] };
+  }
+
+  // ⑩ 수정 범위 — 이번 수정(redbase 대비)을 허용 목록에 댄다. 재현 시험(test/repro/)을 건드렸으면 되돌리고 재수정.
+  async function scopeCheck(s) {
+    const r = await tools.run("patch.allowlist", { patch: s.fixPatch.file, clean: s.redbase, copy: s.work, ai: s.aiCheck });
+    const j = lastJson(r.stdout);
+    if (!j || (r.code !== 0 && r.code !== 3)) throw new Error(`patch.allowlist 실패(코드 ${r.code}): ${short(r.stderr, 200)}`);
+    const frozen = j.byReason?.frozen ?? [];
+    if (frozen.length) {
+      restoreFiles(s.work, s.redbase, s.fixPatch.files.filter((f) => frozen.includes(f.path)));
+      return refix(s, `재현 시험(test/repro/)을 바꾸지 마라 — 되돌렸다: ${frozen.join(", ")}. 시험이 아니라 lib 코드를 고쳐 통과시켜라`, { scopeFinal: j });
+    }
+    const reasons = j.reasons ?? [];
+    const next = s.mode === "live" && reasons.length ? "scope_gate" : "steps_launch";
+    return { scopeFinal: j, phase: "verify", stepsDone: [], needBase: {}, verifyOk: null, verifyFail: null, route: next,
+      log: [`scope_check 허용 ${j.allowed?.length ?? 0} · 사유 ${reasons.map((x) => `${x.path}:${x.reason}`).join(", ") || "없음"} · AI ${s.aiCheck}`] };
+  }
+  // 실제 모드 + 사유 — 순수 interrupt
+  function scopeGate(s) {
+    const decision = interrupt({ question: `고스톱 ${s.sigkey} 수정 패치에 승인이 필요합니다`, reason: s.scopeFinal.reasons.map((x) => `${x.path}: ${x.reason}`).join(" / ") });
+    return { scopeApproval: decision, log: [`scope_gate ${decision}`] };
+  }
+  const afterScopeGate = (s) => (s.scopeApproval === "approved" ? "steps_launch" : "plan");
+
+  // ⑪·AI 비교·⑮ 재검증 — 격리 실행 단계 목록(상태로 정해진다. 끝난 단계는 id 로 건너뛴다)
+  function stepsFor(s) {
+    const W = s.work, CL = s.baseDir, T = s.tmp, test = s.reproTest;
+    if (s.phase === "ai") {
+      return [
+        ...(s.aiGenOk ? [] : [{ id: "ai_gen", cmd: "sandbox.ai-policy", params: { dir: CL, tmp: T, out: "ai-gen", test: AI_POLICY.gen }, kind: "ai_gen" }]),
+        { id: `ai_cmp_${s.fixAttempt}`, cmd: "sandbox.ai-policy", params: { dir: W, tmp: T, out: `ai-cmp-${s.fixAttempt}`, test: AI_POLICY.compare }, kind: "ai_cmp" },
+      ];
+    }
+    const D = s.phase === "merge" ? s.merge.dir : W;
+    const rc = reproCommand(s.signal, D);
+    const target = rc ? [{ id: "target", cmd: rc.cmd === "flutter.test-defines" ? "sandbox.flutter-test-defines" : "sandbox.flutter-test", params: { ...rc.params, dir: D, tmp: T }, kind: "green" }] : [];
+    const three = { id: "three_path", cmd: "sandbox.flutter-test", params: { dir: D, tmp: T, test }, kind: "green" };
+    if (s.phase === "merge") return [three, ...target];
+    const seed = seedFor(s.sigkey);
+    const heavy = [
+      { id: "full", cmd: "sandbox.flutter-test-all", params: { dir: W, tmp: T } },
+      { id: "mini_diff", cmd: "sandbox.flutter-test-defines", params: { dir: W, tmp: T, test: DIFF_TEST, d1: "REPLAY_GAMES=20", d2: `REPLAY_SEED_BASE=${seed}`, d3: "LG_NOOP=1" } },
+      { id: "mini_hard", cmd: "sandbox.flutter-test-defines", params: { dir: W, tmp: T, test: SOAK_TEST, d1: "SOAK_GAMES=6", d2: `SOAK_SEED_BASE=${seed + 1}`, d3: "SOAK_DIFFICULTY=hard" } },
+      { id: "mini_easy", cmd: "sandbox.flutter-test-defines", params: { dir: W, tmp: T, test: SOAK_TEST, d1: "SOAK_GAMES=4", d2: `SOAK_SEED_BASE=${seed + 2}`, d3: "SOAK_DIFFICULTY=easy" } },
+    ].flatMap((m) => [{ ...m, kind: "green_or_base" }, ...(s.needBase[m.id] ? [{ ...m, id: `${m.id}_base`, params: { ...m.params, dir: CL }, kind: "base", of: m.id }] : [])]);
+    return [
+      ...target, three,
+      { id: "coverage", cmd: "sandbox.flutter-cov-ai", params: { dir: W, tmp: T, test, name: s.markers === "h5" ? "3경로/라이브-AI" : "라이브 AI" }, kind: "coverage" },
+      ...(s.analyzeBase ? [] : [{ id: "analyze_base", cmd: "sandbox.flutter-analyze", params: { dir: CL, tmp: T }, kind: "analyze_base" }]),
+      { id: "analyze", cmd: "sandbox.flutter-analyze", params: { dir: W, tmp: T }, kind: "analyze" },
+      ...heavy,
+    ];
+  }
+  // cmdId 는 글자값으로만(정적 검사가 허용 목록과 대조한다) — 단계 목록의 이름을 여기서 글자값 호출로 바꾼다
+  function launchStep(cmd, params, opts) {
+    switch (cmd) {
+      case "sandbox.flutter-test": return tools.launch("sandbox.flutter-test", params, opts);
+      case "sandbox.flutter-test-defines": return tools.launch("sandbox.flutter-test-defines", params, opts);
+      case "sandbox.flutter-test-all": return tools.launch("sandbox.flutter-test-all", params, opts);
+      case "sandbox.flutter-analyze": return tools.launch("sandbox.flutter-analyze", params, opts);
+      case "sandbox.flutter-cov-ai": return tools.launch("sandbox.flutter-cov-ai", params, opts);
+      case "sandbox.ai-policy": return tools.launch("sandbox.ai-policy", params, opts);
+      default: throw Object.assign(new Error(`단계 명령이 목록 밖: ${cmd}`), { codeDefect: true });
+    }
+  }
+  const nextStep = (s) => stepsFor(s).find((x) => !s.stepsDone.includes(x.id)) ?? null;
+  async function stepsLaunch(s) {
+    const step = nextStep(s);
+    if (!step) return { stepHandle: null, route: "steps_check" };
+    if (!s.stepsDone.length && s.phase !== "ai") await canary(s, s.phase === "merge" ? s.merge.dir : s.work); // 단계 묶음 앞 격리 점검
+    if (step.kind === "ai_cmp") {
+      // 비교기(시험 두 파일)가 깨끗한 쪽과 같아야 믿는다. 기준(코퍼스·기준값)은 이번 비교 전용 폴더로 복사(gen 결과를 패치 코드가 못 건드리게)
+      if (!sameFiles(s.clean, s.work, AI_POLICY.trusted)) return { aiCheck: "unavailable", aiDetail: "AI 비교기가 깨끗한 사본과 다르다 — 믿지 않음", stepsDone: [...s.stepsDone, step.id], stepHandle: null, route: "steps_check" };
+      const src = path.join(s.tmp, "ai-gen"), dst = mkdirp(path.join(s.tmp, `ai-cmp-${s.fixAttempt}`));
+      for (const f of ["corpus.json", "baseline.json"]) fs.copyFileSync(path.join(src, f), path.join(dst, f));
+    }
+    const seq = s.seq + 1;
+    const h = launchStep(step.cmd, step.params, { node: `${s.phase}_${step.id}`.slice(0, 60), attempt: seq });
+    return { seq, stepHandle: h, stepId: step.id, route: "steps_check", log: [`${s.phase}:${step.id} 띄움(${seq})`] };
+  }
+  // 한 단계의 판정. 돌려주는 값 { ok, detail, upd }
+  async function judgeStep(s, step, r) {
+    const ex = () => short([...r.out.blocks.map((b) => b[0]), ...r.out.failed].slice(0, 6).join(" | ") || r.raw.split("\n").filter((l) => /Error|error •|warning •/.test(l)).slice(0, 4).join(" | "), 400);
+    switch (step.kind) {
+      case "green": return { ok: r.code === 0, detail: r.code === 0 ? "초록" : `코드 ${r.code} — ${ex()}` };
+      case "coverage": {
+        if (r.code !== 0) return { ok: false, detail: `라이브 AI 시험 실패(코드 ${r.code}) — ${ex()}` };
+        const cv = await tools.run("cov.check", { patch: s.fullPatch.file, lcov: path.join(s.tmp, "coverage", "lcov.info"), root: s.work });
+        const j = lastJson(cv.stdout);
+        return { ok: cv.code === 0 && !!j?.ok, detail: `실행 증명 ${j?.verdict ?? `코드 ${cv.code}`}${j?.summary ? ` — ${short(JSON.stringify(j.summary), 200)}` : ""}` };
+      }
+      case "analyze_base": { const n = analyzeCounts(r.raw); return { ok: true, detail: `기준 오류 ${n.errors}·경고 ${n.warnings}`, upd: { analyzeBase: n } }; }
+      case "analyze": {
+        const n = analyzeCounts(r.raw), b = s.analyzeBase ?? { errors: 0, warnings: 0 };
+        return { ok: n.errors <= b.errors && n.warnings <= b.warnings, detail: `오류 ${n.errors}(기준 ${b.errors})·경고 ${n.warnings}(기준 ${b.warnings})` };
+      }
+      case "green_or_base":
+        if (r.code === 0) return { ok: true, detail: "초록" };
+        if (r.out.compileError || r.code === 124) return { ok: false, detail: r.code === 124 ? "시간 상한 초과" : `컴파일 오류 — ${ex()}` };
+        // 실패 — 깨끗한 내보내기에서도 같은 실패인지 본다(격리 환경·기존 결함 탓을 이번 수정 탓으로 몰지 않게)
+        return { ok: true, pendingBase: true, detail: `실패 ${failureItems(r.out).length} — 깨끗한 내보내기와 견줌`, upd: { needBase: { ...s.needBase, [step.id]: failureItems(r.out).slice(0, 200) } } };
+      case "base": {
+        const mine = s.needBase[step.of] ?? [];
+        const base = new Set(failureItems(r.out));
+        const fresh = mine.filter((x) => !base.has(x));
+        return { ok: fresh.length === 0 && mine.length > 0, detail: fresh.length ? `이번 수정에서 새로 실패: ${short(fresh.slice(0, 5).join(" | "), 400)}` : `기존 실패 ${mine.length}건(깨끗한 내보내기도 같음)` };
+      }
+      case "ai_gen": {
+        const v = readJson(path.join(s.tmp, "ai-gen", "gen-result.json"))?.verdict;
+        return v === "ok" ? { ok: true, detail: "기준 생성", upd: { aiGenOk: true } } : { ok: false, detail: `기준 생성 실패(${v ?? "결과 없음"})`, upd: { aiCheck: "unavailable", aiDetail: `AI 기준 생성 실패(${v ?? "결과 없음"})` } };
+      }
+      case "ai_cmp": {
+        const v = readJson(path.join(s.tmp, `ai-cmp-${s.fixAttempt}`, "compare-result.json"))?.verdict;
+        const ai = v === "same" ? "pass" : v === "changed" || v === "search-only" ? "fail" : "unavailable";
+        return { ok: true, detail: `AI 결정 비교 ${v ?? "결과 없음"} → ${ai}`, upd: { aiCheck: ai, aiDetail: `AI 결정 비교 ${v ?? "결과 없음"}` } };
+      }
+      default: throw new Error(`모르는 단계 종류 ${step.kind}`);
+    }
+  }
+  async function stepsCheck(s) {
+    let upd = {};
+    let cur = s;
+    if (s.stepHandle) {
+      const step = stepsFor(s).find((x) => x.id === s.stepId);
+      if (!step) throw new Error(`단계 ${s.stepId} 가 목록에 없다`);
+      const r = checkCmd(s.stepHandle, `${s.phase}:${step.id}`);
+      if (r.dead) {
+        if (s.stepRelaunch + 1 < MAX_RELAUNCH) return { stepHandle: null, stepRelaunch: s.stepRelaunch + 1, route: "steps_launch", log: [`${s.phase}:${step.id} ${r.dead} — 다시 띄움`] };
+        r.code = -1; r.raw = r.dead; r.out = readTestOutput("", 1);
+      }
+      const logFile = saveLog(s, `${s.phase}-${s.fixAttempt}-${step.id}`, r.raw);
+      if (r.code === 98) return violate(s, "exit98", `${s.phase}:${step.id} — ${short(r.raw.split("LG-SANDBOX").pop(), 160)}`);
+      if (r.code === 97) throw new Error(`격리 실행 준비 오류(97) ${step.id}: ${short(r.raw.split("LG-SANDBOX").pop(), 200)}`);
+      const j = r.code === -1 ? { ok: false, detail: `실행 실패 ${MAX_RELAUNCH}회 — ${r.dead}` } : await judgeStep(s, step, r);
+      const rec = { phase: s.phase, fix: s.fixAttempt, id: step.id, ok: j.ok, rc: r.code, secs: r.secs ?? null, detail: j.detail, log: rel(s, logFile) };
+      upd = { ...(j.upd ?? {}), steps: [...s.steps, rec], stepsDone: [...s.stepsDone, step.id], stepHandle: null, stepRelaunch: 0, log: [`${s.phase}:${step.id} ${j.ok ? "통과" : "실패"} — ${short(j.detail, 120)}`] };
+      cur = { ...s, ...upd };
+      if (!j.ok) {
+        if (s.phase === "ai") return { ...upd, route: "scope_check" }; // 기준 생성 실패 → 폴백
+        if (s.phase === "merge") return { ...upd, merge: { ...s.merge, ok: false, detail: `${step.id}: ${j.detail}` }, route: "plan" };
+        const tail = r.out ? reproExcerpt({ ...r.out, rc: r.code }) : "";
+        return refix(cur, `자동 검증 '${step.id}' 실패 — ${j.detail}\n${short(tail, 1500)}`, { ...upd, verifyOk: false, verifyFail: { id: step.id, detail: j.detail } });
+      }
+    }
+    if (nextStep(cur)) return { ...upd, route: "steps_launch" };
+    if (cur.phase === "ai") return { ...upd, route: "scope_check" };
+    if (cur.phase === "merge") return { ...upd, merge: { ...cur.merge, ok: true }, route: "commit_push" };
+    // 검증 끝 — 검증하는 동안 사본(수정 패치)이 그대로였나(시험 코드가 lib 를 고쳐 놓는 길)
+    const again = await extract(cur, cur.redbase, `fix-${cur.fixAttempt}-after`);
+    if (!again.ok || again.sha256 !== cur.fixPatch.sha256) return { ...upd, ...violate(cur, "copy_changed", `검증 중 수정 패치가 바뀜(${again.ok ? "내용 다름" : again.reason})`) };
+    return { ...upd, verifyOk: true, verifyFail: null, route: "review_launch" };
+  }
+
+  // ⑫ 검토 — sonnet, 새 맥락, 읽기만
+  function verifySummary(s) {
+    return s.steps.filter((x) => x.phase === "verify" && x.fix === s.fixAttempt).map((x) => `- ${x.id}: ${x.ok ? "통과" : "실패"} — ${x.detail}`).join("\n") || "(없음)";
+  }
+  function reviewLaunch(s) {
+    let patch = "";
+    try { patch = fs.readFileSync(s.fullPatch.file, "utf8"); } catch { /* 없으면 빈 패치로 묻는다 */ }
+    const l = launchLlm(s, "review", "sonnet", reviewPrompt({ signal: s.signal, diag: s.diag, patch, verify: verifySummary(s) }),
+      { tools: ["Read", "Grep", "Glob"], jsonSchema: REVIEW_SCHEMA, timeoutMs: REVIEW_TIMEOUT_MS });
+    if (!l) return { fixError: `sonnet 상한 ${modelCap("sonnet")}회에 닿음(검토)`, route: "plan", log: ["review 상한"] };
+    return { seq: l.seq, reviewHandle: l.handle, llmWaitUntil: null, route: "review_check", log: [`review_launch 수정 ${s.fixAttempt} · 실행 ${l.seq}`] };
+  }
+  function reviewCheck(s) {
+    const c = checkLlm(s, s.reviewHandle, "sonnet", "검토");
+    if (c.fatal) return { ...c.upd, reviewHandle: null, fixError: c.fatal, route: "plan", log: [c.fatal] };
+    if (c.infra) return { ...c.upd, reviewHandle: null, route: "review_launch", log: [`review 실행 실패 — ${c.infra}`] };
+    const rv = c.st ? parseReview(c.st.structured, c.st.text) : null;
+    const review = rv ? { ...rv, pass: reviewPass(rv), fix: s.fixAttempt } : { pass: false, fix: s.fixAttempt, issues: [c.fail ? `검토 호출 실패: ${c.fail}` : "검토 답이 형식에 맞지 않음"], summary: "" };
+    if (!review.pass) {
+      const why = [`검토 반려 — 3경로 ${rv?.three_path ?? "?"} · 무관한 변경 ${rv?.unrelated_changes ?? "?"} · 규칙 일치 ${rv?.rule_match ?? "?"}`, ...(review.issues ?? []).slice(0, 8)].join("\n");
+      return refix({ ...s, ...c.upd }, why, { ...c.upd, reviewHandle: null, review });
+    }
+    const st = statusOf({ ...s, review });
+    const next = st.status !== "ready" ? "plan" : s.mode === "live" ? "merge_prep" : "commit_push";
+    return { ...c.upd, reviewHandle: null, review, route: next, log: [`review 통과 → ${next}`] };
+  }
+
+  // ⑮ 반영 준비(실제 전용) — 최신 master 를 git 없이 내보내 패치를 얹고 격리 재검증. 본 저장소는 읽기만.
+  async function mergePrep(s) {
+    const root = sandboxDir(tools.stateDir, s.sigkey);
+    const dir = path.join(root, "merge"), tar = path.join(root, "src.tar");
+    const h = await tools.run("git.rev-parse", { repo, rev: "master" });
+    const head = h.code === 0 ? h.stdout.trim() : "";
+    if (!/^[0-9a-f]{40}$/.test(head)) return { merge: { ok: false, detail: `master 를 못 찾음(코드 ${h.code})` }, route: "plan" };
+    fs.rmSync(dir, { recursive: true, force: true }); mkdirp(dir);
+    const a = await tools.run("git.archive", { repo, out: tar, rev: head });
+    if (a.code !== 0) throw new Error(`git archive 실패(코드 ${a.code})`);
+    const x = await tools.run("tar.extract-sandbox", { tar, dir });
+    fs.rmSync(tar, { force: true });
+    if (x.code !== 0) throw new Error(`tar 풀기 실패(코드 ${x.code})`);
+    if (forbiddenPresent(dir).length) throw Object.assign(new Error("반영 사본에 있으면 안 되는 것이 있다"), { codeDefect: true });
+    const pg = await tools.run("flutter.pub-get-offline", { dir }); // 패치(LLM 코드)를 얹기 전에만
+    if (pg.code !== 0) throw new Error(`pub get --offline 실패(코드 ${pg.code})`);
+    const ap = await tools.run("patch.apply-copy", { dir, patch: s.fullPatch.file });
+    if (ap.code !== 0) return { merge: { ok: false, head, detail: `최신 master 에 패치가 안 맞음(코드 ${ap.code}): ${short(ap.stdout + ap.stderr, 300)}` }, route: "plan", log: ["merge_prep 충돌"] };
+    return { merge: { ok: null, head, dir }, phase: "merge", stepsDone: [], route: "steps_launch", log: [`merge_prep master ${head.slice(0, 8)} 에 패치 적용`] };
+  }
+
+  // ⑯ 커밋·push — effect 로만. 그림자는 '했을 일'만 적힌다(fn 을 부르지 않는다).
+  async function commitPush(s) {
+    const key = `gostop-commit:${s.sigkey}:${String(s.fullPatch?.sha256 ?? "").slice(0, 12)}`;
+    const wt = path.join(gostopDir(tools.stateDir), "release-wt", keyDir(s.sigkey));
+    const title = short(String(s.diag?.hypothesis ?? s.sigkey).split(/[.。\n]/)[0], 60);
+    const msg = writeAtomic(path.join(rdir(s), "commit-msg.txt"),
+      `fix(rules): ${title}\n\n${short(s.review?.summary ?? "", 600)}\n\n재현 시험: ${s.reproTest}\n자동 검증: ${s.steps.filter((x) => x.phase === "verify" && x.fix === s.fixAttempt).map((x) => `${x.id}${x.ok ? "✓" : "✗"}`).join(" ")}\n\nLG-Key: ${s.sigkey}\n`);
+    const res = await tools.effect(key, "git_commit_push", async () => {
+      const must = (id, r) => { if (r.code !== 0) throw new Error(`${id} 실패(코드 ${r.code}): ${short(r.stderr, 200)}`); };
+      must("worktree-add", await tools.run("git.worktree-add", { repo, wt, rev: s.merge.head }));
+      try {
+        must("apply", await tools.run("git.apply-index", { wt, patch: s.fullPatch.file }));
+        must("commit", await tools.run("git.commit-file", { wt, msg }));
+        must("push", await tools.run("git.push-master", { wt }));
+      } finally {
+        await tools.run("git.worktree-remove", { repo, wt });
+      }
+    });
+    return { commit: { key, shadow: !!res?.shadow, ran: res?.ran !== false && !res?.shadow, dedup: !!res?.dedup }, route: "plan", log: [`commit_push ${res?.shadow ? "그림자(했을 일)" : "실행"}`] };
+  }
+
+  // 1b 상태 판정 — plan 과 검토 뒤 갈림길이 함께 쓴다
+  function statusOf(s) {
+    if (s.violation) return { status: "gave_up", note: `격리 위반 — ${s.violation}` };
+    if (s.rtError) return { status: "gave_up", note: s.rtError };
+    if (s.noRed) return { status: "no_red", note: "재현 시험이 패치 전에 빨간불을 내지 못했다(2회)" };
+    if (s.fixError) return { status: "gave_up", note: s.fixError };
+    if (!s.verifyOk || !s.review?.pass) return { status: "gave_up", note: "검증·검토를 마치지 못했다" };
+    if (s.mode === "live" && s.scopeFinal?.reasons?.length && s.scopeApproval && s.scopeApproval !== "approved") return { status: "gave_up", note: "주인님 반려(수정 패치)" };
+    const reasons = [...(s.scope?.reasons ?? []), ...(s.scopeFinal?.reasons ?? []).map((x) => `${x.path}: ${x.reason}`)];
+    if (reasons.length) {
+      if (s.mode !== "live") return { status: "would_ask", note: reasons.join(" / ") };
+      const okPre = !(s.scope?.reasons?.length) || s.approval === "approved";
+      const okFinal = !(s.scopeFinal?.reasons?.length) || s.scopeApproval === "approved";
+      if (!(okPre && okFinal)) return { status: "gave_up", note: "주인님 반려" };
+    }
+    if (s.mode === "live" && s.merge && s.merge.ok === false) return { status: "gave_up", note: `반영 준비 실패 — ${s.merge.detail}` };
+    return { status: "ready", note: null };
+  }
+
+  // plan.md 의 1b 절 — 고칠 안을 사람이 따라갈 수 있게 경로를 다 적는다
+  function plan1b(s, dir) {
+    const r = (f) => (f ? path.relative(dir, f) : "-");
+    const lastFix = s.steps.filter((x) => x.phase === "verify" && x.fix === s.fixAttempt);
+    return [
+      "", "## 빨간 시험 → 수정 → 검증(1b)",
+      `- 재현 시험: ${s.reproTest ?? "-"}${s.threePath ? ` (3경로 ${JSON.stringify(s.threePath)})` : ""} · 작성 ${s.rtAttempt}회${s.rtError ? ` — ${s.rtError}` : ""}`,
+      `- 시험 파일 자리: ${s.reproTest && s.work ? path.join(s.work, s.reproTest) : "-"}`,
+      ...s.redRuns.map((x) => `- 빨간불 확인 ${x.attempt}: ${x.red ? "빨강" : "아님"} rc=${x.rc} ${x.secs}s 실패 ${x.failed.length}${x.compileError ? " (컴파일 오류)" : ""} · 로그 ${x.log}`),
+      `- 수정: ${s.fixAttempt}회${s.fixError ? ` — ${s.fixError}` : ""} · 정본 패치 ${r(s.fullPatch?.file)} (${s.fullPatch?.files?.map((f) => `${f.path}+${f.added}-${f.removed}`).join(", ") ?? "-"})`,
+      `- 이번 수정만: ${r(s.fixPatch?.file)} · AI 결정 비교: ${s.aiCheck}${s.aiDetail ? ` (${s.aiDetail})` : ""}`,
+      ...(s.scopeFinal ? [`- 수정 범위: ${s.scopeFinal.reasons?.length ? s.scopeFinal.reasons.map((x) => `${s.mode === "shadow" ? "물었을 것" : "승인 사유"} ${x.path}: ${x.reason}`).join(" / ") : "승인 사유 없음"}`] : []),
+      ...(lastFix.length ? ["", "| 검증 | 결과 | 시간 | 내용 | 로그 |", "|---|---|---|---|---|", ...lastFix.map((x) => `| ${x.id} | ${x.ok ? "통과" : "실패"} | ${x.secs ?? "-"}s | ${String(x.detail).replace(/\|/g, "/").slice(0, 160)} | ${x.log} |`)] : []),
+      ...(s.review ? ["", `- 검토(수정 ${s.review.fix}): ${s.review.pass ? "통과" : "반려"} — ${s.review.summary ?? ""}`, ...(s.review.issues ?? []).map((x) => `  - ${x}`)] : []),
+      ...(s.violation ? [`- 격리 위반: ${s.violation}`] : []),
+      ...(s.merge ? [`- 반영 준비(⑮): ${s.merge.ok ? "통과" : `실패 — ${s.merge.detail ?? ""}`} master ${String(s.merge.head ?? "").slice(0, 8)}`] : []),
+      ...(s.commit ? [`- 커밋·push(⑯): ${s.commit.shadow ? "그림자 — 했을 일만 기록" : s.commit.dedup ? "이미 했음" : "실행"} (${s.commit.key})`] : []),
+      `- 호출: sonnet ${sonnetUsed(s)} · opus ${s.calls.opus ?? 0}`,
+    ];
   }
 
   // ⑭ 고칠 안 — 상태를 정하고 runs/<sigkey>/plan.md 를 남긴다. 사본의 build·.dart_tool 은 지운다(사본은 3일 보관, §2).
@@ -220,7 +720,10 @@ export function build({ checkpointer, llm, tools }) {
     else if (s.repro === "not_reproduced") status = "not_reproduced";
     else if (s.repro === "failed" || s.repro === "compile_error" || s.repro === "tool_error" || s.diagError) { status = "gave_up"; note = s.diagError ?? `재현 ${s.repro}`; }
     else if (s.diag?.rule_gap) status = "rule_decision";
-    else if (s.scope?.reasons?.length) {
+    else if (s.stage === "1b") {
+      if (s.mode === "live" && s.scope?.reasons?.length && s.approval !== "approved") { status = "gave_up"; note = "주인님 반려(수정 전 승인)"; }
+      else ({ status, note } = statusOf(s));
+    } else if (s.scope?.reasons?.length) {
       if (s.mode !== "live") status = "would_ask";
       else if (s.approval === "approved") status = "ready";
       else { status = "gave_up"; note = "주인님 반려"; }
@@ -232,7 +735,8 @@ export function build({ checkpointer, llm, tools }) {
     if (s.diag || status === "flaky" || status === "not_reproduced") {
       // 주인님용 요약 — haiku 1회(설계 ⑭). 덤이다: 실패·상한 보류·시간 부족이어도 고칠 안은 남기고 넘어간다(H3 하 — 요약 때문에 대기열을 묶지 않는다)
       try {
-        const facts = JSON.stringify({ sigkey: s.sigkey, status, repro: s.repro, diag: s.diag ? { hypothesis: s.diag.hypothesis, files: s.diag.files, rule_gap: s.diag.rule_gap, rule_gap_detail: s.diag.rule_gap_detail, confidence: s.diag.confidence } : null, scope: s.scope?.reasons ?? [] });
+        const facts = JSON.stringify({ sigkey: s.sigkey, status, note, repro: s.repro, diag: s.diag ? { hypothesis: s.diag.hypothesis, files: s.diag.files, rule_gap: s.diag.rule_gap, rule_gap_detail: s.diag.rule_gap_detail, confidence: s.diag.confidence } : null, scope: s.scope?.reasons ?? [],
+          ...(s.stage === "1b" ? { repro_test: s.reproTest, patch_files: s.fullPatch?.files?.map((f) => f.path) ?? [], verify: s.steps.filter((x) => x.phase === "verify" && x.fix === s.fixAttempt).map((x) => `${x.id}:${x.ok ? "ok" : "fail"}`), review: s.review?.summary ?? null, approval_reasons: s.scopeFinal?.reasons?.map((x) => x.reason) ?? [] } : {}) });
         const r = await llm.ask(`아래 고스톱 결함 진단 결과를 비개발자가 읽을 한국어 3줄로 요약하라. 무엇이 잘못됐는지, 왜인지, 다음에 무엇을 해야 하는지. 요약문만 답하라.\n${facts}`,
           { model: "haiku", node: "plan" });
         summary = short(r.text, 1200);
@@ -258,18 +762,23 @@ export function build({ checkpointer, llm, tools }) {
       ...(s.scope ? ["", "## 수정 범위 미리 보기", ...(s.scope.reasons.length ? s.scope.reasons.map((r) => `- ${s.mode === "shadow" ? "물었을 것" : "승인 사유"}: ${r}`) : ["- 승인 사유 없음"]),
         ...(s.scope.note ? [`- 참고: ${s.scope.note}`] : [])] : []),
       ...(match ? ["", "## 벤치 대조", `- 사례: ${bench.id} · 진단 일치: ${match.ok}${match.why.length ? ` (${match.why.join("; ")})` : ""}`] : []),
+      ...(s.stage === "1b" && (s.rtAttempt || s.reproTest) ? plan1b(s, dir) : []),
       "",
     ].join("\n");
     const planPath = writeAtomic(path.join(dir, "plan.md"), md);
-    writeAtomic(path.join(dir, "result.json"), `${JSON.stringify({ sigkey: s.sigkey, status, note, leak: s.leak, repro: s.repro, runs: s.reproRuns.map(({ blocks, ...r }) => r), diag: s.diag, diagError: s.diagError, scope: s.scope, bench: bench ? { id: bench.id, match } : null, mode: s.mode, base: s.base, sizes: s.sizes }, null, 1)}\n`);
+    writeAtomic(path.join(dir, "result.json"), `${JSON.stringify({ sigkey: s.sigkey, status, note, leak: s.leak, repro: s.repro, runs: s.reproRuns.map(({ blocks, ...r }) => r), diag: s.diag, diagError: s.diagError, scope: s.scope, bench: bench ? { id: bench.id, match } : null, mode: s.mode, base: s.base, sizes: s.sizes,
+      ...(s.stage === "1b" ? { stage: "1b", reproTest: s.reproTest, reproSupport: s.reproSupport, threePath: s.threePath, rtAttempt: s.rtAttempt, rtError: s.rtError, redRuns: s.redRuns, noRed: s.noRed,
+        fixAttempt: s.fixAttempt, fixError: s.fixError, fixPatch: s.fixPatch, fullPatch: s.fullPatch, aiCheck: s.aiCheck, aiDetail: s.aiDetail, scopeFinal: s.scopeFinal,
+        steps: s.steps, verifyOk: s.verifyOk, review: s.review, violation: s.violation, merge: s.merge, commit: s.commit, calls: { ...s.calls, sonnet: sonnetUsed(s) }, work: s.work } : {}) }, null, 1)}\n`);
     // 판정 M8 은 스레드당 한 번(plan 이 다시 돌아도 두 번 세지 않게 표식 파일)
     let firstBench = false;
     if (bench) { try { fs.writeFileSync(path.join(dir, "bench-recorded"), status, { flag: "wx", mode: 0o600 }); firstBench = true; } catch { /* 이미 적음 */ } }
     if (firstBench) tools.bench({ bench: bench.id, reproduced: s.repro === "skipped" ? null : s.repro === "reproduced", diag_match: match?.ok ?? null, signal: sg.kind });
-    for (const sub of ["build", ".dart_tool"]) if (s.work) fs.rmSync(path.join(s.work, sub), { recursive: true, force: true });
+    for (const d of [s.work, s.baseDir, s.merge?.dir].filter(Boolean)) for (const sub of ["build", ".dart_tool"]) fs.rmSync(path.join(d, sub), { recursive: true, force: true });
     return { status, planPath, log: [`plan ${status}`] };
   }
 
+  const R = (s) => s.route; // 갈림길 노드가 고른 다음 노드
   return new StateGraph(State)
     .addNode("preflight", preflight)
     .addNode("sandbox", sandbox)
@@ -279,6 +788,20 @@ export function build({ checkpointer, llm, tools }) {
     .addNode("diagnose_check", diagnoseCheck)
     .addNode("scope_precheck", scopePrecheck)
     .addNode("owner_gate", ownerGate)
+    .addNode("repro_test_launch", reproTestLaunch)
+    .addNode("repro_test_check", reproTestCheck)
+    .addNode("verify_red_launch", verifyRedLaunch)
+    .addNode("verify_red_check", verifyRedCheck)
+    .addNode("fix_launch", fixLaunch)
+    .addNode("fix_check", fixCheck)
+    .addNode("scope_check", scopeCheck)
+    .addNode("scope_gate", scopeGate)
+    .addNode("steps_launch", stepsLaunch)
+    .addNode("steps_check", stepsCheck)
+    .addNode("review_launch", reviewLaunch)
+    .addNode("review_check", reviewCheck)
+    .addNode("merge_prep", mergePrep)
+    .addNode("commit_push", commitPush)
     .addNode("plan", plan)
     .addEdge(START, "preflight")
     .addEdge("preflight", "sandbox")
@@ -287,8 +810,22 @@ export function build({ checkpointer, llm, tools }) {
     .addConditionalEdges("reproduce_check", afterReproCheck, ["reproduce_launch", "diagnose_launch", "plan"])
     .addEdge("diagnose_launch", "diagnose_check")
     .addConditionalEdges("diagnose_check", afterDiagCheck, ["diagnose_launch", "scope_precheck", "plan"])
-    .addConditionalEdges("scope_precheck", afterScope, ["owner_gate", "plan"])
-    .addEdge("owner_gate", "plan")
+    .addConditionalEdges("scope_precheck", afterScope, ["owner_gate", "repro_test_launch", "plan"])
+    .addConditionalEdges("owner_gate", afterOwner, ["repro_test_launch", "plan"])
+    .addConditionalEdges("repro_test_launch", R, ["repro_test_check", "plan"])
+    .addConditionalEdges("repro_test_check", R, ["repro_test_launch", "verify_red_launch", "plan"])
+    .addEdge("verify_red_launch", "verify_red_check")
+    .addConditionalEdges("verify_red_check", R, ["verify_red_launch", "repro_test_launch", "fix_launch", "plan"])
+    .addConditionalEdges("fix_launch", R, ["fix_check", "plan"])
+    .addConditionalEdges("fix_check", R, ["fix_launch", "steps_launch", "scope_check", "plan"])
+    .addConditionalEdges("scope_check", R, ["fix_launch", "scope_gate", "steps_launch", "plan"])
+    .addConditionalEdges("scope_gate", afterScopeGate, ["steps_launch", "plan"])
+    .addEdge("steps_launch", "steps_check")
+    .addConditionalEdges("steps_check", R, ["steps_launch", "scope_check", "fix_launch", "review_launch", "commit_push", "plan"])
+    .addConditionalEdges("review_launch", R, ["review_check", "plan"])
+    .addConditionalEdges("review_check", R, ["review_launch", "fix_launch", "merge_prep", "commit_push", "plan"])
+    .addConditionalEdges("merge_prep", R, ["steps_launch", "plan"])
+    .addEdge("commit_push", "plan")
     .addEdge("plan", END)
     .compile({ checkpointer });
 }
