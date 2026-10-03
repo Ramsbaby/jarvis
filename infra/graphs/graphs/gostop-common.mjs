@@ -79,6 +79,45 @@ export function applyInject(dir, inject) {
   fs.writeFileSync(file, src.replace(inject.find, () => inject.replace));
 }
 
+// 사본에서 빼는 '기록' 문서(독립 검토 H3 상1): 수정 원장·작업 기록·QA 보고는 벤치 정답(무엇을 어디서 고쳤나)을 담는다.
+// 남기는 문서는 규칙서(docs/rules)와 CLAUDE.md 뿐이다. 시험은 이 문서들을 읽지 않는다(10-03 확인 — test/ 에서 참조 0).
+export const KEEP_DOCS = new Set(["rules"]);
+export const DROP_TOP = ["context", "coverage", "qa", ".gemini", ".vscode", ".cursorrules", ".fvm.bak", "store_assets", ".cursor"];
+export function pruneHistoryDocs(dir) {
+  const removed = [];
+  const rm = (rel) => { fs.rmSync(path.join(dir, rel), { recursive: true, force: true }); removed.push(rel); };
+  const docs = path.join(dir, "docs");
+  if (fs.existsSync(docs)) for (const e of fs.readdirSync(docs)) if (!KEEP_DOCS.has(e)) rm(path.join("docs", e));
+  for (const t of DROP_TOP) if (fs.existsSync(path.join(dir, t))) rm(t);
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (!e.isFile()) continue;
+    if ((/\.(md|txt|png|jpe?g)$/i.test(e.name) && e.name !== "CLAUDE.md") || /^CHANGELOG/i.test(e.name)) rm(e.name);
+  }
+  return removed;
+}
+
+// 벤치 누설 검사: 코드(lib·test) 밖 글 파일에 정답 표지(수정 커밋 해시·정답 시험 이름 등)가 있으면 그 자리를 돌려준다.
+// 코드 주석은 실제 회귀에서도 남아 있으므로 보지 않는다(설계 §1 '회귀 주입').
+export function leakScan(dir, terms) {
+  const want = (terms ?? []).map(String).filter((x) => x.length >= 5);
+  const hits = [];
+  if (!want.length) return hits;
+  const walk = (d, rel) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { if (!["lib", "test", "build", ".dart_tool", "assets", "android", "ios", "macos", "web", "node_modules"].includes(r)) walk(path.join(d, e.name), r); continue; }
+      if (!e.isFile() || hits.length >= 20) continue;
+      let buf;
+      try { if (fs.statSync(path.join(d, e.name)).size > 2_000_000) continue; buf = fs.readFileSync(path.join(d, e.name)); } catch { continue; }
+      if (buf.includes(0)) continue; // 바이너리
+      const text = buf.toString("utf8");
+      for (const t of want) if (text.includes(t)) { hits.push({ file: r, term: t }); break; }
+    }
+  };
+  walk(dir, "");
+  return hits;
+}
+
 // ── 대화 작업 표식(설계 §5.2①) ───────────────────────────────────
 export const BUSY_FILE = ".jarvis-busy";
 export const BUSY_RECENT_MS = 30 * 60_000;
@@ -95,7 +134,7 @@ export function busyReason(repo, nowMs, lastCommitSec) {
 // ── 재현 출력 판독(사람이 쓴 기존 시험의 출력) ─────────────────────
 // 차분 대조: '⛔ seed=N: …' 블록(들여쓴 4칸 줄까지). 일반 시험: 실패한 시험 이름. 서명은 흔들림 판정에 쓴다.
 const strip = (s) => String(s).replace(/\u001b\[[0-9;]*m/g, "");
-export function readTestOutput(raw, rc) {
+export function readTestOutput(raw, rc, signal = null) {
   const lines = strip(raw).replace(/\r/g, "\n").split("\n");
   const blocks = [];
   for (let i = 0; i < lines.length; i++) {
@@ -112,12 +151,16 @@ export function readTestOutput(raw, rc) {
   }
   const compileError = lines.some((l) => /^(?:lib|test)\/\S+\.dart:\d+:\d+: Error:/.test(l.trim()) || /Failed to load ".*": Compilation failed/.test(l));
   const summary = lines.map((l) => l.trim()).find((l) => /^★ /.test(l)) ?? null;
-  const red = Number(rc) !== 0;
+  // 신호로 죽음(코드 없음)은 초록이 아니라 실행 실패다(H3 하) — 그래프가 같은 회차를 다시 띄운다
+  const infra = rc == null || signal != null;
+  const red = !infra && Number(rc) !== 0;
   // 서명: 불일치 블록(차분 대조) 또는 실패한 시험 이름 — 메모·시각처럼 매번 바뀌는 줄은 뺀다
   const sig = blocks.length
     ? blocks.map((b) => b.filter((x) => !/^메모:|^결정 \d+건/.test(x)).join(" | ")).join(" || ")
     : failed.join(" || ");
-  return { red, rc: Number(rc), blocks, failed, compileError, summary, sig: red ? (sig || "(실패 · 서명 없음)") : "" };
+  // 빨간불인데 불일치·실패 시험·컴파일 오류 어느 것도 없으면 도구 오류(없는 파일·flutter 고장)다 — 재현으로 세지 않는다(H3 하)
+  const toolError = red && !blocks.length && !failed.length && !compileError;
+  return { red, rc: rc == null ? null : Number(rc), infra, toolError, blocks, failed, compileError, summary, sig: red ? (sig || "(실패 · 서명 없음)") : "" };
 }
 
 // 2회 결과 → 재현 판정. 둘 다 같은 서명의 빨간불 = reproduced, 둘 다 초록 = not_reproduced, 그 밖 = flaky.
@@ -125,6 +168,7 @@ export function judgeRepro(runs) {
   if (runs.length < 2) return null;
   const [a, b] = runs;
   if (a.compileError || b.compileError) return "compile_error";
+  if (a.toolError || b.toolError) return "tool_error";
   if (a.red && b.red) return a.sig === b.sig ? "reproduced" : "flaky";
   if (!a.red && !b.red) return "not_reproduced";
   return "flaky";
@@ -182,7 +226,12 @@ export function parseDiag(structured, text) {
   }
   return null;
 }
-export const normRel = (f) => String(f).trim().replace(/^\.\//, "").replace(/^[A-Za-z]:/, "").replace(/^\/.*?\/(?=(lib|test|docs)\/)/, "").replace(/:\d+(?::\d+)?$/, "");
+// 저장소 기준 상대 경로로. '..' 는 펴서 본다 — 펴도 저장소 밖(.. 로 시작·절대 경로)이면 '?' 를 앞에 붙여 허용 목록에 안 걸리게(H3 하)
+export const normRel = (f) => {
+  const s = String(f).trim().replace(/^\.\//, "").replace(/^[A-Za-z]:/, "").replace(/^\/.*?\/(?=(lib|test|docs)\/)/, "").replace(/:\d+(?:[-:]\d+)?$/, "");
+  const n = path.posix.normalize(s);
+  return n.startsWith("..") || n.startsWith("/") ? `?${n}` : n;
+};
 
 // ── 수정 범위 미리 보기(설계 §4① 허용 목록 · §4② AI 영역) ─────────────
 const ALLOW = [/^lib\/domain\/game\//, /^lib\/presentation\/providers\/(game_provider|bomb_handler)\.dart$/, /^test\//];
@@ -205,18 +254,30 @@ export function loadBench(file = BENCH_FILE) {
   if (!j || !Array.isArray(j.cases)) throw new Error(`벤치 목록을 못 읽음: ${file}`);
   return j;
 }
-// 진단이 벤치 정답과 맞나: 기대 파일 중 하나 이상 · 기대 낱말(정규식) 모두 · 규칙 공백 여부 · (있으면) 최종 상태
+// 진단이 벤치 정답과 맞나(H3 상2 — 프롬프트 낱말은 채점하지 않는다. 낱말은 '실패한 시험' 이름으로 이미 프롬프트에 있다):
+//   ① 기대 파일이 진단 파일 1~2위 안에 있고 ② 근거('파일:줄')가 정답 자리(수정·주입한 줄 범위) ±NEAR 줄 안을 가리키며
+//   ③ 규칙 공백 판정·최종 상태가 기대와 같을 때만 맞음. 정답 자리 = expect.lines { 파일: [[시작, 끝], …] }(벤치 준비 때 diff 로 계산).
+export const NEAR = 15;
+export function evidenceRefs(diag) {
+  const refs = [];
+  for (const e of [...(diag?.evidence ?? []), diag?.hypothesis ?? ""]) {
+    for (const m of String(e).matchAll(/((?:lib|test|docs)\/[A-Za-z0-9_./-]+\.(?:dart|md)):(\d+)(?:[-~](\d+))?/g)) {
+      refs.push({ file: normRel(m[1]), from: Number(m[2]), to: Number(m[3] ?? m[2]) });
+    }
+  }
+  return refs;
+}
 export function diagMatch(expect, diag, status) {
   if (!expect) return null;
   const why = [];
   if (!diag) return { ok: false, why: ["진단 없음"] };
-  const files = new Set((diag.files ?? []).map(normRel));
-  if (expect.files?.length && !expect.files.some((f) => files.has(f))) why.push(`파일 불일치(기대 ${expect.files.join(",")})`);
-  const text = `${diag.hypothesis}\n${diag.rule_gap_detail ?? ""}\n${(diag.evidence ?? []).join("\n")}`;
-  // 낱말 묶음은 절반 이상(올림) 맞으면 된다 — 파일이 맞고 기제를 말하면 원인 일치로 본다
-  const kws = expect.keywords ?? [];
-  const missing = kws.filter((k) => !new RegExp(k, "i").test(text));
-  if (kws.length && kws.length - missing.length < Math.ceil(kws.length / 2)) why.push(`낱말 부족(${missing.join(" / ")})`);
+  const top = (diag.files ?? []).map(normRel).slice(0, 2);
+  if (expect.files?.length && !expect.files.some((f) => top.includes(f))) why.push(`기대 파일이 1~2위에 없음(기대 ${expect.files.join(",")} · 진단 ${top.join(",") || "-"})`);
+  if (expect.lines && Object.keys(expect.lines).length) {
+    const refs = evidenceRefs(diag);
+    const near = refs.some((r) => (expect.lines[r.file] ?? []).some(([a, b]) => r.to >= a - NEAR && r.from <= b + NEAR));
+    if (!near) why.push(`근거 줄이 정답 자리 ±${NEAR}줄 밖(근거 ${refs.slice(0, 4).map((r) => `${r.file.split("/").pop()}:${r.from}`).join(", ") || "없음"})`);
+  }
   if (typeof expect.ruleGap === "boolean" && diag.rule_gap !== expect.ruleGap) why.push(`규칙 공백 판정 ${diag.rule_gap}(기대 ${expect.ruleGap})`);
   if (expect.status && status && expect.status !== status) why.push(`상태 ${status}(기대 ${expect.status})`);
   return { ok: why.length === 0, why };
@@ -237,7 +298,8 @@ export function reproCommand(signal, dir) {
 
 // 벤치 사례 → 수정 그래프 신호
 export function benchSignal(c, round = 1) {
-  const sig = { source: "bench", kind: c.kind, sigkey: `bench:${c.id}:r${round}`, rev: c.rev, bench: { id: c.id, expect: c.expect ?? null } };
+  const sig = { source: "bench", kind: c.kind, sigkey: `bench:${c.id}:r${round}`, rev: c.rev,
+    bench: { id: c.id, expect: c.expect ?? null, leakTerms: [...new Set([c.origin, ...(c.leakTerms ?? [])].filter(Boolean))] } };
   if (c.test) sig.test = c.test;
   if (c.defines) sig.defines = c.defines;
   if (c.report) sig.report = c.report;

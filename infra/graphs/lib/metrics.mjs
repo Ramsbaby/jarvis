@@ -8,7 +8,7 @@ import { iso } from "./config.mjs";
 // 사건 이름 — lg-report.mjs 가 이 이름으로 센다. 새 사건을 더하면 README 의 표와 함께 고친다.
 export const EVENTS = new Set([
   "start", "node_start", "node_end", "continue", "interrupted", "resumed", "waiting", "answered", "expired", "held",
-  "gave_up", "done", "llm", "effect", "stuck", "tick", "gc", "failed", "bench",
+  "gave_up", "done", "llm", "effect", "stuck", "tick", "gc", "failed", "bench", "fault",
 ]);
 
 const MAX_LINE = 3800;

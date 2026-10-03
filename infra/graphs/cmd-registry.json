@@ -150,7 +150,7 @@
       "maxSeconds": 45
     },
     "flutter.test-defines": {
-      "desc": "사본에서 사람이 쓴 기존 시험을 씨앗(dart-define 3자리, 안 쓰는 자리는 LG_NOOP=1)으로 돌린다 — 재현(설계 §5.2③). 실측 최대 46초(1판, 첫 컴파일 포함, 10-03) → 최대 시간 1.5배 69초",
+      "desc": "사본에서 사람이 쓴 기존 시험을 씨앗(dart-define 3자리, 안 쓰는 자리는 LG_NOOP=1)으로 돌린다 — 재현(설계 §5.2③). 실측 최대 49초(벤치 실주행 1판, 부하 중, 10-03) → 최대 시간 1.5배 74초, 시간 제한 68초",
       "bin": "/opt/homebrew/bin/flutter",
       "argv": [
         "test",
@@ -177,11 +177,11 @@
         "shadow",
         "live"
       ],
-      "timeoutSec": 60,
-      "maxSeconds": 69
+      "timeoutSec": 68,
+      "maxSeconds": 74
     },
     "flutter.test-file": {
-      "desc": "사본에서 사람이 쓴 기존 시험 파일 하나를 그대로 돌린다 — 회귀 주입·CI 실패 재현. 실측 최대 26.3초(벤치 14건) → 최대 시간 1.5배 40초. 긴 CI 시험은 넘을 수 있다(1b 에서 시험별로)",
+      "desc": "사본에서 사람이 쓴 기존 시험 파일 하나를 그대로 돌린다 — 회귀 주입·CI 실패 재현. 실측 최대 37.8초(독립 검토 재측정, 부하 중) → 최대 시간 1.5배 57초, 시간 제한 52초. 긴 CI 시험은 넘을 수 있다(1b 에서 시험별로)",
       "bin": "/opt/homebrew/bin/flutter",
       "argv": [
         "test",
@@ -199,8 +199,8 @@
         "shadow",
         "live"
       ],
-      "timeoutSec": 35,
-      "maxSeconds": 40
+      "timeoutSec": 52,
+      "maxSeconds": 57
     },
     "gh.run-list": {
       "desc": "CI 신호(읽기 전용) — 고스톱 저장소 최근 실행 50건 JSON. 저장소는 작업 폴더의 git 원격으로 정한다. 실측 2.1초",

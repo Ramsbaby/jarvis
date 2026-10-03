@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { StateGraph, Annotation, START, END, interrupt } from "@langchain/langgraph";
 import {
-  repoPath, sandboxDir, runDir, mkdirp, writeAtomic, dirBytes, forbiddenPresent, applyInject, busyReason,
+  repoPath, sandboxDir, runDir, mkdirp, writeAtomic, dirBytes, forbiddenPresent, applyInject, busyReason, pruneHistoryDocs, leakScan,
   readTestOutput, judgeRepro, reproExcerpt, DIAG_SCHEMA, parseDiag, scopeOf, diagMatch, reproCommand, short, DIFF_TEST,
 } from "./gostop-common.mjs";
 
@@ -16,7 +16,9 @@ import {
 export const meta = { name: "gostop-fix", description: "고스톱 결함 재현·진단(1a 읽기 전용)", serial: true };
 
 const MAX_REPRO_ATTEMPTS = 3; // 분리 실행이 결과 없이 죽거나 최대 시간을 넘긴 경우의 다시 띄우기(같은 run 번호)
-const MAX_DIAG_ATTEMPTS = 2; // sonnet ×≤2 (설계 §5.2④)
+const MAX_DIAG_ATTEMPTS = 2; // sonnet ×≤2 (설계 §5.2④) — 답이 형식에 안 맞을 때
+const MAX_DIAG_INFRA = 3; // 로그인 만료·사용량 한도·결과 없이 죽음으로 다시 띄우는 횟수(모델 시도와 따로 센다, H3 상3)
+const DIAG_WAIT_MS = { login: 6 * 3_600_000, usage_limit: 3_600_000 }; // 관문(llm-hold)과 같은 쉼
 const DIAG_TIMEOUT_MS = 15 * 60_000; // 분리 실행 — 최대 시간은 1.5배(22.5분)
 
 const last = (a, b) => (b === undefined ? a : b);
@@ -34,6 +36,11 @@ const State = Annotation.Root({
   repro: Annotation({ reducer: last, default: () => null }), // reproduced · not_reproduced · flaky · skipped · compile_error · failed
   diagHandle: Annotation({ reducer: last, default: () => null }),
   diagAttempt: Annotation({ reducer: last, default: () => 1 }),
+  diagJob: Annotation({ reducer: last, default: () => 1 }), // 분리 실행 시도 번호(다시 띄울 때마다 +1 — 같은 번호는 같은 결과 파일)
+  diagInfra: Annotation({ reducer: last, default: () => 0 }),
+  diagWaitUntil: Annotation({ reducer: last, default: () => null }),
+  leak: Annotation({ reducer: last, default: () => null }), // 벤치 정답 누설(사본 안 글 파일)
+  pruned: Annotation({ reducer: last, default: () => 0 }),
   diag: Annotation({ reducer: last, default: () => null }),
   diagError: Annotation({ reducer: last, default: () => null }),
   scope: Annotation({ reducer: last, default: () => null }),
@@ -82,6 +89,7 @@ export function build({ checkpointer, llm, tools }) {
         if (x.code !== 0) throw new Error(`tar 풀기 실패(코드 ${x.code}): ${short(x.stderr)}`);
       }
       fs.rmSync(tar, { force: true });
+      for (const dir of [work, clean]) pruneHistoryDocs(dir); // 수정 원장·작업 기록·QA 보고 — 정답이 적혀 있다(H3 상1)
       if (s.signal?.kind === "inject") { applyInject(work, s.signal.inject); applyInject(clean, s.signal.inject); }
       const bad = [...forbiddenPresent(work), ...forbiddenPresent(clean)];
       if (bad.length) throw Object.assign(new Error(`사본에 있으면 안 되는 것이 있다: ${bad.join(", ")}`), { codeDefect: true });
@@ -90,7 +98,9 @@ export function build({ checkpointer, llm, tools }) {
       fs.writeFileSync(ready, s.base, { mode: 0o600 });
     }
     const sizes = { work: dirBytes(work), clean: dirBytes(clean) };
-    return { work, clean, sizes, log: [`sandbox ${Math.round((sizes.work + sizes.clean) / 1e6)}MB`] };
+    // 벤치면 정답 표지(수정 커밋 해시·정답 시험 이름 등)가 사본 글 파일에 없는지 — 있으면 이 사례는 진단하지 않는다(plan: gave_up)
+    const leak = s.signal?.bench ? leakScan(work, s.signal.bench.leakTerms) : [];
+    return { work, clean, sizes, leak: leak.length ? leak : null, log: [`sandbox ${Math.round((sizes.work + sizes.clean) / 1e6)}MB${leak.length ? ` · 누설 ${leak.length}` : ""}`] };
   }
 
   // ③ 재현 — 사람이 쓴 기존 시험을 같은 조건으로 2회(흔들림 판정). 분리 실행이라 띄우기/확인 두 노드다.
@@ -108,14 +118,14 @@ export function build({ checkpointer, llm, tools }) {
     if (st.state === "running") throw tools.pending(`재현 ${s.reproRuns.length + 1}/2 진행 중`);
     // 결과 없이 죽음·최대 시간 초과(dead) · 시간 제한에 걸림(timedOut) · 띄우지 못함(error) — 재현이 아니라 실행 실패다.
     // 같은 회차를 다시 띄운다(통틀어 3회). 끝내 안 되면 failed → plan(gave_up).
-    if (st.state === "dead" || st.timedOut || st.error) {
-      const why = st.state === "dead" ? `분리 실행 ${st.reason}` : st.timedOut ? "시간 제한 초과" : `띄우기 오류 ${short(st.error, 80)}`;
+    if (st.state === "dead" || st.timedOut || st.error || st.code == null || st.signal) {
+      const why = st.state === "dead" ? `분리 실행 ${st.reason}` : st.timedOut ? "시간 제한 초과" : st.error ? `띄우기 오류 ${short(st.error, 80)}` : `신호로 끝남(${st.signal ?? "코드 없음"})`;
       const attempt = s.reproAttempt + 1;
       if (attempt > MAX_REPRO_ATTEMPTS) return { reproHandle: null, repro: "failed", log: [`reproduce ${why} — ${MAX_REPRO_ATTEMPTS}회 끝`] };
       return { reproHandle: null, reproAttempt: attempt, log: [`reproduce ${why} — 다시 띄움(${attempt})`] };
     }
     const raw = tools.output(h, "stdout") + tools.output(h, "stderr");
-    const out = readTestOutput(raw, st.code);
+    const out = readTestOutput(raw, st.code, st.signal ?? null);
     const n = s.reproRuns.length + 1;
     const logFile = writeAtomic(path.join(runDir(tools.stateDir, s.sigkey), `repro-${n}.log`), raw.slice(-200_000));
     const run = { n, rc: out.rc, red: out.red, sig: out.sig, blocks: out.blocks, failed: out.failed, summary: out.summary,
@@ -125,7 +135,7 @@ export function build({ checkpointer, llm, tools }) {
     return { reproRuns: runs, reproHandle: null, reproAttempt: 1, repro: verdict, log: [`reproduce_check ${n}/2 rc=${run.rc} ${run.secs}s${verdict ? ` → ${verdict}` : ""}`] };
   }
   const afterReproCheck = (s) => {
-    if (s.repro === "failed" || s.repro === "compile_error") return "plan";
+    if (s.repro === "failed" || s.repro === "compile_error" || s.repro === "tool_error") return "plan";
     if (!s.repro) return "reproduce_launch"; // 다시 띄우기 또는 2회째
     // 차분 대조·시험 신호는 재현이 돼야 진단한다. 재현 안 됨·흔들림은 고칠 안으로 끝(설계 §5.2 간선)
     return s.repro === "reproduced" ? "diagnose_launch" : "plan";
@@ -158,9 +168,11 @@ export function build({ checkpointer, llm, tools }) {
     return lines.join("\n");
   }
   function diagnoseLaunch(s) {
-    const h = llm.launchAsk(diagPrompt(s), { model: "sonnet", node: "diagnose", attempt: s.diagAttempt, tools: ["Read", "Grep", "Glob"], cwd: s.work,
+    // 로그인 만료·사용량 한도 뒤에는 관문과 같은 시간을 쉰다(그사이 틱 관문도 llm-hold 로 쉰다). 쉬는 동안은 보류 — 다음 틱에 다시 본다.
+    if (s.diagWaitUntil && tools.now() < s.diagWaitUntil) throw tools.hold(`진단 호출 쉼 — ${new Date(s.diagWaitUntil).toISOString()} 뒤 다시`, "llm_wait");
+    const h = llm.launchAsk(diagPrompt(s), { model: "sonnet", node: "diagnose", attempt: s.diagJob, tools: ["Read", "Grep", "Glob"], cwd: s.work,
       jsonSchema: DIAG_SCHEMA, timeoutMs: DIAG_TIMEOUT_MS });
-    return { diagHandle: h, log: [`diagnose_launch 시도 ${s.diagAttempt}`] };
+    return { diagHandle: h, diagWaitUntil: null, log: [`diagnose_launch 시도 ${s.diagAttempt} · 실행 ${s.diagJob}`] };
   }
   function diagnoseCheck(s) {
     const st = llm.checkAsk(s.diagHandle);
@@ -169,13 +181,19 @@ export function build({ checkpointer, llm, tools }) {
       const d = parseDiag(st.structured, st.text);
       if (d) return { diag: d, diagHandle: null, log: [`diagnose_check 확신도 ${d.confidence} · 파일 ${d.files.length} · 규칙 공백 ${d.rule_gap}`] };
     }
-    if (st.state === "failed" && (st.kind === "login" || st.kind === "usage_limit")) {
-      throw tools.hold(`진단 호출 ${st.kind === "login" ? "로그인 만료" : "사용량 한도"} — 관문이 풀린 뒤 다시`, st.kind);
+    // 실행 실패(로그인 만료·한도·결과 없이 죽음·호출 오류)는 모델 시도로 세지 않고 새 실행 번호로 다시 띄운다(H3 상3 — 같은 번호는 같은 결과 파일을 다시 읽는다)
+    const infraFail = st.state === "dead" || (st.state === "failed" && st.kind !== "fable");
+    if (infraFail) {
+      const n = s.diagInfra + 1;
+      const why = `${st.state} ${st.reason ?? st.kind ?? ""} ${short(st.error ?? "", 120)}`.trim();
+      if (n > MAX_DIAG_INFRA) return { diagHandle: null, diagError: `진단 실행 실패 ${MAX_DIAG_INFRA}회 — ${why}`, log: [`diagnose 실행 실패 끝 — ${why}`] };
+      const wait = DIAG_WAIT_MS[st.kind] ?? 0;
+      return { diagHandle: null, diagJob: s.diagJob + 1, diagInfra: n, diagWaitUntil: wait ? tools.now() + wait : null, log: [`diagnose 실행 실패(${n}) — ${why}`] };
     }
-    const why = st.state === "done" ? "진단 JSON 이 형식에 맞지 않음" : `${st.state} ${st.reason ?? st.kind ?? ""} ${short(st.error ?? "", 120)}`.trim();
+    const why = st.state === "done" ? "진단 JSON 이 형식에 맞지 않음" : `${st.state} ${st.kind ?? ""}`.trim();
     const attempt = s.diagAttempt + 1;
     if (attempt > MAX_DIAG_ATTEMPTS) return { diagHandle: null, diagError: why, log: [`diagnose 실패 ${MAX_DIAG_ATTEMPTS}회 — ${why}`] };
-    return { diagHandle: null, diagAttempt: attempt, log: [`diagnose 다시(${attempt}) — ${why}`] };
+    return { diagHandle: null, diagAttempt: attempt, diagJob: s.diagJob + 1, log: [`diagnose 다시(${attempt}) — ${why}`] };
   }
   const afterDiagCheck = (s) => (s.diag ? "scope_precheck" : s.diagError ? "plan" : "diagnose_launch");
 
@@ -195,26 +213,29 @@ export function build({ checkpointer, llm, tools }) {
 
   // ⑭ 고칠 안 — 상태를 정하고 runs/<sigkey>/plan.md 를 남긴다. 사본의 build·.dart_tool 은 지운다(사본은 3일 보관, §2).
   async function plan(s) {
-    let status;
-    if (s.repro === "flaky") status = "flaky";
+    let status, note = null;
+    if (s.leak) { status = "gave_up"; note = `벤치 정답 누설 — ${s.leak.map((h) => `${h.file}(${h.term})`).join(", ")}`; }
+    else if (s.repro === "flaky") status = "flaky";
     else if (s.repro === "not_reproduced") status = "not_reproduced";
-    else if (s.repro === "failed" || s.repro === "compile_error" || s.diagError) status = "gave_up";
+    else if (s.repro === "failed" || s.repro === "compile_error" || s.repro === "tool_error" || s.diagError) { status = "gave_up"; note = s.diagError ?? `재현 ${s.repro}`; }
     else if (s.diag?.rule_gap) status = "rule_decision";
-    else if (s.scope?.reasons?.length) status = s.mode === "live" && s.approval === "approved" ? "ready" : "would_ask";
-    else status = "ready";
+    else if (s.scope?.reasons?.length) {
+      if (s.mode !== "live") status = "would_ask";
+      else if (s.approval === "approved") status = "ready";
+      else { status = "gave_up"; note = "주인님 반려"; }
+    } else status = "ready";
     const bench = s.signal?.bench ?? null;
     const match = bench ? diagMatch(bench.expect, s.diag, status) : null;
     let summary = null;
     if (s.diag || status === "flaky" || status === "not_reproduced") {
-      // 주인님용 요약 — haiku 1회(설계 ⑭). 실패해도 고칠 안은 남긴다(상한·로그인 보류는 그대로 따른다).
+      // 주인님용 요약 — haiku 1회(설계 ⑭). 덤이다: 실패·상한 보류·시간 부족이어도 고칠 안은 남기고 넘어간다(H3 하 — 요약 때문에 대기열을 묶지 않는다)
       try {
         const facts = JSON.stringify({ sigkey: s.sigkey, status, repro: s.repro, diag: s.diag ? { hypothesis: s.diag.hypothesis, files: s.diag.files, rule_gap: s.diag.rule_gap, rule_gap_detail: s.diag.rule_gap_detail, confidence: s.diag.confidence } : null, scope: s.scope?.reasons ?? [] });
         const r = await llm.ask(`아래 고스톱 결함 진단 결과를 비개발자가 읽을 한국어 3줄로 요약하라. 무엇이 잘못됐는지, 왜인지, 다음에 무엇을 해야 하는지. 요약문만 답하라.\n${facts}`,
           { model: "haiku", node: "plan" });
         summary = short(r.text, 1200);
       } catch (e) {
-        if (e?.held || e?.pending) throw e;
-        summary = `(요약 실패: ${short(e?.message, 120)})`;
+        summary = `(요약 없음: ${short(e?.message, 120)})`;
       }
     }
     const dir = runDir(tools.stateDir, s.sigkey);
@@ -222,7 +243,7 @@ export function build({ checkpointer, llm, tools }) {
     const md = [
       `# 고칠 안 — ${s.sigkey}`,
       "",
-      `- 상태: **${status}**${s.mode === "shadow" ? " (그림자)" : ""}`,
+      `- 상태: **${status}**${s.mode === "shadow" ? " (그림자)" : ""}${note ? ` — ${note}` : ""}`,
       `- 신호: ${sg.source ?? "?"} · ${sg.kind ?? "?"} · 대상 ${String(s.base ?? sg.rev ?? "").slice(0, 12)}`,
       `- 재현: ${s.repro ?? "-"}${s.reproRuns.length ? ` (${s.reproRuns.map((r) => `rc=${r.rc} ${r.secs}s`).join(" / ")})` : ""}`,
       `- 사본: ${s.work ?? "-"} (${s.sizes ? `${Math.round(s.sizes.work / 1e6)}MB + 깨끗한 내보내기 ${Math.round(s.sizes.clean / 1e6)}MB` : "-"})`,
@@ -238,8 +259,11 @@ export function build({ checkpointer, llm, tools }) {
       "",
     ].join("\n");
     const planPath = writeAtomic(path.join(dir, "plan.md"), md);
-    writeAtomic(path.join(dir, "result.json"), `${JSON.stringify({ sigkey: s.sigkey, status, repro: s.repro, runs: s.reproRuns.map(({ blocks, ...r }) => r), diag: s.diag, diagError: s.diagError, scope: s.scope, bench: bench ? { id: bench.id, match } : null, mode: s.mode, base: s.base, sizes: s.sizes }, null, 1)}\n`);
-    if (bench) tools.bench({ bench: bench.id, reproduced: s.repro === "skipped" ? null : s.repro === "reproduced", diag_match: match?.ok ?? null, signal: sg.kind });
+    writeAtomic(path.join(dir, "result.json"), `${JSON.stringify({ sigkey: s.sigkey, status, note, leak: s.leak, repro: s.repro, runs: s.reproRuns.map(({ blocks, ...r }) => r), diag: s.diag, diagError: s.diagError, scope: s.scope, bench: bench ? { id: bench.id, match } : null, mode: s.mode, base: s.base, sizes: s.sizes }, null, 1)}\n`);
+    // 판정 M8 은 스레드당 한 번(plan 이 다시 돌아도 두 번 세지 않게 표식 파일)
+    let firstBench = false;
+    if (bench) { try { fs.writeFileSync(path.join(dir, "bench-recorded"), status, { flag: "wx", mode: 0o600 }); firstBench = true; } catch { /* 이미 적음 */ } }
+    if (firstBench) tools.bench({ bench: bench.id, reproduced: s.repro === "skipped" ? null : s.repro === "reproduced", diag_match: match?.ok ?? null, signal: sg.kind });
     for (const sub of ["build", ".dart_tool"]) if (s.work) fs.rmSync(path.join(s.work, sub), { recursive: true, force: true });
     return { status, planPath, log: [`plan ${status}`] };
   }
@@ -256,7 +280,7 @@ export function build({ checkpointer, llm, tools }) {
     .addNode("plan", plan)
     .addEdge(START, "preflight")
     .addEdge("preflight", "sandbox")
-    .addEdge("sandbox", "reproduce_launch")
+    .addConditionalEdges("sandbox", (s) => (s.leak ? "plan" : "reproduce_launch"), ["reproduce_launch", "plan"])
     .addConditionalEdges("reproduce_launch", (s) => (s.repro === "skipped" ? "diagnose_launch" : "reproduce_check"), ["reproduce_check", "diagnose_launch"])
     .addConditionalEdges("reproduce_check", afterReproCheck, ["reproduce_launch", "diagnose_launch", "plan"])
     .addEdge("diagnose_launch", "diagnose_check")

@@ -61,6 +61,7 @@ export function loadConfig(env = process.env) {
     approvalTtlMs: num(env, "LG_APPROVAL_TTL_HOURS", 48) * 3_600_000,
     holdTtlMs: num(env, "LG_HOLD_TTL_HOURS", 48) * 3_600_000, // 진척 없는 보류·이어가기·대기열·실패도 48시간이면 만료
     gcDays: num(env, "LG_GC_DAYS", 14),
+    sandboxKeepDays: num(env, "LG_SANDBOX_KEEP_DAYS", 3), // 작업 사본 보관(설계 §2) — 관문 앞에서 틱마다 정리
     // 살아 있는 pid 의 잠금은 나이와 상관없이 넘겨받지 않는다. 이보다 오래 쥐고 있으면 STUCK 으로 알리고 그 스레드는 건드리지 않는다.
     lockStuckMs: num(env, "LG_LOCK_STUCK_MIN", num(env, "LG_LOCK_STALE_MIN", 30)) * 60_000,
     busyTimeoutMs: num(env, "LG_BUSY_TIMEOUT_MS", 15_000),

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { sandbox, run, runAsync, fakeClaude, ROOT, NODE, FIXTURES, T0 } from "./helpers.mjs";
+import { sandbox, run, runAsync, fakeClaude, appWith, ROOT, NODE, FIXTURES, T0 } from "./helpers.mjs";
 import { tickEnv, metrics, writeUsage } from "./helpers0b.mjs";
 import * as C from "../graphs/gostop-common.mjs";
 import { soakSignals, ciFailures, ciTestOf, DAY_CAP } from "../graphs/gostop-intake.mjs";
@@ -506,7 +506,12 @@ test("판독·판정 도우미: 재현 출력 서명(메모·결정 수 제외)�
   assert.deepEqual(claudeArgs("haiku").slice(-2), ["--tools", ""]);
   assert.equal(C.keyDir("bench:hist-69a0144:r1"), "bench_hist-69a0144_r1");
   // 접수 판독
-  assert.deepEqual(soakSignals(soakSummary("20261005", [5], ["멈춤 1"])).map((s) => s.kind), ["seed", "report"]);
+  const ss = soakSignals(soakSummary("20261005", [5], ["멈춤 1"]));
+  assert.deepEqual(ss.signals.map((x) => x.kind), ["seed"]);
+  assert.equal(ss.reportOnly.length, 1, "씨앗 없는 문제는 기록만(H3 중5)");
+  const dirty = soakSignals({ ...soakSummary("20261005", [5]), dirty: 2 });
+  assert.equal(dirty.signals.length, 0, "미커밋 소크는 수정 스레드로 보내지 않는다");
+  assert.match(dirty.reportOnly[0].why, /dirty/);
   assert.equal(ciFailures([{ conclusion: "failure", workflowName: "W", createdAt: "2026-01-01T00:00:00Z", headSha: "a".repeat(40), databaseId: 1 }], Date.parse("2026-01-02")).length, 0, "기준 시각 전 실패는 이미 본 것");
   assert.equal(ciTestOf("x test/domain/game/a_b_test.dart:12 y"), "test/domain/game/a_b_test.dart");
 });
@@ -523,5 +528,199 @@ test("벤치 목록: 역사 2건 + 회귀 주입 6건 이상, 사례마다 빨�
     if (c.kind === "inject") assert.ok(c.inject.file && c.inject.find && c.inject.replace !== undefined && c.test && c.green?.rc === 0, c.id);
   }
   assert.equal(hist.find((c) => c.origin === "02d61dc").expect.status, "rule_decision");
+  for (const c of b.cases) assert.deepEqual(c.leakCheck?.hits, [], `${c.id} 사본 규칙 뒤 정답 표지 0(H3 상1)`);
   assert.equal(new Set(b.cases.map((c) => c.id)).size, b.cases.length, "id 겹침 없음");
+});
+
+// ── 고장 주입 도구(PLAN §5 1a) ────────────────────────────────────
+const FAULT = path.join(ROOT, "scripts", "lg-fault.mjs");
+const fault = (env, args) => { const r = spawnSync(NODE, [FAULT, ...args], { env, encoding: "utf8", timeout: 30_000 }); return { code: r.status, lines: String(r.stdout).trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) }; };
+
+test("고장 주입 kill-job: 살아 있는 재현 묶음을 SIGKILL → 그래프가 다시 띄워 끝까지 · fault 기록과 lg-report M1 '주입 뒤 이어 감'", async (t) => {
+  const x = setup(t, { flutter: { mode: "hang" } });
+  assert.equal(startFix(x, "bench:t1:r1", benchSig(x)).code, 0);
+  const thread = "gostop-fix:bench:t1:r1";
+  let jobs = [];
+  for (let i = 0; i < 50 && !jobs.length; i++) { jobs = fault(x.env, ["list", thread]).lines[0].jobs; if (!jobs.length) await new Promise((r) => setTimeout(r, 100)); }
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].node, "reproduce_1");
+  const k = fault(x.env, ["kill-job", thread]);
+  assert.equal(k.code, 0);
+  assert.equal(k.lines[0].ok, true);
+  assert.equal(fault(x.env, ["kill-job", "gostop-fix:없음"]).code, 1, "없는 스레드는 아무것도 끄지 않는다");
+  x.reg.setFlutter({ mode: "mismatch" });
+  assert.equal((await drive(x, thread)).status, "done");
+  assert.equal(resultOf(x, "bench:t1:r1").repro, "reproduced");
+  assert.equal(metrics(x.sb).filter((m) => m.ev === "fault").length, 1);
+  const rep = JSON.parse(spawnSync(NODE, [path.join(ROOT, "lg-report.mjs"), "--json"], { env: x.env, encoding: "utf8" }).stdout);
+  assert.deepEqual(rep.m1.faults, { injected: 1, continued: 1 });
+});
+
+test("고장 주입 kill-tick: 잠금을 쥔 실행기(run.mjs)만 SIGKILL → 다음 틱이 끊김(interrupted)으로 적고 잇는다", async (t) => {
+  const sb = sandbox(t);
+  const lg = appWith(sb, { steps: (await import("./helpers0b.mjs")).STEPS });
+  const env = { ...tickEnv(sb), LG_TEST_STEP_MS: "2500" };
+  assert.equal(lg(env, ["start", "steps", "s1", "--queue"]).code, 0);
+  const appFault = path.join(sb.dir, "app", "scripts", "lg-fault.mjs");
+  const tick = spawnSync(NODE, ["-e", `require("node:child_process").spawn(process.execPath,[${JSON.stringify(path.join(sb.dir, "app", "run.mjs"))},"tick"],{env:process.env,stdio:"ignore",detached:true}).unref()`], { env });
+  assert.equal(tick.status, 0);
+  // 노드가 돌고 있을 때(잠금 + 실행 중) 끈다 — 잠금만 잡고 시작 전이면 끊김이 아니라 아직 시작 안 한 것이다
+  let locks = [];
+  for (let i = 0; i < 100; i++) {
+    const r = spawnSync(NODE, [appFault, "list"], { env, encoding: "utf8" });
+    locks = JSON.parse(r.stdout.trim().split("\n")[0]).locks;
+    if (locks.length && JSON.parse(lg(env, ["status", "s1", "--json"]).out).status === "running") break;
+    await new Promise((r2) => setTimeout(r2, 100));
+  }
+  assert.equal(locks.length, 1, "틱이 잠금을 쥐고 노드를 돌리는 중");
+  const k = spawnSync(NODE, [appFault, "kill-tick", "s1"], { env, encoding: "utf8" });
+  assert.equal(k.status, 0, k.stdout + k.stderr);
+  await new Promise((r) => setTimeout(r, 300));
+  for (let i = 0; i < 10; i++) { lg(env, ["tick"], { extraEnv: { LG_TEST_STEP_MS: "0" } }); if (JSON.parse(lg(env, ["status", "s1", "--json"]).out).status === "done") break; }
+  assert.equal(JSON.parse(lg(env, ["status", "s1", "--json"]).out).status, "done");
+  const m = metrics(sb);
+  assert.ok(m.some((r) => r.ev === "interrupted" && r.thread === "s1"), "끊김으로 적혔다");
+  assert.ok(m.some((r) => r.ev === "fault" && r.kind === "kill-tick"));
+});
+
+// ── 독립 검토(H3) 회귀 시험 ─────────────────────────────────────────
+test("H3 상1: 사본에서 기록 문서(docs/release·context·QA 보고·루트 md)를 빼고 규칙서·CLAUDE.md 는 남긴다 · 정답 표지가 남으면 진단하지 않고 gave_up", async (t) => {
+  const x = setup(t);
+  // 기록 문서에 정답을 적어 둔다(실제 저장소의 NEXT_ACTIONS·context/bugs 와 같은 모양)
+  put(x.repo, "docs/release/NEXT_ACTIONS.md", `국진 두 길 수정 ${x.answer.slice(0, 7)} ANSWER-MARKER-7f3a\n`);
+  put(x.repo, "context/bugs/gukjin.md", "ANSWER-MARKER-7f3a\n");
+  put(x.repo, "QA_REPORT.md", "ANSWER-MARKER-7f3a\n");
+  put(x.repo, "docs/tech/notes.md", "ANSWER-MARKER-7f3a\n");
+  git(x.repo, ["add", "-A"]);
+  git(x.repo, ["commit", "-q", "-m", "기록 문서"]);
+  const base2 = git(x.repo, ["rev-parse", "HEAD"]);
+  const sig = { ...benchSig(x), rev: base2.slice(0, 12), bench: { id: "t1", expect: null, leakTerms: ["ANSWER-MARKER-7f3a"] } };
+  assert.equal(startFix(x, "bench:t1:r1", sig).code, 0);
+  assert.equal((await drive(x, "gostop-fix:bench:t1:r1")).status, "done");
+  const work = path.join(C.sandboxDir(x.sb.state, "bench:t1:r1"), "work");
+  for (const rel of ["docs/release", "context", "QA_REPORT.md", "docs/tech"]) assert.ok(!fs.existsSync(path.join(work, rel)), `${rel} 빠짐`);
+  assert.ok(fs.existsSync(path.join(work, "docs/rules/GAME_MECHANICS.md")) && fs.existsSync(path.join(work, "CLAUDE.md")), "규칙서·CLAUDE.md 는 남는다");
+  assert.equal(resultOf(x, "bench:t1:r1").status, "ready", "기록 문서를 뺐으니 누설 없음");
+  // 빼는 목록 밖(도구 폴더)에 정답 표지가 남으면 — 진단하지 않고 gave_up
+  const y = setup(t);
+  put(y.repo, "tools/memo.txt", "ANSWER-MARKER-7f3a\n");
+  git(y.repo, ["add", "-A"]);
+  git(y.repo, ["commit", "-q", "-m", "도구"]);
+  const sig2 = { ...benchSig(y), rev: git(y.repo, ["rev-parse", "HEAD"]).slice(0, 12), bench: { id: "t1", expect: null, leakTerms: ["ANSWER-MARKER-7f3a"] } };
+  assert.equal(startFix(y, "bench:t1:r1", sig2).code, 0);
+  assert.equal((await drive(y, "gostop-fix:bench:t1:r1")).status, "done");
+  const r2 = resultOf(y, "bench:t1:r1");
+  assert.equal(r2.status, "gave_up");
+  assert.match(r2.note, /누설.*tools\/memo\.txt/);
+  assert.equal(y.fc.calls().length, 0, "누설이면 LLM 을 부르지 않는다");
+  assert.equal(traceOf(y.sb, "flutter-trace.jsonl").filter((c) => c.sub === "test").length, 0);
+});
+
+test("H3 상2: 채점은 '기대 파일 1~2위 + 근거 줄이 정답 자리 ±15' — 실패한 시험 이름을 되풀이한 진단은 틀림", () => {
+  const expect = { files: ["lib/domain/game/turn_manager.dart"], lines: { "lib/domain/game/turn_manager.dart": [[1572, 1572]] } };
+  const echo = { hypothesis: "winner_attribution_regression_test 의 승자 귀속 시험이 실패한다. selectWinner 승자 판정 문제.", rule_gap: false, confidence: 0.6,
+    files: ["lib/domain/game/turn_manager.dart", "lib/domain/game/game_engine.dart"], evidence: ["lib/domain/game/turn_manager.dart:40 — 클래스 머리"] };
+  assert.equal(C.diagMatch(expect, echo).ok, false, "낱말·파일만 맞은 메아리");
+  assert.equal(C.diagMatch(expect, { ...echo, evidence: ["lib/domain/game/turn_manager.dart:1580 — byStopDeclaration 무시"] }).ok, true);
+  assert.equal(C.diagMatch(expect, { ...echo, evidence: ["lib/domain/game/turn_manager.dart:1560-1575 — 승자"] }).ok, true, "범위 근거");
+  assert.equal(C.diagMatch(expect, { ...echo, files: ["a.dart", "b.dart", "lib/domain/game/turn_manager.dart"], evidence: ["lib/domain/game/turn_manager.dart:1572 — x"] }).ok, false, "3위 이하는 틀림");
+  assert.equal(C.diagMatch({ ...expect, ruleGap: true, status: "rule_decision" }, { ...echo, evidence: ["lib/domain/game/turn_manager.dart:1572"] }, "ready").ok, false);
+  // 벤치 목록: 모든 사례에 정답 자리(줄 범위)가 있다
+  for (const c of C.loadBench().cases) assert.ok(Object.values(c.expect.lines ?? {}).flat().length, `${c.id} expect.lines`);
+});
+
+test("H3 상3: 진단이 사용량 한도로 끝나면 쉼(llm_wait) 뒤 새 실행 번호로 다시 띄워 끝까지 — 같은 결과 파일을 되읽지 않는다", async (t) => {
+  const x = setup(t, { claudeMode: "limit" });
+  const ok = fakeClaude(x.sb, "diag");
+  fs.writeFileSync(`${ok.log}.answer.json`, fs.readFileSync(`${x.fc.log}.answer.json`));
+  const T = Date.now();
+  const at = (ms) => ({ ...x.env, LG_NOW: String(ms) });
+  const env0 = x.env;
+  x.env = at(T);
+  assert.equal(startFix(x, "bench:t1:r1", benchSig(x)).code, 0);
+  const st = await drive(x, "gostop-fix:bench:t1:r1", { until: ["done", "gave_up", "expired", "held"] });
+  assert.equal(st.status, "held", JSON.stringify(st));
+  // 한 시간 안: 계속 쉼
+  x.env = { ...at(T + 30 * 60_000), LG_CLAUDE_BIN: ok.bin };
+  writeUsage(env0.LG_USAGE_FILE, { at: T + 30 * 60_000 });
+  run(x.env, ["tick"]);
+  assert.equal(status(x, "gostop-fix:bench:t1:r1").status, "held");
+  assert.equal(ok.calls().length, 0);
+  // 두 시간 뒤: 다시 띄워 끝까지
+  x.env = { ...at(T + 2 * 3_600_000), LG_CLAUDE_BIN: ok.bin };
+  writeUsage(env0.LG_USAGE_FILE, { at: T + 2 * 3_600_000 });
+  assert.equal((await drive(x, "gostop-fix:bench:t1:r1")).status, "done");
+  assert.equal(resultOf(x, "bench:t1:r1").status, "ready");
+  assert.ok(fs.existsSync(path.join(x.sb.state, "jobs", "gostop-fix:bench:t1:r1", "diagnose", "2")), "실행 번호 2");
+  assert.equal(x.fc.calls().filter((c) => c.input.includes("정해진 JSON")).length, 1, "한도에 걸린 호출은 한 번뿐");
+});
+
+test("H3 중1: 차례를 기다리는 대기열은 앞 스레드가 묶여 있는 동안 만료되지 않는다(앞 것이 만료되면 시작)", async (t) => {
+  const x = setup(t, { flutter: { mode: "pass" } });
+  const T = Date.now();
+  fs.writeFileSync(path.join(x.repo, ".jarvis-busy"), "");
+  assert.equal(run(x.env, ["start", "gostop-fix", "gostop-fix:bench:a:r1", "--sigkey=bench:a:r1", `--signal=${JSON.stringify(benchSig(x))}`], { extraEnv: { LG_NOW: String(T) } }).code, 0);
+  assert.equal(status(x, "gostop-fix:bench:a:r1").status, "held");
+  assert.equal(run(x.env, ["start", "gostop-fix", "gostop-fix:bench:b:r1", "--sigkey=bench:b:r1", `--signal=${JSON.stringify(benchSig(x))}`, "--queue"], { extraEnv: { LG_NOW: String(T + 3_600_000) } }).code, 0);
+  writeUsage(x.env.LG_USAGE_FILE, { at: T + 48.5 * 3_600_000 });
+  run(x.env, ["tick"], { extraEnv: { LG_NOW: String(T + 48.5 * 3_600_000) } }); // a: 48시간 진척 없음 → 만료. b: 47.5시간 — 아직
+  assert.equal(status(x, "gostop-fix:bench:a:r1").status, "expired");
+  writeUsage(x.env.LG_USAGE_FILE, { at: T + 50 * 3_600_000 });
+  run(x.env, ["tick"], { extraEnv: { LG_NOW: String(T + 50 * 3_600_000) } }); // b: 등록 49시간이지만 a 가 막고 있던 시간은 놀던 것이 아니다 — 시작(표식에 걸려 보류)
+  assert.notEqual(status(x, "gostop-fix:bench:b:r1").status, "expired");
+  // 직접: b 가 대기 중일 때 같은 그래프의 묶인 스레드가 있으면 expireIdle 이 건너뛴다
+  const y = setup(t);
+  fs.writeFileSync(path.join(y.repo, ".jarvis-busy"), "");
+  assert.equal(run(y.env, ["start", "gostop-fix", "gostop-fix:bench:a:r1", "--sigkey=bench:a:r1", `--signal=${JSON.stringify(benchSig(y))}`], { extraEnv: { LG_NOW: String(T) } }).code, 0);
+  assert.equal(run(y.env, ["start", "gostop-fix", "gostop-fix:bench:b:r1", "--sigkey=bench:b:r1", `--signal=${JSON.stringify(benchSig(y))}`, "--queue"], { extraEnv: { LG_NOW: String(T) } }).code, 0);
+  writeUsage(y.env.LG_USAGE_FILE, { at: T + 40 * 3_600_000 });
+  run(y.env, ["tick"], { extraEnv: { LG_NOW: String(T + 40 * 3_600_000) } }); // a 는 보류를 되풀이(진척 없음)
+  writeUsage(y.env.LG_USAGE_FILE, { at: T + 47 * 3_600_000 });
+  run(y.env, ["tick"], { extraEnv: { LG_NOW: String(T + 47 * 3_600_000) } });
+  assert.equal(status(y, "gostop-fix:bench:b:r1").status, "queued");
+});
+
+test("H3 중2·중3: 접수 때 진행 중이던 CI 는 다음 접수가 줍고, 하루 상한에 밀린 소크 신호와 접수가 없던 날의 소크도 이월된다", async (t) => {
+  const run1 = { conclusion: "", headSha: "f".repeat(40), name: "Flutter CI", workflowName: "Flutter CI", url: "u", databaseId: 9, createdAt: "2026-10-05T00:30:00Z", status: "in_progress" };
+  const x = setup(t, { gh: { runs: [run1], log: "FAILED: test/domain/game/a_test.dart" } });
+  // 어제(10-04) 소크 폴더만 있고, 그날은 접수가 없었다 — 불일치 4개
+  fs.mkdirSync(path.join(x.soak, "20261004"));
+  fs.writeFileSync(path.join(x.soak, "20261004", "summary.json"), JSON.stringify(soakSummary("20261004", [11, 22, 33, 44])));
+  const day1 = Date.parse("2026-10-05T09:00:00+09:00");
+  assert.equal(run(x.env, ["start", "gostop-intake", "gostop-intake:2026-10-05", "--day=2026-10-05"], { extraEnv: { LG_NOW: String(day1) } }).code, 0);
+  let q = listThreads(x).filter((v) => v.graph === "gostop-fix").map((v) => v.thread);
+  assert.equal(q.length, 3, "어제 소크를 오늘 줍는다(상한 3)");
+  assert.ok(q.every((th) => th.includes(":soak:")));
+  // 다음 날: 진행 중이던 CI 가 실패로 끝났다 + 어제 밀린 소크 1건
+  fs.writeFileSync(x.reg.ghCtl, JSON.stringify({ runs: [{ ...run1, conclusion: "failure", status: "completed" }], log: "FAILED: test/domain/game/a_test.dart", trace: path.join(x.sb.dir, "gh-trace.jsonl") }));
+  const day2 = Date.parse("2026-10-06T09:00:00+09:00");
+  assert.equal(run(x.env, ["start", "gostop-intake", "gostop-intake:2026-10-06", "--day=2026-10-06"], { extraEnv: { LG_NOW: String(day2) } }).code, 0);
+  q = listThreads(x).filter((v) => v.graph === "gostop-fix").map((v) => v.thread);
+  assert.ok(q.includes(`gostop-fix:ci:flutter-ci:${"f".repeat(8)}`), "진행 중이던 CI 실패를 줍는다");
+  assert.ok(q.includes("gostop-fix:soak:normal:44:abc1234"), "상한에 밀렸던 소크 신호");
+  assert.equal(q.length, 5);
+});
+
+test("H3 중4: 3일 지난 사본은 관문(디스크)에 걸린 틱에서도 지운다 — 끝나지 않은 스레드의 사본은 남긴다", (t) => {
+  const x = setup(t, { extra: { LG_DISK_FLOOR_GIB: "100000" } });
+  const old = path.join(x.sb.state, "gostop", "sandbox", "bench_old_r1");
+  const keep = path.join(x.sb.state, "gostop", "sandbox", "bench_new_r1");
+  for (const d of [old, keep]) { fs.mkdirSync(path.join(d, "work"), { recursive: true }); fs.writeFileSync(path.join(d, ".ready"), "x"); }
+  const four = (Date.now() - 4 * 86_400_000) / 1000;
+  fs.utimesSync(path.join(old, ".ready"), four, four);
+  const r = run(x.env, ["tick", "--verbose"]);
+  assert.match(r.out, /HOLD disk/);
+  assert.ok(!fs.existsSync(old), "3일 지난 사본 정리");
+  assert.ok(fs.existsSync(keep));
+});
+
+test("H3 하: 신호로 죽은 재현은 초록이 아니라 실행 실패 · 서명 없는 빨간불은 도구 오류 · '..' 경로는 허용 목록 밖", () => {
+  const killed = C.readTestOutput("00:01 +3: loading", null, "SIGKILL");
+  assert.equal(killed.infra, true);
+  assert.equal(killed.red, false);
+  const tool = C.readTestOutput("Error: No tests ran.\n", 1);
+  assert.equal(tool.toolError, true);
+  assert.equal(C.judgeRepro([tool, tool]), "tool_error");
+  assert.equal(C.scopeOf({ files: ["lib/domain/game/../ai/ai_player.dart"], hypothesis: "" }).ai.length, 1, "펴서 본다");
+  assert.equal(C.scopeOf({ files: ["lib/domain/game/../../../../etc/passwd"], hypothesis: "" }).outside.length, 1);
 });

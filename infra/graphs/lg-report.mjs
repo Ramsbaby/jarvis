@@ -42,6 +42,9 @@ for (const [, rs] of byThread) {
   else m1.open++;
 }
 m1.rate = pct(m1.continued, m1.continued + m1.abandoned);
+// 고장 주입(scripts/lg-fault.mjs, 사건 fault): 주입 뒤 그 스레드가 단계를 하나라도 끝냈나(이어 감)
+const faults = ev.filter((r) => r.ev === "fault");
+m1.faults = { injected: faults.length, continued: faults.filter((f) => (byThread.get(f.thread) ?? []).some((r) => r.t > f.t && r.ev === "node_end" && r.ok)).length };
 
 // M3 중복 부수효과 0 — 실제 모드에서 같은 key 가 두 번 성공(ok)했거나, 시작(started)이 둘 이상인데 앞의 것이 실패가 아닌 경우
 const m3 = { live_runs: 0, keys: 0, duplicates: 0, unknown: 0, retried_after_fail: 0, shadow_would_run: {} };
@@ -114,7 +117,8 @@ if (args.includes("--json")) { process.stdout.write(`${JSON.stringify(report, nu
 const L = [];
 L.push(`# 랭그래프 판정 집계 — ${iso(now)}`, "", `기록 ${ev.length}줄 · 부수효과 원장 ${fx.length}줄 · 틱 ${ticks.length}회 · 범위 ${flag("since") ?? "처음"} ~ ${flag("until") ?? "지금"}`, "");
 L.push("## M1 끊겨도 끝까지 (기준 100%)", "", "| 끊긴 스레드 | 이어 감 | 그중 끝냄 | 버려짐 | 진행 중 | 비율(이어 감) |", "|---|---|---|---|---|---|",
-  `| ${m1.interrupted} | ${m1.continued} | ${m1.finished} | ${m1.abandoned} | ${m1.open} | ${m1.rate} |`, "");
+  `| ${m1.interrupted} | ${m1.continued} | ${m1.finished} | ${m1.abandoned} | ${m1.open} | ${m1.rate} |`, "",
+  `고장 주입 ${m1.faults.injected}회 · 그 뒤 이어 감 ${m1.faults.continued}회`, "");
 L.push("## M3 중복 부수효과 (기준 0)", "", "| 실제 실행 | key 수 | 중복 | 결과 모름 | 실패 뒤 재시도 | 그림자 '했을 일' |", "|---|---|---|---|---|---|",
   `| ${m3.live_runs} | ${m3.keys} | ${m3.duplicates} | ${m3.unknown} | ${m3.retried_after_fail} | ${Object.entries(m3.shadow_would_run).map(([k, n]) => `${k} ${n}`).join(" · ") || 0} |`, "");
 L.push("## M4 버려진 대기·보류 (기준 0)", "", "| 만료 보고 | 48시간 넘게 보고 없이 남음 |", "|---|---|", `| ${m4.expired_reported} | ${m4.abandoned_unreported}${m4.list.length ? ` (${m4.list.slice(0, 5).join(", ")})` : ""} |`, "");

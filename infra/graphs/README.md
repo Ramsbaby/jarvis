@@ -2,8 +2,8 @@
 
 **그래프 모양인 일만** 돌리는 전용 엔진이다. 초안→비평→수정을 되풀이하거나, 모델이 다음 길을 고르거나, 사람 승인을 기다리는 일이 여기에 해당한다.
 모든 자동화의 뼈대가 아니다. 한 줄로 이어지는 작업은 지금처럼 OpenClaw 예약 잡으로 둔다.
-지금(0b)은 운영과 분리된 공통 부품만 있다: 실행기(틱 방식), 관문, 분리 실행, 명령·부수효과 입구, 판정 기록, 연기 시험 그래프(`smoke`), 시험.
-첫 실제 대상은 다음 단계(1a)의 고스톱 버그 사냥·수정 루프다.
+공통 부품(0a·0b): 실행기(틱 방식), 관문, 분리 실행, 명령·부수효과 입구, 판정 기록, 연기 시험 그래프(`smoke`), 시험.
+첫 실제 대상(1a): 고스톱 버그 루프의 읽기 전용 부분 — 접수(`gostop-intake`)·수정(`gostop-fix` ①~⑥·⑭). 아래 '고스톱 루프(1a)'.
 
 **왜 이 자리인가:** `packages/`는 따로 배포하는 독립 도구(자체 라이선스)를 두는 자리다. 이것은 이 기기의 OpenClaw 잡이 부르고 런타임 상태 폴더를 쓰는 운영 부품이다.
 `infra/`에는 이미 자기 `package.json`·lockfile을 가진 하위 프로젝트(`infra/discord`, `infra/openclaw-plugins/jarvis-rag`)가 있다.
@@ -98,7 +98,7 @@ rm $S/PAUSED           # 다시
 | 관문 | 기준 | 출처·설정 |
 |---|---|---|
 | `paused` | `PAUSED` 있음 | |
-| `disk` | 여유 < 15GiB + 사본 예상 + 1GiB(기본 17GiB) | 감지기와 같은 재는 법(statvfs bavail, `/System/Volumes/Data`). `LG_DISK_FLOOR_GIB`·`LG_COPY_EST_GIB`(1a 실측으로 바꾼다)·`LG_DISK_MARGIN_GIB` |
+| `disk` | 여유 < 15GiB + 사본 예상 + 1GiB(기본 16.4GiB — 사본 실측 0.4) | 감지기와 같은 재는 법(statvfs bavail, `/System/Volumes/Data`). `LG_DISK_FLOOR_GIB`·`LG_COPY_EST_GIB`(1a 실측으로 바꾼다)·`LG_DISK_MARGIN_GIB` |
 | `usage_high`·`usage_unreadable`·`usage_stale` | 주간 사용량 ≥ 80% · 못 읽음 · 6시간 넘게 묵음 | 감지기(`orchestrator-scan.py` `scan_usage` → `usage_findings`)가 `claude -p /usage`로 받아 `state/orchestrator/latest.md`의 '클로드 사용량' 줄에 쓰는 값을 **읽기만** 한다. 주간 범위 중 Fable(금지 모델)은 뺀다. 스냅샷은 정규 회차(08·11·14·17·20시)에만 새로 쓰이므로 **밤 02시 무렵부터 08시까지는 '묵음'으로 쉰다** |
 | `login`·`usage_limit` | 호출 오류 문구로 판정한 표식 | 로그인은 감지기 `LLM_AUTH_FAIL`과 같은 문구 + CLI 문구. 429·사용량 한도는 로그인 고장이 아니다(09-30 오판 전례) |
 | `token_cap` | 오늘 토큰(입력·출력·캐시 생성·캐시 읽기 합) ≥ `LG_DAY_TOKEN_CAP`(기본 3,000,000) | 10-28 '그림자 ② 하루 최댓값 × 1.5'로 다시 정한다 |
@@ -121,6 +121,9 @@ rm $S/PAUSED           # 다시
 | `throw tools.hold("이유")` | 스스로 보류(디스크 부족·대화 작업 표식 등) |
 | `tools.bench({ bench, reproduced, diag_match, hidden_pass, ai_misjudge })` | 판정 M8 기록 |
 | `tools.mode` | `shadow` · `live` |
+| `tools.enqueue(그래프, 스레드, 입력)` | 다른 그래프의 스레드를 대기열에 올린다(접수 → 수정). 다음 틱이 시작. 이미 있으면 `{ok:false, kind:"exists"}`(멱등). 모드는 이 스레드 모드와 지금 `LIVE` 중 낮은 쪽 |
+| `tools.stateDir` · `tools.now()` | 읽기 전용 값: 상태 폴더(사본·원문 파일 자리), 실행기 시계(시험은 `LG_NOW`) |
+| `llm.ask/launchAsk(…, { jsonSchema })` | 구조화 출력(`--json-schema`). 결과의 `structured`(없으면 null — 본문에서 다시 찾는다) |
 
 **정적 검사**
 - `scripts/check-interrupt-nodes.mjs`(0a): interrupt가 든 노드는 동기·순수 — 상태 읽기 → `interrupt(...)` → 값 반환. LLM·파일·발송·바깥 값 금지. 노드는 `addNode("이름", 함수)` 형식. 정적 중단점(`interruptBefore/After`) 금지 — 컴파일에 박힌 그래프는 노드 단위 진행이 지나쳐 버리므로 실행기가 돌리지 않는다. 승인 대기는 한 번에 하나.
@@ -142,6 +145,33 @@ rm $S/PAUSED           # 다시
 - 올릴 수 없는 것: 셸·`env`·`osascript`·`sudo`·`launchctl`·`crontab`·**OpenClaw CLI**(S15 — 노드에서 오픈클로를 다시 부르지 않는다. 파일 이름이 openclaw 이거나 openclaw 패키지 안 스크립트. 경로에 `.openclaw`가 든 인자는 괜찮다), 인터프리터의 즉석 코드(`-c`·`-e`).
 - `envPass`에 비밀류 이름(TOKEN·KEY·SECRET·PASS·AUTH·COOKIE·PAT·WEBHOOK·CRED·URL·SESSION…)은 올릴 수 없다.
 - 파일이 없으면 빈 목록(아무 명령도 허용하지 않음). 시험만 `LG_CMD_REGISTRY`로 바꿀 수 있다.
+
+## 고스톱 루프(1a, 설계 `DESIGN-gostop-loop.md` v2.2)
+
+LLM 이 쓴 코드는 실행하지 않는다. 사본에서 도는 것은 사람이 쓴 기존 시험뿐이다(벤치 회귀 주입도 사람이 적은 변형). 본 저장소는 읽기만 한다.
+
+```
+gostop-intake:<날짜>  (LG_DAILY — 04:30 뒤 첫 틱이 대기열에 올림, LLM 0회)
+  preflight(소크 잠금이면 HOLD · 3일 지난 사본 정리) → collect(어젯밤 소크 summary.json · 직전 접수 뒤 CI 실패 · 없으면 벤치 1건)
+  → dedupe(gostop/intake-state.json) → enqueue(gostop-fix 대기열, 하루 3건)
+gostop-fix:<sigkey>  (meta.serial — 한 번에 하나, S13)
+  ① preflight  대화 작업 표식(.jarvis-busy · 모든 가지 30분 안 커밋)이면 HOLD(busy). 대상 커밋을 전체 해시로
+  ② sandbox    git archive → gostop/sandbox/<키>/work(사본)·clean(깨끗한 내보내기, 1b 패치 기준). .git 없음(역사 0),
+               .claude·.mcp.json·key.properties·*.jks·*.keystore·google-services.json 제외, pub get --offline
+  ③ reproduce  기존 시험 2회(분리 실행) → reproduced · not_reproduced · flaky. 죽음·시간 초과는 같은 회차를 다시(3회 → gave_up)
+  ④ diagnose   sonnet ×≤2, --restricted, Read·Grep·Glob, 작업 폴더 = 사본, --json-schema(가설·파일·규칙 공백·확신도·근거)
+  ⑤ scope_precheck  §4① 허용 목록 밖·AI 영역(lib/domain/ai/**·MCTSConstants)이면 승인 사유
+  ⑥ owner_gate 실제 모드 + 사유일 때만(순수 interrupt). 그림자는 plan 이 would_ask 로 적기만
+  ⑭ plan       runs/<키>/plan.md·result.json(+haiku 요약 1회). 상태: ready·rule_decision·would_ask·not_reproduced·flaky·gave_up.
+               벤치면 판정 M8(bench). 사본의 build·.dart_tool 은 지우고 사본은 3일 보관
+```
+
+- 신호 열쇠: `soak:normal:<씨앗>:<head8>` · `soak:problem:<날>:<head8>:<해시>` · `ci:<워크플로>:<sha8>` · `bench:<id>:r<회차>`.
+- 벤치 `bench/gostop.json`: 역사 2(69a0144 국진 두 길 → ready, 02d61dc 판 끝 조커 → rule_decision) + 회귀 주입 14(현재 코드에 지난 수정의 핵심 줄을 거꾸로 — 지금 있는 시험이 잡는 것만). 사례마다 빨간불 직접 확인 기록(`red`).
+- 명령(cmd-registry): `git.rev-parse`·`git.last-commit-time`·`git.archive`(본 저장소 읽기) · `tar.extract-sandbox` · `flutter.pub-get-offline`·`flutter.test-defines`·`flutter.test-file`(사본 안, 작업 폴더 정규식이 `…/gostop/sandbox/<키>/work|clean` 만) · `gh.run-list`·`gh.run-log-failed`(읽기 전용, 작업 폴더 = 본 저장소 → 원격으로 저장소를 정한다). 최대 시간은 실측 × 1.5(재현 46초 → 69초).
+- 실측(10-03): 사본 92MB + 시험 뒤 build 91MB + 깨끗한 내보내기 92MB(+ 풀기 전 tar 91MB) → `LG_COPY_EST_GIB` 0.4. 1판 재현 15~46초(첫 컴파일 포함). `--restricted` 에서도 작업 폴더의 CLAUDE.md 가 실린다(고스톱 41.8KB → 입력 맥락 약 +2만 토큰, 캐시됨).
+- 실호출: `RUN_LLM=1 node --test test/gostop-live.test.mjs`(haiku 1회 — 밖 읽기 거부·구독 로그인·훅 0·CLAUDE.md) · `node test/gostop-bench-live.mjs <출력> hist-69a0144 hist-02d61dc`(임시 상태 폴더, 진짜 flutter·sonnet).
+- 설정: `LG_GOSTOP_REPO`(기본 ~/projects/gostop_app) · `LG_GOSTOP_SOAK_DIR`(기본 ~/.openclaw/workspace/state/gostop-soak) · `LG_DAILY`(기본 `gostop-intake@04:30`, 빈 값이면 끔).
 
 ## 분리 실행 `lib/detach.mjs` (설계 §6)
 
@@ -200,7 +230,8 @@ rm $S/PAUSED           # 다시
 ## 설정(환경변수)
 
 0a: `LG_STATE_DIR` · `LG_DB` · `LG_APPROVAL_TTL_HOURS`(48) · `LG_GC_DAYS`(14) · `LG_LLM_MAX_PER_THREAD`(5) · `LG_LLM_MAX_PER_DAY`(20) · `LG_LLM_MODEL`(sonnet) · `LG_LLM_TIMEOUT_SEC`(300) · `LG_CLAUDE_BIN` · `LG_NODE` · `LG_BUSY_TIMEOUT_MS`(15000).
-0b: `LG_TICK_BUDGET_SEC`(480) · `LG_JOB_LIMIT_SEC`(600, 틱 안 LLM·명령이 끝나야 하는 시각) · `LG_DETACH_MAX_SEC`(5400, 목록에 `maxSeconds`가 없을 때의 분리 실행 최대 시간) · `LG_HOLD_TTL_HOURS`(48) · `LG_MAX_RETRIES`(3) · `LG_MAX_STEPS`(500) · `LG_LOCK_STUCK_MIN`(30, 옛 이름 `LG_LOCK_STALE_MIN`도 받는다) · `LG_DAY_TOKEN_CAP`(3000000) · `LG_DISK_PATH` · `LG_DISK_FLOOR_GIB`(15) · `LG_COPY_EST_GIB`(1) · `LG_DISK_MARGIN_GIB`(1) · `LG_USAGE_FILE` · `LG_USAGE_MAX_PCT`(80) · `LG_USAGE_MAX_AGE_H`(6) · `LG_QUIET`(01:30-04:30, 빈 값이면 끔) · `LG_LOGIN_RECHECK_MIN`(360) · `LG_LIMIT_RECHECK_MIN`(60) · `LG_HOOK_LOGS`(콜론 구분).
+1a: `LG_DAILY`(gostop-intake@04:30) · `LG_GOSTOP_REPO` · `LG_GOSTOP_SOAK_DIR`.
+0b: `LG_TICK_BUDGET_SEC`(480) · `LG_JOB_LIMIT_SEC`(600, 틱 안 LLM·명령이 끝나야 하는 시각) · `LG_DETACH_MAX_SEC`(5400, 목록에 `maxSeconds`가 없을 때의 분리 실행 최대 시간) · `LG_HOLD_TTL_HOURS`(48) · `LG_MAX_RETRIES`(3) · `LG_MAX_STEPS`(500) · `LG_LOCK_STUCK_MIN`(30, 옛 이름 `LG_LOCK_STALE_MIN`도 받는다) · `LG_DAY_TOKEN_CAP`(3000000) · `LG_DISK_PATH` · `LG_DISK_FLOOR_GIB`(15) · `LG_COPY_EST_GIB`(0.4, 1a 실측) · `LG_DISK_MARGIN_GIB`(1) · `LG_USAGE_FILE` · `LG_USAGE_MAX_PCT`(80) · `LG_USAGE_MAX_AGE_H`(6) · `LG_QUIET`(01:30-04:30, 빈 값이면 끔) · `LG_LOGIN_RECHECK_MIN`(360) · `LG_LIMIT_RECHECK_MIN`(60) · `LG_HOOK_LOGS`(콜론 구분).
 시험 전용 — `LG_TEST_MODE=1`일 때만 먹는다: `LG_NOW`(시간 주입) · `LG_CMD_REGISTRY` · `LG_TEST_START_AT` · `LG_TEST_HEARTBEAT_SEC` · `LG_SMOKE_TRACE` · `LG_SMOKE_CRASH_ONCE` · `LG_SMOKE_CRASH_CODE`.
 
 ## OpenClaw 연결 예(등록하지 않았다)
@@ -240,7 +271,7 @@ cd infra/graphs && H=$(mktemp -d) && HOME=$H ~/.nvm/versions/node/v24.21.0/bin/n
 RUN_LLM=1 ~/.nvm/versions/node/v24.21.0/bin/node --test test/llm.test.mjs                               # 실제 haiku 1회(한도 사용)
 ```
 
-0a 50개 + 0b 59개(틱·답·관문 9종·토큰 상한·로그인·만료·재시도·코드 결함·STUCK·끊김·알림 필터·PAUSED·분리 실행 그래프·겹친 틱·알림함·고장 격리 / 분리 실행 판정·이중 실행·heartbeat·부모 죽음·최대 시간 초과(시간 주입·SIGTERM만으로·SIGKILL까지·증명 못 하면 안 끔·끄는 쪽이 죽어도·정리하는 손주는 기다림)·시간 제한 때 묶음째(결과를 못 써도)·껍데기만 죽음·LLM 분리 / 정적 검사 양성·음성·가져오기·실행기 거부·허용 목록(maxSeconds 포함)·run·effect·모드 고정·훅 누수·gc 보존·관문 해석·집계·잡 상한 / 독립 검토 재현 13건). 실호출 1개는 평소 건너뛴다.
+0a 50개 + 0b 59개(틱·답·관문 9종·토큰 상한·로그인·만료·재시도·코드 결함·STUCK·끊김·알림 필터·PAUSED·분리 실행 그래프·겹친 틱·알림함·고장 격리 / 분리 실행 판정·이중 실행·heartbeat·부모 죽음·최대 시간 초과(시간 주입·SIGTERM만으로·SIGKILL까지·증명 못 하면 안 끔·끄는 쪽이 죽어도·정리하는 손주는 기다림)·시간 제한 때 묶음째(결과를 못 써도)·껍데기만 죽음·LLM 분리 / 정적 검사 양성·음성·가져오기·실행기 거부·허용 목록(maxSeconds 포함)·run·effect·모드 고정·훅 누수·gc 보존·관문 해석·집계·잡 상한 / 독립 검토 재현 13건). + 1a 29개(사본 역사 없음·비밀·기록 문서 제외·본 저장소 불변·재현 2회·흔들림·재현 안 됨·제보만 → 규칙 공백·범위 미리 보기(그림자 would_ask / 실제 owner_gate)·대화 작업 표식 HOLD·시간 초과 묶음째·죽음 뒤 다시 띄움·이중 실행·진단 재시도(sonnet ×≤2, 한도 뒤 쉼)·회귀 주입·벤치 누설·채점·접수(소크·CI·벤치·하루 3건·이월)·S13(차례 대기는 만료 안 함)·하루 1회 접수·사본 정리·허용 목록·디스크 계산식·도우미·벤치 목록·고장 주입 2). 실호출 2개(haiku·gostop-live)는 평소 건너뛴다.
 0a 시험 기대값 3곳은 의도된 변경으로 바꿨다: 격리 플래그(`--restricted`), claude 작업 폴더(홈 밖), DB 판 번호(4).
 
 ## 걷어내는 법

@@ -640,6 +640,8 @@ function expireIdle(ctx) {
       const cur = ctx.store.getThread(row.thread_id);
       if (!cur || !["queued", "continue", "held", "failed", "running", "waiting"].includes(cur.status)) continue;
       if (cur.answer == null && cur.deadline_at != null) continue; // 잠그는 사이 바뀌었다 — 승인 기한으로
+      // 차례를 기다리는 대기열(같은 그래프에 시작한 미완 스레드가 있음 — S13)은 놀고 있는 것이 아니다. 앞 스레드가 끝나거나 만료되면 시작한다(H3 중1)
+      if (cur.status === "queued" && ctx.store.openThreads().some((r) => r.graph === cur.graph && r.thread_id !== cur.thread_id && r.status !== "queued")) continue;
       const h = Math.round(ctx.cfg.holdTtlMs / 3_600_000);
       ctx.store.updateThread(cur.thread_id, { status: "expired", note: `진척 없이 ${h}시간(${cur.status}${cur.hold_reason ? `:${cur.hold_reason}` : ""}) — 보류 기한 초과로 자동 취소`, notified: 0 }, t);
       ctx.expiredNow.push(cur.thread_id);
@@ -680,6 +682,42 @@ async function dailyStart(ctx) {
   }
 }
 
+// 사본 정리(설계 §2 '사본은 3일 보관', H3 중4): 상태 폴더의 <묶음>/sandbox/<키> 중 3일(LG_SANDBOX_KEEP_DAYS) 넘은 것.
+// 관문 앞에서 틱마다 본다 — 디스크 관문에 걸린 날에도 오래된 사본이 비켜 주게. 끝나지 않은 스레드의 사본은 남긴다(그 스레드는 48시간 진척이 없으면 만료된다).
+function pruneSandboxes(ctx) {
+  const keepMs = ctx.cfg.sandboxKeepDays * 86_400_000;
+  const live = new Set(ctx.store.openThreads().map((r) => r.thread_id.replace(/[^A-Za-z0-9._-]/g, "_")));
+  let removed = 0;
+  let groups = [];
+  try { groups = fs.readdirSync(ctx.cfg.stateDir, { withFileTypes: true }).filter((e) => e.isDirectory()); } catch { return; }
+  for (const g of groups) {
+    const root = path.join(ctx.cfg.stateDir, g.name, "sandbox");
+    let ents = [];
+    try { ents = fs.readdirSync(root, { withFileTypes: true }); } catch { continue; }
+    for (const e of ents) {
+      if (!e.isDirectory()) continue;
+      const p = path.join(root, e.name);
+      const ref = fs.existsSync(path.join(p, ".ready")) ? path.join(p, ".ready") : p;
+      if ([...live].some((t) => t.endsWith(e.name))) continue;
+      if (ctx.now() - fs.statSync(ref).mtimeMs > keepMs) { fs.rmSync(p, { recursive: true, force: true }); removed++; }
+    }
+  }
+  if (removed) ctx.metric("gc", { ok: true, sandboxes: removed });
+}
+
+// 원문 파일(runs/<키>/ — 고칠 안·재현 로그·CI 로그)도 gc 기간(14일)이 지나면 지운다(S4 평문 누적, H3 하)
+function pruneRuns(ctx) {
+  const root = path.join(ctx.cfg.stateDir, "runs");
+  let ents = [];
+  try { ents = fs.readdirSync(root, { withFileTypes: true }); } catch { return 0; }
+  let n = 0;
+  for (const e of ents) {
+    const p = path.join(root, e.name);
+    if (e.isDirectory() && ctx.now() - fs.statSync(p).mtimeMs > ctx.cfg.gcDays * 86_400_000) { fs.rmSync(p, { recursive: true, force: true }); n++; }
+  }
+  return n;
+}
+
 function dailyGc(ctx) {
   const { localDay } = ctx.storeMod;
   const today = localDay(ctx.now());
@@ -688,7 +726,7 @@ function dailyGc(ctx) {
   if (last === today) return;
   try {
     const r = ctx.store.gc(ctx.now(), ctx.cfg.gcDays);
-    ctx.metric("gc", { ok: true, deleted: r.deleted, bytes: r.bytes });
+    ctx.metric("gc", { ok: true, deleted: r.deleted, bytes: r.bytes, runs: pruneRuns(ctx) });
     fs.writeFileSync(ctx.cfg.lastGcPath, today, { mode: 0o600 });
   } catch (e) {
     ctx.metric("gc", { ok: false, error: errHead(firstLine(e)) }); // 다음 틱에 다시
@@ -797,7 +835,8 @@ async function tickThreadInner(ctx, row0) {
       }
     }
     const before = ctx.store.getThread(thread);
-    ctx.store.updateThread(thread, { status: "running", run_started_at: t }, t, { touch: false });
+    // 대기열에서 처음 시작할 때는 진척 시각을 지금으로 — 차례를 기다린 시간(S13)이 보류 48시간에 들어가지 않게(H3 중1)
+    ctx.store.updateThread(thread, { status: "running", run_started_at: t, ...(before.status === "queued" ? { progress_at: t } : {}) }, t, { touch: false });
     await advance(ctx, g, thread, first, before);
     return "ok";
   } finally {
@@ -837,6 +876,7 @@ async function cmdTick(ctx) {
     if (li?.stuck) noteStuck(ctx, row, li);
   }
   dailyGc(ctx);
+  pruneSandboxes(ctx);
   const gates = checkGates(ctx.cfg, ctx.store, ctx.now());
   if (gates.length) {
     ctx.metric("held", { scope: "tick", reasons: gates.map((x) => x.gate), detail: gates.map((x) => x.detail).join(" / ") });

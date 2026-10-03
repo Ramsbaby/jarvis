@@ -22,14 +22,41 @@
    ],
    "expect": {
     "status": "ready",
+    "ruleGap": false,
     "files": [
      "lib/presentation/providers/game_provider.dart"
     ],
-    "keywords": [
-     "국진|gukjin",
-     "confirmDrawnCardChoice|뒤집은 패|선택|choice"
-    ],
-    "ruleGap": false
+    "lines": {
+     "lib/presentation/providers/game_provider.dart": [
+      [
+       3490,
+       3490
+      ],
+      [
+       3888,
+       3888
+      ],
+      [
+       4278,
+       4278
+      ],
+      [
+       4283,
+       4284
+      ],
+      [
+       4286,
+       4289
+      ],
+      [
+       4291,
+       4291
+      ]
+     ]
+    },
+    "symbols": [
+     "confirmDrawnCardChoice"
+    ]
    },
    "red": {
     "verified": "2026-10-03",
@@ -39,6 +66,15 @@
     "signature": "seed=202656775: seat0 국진 쌍피 라이브 false / 엔진 true · 확정 점수 4/6",
     "seed2": "seed=202672613: 3인 획득·점수·머니 불일치(25초)",
     "hidden": "gukjin_capture_paths_live_test.dart +2 -4(19초)"
+   },
+   "leakTerms": [
+    "69a0144",
+    "gukjin_capture_paths"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -54,14 +90,37 @@
    ],
    "expect": {
     "status": "rule_decision",
+    "ruleGap": true,
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "조커|joker",
-     "판.{0,4}끝|스톱|나가리|종료"
-    ],
-    "ruleGap": true
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       793,
+       813
+      ],
+      [
+       1370,
+       1390
+      ],
+      [
+       1453,
+       1453
+      ],
+      [
+       1460,
+       1479
+      ],
+      [
+       1620,
+       1641
+      ]
+     ]
+    },
+    "symbols": [
+     "_endGameWithScoreIncrease"
+    ]
    },
    "red": {
     "verified": "2026-10-03",
@@ -69,6 +128,16 @@
     "rc": 1,
     "secs": 13,
     "hidden": "end_game_board_joker(_live)_test.dart +1 -5"
+   },
+   "leakTerms": [
+    "02d61dc",
+    "end_game_board_joker",
+    "바닥에 남는다"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -87,11 +156,16 @@
     "files": [
      "lib/domain/game/score_calculator.dart"
     ],
-    "keywords": [
-     "멍텅구리|멍따|[Mm]eongteong",
-     "국진|[Gg]ukjin",
-     "쌍피|[Ss]sangPi",
-     "열끗|[Yy]eol"
+    "lines": {
+     "lib/domain/game/score_calculator.dart": [
+      [
+       425,
+       429
+      ]
+     ]
+    },
+    "symbols": [
+     "_isMeongteongguriDdable"
     ]
    },
    "red": {
@@ -104,6 +178,14 @@
    "green": {
     "rc": 0,
     "secs": 2.7
+   },
+   "leakTerms": [
+    "b986492"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -122,10 +204,16 @@
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "강제 스톱|mustEndGame|스톱 선언|declareStop",
-     "승자|winner|byStopDeclaration",
-     "_endGame|최고 점수"
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       1260,
+       1263
+      ]
+     ]
+    },
+    "symbols": [
+     "_endTurn"
     ]
    },
    "red": {
@@ -138,6 +226,14 @@
    "green": {
     "rc": 0,
     "secs": 2.1
+   },
+   "leakTerms": [
+    "4c142f8"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -156,10 +252,16 @@
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "손패 ?0|손패가 (없|비)|빈 손패|nextHasHand|hand\\.is(Not)?Empty",
-     "selectCard",
-     "drawFromDeck|덱에서 뒤집|뒤집기"
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       1402,
+       1402
+      ]
+     ]
+    },
+    "symbols": [
+     "_endTurn"
     ]
    },
    "red": {
@@ -172,6 +274,14 @@
    "green": {
     "rc": 0,
     "secs": 1.6
+   },
+   "leakTerms": [
+    "88a5e31"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -190,9 +300,16 @@
     "files": [
      "lib/domain/game/special_rules.dart"
     ],
-    "keywords": [
-     "연뻑|pukStreak|consecutivePuk",
-     "pukStreaksAfterNonPuk|남이 먹|다른 사람|사람별|자기 줄|remove"
+    "lines": {
+     "lib/domain/game/special_rules.dart": [
+      [
+       217,
+       218
+      ]
+     ]
+    },
+    "symbols": [
+     "pukStreaksAfterNonPuk"
     ]
    },
    "red": {
@@ -205,6 +322,14 @@
    "green": {
     "rc": 0,
     "secs": 1.7
+   },
+   "leakTerms": [
+    "4a3fa8e"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -223,9 +348,16 @@
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "폭탄|bomb",
-     "calculatePlayCardSteps|단계|TurnStep|effectTriggered"
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       278,
+       279
+      ]
+     ]
+    },
+    "symbols": [
+     "calculatePlayCardSteps"
     ]
    },
    "red": {
@@ -238,6 +370,14 @@
    "green": {
     "rc": 0,
     "secs": 2.9
+   },
+   "leakTerms": [
+    "6f170c6"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -256,11 +396,15 @@
     "files": [
      "lib/domain/game/go_stop_rule.dart"
     ],
-    "keywords": [
-     "고/스톱|고스톱|evaluateGoStop|GoStopVerdict",
-     "손패|hand\\.isEmpty",
-     "mustEndGame|게임 종료|강제 스톱"
-    ]
+    "lines": {
+     "lib/domain/game/go_stop_rule.dart": [
+      [
+       54,
+       54
+      ]
+     ]
+    },
+    "symbols": []
    },
    "red": {
     "verified": "2026-10-03",
@@ -272,6 +416,14 @@
    "green": {
     "rc": 0,
     "secs": 2.0
+   },
+   "leakTerms": [
+    "5bba902"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -290,9 +442,16 @@
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "selectWinner|승자",
-     "국진|[Gg]ukjin|forPlayer"
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       1576,
+       1577
+      ]
+     ]
+    },
+    "symbols": [
+     "selectWinner"
     ]
    },
    "red": {
@@ -305,6 +464,14 @@
    "green": {
     "rc": 0,
     "secs": 2.3
+   },
+   "leakTerms": [
+    "90d78cc"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -323,9 +490,16 @@
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "3연뻑|삼연뻑|[Tt]hreePuk",
-     "정산|settlement|settleThreePukWin|3,?000|나가리"
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       2086,
+       2102
+      ]
+     ]
+    },
+    "symbols": [
+     "_handlePuk"
     ]
    },
    "red": {
@@ -338,6 +512,14 @@
    "green": {
     "rc": 0,
     "secs": 1.7
+   },
+   "leakTerms": [
+    "41df6e2"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -356,9 +538,16 @@
     "files": [
      "lib/domain/game/special_rules.dart"
     ],
-    "keywords": [
-     "쓸|[Ss]seul",
-     "마지막 패|막판|remainingHand|남은 손패"
+    "lines": {
+     "lib/domain/game/special_rules.dart": [
+      [
+       433,
+       436
+      ]
+     ]
+    },
+    "symbols": [
+     "isSseul"
     ]
    },
    "red": {
@@ -371,6 +560,14 @@
    "green": {
     "rc": 0,
     "secs": 1.7
+   },
+   "leakTerms": [
+    "e8fc0a5"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -389,9 +586,16 @@
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "피 ?뺏|_stealPiFromOpponents|steal",
-     "한 차례|이번 차례|piStolenThisTurn|already|두 번"
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       2608,
+       2609
+      ]
+     ]
+    },
+    "symbols": [
+     "confirmDrawnFloorCardChoice"
     ]
    },
    "red": {
@@ -404,6 +608,14 @@
    "green": {
     "rc": 0,
     "secs": 12.5
+   },
+   "leakTerms": [
+    "c064409"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -422,9 +634,16 @@
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "selectWinner|승자",
-     "byStopDeclaration|스톱 선언|짐작|추론|goCount|고를 부른|고박"
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       1572,
+       1572
+      ]
+     ]
+    },
+    "symbols": [
+     "selectWinner"
     ]
    },
    "red": {
@@ -437,6 +656,14 @@
    "green": {
     "rc": 0,
     "secs": 2.2
+   },
+   "leakTerms": [
+    "21ed0b9"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -455,9 +682,16 @@
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "국진|[Gg]ukjin",
-     "_endTurn|턴 종료|_settleGukjinOnCapture"
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       1204,
+       1207
+      ]
+     ]
+    },
+    "symbols": [
+     "_endTurn"
     ]
    },
    "red": {
@@ -470,6 +704,14 @@
    "green": {
     "rc": 0,
     "secs": 2.2
+   },
+   "leakTerms": [
+    "1610f02"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -488,9 +730,16 @@
     "files": [
      "lib/presentation/providers/game_provider.dart"
     ],
-    "keywords": [
-     "pukOwnership|소유권",
-     "_clearEatenPukOwnership|모두|한 월|months"
+    "lines": {
+     "lib/presentation/providers/game_provider.dart": [
+      [
+       3337,
+       3338
+      ]
+     ]
+    },
+    "symbols": [
+     "_clearEatenPukOwnership"
     ]
    },
    "red": {
@@ -503,6 +752,14 @@
    "green": {
     "rc": 0,
     "secs": 9.1
+   },
+   "leakTerms": [
+    "c064409"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   },
   {
@@ -521,10 +778,16 @@
     "files": [
      "lib/domain/game/turn_manager.dart"
     ],
-    "keywords": [
-     "덱 소진|덱이 비|deck\\.isEmpty|빈 덱",
-     "drawFromDeck|뒤집",
-     "_endTurn|턴을 끝내|정지|멈춤|무한|deadlock"
+    "lines": {
+     "lib/domain/game/turn_manager.dart": [
+      [
+       816,
+       821
+      ]
+     ]
+    },
+    "symbols": [
+     "drawFromDeck"
     ]
    },
    "red": {
@@ -537,6 +800,14 @@
    "green": {
     "rc": 0,
     "secs": 2.3
+   },
+   "leakTerms": [
+    "88a5e31"
+   ],
+   "leakCheck": {
+    "checked": "2026-10-03",
+    "how": "사본 규칙(tar 제외 + 기록 문서 정리) 뒤 남는 글 파일을 git grep",
+    "hits": []
    }
   }
  ]

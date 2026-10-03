@@ -5,19 +5,22 @@
 import fs from "node:fs";
 import path from "node:path";
 import { StateGraph, Annotation, START, END } from "@langchain/langgraph";
-import { repoPath, soakRoot, gostopDir, sandboxRoot, runDir, writeAtomic, readJson, loadBench, benchSignal, short, DIFF_TEST, kstDay } from "./gostop-common.mjs";
+import { repoPath, soakRoot, gostopDir, runDir, writeAtomic, readJson, loadBench, benchSignal, short, DIFF_TEST, kstDay } from "./gostop-common.mjs";
 
 export const meta = { name: "gostop-intake", description: "고스톱 신호 접수(소크·CI·벤치) → 수정 스레드 대기열" };
 
 export const DAY_CAP = 3; // 하루 3건 이하(S13)
-const CI_FIRST_LOOKBACK_MS = 72 * 3_600_000; // 처음 접수할 때 CI 를 거슬러 보는 길이
-const CI_LOG_MAX = 48 * 1024; // 실패 로그 발췌 상한(끝부분)
-const SANDBOX_KEEP_MS = 3 * 86_400_000; // 사본 3일 보관(설계 §2)
+// 거슬러 보는 길이(H3 중2·중3): 기준 시각을 앞으로 미는 대신 늘 이만큼 다시 보고, 이미 접수한 sigkey 는 장부(seen)로 뺀다.
+// 그래서 접수 때 진행 중이던 CI·하루 상한에 밀린 신호·관문 때문에 접수가 없던 날의 소크도 다음 접수가 줍는다.
+const CI_LOOKBACK_MS = 7 * 86_400_000;
+const SOAK_LOOKBACK_DAYS = 3;
+const CI_LOG_MAX = 48 * 1024; // 실패 로그 발췌 상한(바이트)
 
 const last = (a, b) => (b === undefined ? a : b);
 const State = Annotation.Root({
   day: Annotation(),
   signals: Annotation({ reducer: last, default: () => [] }),
+  reportOnly: Annotation({ reducer: last, default: () => [] }), // 재현 수단이 없어 수정 스레드로 보내지 않은 신호(기록만)
   ciError: Annotation({ reducer: last, default: () => null }),
   fresh: Annotation({ reducer: last, default: () => [] }),
   enqueued: Annotation({ reducer: last, default: () => [] }),
@@ -30,33 +33,33 @@ export function input(flags) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error(`--day 는 YYYY-MM-DD: ${day}`);
   return { day };
 }
-export const summarize = (v) => `신호 ${v.signals?.length ?? 0} · 새것 ${v.fresh?.length ?? 0} · 올림 ${v.enqueued?.length ?? 0}${v.ciError ? ` · CI 못 읽음` : ""}`;
+export const summarize = (v) => `신호 ${v.signals?.length ?? 0} · 새것 ${v.fresh?.length ?? 0} · 올림 ${v.enqueued?.length ?? 0}${v.reportOnly?.length ? ` · 기록만 ${v.reportOnly.length}` : ""}${v.ciError ? ` · CI 못 읽음` : ""}`;
 
-// 접수 장부(상태 폴더 gostop/intake-state.json): 본 sigkey · 마지막 CI 확인 · 마지막으로 읽은 소크 날 · 벤치 회차
+// 접수 장부(상태 폴더 gostop/intake-state.json): 본 sigkey(60일) · 벤치 회차 · 날짜별 올린 것
 const ledgerPath = (stateDir) => path.join(gostopDir(stateDir), "intake-state.json");
-const readLedger = (stateDir) => ({ seen: {}, ciCheckedAt: null, soakDay: null, benchRounds: {}, daily: {}, ...(readJson(ledgerPath(stateDir), {}) ?? {}) });
+const readLedger = (stateDir) => ({ seen: {}, benchRounds: {}, daily: {}, ...(readJson(ledgerPath(stateDir), {}) ?? {}) });
 
-// 소크 summary.json → 신호. 불일치(⛔ seed=…)는 씨앗 신호, 씨앗 없는 문제(멈춤·코치 위반·요약 전 종료)는 제보 신호.
+// 소크 summary.json → { signals, reportOnly }. 수정 스레드로 보내는 것은 씨앗이 있는 불일치(⛔ seed=…)뿐이다(H3 중5):
+// 씨앗 없는 문제(멈춤·코치 위반·요약 전 종료)는 사본에서 재현할 길이 없어 근거 없는 진단이 되므로 기록만 한다.
+// 미커밋 상태(dirty)로 돈 소크는 커밋에서 재현되지 않으니 통째로 기록만 한다.
 export function soakSignals(summary) {
-  const out = [];
-  if (!summary || typeof summary !== "object") return out;
+  const signals = [], reportOnly = [];
+  if (!summary || typeof summary !== "object") return { signals, reportOnly };
   const head = String(summary.head ?? "").slice(0, 8);
+  const dirty = Number(summary.dirty ?? 0) > 0;
   for (const blk of summary.mismatch_details ?? []) {
     const m = /^seed=(\d+):/.exec(String(blk));
     if (!m) continue;
-    out.push({ source: "soak", kind: "seed", sigkey: `soak:normal:${m[1]}:${head}`, rev: head || "HEAD", test: DIFF_TEST,
-      defines: ["REPLAY_GAMES=1", `REPLAY_SEED_BASE=${m[1]}`], report: short(blk, 1500) });
+    const sg = { source: "soak", kind: "seed", sigkey: `soak:normal:${m[1]}:${head}`, rev: head || "HEAD", test: DIFF_TEST,
+      defines: ["REPLAY_GAMES=1", `REPLAY_SEED_BASE=${m[1]}`], report: short(blk, 1500) };
+    if (dirty) reportOnly.push({ sigkey: sg.sigkey, why: "미커밋 상태로 돈 소크(dirty)", report: sg.report });
+    else signals.push(sg);
   }
-  for (const p of summary.problems ?? []) {
-    const text = String(p);
-    let h = 0;
-    for (const ch of text.replace(/\d+/g, "#")) h = (h * 31 + ch.codePointAt(0)) >>> 0;
-    out.push({ source: "soak", kind: "report", sigkey: `soak:problem:${summary.day}:${head}:${h.toString(16).slice(0, 6)}`, rev: head || "HEAD", report: short(text, 1500) });
-  }
-  return out;
+  for (const p of summary.problems ?? []) reportOnly.push({ sigkey: `soak:problem:${summary.day}:${head}`, why: "씨앗 없는 문제 — 재현 수단 없음", report: short(p, 600) });
+  return { signals, reportOnly };
 }
 
-// gh run list JSON → 워크플로마다 가장 최근 완료 실행이 실패이고 기준 시각 뒤에 만들어진 것
+// gh run list JSON → 워크플로마다 가장 최근 완료 실행이 실패이고 거슬러 보는 길이 안에 만들어진 것(이미 본 것은 dedupe 가 뺀다)
 export function ciFailures(runs, sinceMs) {
   const latest = new Map();
   for (const r of runs ?? []) {
@@ -91,7 +94,7 @@ export function ciTestOf(logText) {
 export function build({ checkpointer, tools }) {
   const repo = repoPath();
 
-  // 야간 소크가 도는 중이면 보류(잠금 폴더의 pid 가 살아 있음). 3일 지난 사본을 치운다.
+  // 야간 소크가 도는 중이면 보류(잠금 폴더의 pid 가 살아 있음). 3일 지난 사본 정리는 실행기가 관문 앞에서 한다(H3 중4).
   function preflight(s) {
     const lock = path.join(soakRoot(), ".lock.d");
     if (fs.existsSync(lock)) {
@@ -101,29 +104,22 @@ export function build({ checkpointer, tools }) {
       try { if (pid > 1) { process.kill(pid, 0); alive = true; } } catch (e) { alive = e?.code === "EPERM"; }
       if (alive) throw tools.hold(`야간 소크 진행 중(pid ${pid}) — 끝난 뒤 접수`, "soak");
     }
-    const root = sandboxRoot(tools.stateDir);
-    const removed = [];
-    let ents = [];
-    try { ents = fs.readdirSync(root, { withFileTypes: true }); } catch { /* 아직 없음 */ }
-    for (const e of ents) {
-      if (!e.isDirectory()) continue;
-      const p = path.join(root, e.name);
-      const st = fs.statSync(fs.existsSync(path.join(p, ".ready")) ? path.join(p, ".ready") : p);
-      if (tools.now() - st.mtimeMs > SANDBOX_KEEP_MS) { fs.rmSync(p, { recursive: true, force: true }); removed.push(e.name); }
-    }
-    return { log: [`preflight 사본 정리 ${removed.length}`] };
+    return { log: ["preflight"] };
   }
 
   async function collect(s) {
     const L = readLedger(tools.stateDir);
-    const signals = [];
-    // ① 어젯밤 소크 — 오늘 날짜 폴더(소크는 02:00 에 그날 날짜로 쓴다). 이미 읽은 날이면 넘긴다.
-    const soakDay = s.day.replaceAll("-", "");
-    const summary = readJson(path.join(soakRoot(), soakDay, "summary.json"));
-    if (summary && L.soakDay !== soakDay) signals.push(...soakSignals(summary));
-    // ② 직전 접수 뒤 CI 실패(읽기 전용 gh). 못 읽으면 적고 넘어간다(접수는 계속).
+    const signals = [], reportOnly = [];
+    // ① 소크 — 오늘부터 3일 치 폴더(소크는 02:00 에 그날 날짜로 쓴다). 이미 접수한 것은 dedupe 가 장부로 뺀다.
+    for (let k = 0; k < SOAK_LOOKBACK_DAYS; k++) {
+      const d = kstDay(Date.parse(`${s.day}T12:00:00+09:00`) - k * 86_400_000).replaceAll("-", "");
+      const r = soakSignals(readJson(path.join(soakRoot(), d, "summary.json")));
+      signals.push(...r.signals);
+      reportOnly.push(...r.reportOnly);
+    }
+    // ② CI 실패(읽기 전용 gh) — 지난 7일 안에서 지금도 빨간 워크플로. 못 읽으면 적고 넘어간다(접수는 계속).
     let ciError = null;
-    const since = Number.isFinite(L.ciCheckedAt) ? L.ciCheckedAt : tools.now() - CI_FIRST_LOOKBACK_MS;
+    const since = tools.now() - CI_LOOKBACK_MS;
     const r = await tools.run("gh.run-list", { repo });
     let runs = null;
     if (r.code === 0) { try { runs = JSON.parse(r.stdout); } catch { ciError = "gh 출력이 JSON 이 아니다"; } }
@@ -138,16 +134,10 @@ export function build({ checkpointer, tools }) {
           report: `CI '${f.workflow}' 실패 — ${f.url}` });
       }
     }
-    // ③ 신호가 없으면 벤치 1건 — 가장 덜 돌린 사례부터(같으면 목록 순서)
-    if (!signals.length) {
-      const bench = loadBench();
-      const pick = [...bench.cases].sort((a, b) => (L.benchRounds[a.id] ?? 0) - (L.benchRounds[b.id] ?? 0))[0];
-      if (pick) signals.push(benchSignal(pick, (L.benchRounds[pick.id] ?? 0) + 1));
-    }
-    return { signals, ciError, log: [`collect 신호 ${signals.length}${ciError ? " · CI 못 읽음" : ""}`] };
+    return { signals, reportOnly, ciError, log: [`collect 신호 ${signals.length}${reportOnly.length ? ` · 기록만 ${reportOnly.length}` : ""}${ciError ? " · CI 못 읽음" : ""}`] };
   }
 
-  // 이미 본 sigkey·같은 묶음 안 중복을 뺀다(순수)
+  // 이미 본 sigkey·같은 묶음 안 중복을 뺀다. 새 신호가 없으면 벤치 1건 — 가장 덜 돌린 사례부터(같으면 목록 순서)
   function dedupe(s) {
     const L = readLedger(tools.stateDir);
     const seen = new Set(Object.keys(L.seen));
@@ -156,6 +146,10 @@ export function build({ checkpointer, tools }) {
       if (seen.has(sg.sigkey)) { skipped.push({ sigkey: sg.sigkey, why: "이미 접수" }); continue; }
       seen.add(sg.sigkey);
       fresh.push(sg);
+    }
+    if (!fresh.length) {
+      const pick = [...loadBench().cases].sort((a, b) => (L.benchRounds[a.id] ?? 0) - (L.benchRounds[b.id] ?? 0))[0];
+      if (pick) fresh.push(benchSignal(pick, (L.benchRounds[pick.id] ?? 0) + 1));
     }
     return { fresh, skipped, log: [`dedupe 새것 ${fresh.length} · 뺌 ${skipped.length}`] };
   }
@@ -174,8 +168,6 @@ export function build({ checkpointer, tools }) {
       L.seen[sg.sigkey] = s.day;
       if (sg.source === "bench" && sg.bench?.id) L.benchRounds[sg.bench.id] = (L.benchRounds[sg.bench.id] ?? 0) + 1;
     }
-    if (s.signals.some((x) => x.source === "soak") || fs.existsSync(path.join(soakRoot(), s.day.replaceAll("-", ""), "summary.json"))) L.soakDay = s.day.replaceAll("-", "");
-    if (!s.ciError) L.ciCheckedAt = tools.now();
     L.daily[s.day] = [...today, ...enqueued.filter((e) => !e.existed).map((e) => e.sigkey)];
     const cut = kstDay(tools.now() - 60 * 86_400_000);
     for (const d of Object.keys(L.daily)) if (d < cut) delete L.daily[d];
