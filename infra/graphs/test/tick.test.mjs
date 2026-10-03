@@ -358,3 +358,56 @@ test("틱 두 개가 겹쳐 돌아도 노드는 한 번씩 — 스레드 잠금�
   for (const l of fs.readFileSync(sb.env.LG_SMOKE_TRACE, "utf8").split("\n").filter(Boolean)) { const n = l.split(" ")[1]; per[n] = (per[n] ?? 0) + 1; }
   assert.deepEqual(per, { a: 3, b: 3, c: 3, d: 3 }, "노드마다 스레드 수만큼(3)만");
 });
+
+test("알림함: 틱이 알림을 내기 전에 죽어도(SIGKILL) 다음 틱이 그 알림을 낸다 — DONE·WAITING 이 사라지지 않는다", async (t) => {
+  const sb = sandbox(t);
+  const lg = appWith(sb, { steps: STEPS });
+  const env = tickEnv(sb);
+  assert.equal(lg(env, ["start", "smoke", "o1", "--queue"]).code, 0); // 먼저 돌아 WAITING 을 알림함에 넣는다
+  assert.equal(lg(env, ["start", "steps", "o2", "--queue"]).code, 0); // 그다음 오래 걸리는 노드에서 죽는다
+  const child = spawn(NODE, [path.join(sb.dir, "app", "run.mjs"), "tick"], { env: { ...env, LG_TEST_STEP_MS: "20000" } });
+  let out = "";
+  child.stdout.on("data", (d) => { out += d; });
+  const closed = new Promise((r) => child.on("close", r));
+  const until = Date.now() + 15_000;
+  while (!counts(sb).a && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
+  child.kill("SIGKILL");
+  await closed;
+  assert.equal(out, "", "죽은 틱은 아무것도 내지 못했다");
+  const r = lg(env, ["tick"]);
+  assert.equal(r.code, 0);
+  assert.ok(r.lines.some((l) => /^WAITING o1 /.test(l)), `앞 틱이 남긴 WAITING: ${r.out}`);
+  assert.ok(r.lines.some((l) => /^DONE o2 a>b>c>d$/.test(l)), r.out);
+  assert.equal(lg(env, ["tick"]).first, "NO_REPLY", "낸 알림은 다시 내지 않는다");
+});
+
+test("알리지 못한 대기(정리가 끊긴 실행을 대기로 맞춘 경우 등)는 틱이 WAITING 으로 한 번 알린다", async (t) => {
+  const sb = sandbox(t);
+  const env = tickEnv(sb);
+  assert.match(run(env, ["start", "smoke", "u1"]).first, /^WAITING u1 /);
+  const db = await openDb(sb);
+  t.after(() => db.close());
+  db.prepare("UPDATE lg_threads SET waiting_notified=NULL WHERE thread_id='u1'").run();
+  const r = run(env, ["tick"]);
+  assert.match(r.first, /^WAITING u1 이 초안으로 마무리할까요\? .*· 답: lg\.sh answer u1 approved\|rejected · 기한 /);
+  assert.equal(run(env, ["tick"]).first, "NO_REPLY");
+});
+
+test("그래프 하나의 고장(불러오다 죽음·summarize 예외)은 그 스레드만 보류 — 같은 틱의 다른 스레드는 끝나고 틱은 0", (t) => {
+  const sb = sandbox(t);
+  const boom = STEPS.replace("export const summarize = (v) => v.log.join(\">\");", "export const summarize = (v) => { throw new Error(\"요약 고장\"); };");
+  const dead = `throw new Error("불러오다 죽음");\n${STEPS}`;
+  const lg = appWith(sb, { boom, dead: STEPS, steps: STEPS });
+  const env = tickEnv(sb);
+  for (const [g, th] of [["boom", "x1"], ["dead", "x2"], ["steps", "x3"]]) assert.equal(lg(env, ["start", g, th, "--queue"]).code, 0, `${g}`);
+  fs.writeFileSync(path.join(sb.dir, "app", "graphs", "dead.mjs"), dead); // 대기열에 든 뒤 그래프가 망가진다
+  const r = lg(env, ["tick"]);
+  assert.equal(r.code, 0, r.out + r.err);
+  assert.ok(r.lines.some((l) => /^DONE x3 a>b>c>d$/.test(l)), r.out);
+  for (const th of ["x1", "x2"]) {
+    const v = JSON.parse(lg(env, ["status", th, "--json"]).out);
+    assert.equal(v.status, "held", th);
+    assert.equal(v.hold, "code_defect", th);
+  }
+  assert.equal(lg(env, ["tick"]).first, "NO_REPLY", "코드가 그대로면 다시 돌리지 않는다");
+});

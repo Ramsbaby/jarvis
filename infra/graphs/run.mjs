@@ -228,6 +228,17 @@ async function reconcile(ctx, g, thread, { fresh = false, answered = false } = {
   return { kind: "waiting", s, q, deadline, key, intr };
 }
 
+// 알림 줄(DONE·WAITING·GAVE_UP·STUCK). 틱은 상태 변경과 같은 트랜잭션으로 알림함에 넣고 끝에서 낸다 — 틱이 도중에 죽어도
+// (게이트웨이 재시작·잡 시간 초과) 다음 틱이 낸다. 수동 명령은 바로 낸다(부른 쪽이 보고 있다).
+function announce(ctx, thread, line, change) {
+  if (ctx.isTick) {
+    ctx.store.tx(() => { change?.(); ctx.store.addNotice(thread, line.split(" ")[0], line.replace(/\s+/g, " ").trim().slice(0, 400), ctx.now()); });
+  } else {
+    change?.();
+    say(line);
+  }
+}
+
 const multiLine = (thread, intrs) =>
   `ERROR ${thread} multi-interrupt 승인 대기 ${intrs.length}개가 동시에 생겼다 — 답 하나가 모두를 승인할 수 있어 받지 않는다: ${intrs.map(questionOf).join(" / ")}`;
 
@@ -249,21 +260,22 @@ async function settle(ctx, g, thread, { fresh = false, answered = false } = {}) 
     if (first) {
       ctx.metric("waiting", { thread, graph: g.name, reason: typeof r.intr?.value?.reason === "string" ? r.intr.value.reason : null });
     }
+    const mark = () => ctx.store.updateThread(thread, { waiting_notified: r.key }, t, { touch: false });
     if (!ctx.isTick) {
       say(`WAITING ${thread} ${r.q}`);
       say(`답: lg.sh answer ${thread} approved|rejected · 기한 ${iso(r.deadline)}`);
+      mark();
     } else if (first) {
-      say(`WAITING ${thread} ${r.q} · 답: lg.sh answer ${thread} approved|rejected · 기한 ${iso(r.deadline)}`);
+      announce(ctx, thread, `WAITING ${thread} ${r.q} · 답: lg.sh answer ${thread} approved|rejected · 기한 ${iso(r.deadline)}`, mark);
     }
-    ctx.store.updateThread(thread, { waiting_notified: r.key }, t, { touch: false });
     return 0;
   }
   if (!r.s.next?.length) {
     const summary = String(g.mod.summarize ? g.mod.summarize(r.s.values ?? {}) : "");
-    ctx.store.updateThread(thread, { status: "done", note: summary.slice(0, 300), hold_reason: null, fail_sig: null, fail_count: 0 }, t);
+    announce(ctx, thread, `DONE ${thread} ${summary}`,
+      () => ctx.store.updateThread(thread, { status: "done", note: summary.slice(0, 300), hold_reason: null, fail_sig: null, fail_count: 0 }, t));
     const v = r.s.values ?? {};
     ctx.metric("done", { thread, graph: g.name, mode: row?.mode ?? "shadow", verified: typeof v.verify_log === "string" ? v.verify_log : null });
-    say(`DONE ${thread} ${summary}`);
     return 0;
   }
   // interrupt 없이 다음 노드가 남았다 = 노드 단위 진행 도중이다. 여기 오면 안 된다(advance 가 다음 단계를 돈다).
@@ -316,9 +328,9 @@ const shape = (msg) => msg.replace(/\d+/g, "#").replace(/\s+/g, " ").slice(0, 12
 const errHead = (msg) => shape(String(msg ?? "").split(/[:—]/)[0]).slice(0, 80);
 
 function giveUp(ctx, thread, graph, node, count, note) {
-  ctx.store.updateThread(thread, { status: "gave_up", note: `같은 오류 ${count}회 — ${note}` }, ctx.now());
+  announce(ctx, thread, `GAVE_UP ${thread} ${node} 같은 오류 ${count}회 — ${note}`,
+    () => ctx.store.updateThread(thread, { status: "gave_up", note: `같은 오류 ${count}회 — ${note}` }, ctx.now()));
   ctx.metric("gave_up", { thread, graph, node, count, error: errHead(note) });
-  say(`GAVE_UP ${thread} ${node} 같은 오류 ${count}회 — ${note}`);
   return 0;
 }
 
@@ -589,10 +601,10 @@ function expireIdle(ctx) {
 function noteStuck(ctx, row, li) {
   const key = `${li.pid}:${li.acquiredAt}`;
   if (row.stuck_key === key) return;
-  ctx.store.updateThread(row.thread_id, { stuck_key: key }, ctx.now(), { touch: false });
+  announce(ctx, row.thread_id, `STUCK ${row.thread_id} pid ${li.pid} 가 ${Math.round(li.ageMs / 60_000)}분째 잠금을 쥐고 있다(살아 있음 — 넘겨받지 않고 이 스레드는 보류)`,
+    () => ctx.store.updateThread(row.thread_id, { stuck_key: key }, ctx.now(), { touch: false }));
   ctx.metric("stuck", { thread: row.thread_id, graph: row.graph, pid: li.pid, age_min: Math.round(li.ageMs / 60_000) });
   ctx.metric("held", { thread: row.thread_id, graph: row.graph, scope: "thread", reasons: ["stuck"] });
-  say(`STUCK ${row.thread_id} pid ${li.pid} 가 ${Math.round(li.ageMs / 60_000)}분째 잠금을 쥐고 있다(살아 있음 — 넘겨받지 않고 이 스레드는 보류)`);
 }
 
 function dailyGc(ctx) {
@@ -618,7 +630,23 @@ function tickCandidates(ctx) {
     .sort((a, b) => RANK[a.status] - RANK[b.status] || (a.progress_at ?? a.created_at) - (b.progress_at ?? b.created_at));
 }
 
+// 스레드 하나의 예상 밖 오류(그래프의 summarize·상태 읽기 등)는 그 스레드만 코드 결함으로 보류하고 틱은 계속 간다 —
+// 그래프 하나의 고장이 틱 전체를 매번 죽여(종료 1) 잡이 꺼지는 일을 막는다. 저장소 자체가 고장이면 보류 기록도 실패해 그대로 던진다.
 async function tickThread(ctx, row0) {
+  try {
+    return await tickThreadInner(ctx, row0);
+  } catch (e) {
+    active.running = false;
+    const note = `예상 밖 오류 — ${firstLine(e)}`;
+    ctx.store.updateThread(row0.thread_id, { status: "held", note, hold_reason: "code_defect", hold_ref: codeHash(row0.graph) }, ctx.now());
+    ctx.metric("held", { thread: row0.thread_id, graph: row0.graph, scope: "thread", reasons: ["code_defect"], error: errHead(firstLine(e)) });
+    say(`HELD ${row0.thread_id} ${note}`);
+    if (process.env.LG_DEBUG) warn(e?.stack ?? String(e));
+    return "held";
+  }
+}
+
+async function tickThreadInner(ctx, row0) {
   const thread = row0.thread_id;
   current = thread;
   const li = ctx.store.lockInfo(thread);
@@ -642,9 +670,7 @@ async function tickThread(ctx, row0) {
       row = ctx.store.getThread(thread);
     }
     if (row.status === "failed" && (row.fail_count ?? 0) > ctx.cfg.maxRetries) {
-      ctx.store.updateThread(thread, { status: "gave_up", note: `같은 오류 ${row.fail_count}회 — ${row.note ?? ""}` }, t);
-      ctx.metric("gave_up", { thread, graph: row.graph, count: row.fail_count, error: errHead(row.note) });
-      say(`GAVE_UP ${thread} 같은 오류 ${row.fail_count}회 — ${row.note ?? ""}`);
+      giveUp(ctx, thread, row.graph, String(row.fail_sig ?? "?").split(":")[0], row.fail_count, row.note ?? "");
       return "gave_up";
     }
     let g;
@@ -652,7 +678,7 @@ async function tickThread(ctx, row0) {
       g = await openGraph(ctx, row.graph, thread, { mode: row.mode ?? "shadow" });
       if (g.blocked) throw new GraphRuleError("컴파일에 정적 중단점(interruptBefore/After)이 있다 — 노드 단위 진행이 승인 없이 지나칠 수 있다");
     } catch (e) {
-      if (!(e instanceof UsageError) && !(e instanceof GraphRuleError) && classifyError(e).kind !== "code_defect") throw e;
+      // 허용 목록은 틱 시작 때 이미 읽었다 — 여기서 나는 오류는 그 그래프 몫(파일 없음·규칙 위반·불러오다 죽음)이다. 다른 스레드는 계속 간다.
       const note = firstLine(e);
       const same = row.status === "held" && row.note === note;
       ctx.store.updateThread(thread, { status: "held", note, hold_reason: "code_defect", hold_ref: codeHash(row.graph) }, t, { touch: !same });
@@ -711,9 +737,17 @@ async function cmdTick(ctx) {
     say(`ERROR - selftest ${leak.msg}`);
     return 1;
   }
+  await registry(ctx); // 허용 목록이 망가졌으면 여기서 진짜 오류(1) — 스레드마다 보류로 숨기지 않는다
   const failures = await sweep(ctx);
   for (const f of failures) ctx.metric("held", { scope: "sweep", reasons: ["sweep_error"], detail: errHead(f) });
   expireIdle(ctx);
+  // 아직 알리지 못한 대기(끊긴 실행을 정리가 대기로 맞춘 경우 등)는 여기서 알린다 — 주인님이 못 본 질문이 조용히 만료되지 않게
+  for (const row of ctx.store.openThreads()) {
+    if (row.status !== "waiting" || !row.interrupt_id || row.waiting_notified === row.interrupt_id || row.answer != null) continue;
+    announce(ctx, row.thread_id, `WAITING ${row.thread_id} ${row.question ?? "승인 대기"} · 답: lg.sh answer ${row.thread_id} approved|rejected · 기한 ${row.deadline_at ? iso(row.deadline_at) : "?"}`,
+      () => ctx.store.updateThread(row.thread_id, { waiting_notified: row.interrupt_id }, ctx.now(), { touch: false }));
+    ctx.metric("waiting", { thread: row.thread_id, graph: row.graph, reason: null, late: true });
+  }
   for (const row of ctx.store.openThreads()) {
     const li = ctx.store.lockInfo(row.thread_id);
     if (li?.stuck) noteStuck(ctx, row, li);
@@ -871,12 +905,18 @@ function end(code) {
       code = 1;
     }
   }
-  let out = [...lines, ...notices.map((r) => `EXPIRED ${r.thread_id} ${r.question ?? r.note ?? ""} — ${r.note?.includes("보류") ? "보류 기한 초과로 자동 취소" : "승인 기한 초과로 자동 취소"}`.replace(/\s+/g, " ").slice(0, 400))];
+  // 틱 알림함: 이번 틱과 앞서 도중에 죽은 틱이 남긴 알림을 낸다(꺼내면서 지우고, 내지 못하면 되돌린다)
+  let outbox = [];
+  if (store && active.cmd === "tick") {
+    try { outbox = store.claimNotices(); } catch (e) { lines.push(`ERROR - internal 알림함을 읽지 못함: ${String(e?.message ?? e).split("\n")[0]}`); code = 1; }
+  }
+  let out = [...lines, ...outbox.map((r) => r.line), ...notices.map((r) => `EXPIRED ${r.thread_id} ${r.question ?? r.note ?? ""} — ${r.note?.includes("보류") ? "보류 기한 초과로 자동 취소" : "승인 기한 초과로 자동 취소"}`.replace(/\s+/g, " ").slice(0, 400))];
   // 알림 필터: 예약 잡(tick)은 주인님께 갈 줄만 — DONE·WAITING·EXPIRED·GAVE_UP·STUCK(+진짜 오류 ERROR). 낼 것이 없으면 NO_REPLY.
   if (active.cmd === "tick" && !active.verbose) out = out.filter((l) => NOTIFY.test(l) || (code !== 0 && /^ERROR /.test(l)));
   if (ownsNotices && !out.length) out.push("NO_REPLY");
   let written = false;
   try { writeOut(out.length ? `${out.join("\n")}\n` : ""); written = true; } catch { code = 1; }
+  if (!written && outbox.length) { try { store.restoreNotices(outbox); } catch { /* 다음 틱도 못 낸다 — 상태는 그대로 */ } }
   if (store) {
     try {
       if (written && ownsNotices && notices.length) store.markNotified(notices.map((r) => r.thread_id));

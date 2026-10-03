@@ -56,6 +56,13 @@ CREATE TABLE IF NOT EXISTS lg_llm_calls (
   model TEXT,
   in_tok INTEGER, out_tok INTEGER, cc_tok INTEGER, cr_tok INTEGER, cost_usd REAL   -- 응답의 usage — 하루 토큰 상한에 쓴다
 );
+CREATE TABLE IF NOT EXISTS lg_notices (   -- 틱 알림함: 상태 변경과 같은 트랜잭션으로 넣고, 표준 출력에 낸 뒤 지운다(도중에 죽어도 다음 틱이 낸다)
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  thread_id TEXT,
+  kind TEXT NOT NULL,
+  line TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS lg_llm_calls_day ON lg_llm_calls(day);
 CREATE INDEX IF NOT EXISTS lg_llm_calls_thread ON lg_llm_calls(thread_id);
 `;
@@ -237,6 +244,22 @@ export class Store {
   }
   openThreads() {
     return this.db.prepare("SELECT * FROM lg_threads WHERE status NOT IN ('done', 'expired', 'blocked', 'gave_up') ORDER BY COALESCE(progress_at, created_at), thread_id").all();
+  }
+  // ── 틱 알림함 ──────────────────────────────────────────────────
+  addNotice(thread, kind, line, now) {
+    this.db.prepare("INSERT INTO lg_notices(thread_id, kind, line, created_at) VALUES(?, ?, ?, ?)").run(thread, kind, line, now);
+  }
+  // 꺼내면서 지운다(겹친 틱이 같은 알림을 두 번 내지 않게). 내지 못하면 restoreNotices 로 되돌린다.
+  claimNotices() {
+    return this.tx(() => {
+      const rows = this.db.prepare("SELECT * FROM lg_notices ORDER BY id").all();
+      if (rows.length) this.db.prepare(`DELETE FROM lg_notices WHERE id <= ?`).run(rows.at(-1).id);
+      return rows;
+    });
+  }
+  restoreNotices(rows) {
+    const st = this.db.prepare("INSERT INTO lg_notices(thread_id, kind, line, created_at) VALUES(?, ?, ?, ?)");
+    this.tx(() => { for (const r of rows) st.run(r.thread_id, r.kind, r.line, r.created_at); });
   }
   unnotifiedExpired() {
     return this.db.prepare("SELECT * FROM lg_threads WHERE status='expired' AND notified=0 ORDER BY deadline_at, thread_id").all();
