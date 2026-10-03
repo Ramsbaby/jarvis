@@ -37,8 +37,9 @@ export function jobDir(jobsDir, { thread, node, attempt }) {
   return path.join(jobsDir, thread, node, String(attempt));
 }
 
-// spec: { bin, argv, cwd, env, stdinText?, timeoutMs, maxMs?, heartbeatSec? }. 돌려주는 handle 은 그래프 상태에 넣을 수 있는 순수 값이다.
+// spec: { bin, argv, cwd, env, stdinText?, timeoutMs, maxMs?, stopGraceMs?, heartbeatSec? }. 돌려주는 handle 은 그래프 상태에 넣을 수 있는 순수 값이다.
 // timeoutMs: 껍데기가 스스로 끄는 시간(결과에 timedOut). maxMs: check() 가 묶음째 끄는 시간(dead "timeout") — 둘 다 시작부터 잰다.
+// stopGraceMs: 껍데기가 멈춤 신호를 받아 명령이 끝난 뒤, 남은 손주가 스스로 정리하도록 기다리는 시간(기본 30초 — check 의 유예와 같다).
 export function launch(jobsDir, { thread, node, attempt, cmdId }, spec) {
   const dir = jobDir(jobsDir, { thread, node, attempt });
   const timeoutMs = spec.timeoutMs ?? 600_000;
@@ -59,7 +60,7 @@ export function launch(jobsDir, { thread, node, attempt, cmdId }, spec) {
   }
   fs.writeFileSync(path.join(dir, "spec.json"), JSON.stringify({
     cmdId, thread, node, attempt, bin: spec.bin, argv: spec.argv ?? [], cwd: spec.cwd, env: spec.env ?? {},
-    stdinFile, timeoutMs, maxMs, heartbeatSec: spec.heartbeatSec ?? 30,
+    stdinFile, timeoutMs, maxMs, stopGraceMs: spec.stopGraceMs ?? KILL_GRACE_MS, heartbeatSec: spec.heartbeatSec ?? 30,
   }), { mode: 0o600 });
   const child = allowSpawn(() => spawn(process.execPath, [RUNNER, dir], {
     detached: true, stdio: "ignore", cwd: dir, env: { PATH: "/usr/bin:/bin:/usr/sbin:/sbin", LANG: process.env.LANG || "en_US.UTF-8" },

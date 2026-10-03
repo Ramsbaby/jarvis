@@ -103,11 +103,11 @@ setTimeout(() => process.kill(process.pid, "SIGKILL"), 300);`.replace('require("
 });
 
 // 손주까지 있는 명령(cmd-fixture tree → hang)을 띄우고 손주가 준비될 때까지 기다린다. 시험이 중간에 실패해도 묶음을 치운다.
-// ignore: "" 모두 SIGTERM 을 따름 · "term-ignore" 손주만 무시 · "all-ignore" 명령도 무시
-async function launchTree(t, sb, name, { ignore = "term-ignore", timeoutMs = 60_000, maxMs = 120_000 } = {}) {
+// ignore: "" 모두 SIGTERM 을 따름 · "term-ignore" 손주만 무시 · "all-ignore" 명령도 무시 · "term-slow" 손주가 1초 정리 뒤 끝남
+async function launchTree(t, sb, name, { ignore = "term-ignore", timeoutMs = 60_000, maxMs = 120_000, stopGraceMs } = {}) {
   const pidsFile = path.join(sb.dir, `${name}.pids`);
   const h = detach.launch(path.join(sb.state, "jobs"), { thread: name, node: "work", attempt: 1, cmdId: "test.tree" },
-    { bin: NODE, argv: [CMD_FIXTURE, "tree", pidsFile, ignore], cwd: "/", env: { PATH: "/usr/bin:/bin" }, timeoutMs, maxMs });
+    { bin: NODE, argv: [CMD_FIXTURE, "tree", pidsFile, ignore], cwd: "/", env: { PATH: "/usr/bin:/bin" }, timeoutMs, maxMs, stopGraceMs });
   const pids = await until(() => { try { return fs.readFileSync(pidsFile, "utf8").split(" ").map(Number); } catch { return null; } });
   assert.ok(pids, "손주가 떴다");
   const [child, grand] = pids;
@@ -161,12 +161,22 @@ test("최대 시간: 우리 껍데기임을 증명 못 하면(시작 시각 기�
   assert.ok([meta.pid, child, grand].every(alive), "아무것도 끄지 않았다");
 });
 
-test("최대 시간: 끄는 쪽(틱)이 유예 중에 죽어도 — 바깥 SIGTERM 을 받은 껍데기가 결과를 쓰고 남은 손주까지 SIGKILL", async (t) => {
+test("최대 시간: 끄는 쪽(틱)이 유예 중에 죽어도 — 바깥 SIGTERM 을 받은 껍데기가 결과를 쓰고, 유예 뒤 남은 손주까지 SIGKILL", async (t) => {
   const sb = sandbox(t);
-  const { h, meta, child, grand } = await launchTree(t, sb, "m5");
+  const { h, meta, child, grand } = await launchTree(t, sb, "m5", { stopGraceMs: 1000 });
   process.kill(-meta.pid, "SIGTERM"); // check 가 묶음에 보내는 신호 — 그 뒤 아무도 check 하지 않는다
   await gone([grand, child], 8000);
   assert.ok(fs.existsSync(path.join(h.dir, "result.json")), "결과는 남긴다");
+});
+
+test("멈춤 신호 뒤 손주가 스스로 정리할 시간을 준다 — 명령이 먼저 끝나도 묶음이 빌 때까지 기다리고, 그 뒤에만 SIGKILL", async (t) => {
+  const sb = sandbox(t);
+  const { h, meta, child, grand } = await launchTree(t, sb, "m8", { ignore: "term-slow" });
+  const st = detach.check(h, { now: meta.startedAt + 120_000, killGraceMs: 10_000 });
+  assert.equal(st.reason, "timeout", JSON.stringify(st));
+  assert.equal(st.signal, "SIGTERM", "정리를 마치고 스스로 끝났다 — SIGKILL 까지 안 갔다");
+  assert.ok(fs.existsSync(path.join(sb.dir, "m8.pids.cleaned")), "손주가 1초 걸리는 정리를 마쳤다");
+  await gone([grand, child]);
 });
 
 test("껍데기 시간 제한(timeoutMs)으로 끝날 때도 묶음째 — SIGTERM 을 무시한 손주도 남지 않는다(done, timedOut)", async (t) => {
@@ -175,7 +185,7 @@ test("껍데기 시간 제한(timeoutMs)으로 끝날 때도 묶음째 — SIGTE
   const d = await until(() => { const s = detach.check(h); return s.state === "done" ? s : null; }, 20_000);
   assert.ok(d, "결과를 남긴다");
   assert.equal(d.timedOut, true);
-  await gone([grand, child]);
+  await gone([grand, child], 12_000); // 결과 뒤 5초 유예를 준 다음 SIGKILL
 });
 
 test("껍데기 시간 제한: 결과를 못 써도(작업 폴더가 사라짐) 남은 손주는 SIGKILL", async (t) => {
