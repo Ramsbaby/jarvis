@@ -25,6 +25,17 @@ function timeWindow(env, key, dflt) {
   return [a, b];
 }
 
+// "gostop-intake@04:30,다른-그래프@06:00" → [{ graph, after: 분 }]. 빈 값이면 끈다(시험 기본).
+function dailyList(env, key, dflt) {
+  const v = env[key] ?? dflt;
+  if (!v) return [];
+  return String(v).split(",").map((x) => x.trim()).filter(Boolean).map((x) => {
+    const m = /^([a-z][a-z0-9-]{0,40})@(\d{1,2}):(\d{2})$/.exec(x);
+    if (!m || Number(m[2]) > 23 || Number(m[3]) > 59) throw new Error(`${key} 는 '그래프@HH:MM[,…]' 형식이어야 한다: ${x}`);
+    return { graph: m[1], after: Number(m[2]) * 60 + Number(m[3]) };
+  });
+}
+
 export function loadConfig(env = process.env) {
   const home = env.HOME || os.homedir();
   const stateDir = path.resolve(env.LG_STATE_DIR || path.join(home, ".openclaw-data", "runtime", "state", "graphs"));
@@ -60,11 +71,14 @@ export function loadConfig(env = process.env) {
     detachMaxSec, // 분리 실행 최대 시간 기본값 — 목록에 maxSeconds 가 없을 때
     maxRetries: num(env, "LG_MAX_RETRIES", 3), // 같은 오류 재시도 횟수. 그다음에도 같은 오류면 GAVE_UP
     maxSteps: num(env, "LG_MAX_STEPS", 500), // 스레드 하나의 단계 상한(끝없는 되풀이 방지)
+    // 하루 1회 대기열에 올릴 그래프(틱이 '<그래프>:<날짜>'로 등록). 접수는 야간 소크(02:00~03:52)가 끝난 04:30 뒤 첫 틱 — 설계 §5.1
+    daily: dailyList(env, "LG_DAILY", "gostop-intake@04:30"),
     testMode,
     gates: {
       diskPath: env.LG_DISK_PATH || (fs.existsSync("/System/Volumes/Data") ? "/System/Volumes/Data" : stateDir),
       diskFloorGiB: num(env, "LG_DISK_FLOOR_GIB", 15), // 감지기 경고선
-      copyEstGiB: num(env, "LG_COPY_EST_GIB", 1), // 작업 사본 예상 크기 — 1a 에서 실측해 바꾼다
+      // 작업 사본 예상 크기 — 1a 실측(10-03): 사본 92MB + 시험 뒤 build 91MB + 깨끗한 내보내기 92MB + 풀기 전 tar 91MB = 최고 0.34GiB → 0.4
+      copyEstGiB: num(env, "LG_COPY_EST_GIB", 0.4),
       diskMarginGiB: num(env, "LG_DISK_MARGIN_GIB", 1),
       usagePath: path.resolve(env.LG_USAGE_FILE || path.join(home, ".openclaw", "workspace", "state", "orchestrator", "latest.md")),
       usageMaxPct: num(env, "LG_USAGE_MAX_PCT", 80),

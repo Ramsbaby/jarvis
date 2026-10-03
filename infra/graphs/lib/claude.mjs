@@ -60,10 +60,12 @@ export function checkTools(tools) {
   return tools;
 }
 
-export function claudeArgs(model, tools = []) {
+// jsonSchema: 구조화 출력(--json-schema). 객체를 받아 JSON 글자로 넘긴다. --tools 는 값을 여러 개 받으므로 맨 뒤에 둔다.
+export function claudeArgs(model, tools = [], { jsonSchema = null } = {}) {
   return [
     "-p", "--restricted", "--strict-mcp-config", "--no-session-persistence",
     "--output-format", "json", "--model", model, "--disable-slash-commands",
+    ...(jsonSchema ? ["--json-schema", typeof jsonSchema === "string" ? jsonSchema : JSON.stringify(jsonSchema)] : []),
     "--tools", ...(tools.length ? tools : [""]), // 기본은 도구 없음. 프롬프트는 표준 입력으로 준다
   ];
 }
@@ -169,7 +171,9 @@ export function judge(res) {
     const text = String(j.result ?? "");
     return { ok: false, kind: classifyLlmFailure(text) ?? "error", msg: `claude 오류(${j.subtype ?? "?"}): ${text.slice(0, 160)}`, models, usage };
   }
-  return { ok: true, text: String(j.result ?? ""), models, usage, costUsd: j.total_cost_usd ?? null, durationMs: j.duration_ms ?? null };
+  // --json-schema 를 준 호출은 structured_output 에 검증된 객체가 온다(없으면 null — 그래프가 본문에서 다시 찾는다)
+  const structured = j.structured_output && typeof j.structured_output === "object" ? j.structured_output : null;
+  return { ok: true, text: String(j.result ?? ""), structured, models, usage, costUsd: j.total_cost_usd ?? null, durationMs: j.duration_ms ?? null };
 }
 
 // 스레드 하나에 묶인 호출기. 실행기가 그래프를 만들 때 넘긴다.
@@ -204,9 +208,12 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
     if (v.ok) clearHold();
     else if (v.kind === "login" || v.kind === "usage_limit") setHold(v.kind, v.msg);
   };
-  const prep = ({ model, tools, cwd }) => {
+  const prep = ({ model, tools, cwd, jsonSchema }) => {
     const m = checkModel(model);
     checkTools(tools);
+    if (jsonSchema != null && (typeof jsonSchema !== "object" || Array.isArray(jsonSchema) || JSON.stringify(jsonSchema).length > 16_384)) {
+      throw new LlmModelBlocked("jsonSchema 는 16KB 이하의 JSON Schema 객체");
+    }
     if (!cwd && tools.some((t) => t === "Edit" || t === "Write")) throw new LlmModelBlocked("쓰기 도구(Edit·Write)는 작업 폴더(cwd — 사본)를 직접 줘야 한다 — 공용 빈 폴더에 쓰지 않는다");
     const bin = resolveClaudeBin(cfg.llm.bin);
     const dir = cwd ?? defaultClaudeCwd();
@@ -215,15 +222,15 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
   };
   return {
     // 동기 호출 — 틱 예산 안에 끝나는 짧은 호출(haiku 분류·요약). 긴 것은 launchAsk/checkAsk.
-    async ask(prompt, { model = cfg.llm.defaultModel, node = "?", tools = [], timeoutMs = cfg.llm.timeoutMs, cwd } = {}) {
-      const { m, bin, dir } = prep({ model, tools, cwd });
+    async ask(prompt, { model = cfg.llm.defaultModel, node = "?", tools = [], timeoutMs = cfg.llm.timeoutMs, cwd, jsonSchema = null } = {}) {
+      const { m, bin, dir } = prep({ model, tools, cwd, jsonSchema });
       const tmo = fitTimeout(timeoutMs, timeLeft);
       const callId = reserve({ model: m, node });
       const t0 = Date.now();
-      const res = await run(bin, claudeArgs(m, tools), { env: cleanEnv(bin), cwd: dir, input: String(prompt), timeoutMs: tmo });
+      const res = await run(bin, claudeArgs(m, tools, { jsonSchema }), { env: cleanEnv(bin), cwd: dir, input: String(prompt), timeoutMs: tmo });
       const v = judge({ ...res, timeoutMs: tmo });
       record(callId, { node, model: m, v, ms: Date.now() - t0 });
-      if (v.ok) return { text: v.text, models: v.models, costUsd: v.costUsd, durationMs: v.durationMs, usage: v.usage };
+      if (v.ok) return { text: v.text, structured: v.structured, models: v.models, costUsd: v.costUsd, durationMs: v.durationMs, usage: v.usage };
       if (v.kind === "fable") throw new LlmModelBlocked(v.msg);
       if (v.kind === "login") throw new LlmAuthHeld(`클로드 로그인 만료로 보인다 — ${v.msg}`);
       if (v.kind === "usage_limit") throw new LlmLimitHeld(`클로드 사용량 한도 — ${v.msg}`);
@@ -231,12 +238,12 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
     },
     // 분리 실행: 같은 (노드, 시도)는 한 번만 띄운다. 돌려주는 handle 을 상태에 넣고 다음 노드에서 check 한다.
     // 최대 시간(maxMs)은 기본 시간 제한의 1.5배(15분 → 22.5분, 설계 §6) — 넘기면 checkAsk 가 묶음째 끄고 dead(timeout).
-    launchAsk(prompt, { model = cfg.llm.defaultModel, node, attempt = 1, tools = [], timeoutMs = 15 * 60_000, maxMs = detach.defaultMaxMs(timeoutMs), cwd } = {}) {
-      const { m, bin, dir } = prep({ model, tools, cwd });
+    launchAsk(prompt, { model = cfg.llm.defaultModel, node, attempt = 1, tools = [], timeoutMs = 15 * 60_000, maxMs = detach.defaultMaxMs(timeoutMs), cwd, jsonSchema = null } = {}) {
+      const { m, bin, dir } = prep({ model, tools, cwd, jsonSchema });
       const ids = { thread, node, attempt, cmdId: "claude.ask" };
       if (fs.existsSync(detach.jobDir(cfg.jobsDir, ids))) return { dir: detach.jobDir(cfg.jobsDir, ids), ...ids, already: true };
       const callId = reserve({ model: m, node });
-      const h = detach.launch(cfg.jobsDir, ids, { bin, argv: claudeArgs(m, tools), cwd: dir, env: cleanEnv(bin), stdinText: String(prompt), timeoutMs, maxMs });
+      const h = detach.launch(cfg.jobsDir, ids, { bin, argv: claudeArgs(m, tools, { jsonSchema }), cwd: dir, env: cleanEnv(bin), stdinText: String(prompt), timeoutMs, maxMs });
       if (!h.already) fs.writeFileSync(path.join(h.dir, "llm.json"), JSON.stringify({ callId, model: m, node }), { mode: 0o600 });
       return h;
     },
@@ -251,7 +258,7 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
       let first = false;
       try { fs.writeFileSync(path.join(handle.dir, "recorded"), "1", { flag: "wx", mode: 0o600 }); first = true; } catch { /* 이미 적음 */ }
       if (first) record(info.callId, { node: info.node, model: info.model, v, ms: (st.endedAt ?? 0) - (st.startedAt ?? 0), detached: true });
-      if (v.ok) return { state: "done", text: v.text, models: v.models, costUsd: v.costUsd, usage: v.usage };
+      if (v.ok) return { state: "done", text: v.text, structured: v.structured, models: v.models, costUsd: v.costUsd, usage: v.usage };
       return { state: "failed", kind: v.kind, error: v.msg };
     },
   };

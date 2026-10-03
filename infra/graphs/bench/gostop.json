@@ -1,0 +1,543 @@
+{
+ "version": 2,
+ "note": "고스톱 재연 벤치 v2(설계 §1). 역사 2건(부모에서 재현, 그 커밋의 시험이 정답) + 회귀 주입(지난 수정의 핵심 줄을 현재 코드에서 거꾸로 되돌린 변형 — 지금 있는 시험이 빨간불로 잡는 것만). 변형은 사본에만 넣는다. red = 빨간불 직접 확인 기록. LLM 은 이 파일을 보지 못한다(사본 밖).",
+ "generatedAt": "2026-10-03",
+ "cases": [
+  {
+   "id": "hist-69a0144",
+   "kind": "seed",
+   "origin": "69a0144",
+   "rev": "69a0144^",
+   "title": "국진 획득 두 길의 규칙 누락 — 라이브 사람(뒤집은 패로 바닥 2장 중 고르는 턴)에서 국진을 묻지 않고, AI 는 국진 섞인 획득에서 뻑 더미·피 뺏기를 빠뜨림",
+   "test": "test/domain/game/live_replay_differential_test.dart",
+   "defines": [
+    "REPLAY_GAMES=1",
+    "REPLAY_SEED_BASE=202656775"
+   ],
+   "alsoSeeds": [
+    202672613
+   ],
+   "hiddenTests": [
+    "test/presentation/providers/gukjin_capture_paths_live_test.dart"
+   ],
+   "expect": {
+    "status": "ready",
+    "files": [
+     "lib/presentation/providers/game_provider.dart"
+    ],
+    "keywords": [
+     "국진|gukjin",
+     "confirmDrawnCardChoice|뒤집은 패|선택|choice"
+    ],
+    "ruleGap": false
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "부모(34a2766)에서 차분 대조 씨앗 2개와 정답 시험",
+    "rc": 1,
+    "secs": 20,
+    "signature": "seed=202656775: seat0 국진 쌍피 라이브 false / 엔진 true · 확정 점수 4/6",
+    "seed2": "seed=202672613: 3인 획득·점수·머니 불일치(25초)",
+    "hidden": "gukjin_capture_paths_live_test.dart +2 -4(19초)"
+   }
+  },
+  {
+   "id": "hist-02d61dc",
+   "kind": "report",
+   "origin": "02d61dc",
+   "rev": "02d61dc^",
+   "title": "판 끝 뻑 더미 속 조커 귀속 — 규칙서에 조항이 없어 엔진이 스톱한 사람에게 줬다(주인님 결정으로 §3.5 신설)",
+   "report": "실기 v71: 고/스톱 창에서 3점으로 스톱했는데 정산이 6점(돈 2배)으로 나왔다. 그때 바닥의 뻑 더미에 3피 조커가 있었다. 스톱과 동시에 그 조커가 스톱한 사람 획득으로 붙은 것 같다.",
+   "hiddenTests": [
+    "test/domain/game/end_game_board_joker_test.dart",
+    "test/presentation/providers/end_game_board_joker_live_test.dart"
+   ],
+   "expect": {
+    "status": "rule_decision",
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "조커|joker",
+     "판.{0,4}끝|스톱|나가리|종료"
+    ],
+    "ruleGap": true
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "부모(02d61dc^)에 정답 시험 2개를 넣어 돌림 — 기존 시험(차분 대조 기본 3판)은 초록(70초): 규칙 공백이라 기존 시험이 못 잡는다",
+    "rc": 1,
+    "secs": 13,
+    "hidden": "end_game_board_joker(_live)_test.dart +1 -5"
+   }
+  },
+  {
+   "id": "inj-meongtta-gukjin-ssangpi",
+   "kind": "inject",
+   "origin": "b986492",
+   "rev": "4c387e8",
+   "title": "멍텅구리 따블 판정이 국진 쌍피 선택을 무시하고 열끗을 날것으로 세도록 되돌림",
+   "inject": {
+    "file": "lib/domain/game/score_calculator.dart",
+    "find": "    final yeolCards = _yeolCards(\n      player.captured,\n      gukjinAsSsangPi: player.gukjinAsSsangPi,\n    );\n    return yeolCards.length >= 7;",
+    "replace": "    final yeolCards =\n        player.captured.where((c) => c.type == CardType.yeol).toList();\n    return yeolCards.length >= 7;"
+   },
+   "test": "test/domain/game/score_calculator_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/score_calculator.dart"
+    ],
+    "keywords": [
+     "멍텅구리|멍따|[Mm]eongteong",
+     "국진|[Gg]ukjin",
+     "쌍피|[Ss]sangPi",
+     "열끗|[Yy]eol"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 10.0,
+    "failing": "배율 계산 멍텅구리 따블 - 국진을 쌍피로 고르면 열끗 7장이어도 미성립"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 2.7
+   }
+  },
+  {
+   "id": "inj-forced-stop-winner",
+   "kind": "inject",
+   "origin": "4c142f8",
+   "rev": "4c387e8",
+   "title": "손패가 없어 강제 스톱(mustEndGame)될 때 스톱 선언자 대신 최고 점수자를 승자로 고르게 되돌림",
+   "inject": {
+    "file": "lib/domain/game/turn_manager.dart",
+    "find": "      return declareStop(state);\n    }\n\n    if (verdict == GoStopVerdict.choiceNeeded) {",
+    "replace": "      return _endGame(state);\n    }\n\n    if (verdict == GoStopVerdict.choiceNeeded) {"
+   },
+   "test": "test/domain/game/forced_stop_winner_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "강제 스톱|mustEndGame|스톱 선언|declareStop",
+     "승자|winner|byStopDeclaration",
+     "_endGame|최고 점수"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 1.9,
+    "failing": "손패 없어 강제 스톱될 때 스톱한 사람(A)이 이긴다 — 최고 점수자(B)가 아니다"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 2.1
+   }
+  },
+  {
+   "id": "inj-empty-hand-selectcard",
+   "kind": "inject",
+   "origin": "88a5e31",
+   "rev": "4c387e8",
+   "title": "다음 차례 플레이어의 손패가 0장이어도 무조건 selectCard 단계로 넘기게 되돌림(화면 정지)",
+   "inject": {
+    "file": "lib/domain/game/turn_manager.dart",
+    "find": "        turnPhase: nextHasHand ? TurnPhase.selectCard : TurnPhase.drawFromDeck,",
+    "replace": "        turnPhase: TurnPhase.selectCard,"
+   },
+   "test": "test/domain/game/empty_hand_turn_pass_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "손패 ?0|손패가 (없|비)|빈 손패|nextHasHand|hand\\.is(Not)?Empty",
+     "selectCard",
+     "drawFromDeck|덱에서 뒤집|뒤집기"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 1.6,
+    "failing": "손패 0인 플레이어에게 턴을 넘길 때 낼 카드가 없는 차례에 selectCard 로 세우지 않는다"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 1.6
+   }
+  },
+  {
+   "id": "inj-puk-streak-global-reset",
+   "kind": "inject",
+   "origin": "4a3fa8e",
+   "rev": "4c387e8",
+   "title": "뻑이 아닌 수를 두면 그 사람 줄만이 아니라 모든 사람의 연뻑 줄을 지우도록 되돌림(남이 먹어도 내 연뻑이 끊김)",
+   "inject": {
+    "file": "lib/domain/game/special_rules.dart",
+    "find": "    if (!streaks.containsKey(playerId)) return streaks;\n    return {...streaks}..remove(playerId);",
+    "replace": "    if (streaks.isEmpty) return streaks;\n    return <String, int>{};"
+   },
+   "test": "test/domain/game/puk_streak_rules_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/special_rules.dart"
+    ],
+    "keywords": [
+     "연뻑|pukStreak|consecutivePuk",
+     "pukStreaksAfterNonPuk|남이 먹|다른 사람|사람별|자기 줄|remove"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 1.9,
+    "failing": "연뻑 줄 끊기 — 자기 차례에 뻑이 아닌 수를 두면 자기 줄만 ★회귀★ 남이 먹어도 내 줄은 그대로다"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 1.7
+   }
+  },
+  {
+   "id": "inj-four-capture-bomb-step",
+   "kind": "inject",
+   "origin": "6f170c6",
+   "rev": "4c387e8",
+   "title": "바닥 동월 3장에 손패 1장을 내 4장을 먹는 연출 단계에 '💥 폭탄!' 효과 단계를 다시 끼워 넣음(폭탄 오표기)",
+   "inject": {
+    "file": "lib/domain/game/turn_manager.dart",
+    "find": "      // Step 2: 모두 획득 (쓸이면 그 효과)\n      final result = _captureAllMatching(state, card, matchingCards, newHand);",
+    "replace": "      // Step 2: 폭탄 효과\n      steps.add(\n        TurnStep(\n          state: placedState,\n          type: TurnStepType.effectTriggered,\n          focusCard: card,\n          effectType: SpecialEffectType.bomb,\n          message: '💥 폭탄!',\n        ),\n      );\n\n      // Step 3: 모두 획득 (쓸이면 그 효과)\n      final result = _captureAllMatching(state, card, matchingCards, newHand);"
+   },
+   "test": "test/domain/game/turn_manager_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "폭탄|bomb",
+     "calculatePlayCardSteps|단계|TurnStep|effectTriggered"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 2.1,
+    "failing": "calculatePlayCardSteps (단계별 시퀀스) 3장 매칭 - 폭탄이 아닌 평범한 4장 포획 (폭탄은 손패 3장 + 바닥 1장)"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 2.9
+   }
+  },
+  {
+   "id": "inj-gostop-empty-hand",
+   "kind": "inject",
+   "origin": "5bba902",
+   "rev": "4c387e8",
+   "title": "고/스톱 판정에서 손패가 비었는지 보지 않게 되돌림(손패 없이도 고/스톱을 다시 물음)",
+   "inject": {
+    "file": "lib/domain/game/go_stop_rule.dart",
+    "find": "  if (phase == GamePhase.handsExhausted || player.hand.isEmpty) {",
+    "replace": "  if (phase == GamePhase.handsExhausted) {"
+   },
+   "test": "test/domain/game/go_stop_rule_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/go_stop_rule.dart"
+    ],
+    "keywords": [
+     "고/스톱|고스톱|evaluateGoStop|GoStopVerdict",
+     "손패|hand\\.isEmpty",
+     "mustEndGame|게임 종료|강제 스톱"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 2.0,
+    "failing": "★회귀★ 손패가 없으면 고를 할 수 없다 → mustEndGame 손패가 비었으면 자격이 있어도 mustEndGame"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 2.0
+   }
+  },
+  {
+   "id": "inj-select-winner-gukjin",
+   "kind": "inject",
+   "origin": "90d78cc",
+   "rev": "4c387e8",
+   "title": "승자 판정(selectWinner)이 국진 쌍피 선택을 빼고 captured 만으로 점수를 재도록 되돌림",
+   "inject": {
+    "file": "lib/domain/game/turn_manager.dart",
+    "find": "      final scoreA = _scoreCalculator.forPlayer(a).baseScore;\n      final scoreB = _scoreCalculator.forPlayer(b).baseScore;",
+    "replace": "      final scoreA = _scoreCalculator.calculate(a.captured).baseScore;\n      final scoreB = _scoreCalculator.calculate(b.captured).baseScore;"
+   },
+   "test": "test/domain/game/gukjin_score_parity_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "selectWinner|승자",
+     "국진|[Gg]ukjin|forPlayer"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 2.7,
+    "failing": "selectWinner ★회귀★ 국진을 쌍피로 잡은 4점이 삼광 3점을 이겨야 한다"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 2.3
+   }
+  },
+  {
+   "id": "inj-three-puk-nagari",
+   "kind": "inject",
+   "origin": "41df6e2",
+   "rev": "4c387e8",
+   "title": "엔진의 3연뻑 처리를 '승리 + 상대 각 3,000원 정산'에서 정산 없는 나가리 종료로 되돌림",
+   "inject": {
+    "file": "lib/domain/game/turn_manager.dart",
+    "find": "      return TurnResult(\n        state: penalty.state.copyWith(\n          players: settledPlayers,\n          phase: GamePhase.finished,\n          pukStreaks: newPukStreaks,\n          lastPukPlayerId: pukPlayerId,\n          gameLog: [\n            ...state.gameLog,\n            pukResult.message,\n            '😤😤😤 삼연뻑! ${pukWinner.name} 승리 — 상대에게 각 '\n                '${SpecialRules.threePukWinAmountPerOpponent}원',\n          ],\n        ),\n        type: TurnResultType.gameEnded,\n        message: '😤😤😤 삼연뻑! ${pukWinner.name} 승리!',\n        settlement: settlement,\n      );",
+    "replace": "      return TurnResult(\n        state: penalty.state.copyWith(\n          phase: GamePhase.finished,\n          pukStreaks: newPukStreaks,\n          lastPukPlayerId: pukPlayerId,\n          gameLog: [\n            ...state.gameLog,\n            pukResult.message,\n            '🔄 삼연뻑으로 나가리! 다음 판 2배로 진행합니다.',\n          ],\n        ),\n        type: TurnResultType.gameEnded,\n        message: '😤😤😤 삼연뻑! → 나가리!',\n      );"
+   },
+   "test": "test/domain/game/turn_manager_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "3연뻑|삼연뻑|[Tt]hreePuk",
+     "정산|settlement|settleThreePukWin|3,?000|나가리"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 1.8,
+    "failing": "뻑 처리 3연뻑 - 승리로 게임 종료 + 상대 각 3,000원"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 1.7
+   }
+  },
+  {
+   "id": "inj-last-card-sseul",
+   "kind": "inject",
+   "origin": "e8fc0a5",
+   "rev": "4c387e8",
+   "title": "쓸 판정에서 '마지막 패로 쓸면 쓸이 아니다' 차단을 제거(막판 쓸로 피를 뺏음)",
+   "inject": {
+    "file": "lib/domain/game/special_rules.dart",
+    "find": "    if (boardBefore.isEmpty) return false;\n    // 마지막 패로 쓸어도 쓸이 아니다.\n    if (remainingHand != null && remainingHand.isEmpty) return false;\n    if (boardAfter.isEmpty) return true;",
+    "replace": "    if (boardBefore.isEmpty) return false;\n    if (boardAfter.isEmpty) return true;"
+   },
+   "test": "test/domain/game/sseul_last_card_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/special_rules.dart"
+    ],
+    "keywords": [
+     "쓸|[Ss]seul",
+     "마지막 패|막판|remainingHand|남은 손패"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 1.6,
+    "failing": "마지막 패로는 쓸이 발동하지 않는다 바닥을 다 쓸어도 남은 손패가 없으면 쓸이 아니다"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 1.7
+   }
+  },
+  {
+   "id": "inj-pi-steal-once-per-turn",
+   "kind": "inject",
+   "origin": "c064409",
+   "rev": "4c387e8",
+   "title": "엔진의 피 뺏기가 이번 차례에 이미 뺏은 장수를 빼지 않게 되돌림(한 차례에 뻑 더미 둘이면 피를 두 번 뺏음)",
+   "inject": {
+    "file": "lib/domain/game/turn_manager.dart",
+    "find": "    final already = state.piStolenThisTurn;\n    final piCountPerPlayer = piCountPerPlayerForEvent - already;",
+    "replace": "    final piCountPerPlayer = piCountPerPlayerForEvent;"
+   },
+   "test": "test/presentation/providers/puk_pile_once_per_turn_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "피 ?뺏|_stealPiFromOpponents|steal",
+     "한 차례|이번 차례|piStolenThisTurn|already|두 번"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 26.3,
+    "failing": "제 뻑 더미 둘을 한 차례에 — 자뻑 한 번(상대 각각 2장), 소유권은 둘 다 지운다 엔진"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 12.5
+   }
+  },
+  {
+   "id": "inj-winner-inferred-stop",
+   "kind": "inject",
+   "origin": "21ed0b9",
+   "rev": "4c387e8",
+   "title": "승자 판정이 종료 사유를 전달받지 않고 '현재 플레이어가 고를 불렀거나 3점 이상이면 스톱'으로 짐작하게 되돌림(고박 무력화)",
+   "inject": {
+    "file": "lib/domain/game/turn_manager.dart",
+    "find": "    if (byStopDeclaration) return currentPlayer;",
+    "replace": "    if (byStopDeclaration ||\n        currentPlayer.goCount > 0 ||\n        _scoreCalculator.forPlayer(currentPlayer).baseScore >= 3) {\n      return currentPlayer;\n    }"
+   },
+   "test": "test/domain/game/winner_attribution_regression_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "selectWinner|승자",
+     "byStopDeclaration|스톱 선언|짐작|추론|goCount|고를 부른|고박"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 2.6,
+    "failing": "selectWinner — 손패 소진(자동 종료) ★회귀★ 고를 부른 사람이라도 최고 점수자가 아니면 승자가 아니다"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 2.2
+   }
+  },
+  {
+   "id": "inj-gukjin-endturn-settle",
+   "kind": "inject",
+   "origin": "1610f02",
+   "rev": "4c387e8",
+   "title": "턴 종료(_endTurn)에서 이번 포획에 섞인 9월 국진의 열끗/쌍피를 정하지 않게 되돌림(손패 짝 경로에서 국진이 열끗으로 고정)",
+   "inject": {
+    "file": "lib/domain/game/turn_manager.dart",
+    "find": "    final settled = _settleGukjinOnCapture(\n      stateIn.copyWith(piStolenThisTurn: 0),\n      capturedCards,\n    );",
+    "replace": "    final settled = stateIn.copyWith(piStolenThisTurn: 0);"
+   },
+   "test": "test/domain/game/gukjin_capture_settlement_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "국진|[Gg]ukjin",
+     "_endTurn|턴 종료|_settleGukjinOnCapture"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 1.7,
+    "failing": "A. 손패 짝으로 국진 포획 — 플래그가 점수로 정해진다 열끗 0점 vs 쌍피 0점 동점 → 쌍피"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 2.2
+   }
+  },
+  {
+   "id": "inj-live-puk-ownership-one-month",
+   "kind": "inject",
+   "origin": "c064409",
+   "rev": "4c387e8",
+   "title": "라이브(game_provider)가 한 차례에 먹은 뻑 더미의 소유권을 모두가 아니라 한 월만 지우게 되돌림",
+   "inject": {
+    "file": "lib/presentation/providers/game_provider.dart",
+    "find": "    final cleared = Map<int, String>.from(state!.pukOwnership)\n      ..removeWhere((m, _) => months.contains(m));",
+    "replace": "    final cleared = Map<int, String>.from(state!.pukOwnership)\n      ..remove(months.first);"
+   },
+   "test": "test/presentation/providers/puk_pile_once_per_turn_test.dart",
+   "expect": {
+    "files": [
+     "lib/presentation/providers/game_provider.dart"
+    ],
+    "keywords": [
+     "pukOwnership|소유권",
+     "_clearEatenPukOwnership|모두|한 월|months"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 9.5,
+    "failing": "제 뻑 더미 둘을 한 차례에 — 자뻑 한 번(상대 각각 2장), 소유권은 둘 다 지운다 라이브 AI"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 9.1
+   }
+  },
+  {
+   "id": "inj-deck-empty-noop",
+   "kind": "inject",
+   "origin": "88a5e31",
+   "rev": "4c387e8",
+   "title": "덱이 빈 채 뒤집기를 요구받으면(손패 소진 단계 아님) 턴을 끝내지 않고 원래 상태를 그대로 돌려주게 되돌림(무한 정지)",
+   "inject": {
+    "file": "lib/domain/game/turn_manager.dart",
+    "find": "      return _endTurn(\n        state.copyWith(\n          clearPendingFloorCards: true,\n          gameLog: [...state.gameLog, '📭 덱이 소진되어 뒤집을 카드가 없습니다.'],\n        ),\n      );",
+    "replace": "      return TurnResult(state: state, type: TurnResultType.turnEnded);"
+   },
+   "test": "test/domain/game/deck_exhaustion_deadlock_test.dart",
+   "expect": {
+    "files": [
+     "lib/domain/game/turn_manager.dart"
+    ],
+    "keywords": [
+     "덱 소진|덱이 비|deck\\.isEmpty|빈 덱",
+     "drawFromDeck|뒤집",
+     "_endTurn|턴을 끝내|정지|멈춤|무한|deadlock"
+    ]
+   },
+   "red": {
+    "verified": "2026-10-03",
+    "how": "4c387e8 사본에 변형을 넣고 기존 시험",
+    "rc": 1,
+    "secs": 1.7,
+    "failing": "덱 소진 완전 정지 회귀 덱·손패·바닥이 모두 빈 채 뒤집기를 요구받아도 상태가 전진한다"
+   },
+   "green": {
+    "rc": 0,
+    "secs": 2.3
+   }
+  }
+ ]
+}

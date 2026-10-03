@@ -21,7 +21,7 @@ export function sandbox(t) {
   const state = path.join(dir, "state");
   const env = {
     PATH: process.env.PATH, HOME: home, TMPDIR: os.tmpdir(), LANG: "en_US.UTF-8",
-    LG_TEST_MODE: "1", LG_STATE_DIR: state, LG_SMOKE_TRACE: path.join(dir, "trace.log"),
+    LG_TEST_MODE: "1", LG_STATE_DIR: state, LG_SMOKE_TRACE: path.join(dir, "trace.log"), LG_DAILY: "", // 하루 1회 접수는 그 시험에서만 켠다
   };
   t?.after?.(() => {
     // 이 시험이 mktemp 로 만든 폴더만 지운다

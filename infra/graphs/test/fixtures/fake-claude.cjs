@@ -20,6 +20,18 @@ module.exports = function fake(log, mode) {
     process.stdout.write(JSON.stringify({ type: "result", subtype: "success", is_error: true, result: "Claude AI usage limit reached|1760000000" }));
     return;
   }
+  // diag · diag-text · diag-bad (1a): 진단 프롬프트면 '<log>.answer.json' 을 구조화 출력으로(diag-text 는 본문 속 코드 울타리로,
+  // diag-bad 는 형식에 안 맞는 글로) 답한다. 그 밖(요약)은 짧은 글.
+  if (/^diag/.test(mode) && /정해진 JSON 으로만 답한다/.test(input)) {
+    let ans = {};
+    try { ans = JSON.parse(fs.readFileSync(`${log}.answer.json`, "utf8")); } catch { /* 빈 답 */ }
+    const res = { type: "result", subtype: "success", is_error: false, modelUsage: { "claude-sonnet-5-5": { inputTokens: 900, outputTokens: 120 } }, total_cost_usd: 0, duration_ms: 5 };
+    if (mode === "diag") Object.assign(res, { result: "진단을 마쳤다", structured_output: ans });
+    else if (mode === "diag-text") Object.assign(res, { result: "결과:\n```json\n" + JSON.stringify(ans) + "\n```" });
+    else Object.assign(res, { result: "원인을 모르겠다" });
+    process.stdout.write(JSON.stringify(res));
+    return;
+  }
   const model = mode === "fable" ? "claude-fable-5-1" : "claude-haiku-4-5-20251001";
   const usage = mode === "tokens"
     ? { inputTokens: 100, outputTokens: 50, cacheReadInputTokens: 1000, cacheCreationInputTokens: 200, costUSD: 0.0012 }

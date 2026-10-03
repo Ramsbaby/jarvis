@@ -237,7 +237,7 @@ test("관문 해석: 감지기 스냅샷 모양·자정 넘는 야간 구간·�
   assert.equal(classifyLlmFailure("API Error: 429 rate_limit_error"), "usage_limit", "429 는 로그인 고장이 아니다(09-30 오판 전례)");
   assert.equal(classifyLlmFailure("가짜 실패: 인증 오류 흉내"), null);
   const cfg = loadConfig({ HOME: sb.home, LG_STATE_DIR: sb.state });
-  assert.equal(cfg.gates.diskFloorGiB + cfg.gates.copyEstGiB + cfg.gates.diskMarginGiB, 17, "기본 관문 = 15 + 사본 1 + 1");
+  assert.equal(cfg.gates.diskFloorGiB + cfg.gates.copyEstGiB + cfg.gates.diskMarginGiB, 16.4, "기본 관문 = 15 + 사본 실측 0.4(1a, 10-03) + 1");
   assert.deepEqual(cfg.gates.quiet, [90, 270]);
   assert.equal(cfg.tickBudgetMs, 480_000);
   assert.equal(cfg.lockStuckMs, 30 * 60_000);

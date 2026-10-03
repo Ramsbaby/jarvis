@@ -131,6 +131,7 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
   const { createRun, resolveCommand, CmdNotAllowed, killRunChildren } = await import("./lib/run.mjs");
   const { createEffect, effectScope } = await import("./lib/effects.mjs");
   const detach = await import("./lib/detach.mjs");
+  const { liveMode } = await import("./lib/gates.mjs");
   active.killChildren = () => { killActiveChildren(); killRunChildren(); };
   const { cfg, now, metric } = ctx;
   const timeLeft = ctx.isTick ? () => cfg.jobLimitMs - elapsedMs() : null; // 틱만 — 잡 시간 상한(600초) 안에서
@@ -160,6 +161,26 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
     hold: (msg, reason = "node") => Object.assign(new Error(msg), { held: true, holdReason: reason }),
     // 판정 M8 칸(벤치 결과). 정해진 필드만 남긴다.
     bench: (fields = {}) => metric("bench", { thread, ...Object.fromEntries(Object.entries(fields).filter(([k]) => BENCH.has(k))) }),
+    // 다른 그래프의 스레드를 대기열에 올린다(접수 → 수정, S13). 다음 틱이 시작한다. 이미 있는 스레드면 다시 올리지 않는다(멱등).
+    // 모드는 이 스레드 모드와 지금 LIVE 스위치 중 낮은 쪽 — 그림자 접수가 실제 수정을 낳지 않게.
+    enqueue(graphName, threadName, input = {}) {
+      const bad = (m) => Object.assign(new Error(`enqueue: ${m}`), { codeDefect: true });
+      if (!GRAPH_RE.test(String(graphName ?? "")) || !fs.existsSync(path.join(HERE, "graphs", `${graphName}.mjs`))) throw bad(`그래프 없음 ${graphName}`);
+      if (!THREAD_RE.test(String(threadName ?? ""))) throw bad(`스레드 이름 형식 ${threadName}`);
+      const body = JSON.stringify(input ?? {});
+      if (body.length > 65_536) throw bad("입력이 64KB 를 넘는다");
+      return ctx.store.tx(() => {
+        const row = ctx.store.getThread(threadName);
+        if (row || ctx.store.hasCheckpoint(threadName)) return { ok: false, kind: "exists", status: row?.status ?? "checkpoint" };
+        const childMode = mode === "live" && liveMode(cfg) === "live" ? "live" : "shadow";
+        ctx.store.registerThread(threadName, graphName, now(), { mode: childMode, status: "queued", input: JSON.parse(body) });
+        metric("start", { thread: threadName, graph: graphName, mode: childMode, queued: true, by: thread });
+        return { ok: true, kind: "queued", mode: childMode };
+      });
+    },
+    // 읽기 전용 값: 상태 폴더(사본·원문 파일 자리)와 실행기 시계(시험은 LG_NOW 로 주입)
+    stateDir: cfg.stateDir,
+    now: () => now(),
   };
   const restoreBuild = captureOutput(ctx, thread);
   let app;
@@ -640,6 +661,25 @@ function noteStuck(ctx, row, li) {
   ctx.metric("held", { thread: row.thread_id, graph: row.graph, scope: "thread", reasons: ["stuck"] });
 }
 
+// 하루 1회 시작(PLAN §3 '하루 1회 정리·접수'): LG_DAILY 의 그래프마다 '<그래프>:<날짜>' 스레드를 정한 시각 뒤 첫 틱에 대기열에 올린다.
+// 관문을 통과한 틱에서만 부른다. 그날 스레드가 이미 있으면(끝났어도) 다시 올리지 않는다. 시작 입력은 { day }.
+async function dailyStart(ctx) {
+  if (!ctx.cfg.daily.length) return;
+  const { liveMode } = await import("./lib/gates.mjs");
+  const t = ctx.now();
+  const d = new Date(t);
+  const mins = d.getHours() * 60 + d.getMinutes();
+  const day = ctx.storeMod.localDay(t);
+  for (const { graph, after } of ctx.cfg.daily) {
+    if (mins < after || !fs.existsSync(path.join(HERE, "graphs", `${graph}.mjs`))) continue;
+    const thread = `${graph}:${day}`;
+    if (ctx.store.getThread(thread) || ctx.store.hasCheckpoint(thread)) continue;
+    const mode = liveMode(ctx.cfg);
+    ctx.store.registerThread(thread, graph, t, { mode, status: "queued", input: { day } });
+    ctx.metric("start", { thread, graph, mode, queued: true, by: "daily" });
+  }
+}
+
 function dailyGc(ctx) {
   const { localDay } = ctx.storeMod;
   const today = localDay(ctx.now());
@@ -726,6 +766,9 @@ async function tickThreadInner(ctx, row0) {
       say(`HELD ${thread} 코드 결함 — ${note}`);
       return "held";
     }
+    // S13 한 번에 하나(그래프 meta.serial): 같은 그래프에 이미 시작한 미완 스레드가 있으면 대기열 것은 다음 틱으로 미룬다(상태 그대로)
+    if (row.status === "queued" && g.mod.meta?.serial === true
+      && ctx.store.openThreads().some((r) => r.graph === row.graph && r.thread_id !== thread && r.status !== "queued")) return "skip";
     let first;
     if (!ctx.store.hasCheckpoint(thread)) {
       if (row.input_json == null) { // 입력을 모르는 옛 스레드 — 시작할 수 없다
@@ -802,6 +845,7 @@ async function cmdTick(ctx) {
     failures.forEach(say);
     return 0;
   }
+  await dailyStart(ctx);
   const seen = new Set();
   let n = 0, outcome = "idle";
   for (;;) {

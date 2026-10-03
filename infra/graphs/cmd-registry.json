@@ -1,23 +1,249 @@
 {
   "version": 1,
-  "note": "그래프 노드가 run(cmdId, 인자)·launch(cmdId, 인자)로 실행할 수 있는 명령의 허용 목록(정본). 모드별 허용(modes), 부수효과 명령은 effect:true(실제 모드 전용, effect() 안에서만). 셸·env·OpenClaw CLI·인터프리터 즉석 코드는 올릴 수 없다(lib/run.mjs 가 거부). timeoutSec: 명령 시간 제한. maxSeconds: 분리 실행(launch) 최대 시간 — 시작부터 이만큼 넘기면 확인(check)이 프로세스 묶음째 끄고 dead(timeout)(설계 §6). timeoutSec 보다 커야 하고, 첫 값은 알려진 상한의 1.5배다. 없으면 LG_DETACH_MAX_SEC(5400). 1a 에서 고스톱 명령을 더한다.",
+  "note": "그래프 노드가 run(cmdId, 인자)·launch(cmdId, 인자)로 실행할 수 있는 명령의 허용 목록(정본). 모드별 허용(modes), 부수효과 명령은 effect:true(실제 모드 전용, effect() 안에서만). 셸·env·OpenClaw CLI·인터프리터 즉석 코드는 올릴 수 없다(lib/run.mjs 가 거부). timeoutSec: 명령 시간 제한. maxSeconds: 분리 실행(launch) 최대 시간 — 시작부터 이만큼 넘기면 확인(check)이 프로세스 묶음째 끄고 dead(timeout)(설계 §6). timeoutSec 보다 커야 하고, 첫 값은 알려진 상한(실측)의 1.5배다 — 동기 명령은 기동 흔들림 때문에 시간 제한 하한 30초. 없으면 LG_DETACH_MAX_SEC(5400). 고스톱 명령(git·tar·flutter·gh)은 1a 에서 더했다 — 전부 읽기 또는 사본 안 명령이고 effect 명령은 아직 없다.",
   "commands": {
     "sys.true": {
       "desc": "입구 자가 시험 — 아무것도 하지 않고 0",
       "bin": "/usr/bin/true",
       "argv": [],
-      "modes": ["shadow", "live"],
+      "modes": [
+        "shadow",
+        "live"
+      ],
       "timeoutSec": 10,
       "maxSeconds": 15
     },
     "sys.sleep": {
       "desc": "분리 실행·시간 상한 실측용 대기(초)",
       "bin": "/bin/sleep",
-      "argv": ["{seconds}"],
-      "params": { "seconds": "^[0-9]{1,4}$" },
-      "modes": ["shadow", "live"],
+      "argv": [
+        "{seconds}"
+      ],
+      "params": {
+        "seconds": "^[0-9]{1,4}$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
       "timeoutSec": 3600,
       "maxSeconds": 5400
+    },
+    "git.rev-parse": {
+      "desc": "고스톱 본 저장소 읽기 — 커밋 이름을 전체 해시로(없으면 코드 1). 실측 0.1초 미만 — 동기 명령은 기동 흔들림 하한 30초",
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{repo}",
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        "{rev}"
+      ],
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$",
+        "rev": "^(?:[0-9a-f]{7,40}|HEAD)\\^?$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "git.last-commit-time": {
+      "desc": "고스톱 본 저장소 읽기 — 모든 가지 중 가장 최근 커밋 시각(초). 대화 작업 표식(최근 30분 커밋) 판정용. 실측 0.1초 미만",
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{repo}",
+        "log",
+        "--all",
+        "-1",
+        "--format=%ct"
+      ],
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "git.archive": {
+      "desc": "고스톱 본 저장소 읽기 — 대상 커밋 한 판만 tar 로 내보낸다(역사 없음). 사본 자리의 src.tar 로만 쓴다. 실측 1초 미만(91MB)",
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{repo}",
+        "archive",
+        "--format=tar",
+        "-o",
+        "{out}",
+        "{rev}"
+      ],
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$",
+        "out": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/src\\.tar$",
+        "rev": "^(?:[0-9a-f]{7,40}|HEAD)\\^?$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "tar.extract-sandbox": {
+      "desc": "사본 풀기 — 설정·비밀(.claude·.mcp.json·key.properties·서명 키·google-services.json·GoogleService-Info.plist)은 빼고 푼다(설계 §2). 실측 1초 미만",
+      "bin": "/usr/bin/tar",
+      "argv": [
+        "-xf",
+        "{tar}",
+        "-C",
+        "{dir}",
+        "--exclude",
+        ".claude",
+        "--exclude",
+        ".mcp.json",
+        "--exclude",
+        "android/key.properties",
+        "--exclude",
+        "*.jks",
+        "--exclude",
+        "*.keystore",
+        "--exclude",
+        "android/app/google-services.json",
+        "--exclude",
+        "ios/Runner/GoogleService-Info.plist"
+      ],
+      "params": {
+        "tar": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/src\\.tar$",
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|clean)$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "flutter.pub-get-offline": {
+      "desc": "사본 의존성 — 기존 pub 캐시에서만 채운다(네트워크 없음). 실측 2~3초",
+      "bin": "/opt/homebrew/bin/flutter",
+      "argv": [
+        "pub",
+        "get",
+        "--offline"
+      ],
+      "cwd": "{dir}",
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|clean)$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "flutter.test-defines": {
+      "desc": "사본에서 사람이 쓴 기존 시험을 씨앗(dart-define 3자리, 안 쓰는 자리는 LG_NOOP=1)으로 돌린다 — 재현(설계 §5.2③). 실측 최대 46초(1판, 첫 컴파일 포함, 10-03) → 최대 시간 1.5배 69초",
+      "bin": "/opt/homebrew/bin/flutter",
+      "argv": [
+        "test",
+        "--no-pub",
+        "--timeout",
+        "none",
+        "{test}",
+        "--dart-define",
+        "{d1}",
+        "--dart-define",
+        "{d2}",
+        "--dart-define",
+        "{d3}"
+      ],
+      "cwd": "{dir}",
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|clean)$",
+        "test": "^test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$",
+        "d1": "^(?:REPLAY_GAMES|REPLAY_SEED_BASE|SOAK_GAMES|SOAK_SEED_BASE|SOAK_DIFFICULTY|COACH_SOAK_GAMES|COACH_SOAK_SEED_BASE|LG_NOOP)=[A-Za-z0-9_]{1,16}$",
+        "d2": "^(?:REPLAY_GAMES|REPLAY_SEED_BASE|SOAK_GAMES|SOAK_SEED_BASE|SOAK_DIFFICULTY|COACH_SOAK_GAMES|COACH_SOAK_SEED_BASE|LG_NOOP)=[A-Za-z0-9_]{1,16}$",
+        "d3": "^(?:REPLAY_GAMES|REPLAY_SEED_BASE|SOAK_GAMES|SOAK_SEED_BASE|SOAK_DIFFICULTY|COACH_SOAK_GAMES|COACH_SOAK_SEED_BASE|LG_NOOP)=[A-Za-z0-9_]{1,16}$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 60,
+      "maxSeconds": 69
+    },
+    "flutter.test-file": {
+      "desc": "사본에서 사람이 쓴 기존 시험 파일 하나를 그대로 돌린다 — 회귀 주입·CI 실패 재현. 실측 최대 26.3초(벤치 14건) → 최대 시간 1.5배 40초. 긴 CI 시험은 넘을 수 있다(1b 에서 시험별로)",
+      "bin": "/opt/homebrew/bin/flutter",
+      "argv": [
+        "test",
+        "--no-pub",
+        "--timeout",
+        "none",
+        "{test}"
+      ],
+      "cwd": "{dir}",
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|clean)$",
+        "test": "^test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 35,
+      "maxSeconds": 40
+    },
+    "gh.run-list": {
+      "desc": "CI 신호(읽기 전용) — 고스톱 저장소 최근 실행 50건 JSON. 저장소는 작업 폴더의 git 원격으로 정한다. 실측 2.1초",
+      "bin": "/opt/homebrew/bin/gh",
+      "argv": [
+        "run",
+        "list",
+        "--json",
+        "conclusion,headSha,name,url,databaseId,createdAt,workflowName,status,event",
+        "--limit",
+        "50"
+      ],
+      "cwd": "{repo}",
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "gh.run-log-failed": {
+      "desc": "CI 신호(읽기 전용) — 실패한 실행의 실패 단계 로그(실측 1.3초·252KB). 그래프가 실패 줄 + 끝부분 48KB 로 자른다",
+      "bin": "/opt/homebrew/bin/gh",
+      "argv": [
+        "run",
+        "view",
+        "{run_id}",
+        "--log-failed"
+      ],
+      "cwd": "{repo}",
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$",
+        "run_id": "^[0-9]{1,15}$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
     }
   }
 }
