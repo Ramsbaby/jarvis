@@ -51,6 +51,16 @@ enqueue_file_state_contradiction_task() {
         return 1
     }
 
+    # 소비자(jarvis-dev-task-runner)가 꺼져 있으면 넣지 않는다 — 처리할 곳 없는 일 생산 방지(2026-10-03).
+    # 판정은 공통 관문 task-queue-guard.mjs(0=켜짐, 그 외=끔 — 확인 못 하면 끔). 호출 쪽이 실패로 보지 않게 0 으로 돌아간다.
+    local queue_guard="${BOT_HOME}/lib/task-queue-guard.mjs"
+    if [[ -f "$queue_guard" ]] && command -v node &>/dev/null; then
+        if ! node "$queue_guard" >/dev/null 2>&1; then
+            printf '[FSDQB] 생략 — 개발 큐 꺼짐: original=%s\n' "$original_task_id" >&2
+            return 0
+        fi
+    fi
+
     # 새 작업 ID 생성
     local new_task_id
     new_task_id="file-state-analysis-$(date -u +%s)-$(openssl rand -hex 4 2>/dev/null || echo "rand")"
