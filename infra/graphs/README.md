@@ -4,6 +4,7 @@
 모든 자동화의 뼈대가 아니다. 한 줄로 이어지는 작업은 지금처럼 OpenClaw 예약 잡으로 둔다.
 공통 부품(0a·0b): 실행기(틱 방식), 관문, 분리 실행, 명령·부수효과 입구, 판정 기록, 연기 시험 그래프(`smoke`), 시험.
 첫 실제 대상(1a): 고스톱 버그 루프의 읽기 전용 부분 — 접수(`gostop-intake`)·수정(`gostop-fix` ①~⑥·⑭). 아래 '고스톱 루프(1a)'.
+1b: 같은 `gostop-fix` 에 ⑦~⑯(빨간 시험·수정·격리 검증·검토·반영) + `gostop-release`(서명 지문 정지). 아래 '고스톱 루프 1b'.
 
 **왜 이 자리인가:** `packages/`는 따로 배포하는 독립 도구(자체 라이선스)를 두는 자리다. 이것은 이 기기의 OpenClaw 잡이 부르고 런타임 상태 폴더를 쓰는 운영 부품이다.
 `infra/`에는 이미 자기 `package.json`·lockfile을 가진 하위 프로젝트(`infra/discord`, `infra/openclaw-plugins/jarvis-rag`)가 있다.
@@ -176,6 +177,46 @@ gostop-fix:<sigkey>  (meta.serial — 한 번에 하나, S13)
 - 실호출: `RUN_LLM=1 node --test test/gostop-live.test.mjs`(haiku 1회 — 밖 읽기 거부·구독 로그인·훅 0·CLAUDE.md) · `node test/gostop-bench-live.mjs <출력> hist-69a0144 hist-02d61dc`(임시 상태 폴더, 진짜 flutter·sonnet).
 - 설정: `LG_GOSTOP_REPO`(기본 ~/projects/gostop_app) · `LG_GOSTOP_SOAK_DIR`(기본 ~/.openclaw/workspace/state/gostop-soak) · `LG_DAILY`(기본 `gostop-intake@04:30`, 빈 값이면 끔).
 
+## 고스톱 루프 1b — 빨간 시험·수정·격리 검증(설계 §5.2 ⑦~⑯)
+
+기본은 1b 다(`LG_GOSTOP_STAGE=1a` 면 1a 처럼 ⑥ 뒤 plan). **그림자가 기본**이라 `LIVE` 가 없으면 ⑮ 는 건너뛰고 ⑯ 은 effect 가 '했을 일'만 적는다.
+LLM 이 사본에 쓴 뒤에는 그 사본에 격리 밖 시험 명령(`flutter.*`)을 쓰지 않는다 — 시험·분석은 전부 `sandbox.*`(lg-test.sb 격리 실행)로.
+
+```
+⑤ scope_precheck → (규칙 공백이면 plan) → (실제 + 사유) ⑥ owner_gate
+⑦ repro_test     sonnet ×≤2, --restricted + Read·Grep·Glob·Edit·Write, 작업 폴더 = 사본. 결과(정본 패치)가 test/repro/ 새 .dart 뿐인지 다시 본다
+                 (시험 1개 + 도우미 2개까지, 밖은 되돌리고 실패로 센다) → repro.three-path(-h5): 엔진·라이브 사람·라이브 AI(어려움) 묶음
+                 → redbase = 깨끗한 내보내기 + 재현 시험(이후 '이번 수정만' 패치의 기준)
+⑧ verify_red     격리 점검(sandbox.canary) → sandbox.flutter-test 로 패치 전 빨간불(실패한 시험 이름이 있고 컴파일 오류 아님).
+                 시험 실행 뒤 사본이 redbase 와 같아야(다르면 격리 위반). 아니면 ⑦ 다시, 2회면 no_red(수정하지 않는다)
+⑨ fix            opus ×1 + 재수정 ×≤2. 정본 패치는 git 없이(patch.extract): fix-N.diff(redbase 대비) · patch-N.diff(clean 대비 — 반영할 것)
+   [AI 결정 비교] 사본에 고스톱 test/ai_policy(H5)가 있고 lib 를 바꿨을 때만: 기준 사본(base)에서 gen → 패치 사본에서 compare(sandbox.ai-policy).
+                 비교기 두 파일이 깨끗한 쪽과 같아야 믿는다. 없으면 폴백(aiCheck unavailable — AI 영역·MCTSConstants·규칙 처리부는 승인 사유)
+⑩ scope_check    patch.allowlist(이번 수정, --frozen test/repro/). 재현 시험을 건드렸으면 되돌리고 재수정. 사유가 있으면 실제는 scope_gate(순수 interrupt),
+                 그림자는 끝까지 검증하고 would_ask
+⑪ verify         단계 묶음 앞 격리 점검. 대상 시험(신호 재현 명령) · 3경로 시험 · 실행 증명(라이브 AI 묶음 --coverage → cov.check) ·
+                 분석(오류·경고 수가 기준 사본보다 늘지 않음) · 전체 시험 · 미니 대조 30판(차분 대조 20 + 라이브 소크 어려움 6·쉬움 4, 씨앗 = sigkey).
+                 전체·미니가 실패하면 같은 명령을 기준 사본(base)에서 돌려 실패 항목을 견준다 — 새 실패가 없으면 통과(격리 환경·기존 결함 탓을 수정 탓으로 몰지 않게).
+                 끝나면 '이번 수정' 패치를 다시 뽑아 지문이 같아야 한다(시험 코드가 lib 를 고쳐 놓는 길 → 격리 위반)
+⑫ review         sonnet ×1, 새 맥락, 읽기 도구, --json-schema(승인·3경로·무관한 변경·규칙 일치·고칠 점)
+⑬                ⑩(재현 시험 건드림)·⑪·⑫ 실패 → ⑨(실패 내용을 피드백으로), 수정 통틀어 3회 → gave_up
+⑮ merge_prep     실제 전용. 최신 master 를 git archive 로 내보내 pub get(패치 전) → patch.apply-copy → 격리 재검증(3경로·대상)
+⑯ commit_push    effect('gostop-commit:<sigkey>:<패치 지문>') 안에서만: worktree add → git apply --index → commit(LG-Key 트레일러) → push → worktree remove
+⑭ plan           상태 ready · no_red · would_ask · gave_up(격리 위반·재현 시험 실패·수정 3회·반려) · rule_decision · not_reproduced · flaky.
+                 plan.md 에 재현 시험 자리·빨간불 로그·정본 패치·검증 표·검토·커밋 기록, result.json 에 전부
+```
+
+- 사본 셋: `work`(LLM 작업 폴더) · `clean`(패치 기준 — pub get·시험을 돌리지 않는다. 돌리면 생성 파일이 '바뀐 파일'로 섞인다) · `base`(기준 실행용, pub get 함). 임시 폴더는 사본 옆 `tmp`.
+- 예산: 진단 2 + 재현 시험 2 + 수정 3 + 검토 3 + 요약 1 = 11, 스레드 상한 12(그래프 `meta.llmPerThread` — 실행기가 `LG_LLM_MAX_PER_THREAD` 보다 크면 이 값을 쓴다, 12 이하). 모델별 상한 `LG_GOSTOP_SONNET_CAP`(7)·`LG_GOSTOP_OPUS_CAP`(3). Fable 금지.
+- 격리 위반(종료 98·사본 무단 변경)은 gave_up + 지표 `sandbox_violation`(§8). 준비 오류(97)는 던져 재시도(3회 → GAVE_UP). 격리 점검 실패는 보류(`sandbox_canary`).
+- 명령(cmd-registry, 1b): `sandbox.canary`·`sandbox.flutter-test`·`sandbox.flutter-test-defines`·`sandbox.flutter-test-all`·`sandbox.flutter-analyze`·`sandbox.flutter-cov-ai`·`sandbox.ai-policy`
+  · `patch.extract`·`patch.allowlist`·`repro.three-path`·`repro.three-path-h5`·`cov.check`(그림자·실제) · `patch.apply-copy`·`apk.cert-fingerprint`(실제) · effect(실제): `git.worktree-add`·`git.apply-index`·`git.commit-file`·`git.push-master`·`git.worktree-remove`·`fad.distribute`.
+  홈 경로를 목록에 박지 않는다: `bin: "@node"`(이 실행기의 고정 Node) · `argv: "@graphs/<경로>"`(이 폴더 아래 파일, `..` 금지).
+- `gostop-release:<versionCode>`(실제 전용, 최소판): APK 서명 인증서 SHA-256(`keytool -printcert`, 비밀번호 불필요)을 `LG_RELEASE_CERT_SHA256` 과 대조 — 다르면 `signing_mismatch` 로 멈추고 배포 effect 를 내지 않는다. 맞으면 `fad.distribute`(effect, `LG_FAD_APP_ID`). 버전 올리기·빌드·설치는 다음 판.
+- 한계: push 는 effect 안 동기 명령이라 틱 잡 상한(600초) 안에 pre-push 관문이 끝나야 한다(실제 모드 켜기 전 확인). AI 결정 비교 결과 파일은 패치 코드가 같은 프로세스에서 쓸 수 있다(격리는 유출을 막지 판정 위조는 못 막는다 — 검토·사람 승인이 뒤에 있다).
+- 실호출: `LG_GOSTOP_STAGE=1b node test/gostop-bench-live.mjs <출력> hist-69a0144` — 상태는 /private/tmp 아래(격리 실행 뿌리), 끝나면 숨긴 정답 시험으로 채점(대조군 빨강 → 패치 뒤 초록). `LG_BENCH_STATE` 로 이어 돌릴 수 있다.
+- 시험: `test/gostop-1b.test.mjs` 16개(가짜 claude script 모드·가짜 격리 실행기 `fake-sandboxed.mjs`·가짜 keytool).
+
 ## 분리 실행 `lib/detach.mjs` (설계 §6)
 
 작업 폴더 `jobs/<스레드>/<노드>/<시도>/` — 이 폴더 만들기(원자적)가 `(thread, node, attempt)` 잠금이다. 틱이 겹쳐도 한 번만 띄운다.
@@ -234,6 +275,7 @@ gostop-fix:<sigkey>  (meta.serial — 한 번에 하나, S13)
 
 0a: `LG_STATE_DIR` · `LG_DB` · `LG_APPROVAL_TTL_HOURS`(48) · `LG_GC_DAYS`(14) · `LG_LLM_MAX_PER_THREAD`(5) · `LG_LLM_MAX_PER_DAY`(20) · `LG_LLM_MODEL`(sonnet) · `LG_LLM_TIMEOUT_SEC`(300) · `LG_CLAUDE_BIN` · `LG_NODE` · `LG_BUSY_TIMEOUT_MS`(15000).
 1a: `LG_DAILY`(gostop-intake@04:30) · `LG_GOSTOP_REPO` · `LG_GOSTOP_SOAK_DIR`.
+1b: `LG_GOSTOP_STAGE`(1b, 스레드 시작 때 고정) · `LG_GOSTOP_SONNET_CAP`(7) · `LG_GOSTOP_OPUS_CAP`(3) · `LG_RELEASE_CERT_SHA256` · `LG_FAD_APP_ID` · `LG_FAD_GROUPS`(testers).
 0b: `LG_TICK_BUDGET_SEC`(480) · `LG_JOB_LIMIT_SEC`(600, 틱 안 LLM·명령이 끝나야 하는 시각) · `LG_DETACH_MAX_SEC`(5400, 목록에 `maxSeconds`가 없을 때의 분리 실행 최대 시간) · `LG_HOLD_TTL_HOURS`(48) · `LG_MAX_RETRIES`(3) · `LG_MAX_STEPS`(500) · `LG_LOCK_STUCK_MIN`(30, 옛 이름 `LG_LOCK_STALE_MIN`도 받는다) · `LG_DAY_TOKEN_CAP`(3000000) · `LG_DISK_PATH` · `LG_DISK_FLOOR_GIB`(15) · `LG_COPY_EST_GIB`(0.2, 1a 실측) · `LG_DISK_MARGIN_GIB`(1) · `LG_USAGE_FILE` · `LG_USAGE_MAX_PCT`(80) · `LG_USAGE_MAX_AGE_H`(6) · `LG_QUIET`(01:30-04:30, 빈 값이면 끔) · `LG_LOGIN_RECHECK_MIN`(360) · `LG_LIMIT_RECHECK_MIN`(60) · `LG_HOOK_LOGS`(콜론 구분).
 시험 전용 — `LG_TEST_MODE=1`일 때만 먹는다: `LG_NOW`(시간 주입) · `LG_CMD_REGISTRY` · `LG_TEST_START_AT` · `LG_TEST_HEARTBEAT_SEC` · `LG_SMOKE_TRACE` · `LG_SMOKE_CRASH_ONCE` · `LG_SMOKE_CRASH_CODE`.
 
