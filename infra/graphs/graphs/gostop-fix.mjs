@@ -17,7 +17,7 @@ export const meta = { name: "gostop-fix", description: "고스톱 결함 재현�
 
 const MAX_REPRO_ATTEMPTS = 3; // 분리 실행이 결과 없이 죽거나 최대 시간을 넘긴 경우의 다시 띄우기(같은 run 번호)
 const MAX_DIAG_ATTEMPTS = 2; // sonnet ×≤2 (설계 §5.2④) — 답이 형식에 안 맞을 때
-const MAX_DIAG_INFRA = 3; // 로그인 만료·사용량 한도·결과 없이 죽음으로 다시 띄우는 횟수(모델 시도와 따로 센다, H3 상3)
+const MAX_DIAG_INFRA = 3; // 로그인 만료·사용량 한도로 다시 띄우는 횟수 — 이 둘은 모델 일을 쓰지 않아 시도와 따로 센다(H3 상3)
 const DIAG_WAIT_MS = { login: 6 * 3_600_000, usage_limit: 3_600_000 }; // 관문(llm-hold)과 같은 쉼
 const DIAG_TIMEOUT_MS = 15 * 60_000; // 분리 실행 — 최대 시간은 1.5배(22.5분)
 
@@ -129,7 +129,7 @@ export function build({ checkpointer, llm, tools }) {
     const n = s.reproRuns.length + 1;
     const logFile = writeAtomic(path.join(runDir(tools.stateDir, s.sigkey), `repro-${n}.log`), raw.slice(-200_000));
     const run = { n, rc: out.rc, red: out.red, sig: out.sig, blocks: out.blocks, failed: out.failed, summary: out.summary,
-      compileError: out.compileError, secs: Math.round(((st.endedAt ?? 0) - (st.startedAt ?? 0)) / 1000), log: logFile };
+      compileError: out.compileError, toolError: out.toolError, secs: Math.round(((st.endedAt ?? 0) - (st.startedAt ?? 0)) / 1000), log: logFile };
     const runs = [...s.reproRuns, run];
     const verdict = judgeRepro(runs);
     return { reproRuns: runs, reproHandle: null, reproAttempt: 1, repro: verdict, log: [`reproduce_check ${n}/2 rc=${run.rc} ${run.secs}s${verdict ? ` → ${verdict}` : ""}`] };
@@ -181,8 +181,9 @@ export function build({ checkpointer, llm, tools }) {
       const d = parseDiag(st.structured, st.text);
       if (d) return { diag: d, diagHandle: null, log: [`diagnose_check 확신도 ${d.confidence} · 파일 ${d.files.length} · 규칙 공백 ${d.rule_gap}`] };
     }
-    // 실행 실패(로그인 만료·한도·결과 없이 죽음·호출 오류)는 모델 시도로 세지 않고 새 실행 번호로 다시 띄운다(H3 상3 — 같은 번호는 같은 결과 파일을 다시 읽는다)
-    const infraFail = st.state === "dead" || (st.state === "failed" && st.kind !== "fable");
+    // 로그인 만료·사용량 한도는 모델 시도로 세지 않고, 쉰 뒤 새 실행 번호로 다시 띄운다(H3 상3 — 같은 번호는 같은 결과 파일을 다시 읽는다).
+    // 그 밖의 실패(결과 없이 죽음·시간 초과·호출 오류·형식 불일치)는 모델 일을 쓴 것이라 sonnet ×≤2 시도에 센다(재검토 B 중 — 설계 §5.2④).
+    const infraFail = st.state === "failed" && (st.kind === "login" || st.kind === "usage_limit");
     if (infraFail) {
       const n = s.diagInfra + 1;
       const why = `${st.state} ${st.reason ?? st.kind ?? ""} ${short(st.error ?? "", 120)}`.trim();
@@ -190,7 +191,7 @@ export function build({ checkpointer, llm, tools }) {
       const wait = DIAG_WAIT_MS[st.kind] ?? 0;
       return { diagHandle: null, diagJob: s.diagJob + 1, diagInfra: n, diagWaitUntil: wait ? tools.now() + wait : null, log: [`diagnose 실행 실패(${n}) — ${why}`] };
     }
-    const why = st.state === "done" ? "진단 JSON 이 형식에 맞지 않음" : `${st.state} ${st.kind ?? ""}`.trim();
+    const why = st.state === "done" ? "진단 JSON 이 형식에 맞지 않음" : `${st.state} ${st.reason ?? st.kind ?? ""} ${short(st.error ?? "", 120)}`.trim();
     const attempt = s.diagAttempt + 1;
     if (attempt > MAX_DIAG_ATTEMPTS) return { diagHandle: null, diagError: why, log: [`diagnose 실패 ${MAX_DIAG_ATTEMPTS}회 — ${why}`] };
     return { diagHandle: null, diagAttempt: attempt, diagJob: s.diagJob + 1, log: [`diagnose 다시(${attempt}) — ${why}`] };

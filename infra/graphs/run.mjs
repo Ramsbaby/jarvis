@@ -633,6 +633,8 @@ async function sweep(ctx) {
 // 진척 없이 48시간(LG_HOLD_TTL_HOURS)을 넘긴 보류·이어가기·대기열·실패 스레드를 만료시킨다(S9). 승인 기한이 걸린 것은 sweep 이 본다.
 function expireIdle(ctx) {
   const t = ctx.now();
+  // 차례 대기(S13) 판정은 만료를 시작하기 전 모습으로 — 앞 스레드가 이번 틱에 만료돼도 뒤 대기열은 같은 틱에 따라 만료되지 않는다(재검토 B)
+  const blockedGraphs = new Set(ctx.store.openThreads().filter((r) => r.status !== "queued").map((r) => r.graph));
   for (const row of ctx.store.idleCandidates(t, ctx.cfg.holdTtlMs)) { // 답 없는 승인 대기는 후보에서 이미 빠졌다(승인 기한이 정한다)
     const token = ctx.store.acquireLock(row.thread_id);
     if (!token) continue;
@@ -641,7 +643,7 @@ function expireIdle(ctx) {
       if (!cur || !["queued", "continue", "held", "failed", "running", "waiting"].includes(cur.status)) continue;
       if (cur.answer == null && cur.deadline_at != null) continue; // 잠그는 사이 바뀌었다 — 승인 기한으로
       // 차례를 기다리는 대기열(같은 그래프에 시작한 미완 스레드가 있음 — S13)은 놀고 있는 것이 아니다. 앞 스레드가 끝나거나 만료되면 시작한다(H3 중1)
-      if (cur.status === "queued" && ctx.store.openThreads().some((r) => r.graph === cur.graph && r.thread_id !== cur.thread_id && r.status !== "queued")) continue;
+      if (cur.status === "queued" && blockedGraphs.has(cur.graph)) continue;
       const h = Math.round(ctx.cfg.holdTtlMs / 3_600_000);
       ctx.store.updateThread(cur.thread_id, { status: "expired", note: `진척 없이 ${h}시간(${cur.status}${cur.hold_reason ? `:${cur.hold_reason}` : ""}) — 보류 기한 초과로 자동 취소`, notified: 0 }, t);
       ctx.expiredNow.push(cur.thread_id);

@@ -78,8 +78,9 @@ export function loadConfig(env = process.env) {
     gates: {
       diskPath: env.LG_DISK_PATH || (fs.existsSync("/System/Volumes/Data") ? "/System/Volumes/Data" : stateDir),
       diskFloorGiB: num(env, "LG_DISK_FLOOR_GIB", 15), // 감지기 경고선
-      // 작업 사본 예상 크기 — 1a 실측(10-03): 사본 92MB + 시험 뒤 build 91MB + 깨끗한 내보내기 92MB + 풀기 전 tar 91MB = 최고 0.34GiB → 0.4
-      copyEstGiB: num(env, "LG_COPY_EST_GIB", 0.4),
+      // 작업 사본 예상 크기 — 1a 실측(10-03 벤치 실주행, 기록 문서 정리 뒤): 사본 31MB + 깨끗한 내보내기 31MB + 시험 뒤 build 91MB
+      // (풀기 전 tar 91MB 는 시험 전에 지운다) = 최고 0.15GiB → 0.2
+      copyEstGiB: num(env, "LG_COPY_EST_GIB", 0.2),
       diskMarginGiB: num(env, "LG_DISK_MARGIN_GIB", 1),
       usagePath: path.resolve(env.LG_USAGE_FILE || path.join(home, ".openclaw", "workspace", "state", "orchestrator", "latest.md")),
       usageMaxPct: num(env, "LG_USAGE_MAX_PCT", 80),

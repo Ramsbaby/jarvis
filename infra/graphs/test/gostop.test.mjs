@@ -668,16 +668,16 @@ test("H3 중1: 차례를 기다리는 대기열은 앞 스레드가 묶여 있�
   writeUsage(x.env.LG_USAGE_FILE, { at: T + 50 * 3_600_000 });
   run(x.env, ["tick"], { extraEnv: { LG_NOW: String(T + 50 * 3_600_000) } }); // b: 등록 49시간이지만 a 가 막고 있던 시간은 놀던 것이 아니다 — 시작(표식에 걸려 보류)
   assert.notEqual(status(x, "gostop-fix:bench:b:r1").status, "expired");
-  // 직접: b 가 대기 중일 때 같은 그래프의 묶인 스레드가 있으면 expireIdle 이 건너뛴다
+  // 같은 때 올린 묶음: 앞 스레드가 만료되는 바로 그 틱에 뒤 대기열이 따라 만료되지 않고 시작한다(재검토 B 중)
   const y = setup(t);
   fs.writeFileSync(path.join(y.repo, ".jarvis-busy"), "");
   assert.equal(run(y.env, ["start", "gostop-fix", "gostop-fix:bench:a:r1", "--sigkey=bench:a:r1", `--signal=${JSON.stringify(benchSig(y))}`], { extraEnv: { LG_NOW: String(T) } }).code, 0);
   assert.equal(run(y.env, ["start", "gostop-fix", "gostop-fix:bench:b:r1", "--sigkey=bench:b:r1", `--signal=${JSON.stringify(benchSig(y))}`, "--queue"], { extraEnv: { LG_NOW: String(T) } }).code, 0);
-  writeUsage(y.env.LG_USAGE_FILE, { at: T + 40 * 3_600_000 });
-  run(y.env, ["tick"], { extraEnv: { LG_NOW: String(T + 40 * 3_600_000) } }); // a 는 보류를 되풀이(진척 없음)
-  writeUsage(y.env.LG_USAGE_FILE, { at: T + 47 * 3_600_000 });
-  run(y.env, ["tick"], { extraEnv: { LG_NOW: String(T + 47 * 3_600_000) } });
-  assert.equal(status(y, "gostop-fix:bench:b:r1").status, "queued");
+  writeUsage(y.env.LG_USAGE_FILE, { at: T + 48.5 * 3_600_000 });
+  run(y.env, ["tick"], { extraEnv: { LG_NOW: String(T + 48.5 * 3_600_000) } });
+  assert.equal(status(y, "gostop-fix:bench:a:r1").status, "expired");
+  assert.notEqual(status(y, "gostop-fix:bench:b:r1").status, "expired", "앞 것과 같은 틱에 만료되지 않는다");
+  assert.notEqual(status(y, "gostop-fix:bench:b:r1").status, "queued", "그 틱에 시작했다");
 });
 
 test("H3 중2·중3: 접수 때 진행 중이던 CI 는 다음 접수가 줍고, 하루 상한에 밀린 소크 신호와 접수가 없던 날의 소크도 이월된다", async (t) => {
@@ -723,4 +723,19 @@ test("H3 하: 신호로 죽은 재현은 초록이 아니라 실행 실패 · �
   assert.equal(C.judgeRepro([tool, tool]), "tool_error");
   assert.equal(C.scopeOf({ files: ["lib/domain/game/../ai/ai_player.dart"], hypothesis: "" }).ai.length, 1, "펴서 본다");
   assert.equal(C.scopeOf({ files: ["lib/domain/game/../../../../etc/passwd"], hypothesis: "" }).outside.length, 1);
+});
+
+test("재검토 B: 진단 호출 오류(형식·결과 없음)는 sonnet ×≤2 에 센다 · 도구 오류 재현은 gave_up(진단 없음)", async (t) => {
+  const x = setup(t, { claudeMode: "fail" });
+  assert.equal(startFix(x, "bench:t1:r1", benchSig(x)).code, 0);
+  assert.equal((await drive(x, "gostop-fix:bench:t1:r1")).status, "done");
+  assert.equal(resultOf(x, "bench:t1:r1").status, "gave_up");
+  assert.equal(x.fc.calls().filter((c) => c.input.includes("정해진 JSON")).length, 2, "sonnet 2회까지");
+  const y = setup(t, { flutter: { mode: "toolerr" } });
+  assert.equal(startFix(y, "bench:t1:r1", benchSig(y)).code, 0);
+  assert.equal((await drive(y, "gostop-fix:bench:t1:r1")).status, "done");
+  const r = resultOf(y, "bench:t1:r1");
+  assert.equal(r.repro, "tool_error");
+  assert.equal(r.status, "gave_up");
+  assert.equal(y.fc.calls().length, 0, "도구 오류면 진단하지 않는다");
 });

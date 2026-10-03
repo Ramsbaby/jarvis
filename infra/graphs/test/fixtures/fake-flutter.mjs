@@ -38,6 +38,10 @@ switch (ctl.mode) {
     fs.writeSync(1, "00:01 +0: loading test\n00:02 +3 -1: 판 끝 조커 귀속 바닥 조커는 바닥에 남는다 [E]\n00:02 +3 -1: Some tests failed.\n");
     process.exit(1);
     break;
+  case "toolerr": // 시험이 하나도 안 돌았다(파일 없음 등) — 불일치·실패 시험 이름 없이 코드 1
+    fs.writeSync(1, "Error: No tests ran.\n");
+    process.exit(1);
+    break;
   case "compile":
     fs.writeSync(1, "lib/domain/game/turn_manager.dart:10:3: Error: Expected ';' after this.\n00:01 +0 -1: Some tests failed.\n");
     process.exit(1);
