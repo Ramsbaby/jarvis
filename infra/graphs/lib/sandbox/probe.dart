@@ -33,6 +33,9 @@ Future<String?> _one(String op, List<String> a) async {
       final s = await Socket.connect(InternetAddress.loopbackIPv4, srv.port, timeout: const Duration(seconds: 4));
       s.destroy();
       await srv.close();
+    case 'bind': // 그 포트에 대신 리슨(로컬 서비스 가로채기) — 막혀야 한다
+      final srv = await ServerSocket.bind(a[0], int.parse(a[1]));
+      await srv.close();
     case 'unix': // 유닉스 소켓 연결(ssh-agent·docker·mDNSResponder)
       final s = await Socket.connect(InternetAddress(a[0], type: InternetAddressType.unix), 0, timeout: const Duration(seconds: 4));
       s.destroy();

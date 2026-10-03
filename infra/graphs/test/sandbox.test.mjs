@@ -78,11 +78,34 @@ test("음성 ② 막은 로컬 포트: 고정 5종(18789·9222·5037·11434·310
   assert.ok(sbx.listeningPorts().includes(dyn), "netstat 으로 이 시험의 포트가 보여야 한다");
   const ops = sbx.FIXED_DENY_PORTS.flatMap((p) => [{ op: "net", a: ["127.0.0.1", String(p)] }, { op: "net", a: ["::1", String(p)] }]);
   ops.push({ op: "net", a: ["127.0.0.1", String(dyn)] });
+  // 받는 쪽도: 그 포트에 대신 리슨해 밖 프로그램을 가로채기(독립 검토 중1 — * 바인드 서비스는 127.0.0.1, 127.0.0.1 전용은 ::1 로)
+  for (const p of [...sbx.FIXED_DENY_PORTS, dyn]) ops.push({ op: "bind", a: ["127.0.0.1", String(p)] }, { op: "bind", a: ["::1", String(p)] });
   assertDenied(await probe(w, ops), "로컬 포트");
   // 막는 줄은 프로필에 실제로 들어간다(고정은 틀에, 그 밖은 덧붙임)
   const profile = sbx.buildProfile({ ports: [dyn, 18789] });
-  for (const p of [...sbx.FIXED_DENY_PORTS, dyn]) assert.match(profile, new RegExp(`\\(remote ip "localhost:${p}"\\)`));
-  assert.equal(profile.match(/localhost:18789/g).length, 1, "고정 포트는 두 번 넣지 않는다");
+  for (const p of [...sbx.FIXED_DENY_PORTS, dyn]) {
+    for (const f of [`remote ip "localhost:${p}"`, `local ip "localhost:${p}"`]) assert.ok(profile.includes(`(${f})`), `${f} 가 프로필에 없다`);
+  }
+  const appended = profile.slice(profile.indexOf(";; 실행 직전에 열려 있던 포트"));
+  assert.ok(appended.includes(`localhost:${dyn}`));
+  assert.equal(appended.includes("localhost:18789"), false, "고정 포트는 덧붙이는 쪽에 다시 넣지 않는다");
+});
+
+test("LAN 리슨 감시: 0.0.0.0 에 TCP 리슨·UDP 바인드하면(격리 규칙으로는 못 막음 — 실측) 즉시 나무째 끄고 violation", { skip: SKIP }, async (t) => {
+  const w = world(t);
+  const tmp = fs.realpathSync(w.tmp);
+  fs.writeFileSync(path.join(tmp, "tcp.dart"), "import 'dart:io'; Future<void> main() async { final s = await ServerSocket.bind(InternetAddress.anyIPv4, 0); await Future.delayed(const Duration(seconds: 20)); await s.close(); }\n");
+  fs.writeFileSync(path.join(tmp, "udp.dart"), "import 'dart:io'; Future<void> main() async { final s = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0); await Future.delayed(const Duration(seconds: 20)); s.close(); }\n");
+  for (const f of ["tcp.dart", "udp.dart"]) {
+    const r = await sbx.runSandboxed(sbx.sandboxCommand({ copy: w.copy, tmp: w.tmp, tool: "dart", args: [path.join(tmp, f)], ports: [] }), { timeoutMs: 30_000 });
+    assert.match(r.violation ?? "", /^nonloopback_listen .*@\*\.\d+/, `${f}: ${r.violation}`);
+    assert.ok(r.ms < 15_000, `${f}: ${r.ms}ms — 20초 대기 전에 꺼야 한다`);
+  }
+  // 대조군: 루프백 리슨은 감시에 안 걸린다(flutter test 가 쓰는 길)
+  fs.writeFileSync(path.join(tmp, "lo.dart"), "import 'dart:io'; Future<void> main() async { final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0); await Future.delayed(const Duration(seconds: 2)); await s.close(); }\n");
+  const lo = await sbx.runSandboxed(sbx.sandboxCommand({ copy: w.copy, tmp: w.tmp, tool: "dart", args: [path.join(tmp, "lo.dart")], ports: [] }), { timeoutMs: 30_000 });
+  assert.equal(lo.violation, null);
+  assert.equal(lo.code, 0, lo.stderr);
 });
 
 test("음성 ③ 사본·임시 밖 쓰기: 진짜 홈 · 다른 /tmp 폴더 · 사본 옆 · 미끼 덮어쓰기 — 아무것도 생기거나 바뀌지 않는다", { skip: SKIP }, async (t) => {
@@ -313,6 +336,7 @@ void main() {
   const r = await sbx.runSandboxed(sbx.sandboxCommand({ copy, tmp, tool: "flutter", args: ["test", "-r", "expanded", ...tests] }), { timeoutMs: 480_000 });
   const tail = `${r.stdout.slice(-1500)}\n${r.stderr.slice(-800)}`;
   assert.equal(r.code, 0, tail);
+  assert.equal(r.violation, null, "flutter 자신의 소켓은 루프백뿐이어야 한다(감시 오탐 없음)");
   assert.match(r.stdout, /All tests passed!/, tail);
   assert.match(r.stdout, /격리: 홈 목록·본 저장소 읽기, git 실행이 막힌다/);
   t.diagnostic(`flutter test(격리) ${Math.round(r.ms / 1000)}초`);

@@ -60,6 +60,8 @@
 ;; ── 네트워크: 루프백만(L2 위험 C). flutter test 는 도구 ↔ flutter_tester 사이에 루프백 소켓이 꼭 필요하다.
 ;;    'remote ip' 정밀 규칙이어야 한다 — 소박한 network*…localhost 규칙은 공인 IP 까지 샌다(L2 실증).
 ;;    localhost 는 127.0.0.1 과 ::1 을 함께 뜻한다(실측). LAN·Tailscale 주소, DNS, 유닉스 소켓(ssh-agent·docker)은 막힌다.
+;;    한계(실측): bind·inbound 의 주소 자리는 * 나 localhost 만 받고 0.0.0.0 도 localhost 로 친다. 들어오는 연결은 리슨할 때만 보고
+;;    연결마다 상대 주소를 보지 않는다 → 0.0.0.0 리슨에 LAN 이 붙을 수 있다. 그래서 sandboxed-run.mjs 가 리슨 소켓을 감시해 끈다.
 (allow network-bind (local ip "localhost:*"))
 (allow network-inbound (local ip "localhost:*"))
 (allow network-outbound (remote ip "localhost:*"))
@@ -72,3 +74,17 @@
   (remote ip "localhost:5037")
   (remote ip "localhost:11434")
   (remote ip "localhost:3100"))
+;; 받는 쪽도 같은 포트를 막는다(독립 검토 중1 — 실측 재현): 격리 코드가 그 포트에 대신 리슨하면 밖 프로그램이 격리 코드에 붙는다
+;; (게이트웨이·보드는 * 바인드라 127.0.0.1 이, 127.0.0.1 전용인 CDP·adb·ollama 는 ::1 이 더 구체적이라 가로챈다 → 토큰을 넘겨받을 수 있다).
+(deny network-bind
+  (local ip "localhost:18789")
+  (local ip "localhost:9222")
+  (local ip "localhost:5037")
+  (local ip "localhost:11434")
+  (local ip "localhost:3100"))
+(deny network-inbound
+  (local ip "localhost:18789")
+  (local ip "localhost:9222")
+  (local ip "localhost:5037")
+  (local ip "localhost:11434")
+  (local ip "localhost:3100"))

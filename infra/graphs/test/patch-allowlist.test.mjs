@@ -99,6 +99,14 @@ test("내용 사유: 경로로 못 맞히는 결제(in_app_purchase)·송출(url
   assert.equal(reasonOf(r, "lib/domain/game/helper.dart"), "external_send", "규칙 엔진 경로여도 웹훅 주소가 들어오면 송출");
 });
 
+test("기존 시험 수정은 승인 사유(회귀 시험의 expect 를 풀어 전체 초록을 만드는 길 — 독립 검토 중2), 새 시험 파일은 허용", () => {
+  const r = classifyPatchText(mod("test/domain/game/self_qa_regressions_test.dart", "    expect(found, isEmpty);", "    // expect(found, isEmpty);")
+    + add("test/repro/bug_42_test.dart") + mod("lib/domain/game/turn_manager.dart"));
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.byReason, { test_modified: ["test/domain/game/self_qa_regressions_test.dart"] });
+  assert.deepEqual(r.allowed, ["test/repro/bug_42_test.dart", "lib/domain/game/turn_manager.dart"]);
+});
+
 test("기존 시험 파일 삭제 · 앞 단계가 쓴 고정 파일(frozen)을 바꾸면 승인 사유", () => {
   const r = classifyPatchText(del("test/domain/game/bomb_rules_test.dart") + mod("test/repro/bug_42_test.dart"), { frozen: ["test/repro/bug_42_test.dart"] });
   assert.equal(reasonOf(r, "test/domain/game/bomb_rules_test.dart"), "test_removed");
@@ -115,7 +123,7 @@ test("통합 diff 해석: 덩어리 줄 수로 읽는다 — 지운 줄 '-- x' �
   assert.deepEqual(f[1].hunks[0].lines.filter((l) => l.t === "+").map((l) => l.newNo), [5, 6]);
   // git diff 형식(a/ b/ 접두사, 탭 시각)도 같은 경로로
   assert.equal(parseUnifiedDiff("--- a/x.dart\t2026-10-03 10:00:00\n+++ b/x.dart\t2026-10-03 10:00:01\n@@ -1 +1 @@\n-a\n+b\n")[0].path, "x.dart");
-  assert.equal(classifyPatch(parseUnifiedDiff(patch)).ok, true);
+  assert.deepEqual(classifyPatch(parseUnifiedDiff(patch)).byReason, { test_modified: ["test/b_test.dart"] });
   // 머리 줄 수가 본문보다 많은 잘못된 패치라도 다음 파일을 놓치지 않는다
   const bad = patch.replace("@@ -1,3 +1,1 @@", "@@ -1,3 +1,2 @@");
   assert.deepEqual(parseUnifiedDiff(bad).map((x) => x.path), ["lib/domain/game/a.dart", "test/b_test.dart"]);

@@ -11,7 +11,9 @@
 //   SDK 잠금 파일·버전 확인·분석 전송을 끈다(FLUTTER_ALREADY_LOCKED·--no-version-check·--suppress-analytics) — 격리 안에서 SDK 에 쓰지 않게.
 // - 환경변수는 허용 목록만 새로 만든다(토큰류 0). HOME·TMPDIR 는 임시 폴더 아래로 돌린다.
 // - 사본·임시 폴더 경로를 검사한다: 정해진 뿌리 아래 · 홈·SDK·pub 캐시를 품지 않음 · 서로 겹치지 않음(겹치면 .git 보호가 풀린다).
-// - 출력은 그대로 흘려보내고 종료 코드도 그대로 낸다. 시간 초과는 124, 준비 오류는 97(stderr 첫 줄 'LG-SANDBOX <code>: …').
+// - 도는 동안 0.5초마다 격리 안 프로세스의 리슨 소켓을 본다. 루프백이 아닌 주소(0.0.0.0·LAN)에 리슨하면 바로 모두 끈다 —
+//   격리 규칙만으로는 이것을 막을 수 없다(아래 nonLoopbackListeners 주석, 10-03 실측).
+// - 출력은 그대로 흘려보내고 종료 코드도 그대로 낸다. 시간 초과는 124, 준비 오류는 97, 격리 위반 시도는 98(stderr 'LG-SANDBOX …').
 // 맥 전용이다(sandbox-exec). 다른 OS 에서는 97(not_darwin)로 닫힌 쪽 실패.
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -27,6 +29,7 @@ export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 // 늘 막는 로컬 서비스 포트(설계 §3) — 프로필 틀에 박혀 있다. 여기 값은 덧붙일 때 중복을 빼고 시험·보고에 쓴다.
 export const FIXED_DENY_PORTS = [18789, 9222, 5037, 11434, 3100];
 export const EXIT_SETUP = 97;
+export const EXIT_VIOLATION = 98; // 격리 위반 시도(루프백 아닌 주소에 리슨) — 그래프는 보류 + 지표 '격리 위반 시도'
 export const EXIT_TIMEOUT = 124;
 // flutter 하위 명령 허용 목록. pub 은 뺐다 — 끝에 xcodebuild 를 부르다 막히고(실측), 의존성 준비는 LLM 이 손대기 전 사본 단계(1a)에서 한다.
 export const FLUTTER_SUBCOMMANDS = new Set(["test", "analyze"]);
@@ -132,7 +135,9 @@ export function buildProfile({ template = PROFILE, ports = [], ancestors = 0 } =
   (subpath (param "COPY")) (subpath (param "TMP")) (subpath (param "PUB_CACHE")) (subpath (param "FLUTTER_ROOT")))\n`;
   const extra = [...new Set(ports)].filter((p) => Number.isInteger(p) && p > 0 && p < 65536 && !FIXED_DENY_PORTS.includes(p)).sort((a, b) => a - b);
   if (extra.length) {
-    text += `\n;; 실행 직전에 열려 있던 포트 ${extra.length}개(sandboxed-run.mjs 가 덧붙임)\n(deny network-outbound\n${extra.map((p) => `  (remote ip "localhost:${p}")`).join("\n")})\n`;
+    // 나가는 연결과 함께 그 포트에 대신 리슨하기(가로채기)도 막는다
+    text += `\n;; 실행 직전에 열려 있던 포트 ${extra.length}개(sandboxed-run.mjs 가 덧붙임) — 연결·가로채기 둘 다\n(deny network-outbound\n${extra.map((p) => `  (remote ip "localhost:${p}")`).join("\n")})\n`;
+    for (const op of ["network-bind", "network-inbound"]) text += `(deny ${op}\n${extra.map((p) => `  (local ip "localhost:${p}")`).join("\n")})\n`;
   }
   return text;
 }
@@ -201,6 +206,25 @@ function descendants(pid) {
   while (stack.length) for (const c of kids.get(stack.pop()) ?? []) { out.push(c); stack.push(c); }
   return out;
 }
+// 루프백이 아닌 주소(0.0.0.0·::·LAN·Tailscale)로 리슨하는 TCP 소켓 중 pids 의 것. netstat -anv 의 process:pid 칸으로 고른다.
+// 왜 감시가 필요한가(10-03 실측): 격리 규칙의 network-bind·inbound 는 주소 자리에 * 나 localhost 만 받고, 0.0.0.0 을 localhost 로 친다.
+// 들어오는 연결은 리슨할 때 한 번만 보고 연결마다 상대 주소를 보지 않는다 — 그래서 0.0.0.0 에 리슨하면 LAN 에서 붙어 사본(비공개 소스)을 받아 갈 수 있다.
+const isLoopbackAddr = (a) => /^127\.\d+\.\d+\.\d+\.\d+$/.test(a) || /^::1\.\d+$/.test(a) || /%lo0\.\d+$/.test(a);
+export function nonLoopbackListeners(pids) {
+  const want = new Set(pids);
+  const out = [];
+  // TCP 는 LISTEN 만, UDP 는 바인드된 것 전부(받기만 해도 LAN 에서 들어온다). 열 차례: 주소 · 상대 · (TCP 상태) · 바이트 4칸 · 프로세스:pid
+  const RE = { tcp: /^(tcp\S*)\s+\d+\s+\d+\s+(\S+)\s+\S+\s+LISTEN\s+\d+\s+\d+\s+\d+\s+\d+\s+(.*?):(\d+)\s/, udp: /^(udp\S*)\s+\d+\s+\d+\s+(\S+)\s+\S+\s+\d+\s+\d+\s+\d+\s+\d+\s+(.*?):(\d+)\s/ };
+  for (const proto of ["tcp", "udp"]) {
+    const r = spawnSync("/usr/sbin/netstat", ["-anv", "-p", proto], { encoding: "utf8", timeout: 5000 });
+    for (const line of (r.stdout ?? "").split("\n")) {
+      const m = RE[proto].exec(line.trim());
+      if (m && want.has(Number(m[4])) && !isLoopbackAddr(m[2])) out.push({ proto, addr: m[2], proc: m[3], pid: Number(m[4]) });
+    }
+  }
+  return out;
+}
+
 export function killTree(pid) {
   for (let i = 0; i < 2; i++) { // 끄는 사이 새로 뜬 손주까지 두 번 훑는다
     for (const p of [...descendants(pid).reverse(), pid]) { try { process.kill(p, "SIGKILL"); } catch { /* 이미 끝남 */ } }
@@ -208,11 +232,17 @@ export function killTree(pid) {
 }
 
 // 띄워서 끝날 때까지 기다린다. 자식은 우리 프로세스 묶음에 둔다 — 분리 실행 껍데기가 묶음째 끄면 격리 안까지 함께 꺼진다.
-export function runSandboxed(cmd, { timeoutMs = 30 * 60_000, stdio = "pipe", maxCapture = 4_000_000 } = {}) {
+// 감시(watchMs 마다): 격리 안 프로세스가 루프백 아닌 주소로 리슨하면 바로 나무째 끄고 violation 을 남긴다(CLI 종료 코드 98).
+export function runSandboxed(cmd, { timeoutMs = 30 * 60_000, stdio = "pipe", maxCapture = 4_000_000, watchMs = 500 } = {}) {
   return new Promise((resolve) => {
     const t0 = Date.now();
     const child = spawn(cmd.bin, cmd.argv, { cwd: cmd.cwd, env: cmd.env, stdio: stdio === "inherit" ? ["ignore", "inherit", "inherit"] : ["ignore", "pipe", "pipe"] });
-    let out = "", err = "", timedOut = false;
+    let out = "", err = "", timedOut = false, violation = null, closed = false;
+    const watch = watchMs > 0 ? setInterval(() => {
+      if (closed || violation) return;
+      const bad = nonLoopbackListeners([child.pid, ...descendants(child.pid)]);
+      if (bad.length) { violation = `nonloopback_listen ${bad.map((b) => `${b.proc}:${b.pid}@${b.addr}`).join(",")}`; killTree(child.pid); }
+    }, watchMs) : null;
     if (stdio !== "inherit") {
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
@@ -224,9 +254,11 @@ export function runSandboxed(cmd, { timeoutMs = 30 * 60_000, stdio = "pipe", max
     const handlers = ["SIGTERM", "SIGINT", "SIGHUP"].map((s) => [s, onSig(s)]);
     for (const [s, h] of handlers) process.on(s, h);
     const done = (code, signal) => {
+      closed = true;
       clearTimeout(timer);
+      if (watch) clearInterval(watch);
       for (const [s, h] of handlers) process.off(s, h);
-      resolve({ code, signal, stdout: out, stderr: err, timedOut, ms: Date.now() - t0 });
+      resolve({ code, signal, stdout: out, stderr: err, timedOut, violation, ms: Date.now() - t0 });
     };
     child.on("error", (e) => { err += `\nLG-SANDBOX spawn: ${e.message}`; done(EXIT_SETUP, null); });
     child.on("close", done);
@@ -303,6 +335,7 @@ async function main() {
     }
     const cmd = sandboxCommand({ copy: o.copy, tmp: o.tmp, tool: o.tool, args: o.args });
     const r = await runSandboxed(cmd, { timeoutMs: o.timeoutSec * 1000, stdio: "inherit" });
+    if (r.violation) { process.stderr.write(`LG-SANDBOX violation: ${r.violation} — 격리 안 프로세스를 모두 껐다\n`); process.exit(EXIT_VIOLATION); }
     if (r.timedOut) { process.stderr.write(`LG-SANDBOX timeout: ${o.timeoutSec}초를 넘겨 격리 안 프로세스를 모두 껐다\n`); process.exit(EXIT_TIMEOUT); }
     process.exit(r.code ?? (r.signal ? 128 + (os.constants.signals[r.signal] ?? 0) : EXIT_SETUP));
   } catch (e) {

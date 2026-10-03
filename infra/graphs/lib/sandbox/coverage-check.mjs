@@ -46,6 +46,44 @@ export function normalizeSf(sf, roots = []) {
 
 const trivial = (s) => { const t = s.trim(); return t === "" || t.startsWith("//") || t.startsWith("*") || t.startsWith("/*") || t === "}" || t === "{"; };
 
+// 출처 닻(독립 검토 중3): 받은 lcov 가 정말 라이브 AI 경로 시험에서 나왔는지 — 그 경로의 핵심 코드가 실행됐어야 한다.
+// 없으면 '엔진 시험이 바뀐 줄을 지났다'만으로 통과해 버린다. 10-03 실측(고스톱 사본, 격리 안 --coverage):
+//   엔진 시험만(bomb_rules_test) → ai_player.dart·game_provider.dart 실행 0줄 / `--name "라이브 AI"` 로 라이브 AI 시험만 → 49줄·297줄.
+export const DEFAULT_ANCHORS = [
+  { file: "lib/domain/ai/ai_player.dart" },
+  { file: "lib/presentation/providers/game_provider.dart", fn: "processAITurns" },
+];
+
+// 함수 선언(호출이 아닌)의 줄 범위(1부터). 선언 줄의 첫 { 부터 짝 맞는 } 까지. 못 찾으면 null.
+export function functionRange(text, fn) {
+  const lines = String(text).split("\n");
+  const call = new RegExp(`(await|return|[.=(,!])\\s*${fn}\\s*\\(|${fn}\\s*\\([^)]*\\)\\s*;`);
+  const decl = new RegExp(`\\b${fn}\\s*\\(`);
+  for (let i = 0; i < lines.length; i++) {
+    if (!decl.test(lines[i]) || call.test(lines[i]) || /^\s*(\/\/|\*)/.test(lines[i])) continue;
+    let depth = 0, seen = false;
+    for (let j = i; j < lines.length && j < i + 2000; j++) {
+      for (const ch of lines[j]) { if (ch === "{") { depth++; seen = true; } else if (ch === "}") depth--; }
+      if (seen && depth <= 0) return [i + 1, j + 1];
+      if (!seen && j > i + 3) break; // 선언 뒤 몇 줄 안에 { 가 없으면 선언이 아니다
+    }
+  }
+  return null;
+}
+
+function checkAnchors(cov, anchors, root) {
+  const misses = [];
+  for (const a of anchors) {
+    const m = cov.get(a.file);
+    if (!m) { misses.push(`${a.file}(안 실림)`); continue; }
+    let range = null;
+    if (a.fn && root) { try { range = functionRange(fs.readFileSync(path.join(root, a.file), "utf8"), a.fn); } catch { /* 못 읽음 → 파일 단위 */ } }
+    const hit = [...m].some(([ln, c]) => c > 0 && (!range || (ln >= range[0] && ln <= range[1])));
+    if (!hit) misses.push(`${a.file}${a.fn ? `:${a.fn}` : ""}${a.fn && !range ? "(함수 범위 모름 — 파일 단위)" : ""}`);
+  }
+  return misses;
+}
+
 // 덩어리 하나에서 '바뀐 줄'(새 파일 줄 번호) 목록
 export function changedNewLines(h) {
   const plus = h.lines.filter((l) => l.t === "+");
@@ -59,13 +97,19 @@ export function changedNewLines(h) {
   return { lines: [...out].sort((a, b) => a - b), texts: [], deletionOnly: true };
 }
 
-export function checkCoverage({ patch, lcov, root, roots = [], policy = "hunk", isTarget = (p) => p.startsWith("lib/") && p.endsWith(".dart") } = {}) {
+// anchors: 출처 닻(기본 DEFAULT_ANCHORS, [] 면 끔). root: 사본(함수 범위를 읽고 SF 절대경로를 맞춘다).
+export function checkCoverage({ patch, lcov, root, roots = [], policy = "hunk", anchors = DEFAULT_ANCHORS, isTarget = (p) => p.startsWith("lib/") && p.endsWith(".dart") } = {}) {
   if (!["hunk", "all", "any"].includes(policy)) throw new Error(`policy 는 hunk·all·any: ${policy}`);
   const files = parseUnifiedDiff(patch).filter((f) => isTarget(f.path) && f.status !== "deleted");
   if (!files.length) return { ok: true, verdict: "no_lib_change", files: [], summary: "패치에 바뀐 lib 파일이 없다" };
   if (!lcov || !String(lcov).trim()) return { ok: false, verdict: "lcov_missing", files: [], summary: "lcov 가 비었다(시험이 안 돌았거나 --coverage 가 빠짐)" };
   const cov = new Map();
   for (const [sf, m] of parseLcov(lcov)) cov.set(normalizeSf(sf, [root, ...roots].filter(Boolean)), m);
+  const misses = checkAnchors(cov, anchors, root);
+  if (misses.length) {
+    return { ok: false, verdict: "not_ai_path", files: [], anchorsMissed: misses,
+      summary: `이 lcov 는 라이브 AI 경로를 지나지 않았다(닻 미실행: ${misses.join(", ")}) — AI 경로 시험만 --coverage 로 돌렸나(예: --name "라이브 AI")` };
+  }
   const outFiles = [];
   let anyHit = false, anyExec = false;
   for (const f of files) {
@@ -94,17 +138,19 @@ export function checkCoverage({ patch, lcov, root, roots = [], policy = "hunk", 
 }
 
 function main(argv) {
-  const o = {};
+  const o = { anchors: null };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (["--patch", "--lcov", "--root", "--policy"].includes(k)) o[k.slice(2)] = argv[++i];
+    else if (k === "--anchor") { const [file, fn] = argv[++i].split(":"); (o.anchors ??= []).push(fn ? { file, fn } : { file }); }
+    else if (k === "--no-anchor") o.anchors = [];
     else { process.stderr.write(`모르는 인자: ${k}\n`); process.exit(2); }
   }
   if (!o.patch || !o.lcov) { process.stderr.write("--patch·--lcov 가 있어야 한다\n"); process.exit(2); }
   let lcov = "";
   try { lcov = fs.readFileSync(o.lcov, "utf8"); } catch { /* 없음 → lcov_missing */ }
   const root = o.root ? (() => { try { return fs.realpathSync(o.root); } catch { return o.root; } })() : undefined;
-  const r = checkCoverage({ patch: fs.readFileSync(o.patch, "utf8"), lcov, root, roots: o.root ? [o.root] : [], policy: o.policy ?? "hunk" });
+  const r = checkCoverage({ patch: fs.readFileSync(o.patch, "utf8"), lcov, root, roots: o.root ? [o.root] : [], policy: o.policy ?? "hunk", anchors: o.anchors ?? DEFAULT_ANCHORS });
   process.stdout.write(`${JSON.stringify(r)}\n`);
   process.exit(r.ok ? 0 : 3);
 }

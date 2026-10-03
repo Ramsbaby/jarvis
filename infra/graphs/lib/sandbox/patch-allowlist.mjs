@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { parseUnifiedDiff } from "./unified-diff.mjs";
 
 // 허용(§4①). 조건부: §4② AI 판정('같은 상태, 같은 결정')을 통과해야 허용. turn_manager.dart 는 lib/domain/game/ 아래라 이미 허용.
+// test/ 는 새 파일만 허용이다 — 기존 시험의 수정·삭제는 승인 사유(test_modified·test_removed).
 export const ALLOW_PREFIXES = ["lib/domain/game/", "test/"];
 export const CONDITIONAL = new Set(["lib/presentation/providers/game_provider.dart", "lib/presentation/providers/bomb_handler.dart"]);
 export const MCTS_FILE = "lib/core/constants.dart";
@@ -90,6 +91,9 @@ export function classifyPatch(files, { clean, copy, aiCheck = "unavailable", fro
     if (!r) for (const [name, test] of REASON_RULES) if (test(p)) { r = [name, "경로"]; break; }
     if (!r) for (const [name, re] of CONTENT_RULES) if ((before && re.test(before)) || (after && re.test(after))) { r = [name, "내용"]; break; }
     if (!r && f.status === "deleted" && p.startsWith("test/")) r = ["test_removed", "기존 시험 파일 삭제"];
+    // 기존 시험(내보내기에 있던 파일)을 고치면 승인 — 회귀 시험의 expect 를 풀어 '전체 시험 초록'을 만드는 길(독립 검토 중2).
+    // 새 시험 파일(재현 시험 등)은 허용. 기존 시험이 버그 동작을 정답으로 박아 둔 경우도 사람이 판단할 일이다.
+    if (!r && f.status === "modified" && p.startsWith("test/")) r = ["test_modified", "기존 시험 파일 수정(회귀 시험 약화 가능)"];
     if (!r && CONDITIONAL.has(p)) {
       if (aiCheck !== "pass") r = ["ai_check_unavailable", "규칙 처리부지만 AI 판정(§4②)을 통과하지 않았다"];
     }
