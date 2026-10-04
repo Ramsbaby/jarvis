@@ -97,6 +97,17 @@ test("정상 흐름(그림자) — 4판·2판씩: 판 두 묶음, 묶음마다 �
   assert.ok(c.at(-1).cmd === "emu-down", "끝나면 우리 에뮬레이터를 끈다");
 });
 
+test("띄어 쓴 값 플래그 — 매일 잡의 `--games 40` 꼴도 판 수로 읽는다(10-04: 1판만 돌던 것), 모르는 값은 거부", async (t) => {
+  const { env, calls } = setup(t);
+  assert.match(run(env, ["start", "gostop-qa", "qa-s1", "--queue", "--games", "4", "--per", "2", "--seed", "100", "--day", "2026-10-03"]).first, /^OK qa-s1 queued shadow/);
+  const done = await tickUntilDone(env, "qa-s1");
+  assert.match(done.line, /판 4\/4/);
+  assert.deepEqual(calls().filter((x) => x.cmd === "play").map((x) => [x.seed, x.games]), [["100", "2"], ["102", "2"]]);
+  const bad = run(env, ["start", "gostop-qa", "qa-s2", "--queue", "--bogus", "7"]);
+  assert.notEqual(bad.code, 0, "등록 안 된 플래그 뒤의 값은 조용히 버리지 않는다");
+  assert.match(bad.out, /알 수 없는 인자 7/);
+});
+
 test("책갈피 — 판 두기 중 기기가 사라지면 에뮬레이터부터 다시, 같은 판부터(끝난 판은 다시 두지 않는다)", async (t) => {
   const { env, calls, fake } = setup(t);
   fs.writeFileSync(path.join(fake, "die-once"), "");

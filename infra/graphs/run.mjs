@@ -30,7 +30,9 @@ import { loadConfig, clock, iso } from "./lib/config.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const THREAD_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const GRAPH_RE = /^[a-z][a-z0-9-]{0,40}$/;
-const VALUE_FLAGS = new Set(["days", "topic"]);
+// 값을 받는 플래그. 여기 없으면 `--games 40` 이 games=true 와 떠도는 "40" 으로 갈라져 그래프가 기본값으로 돈다
+// (10-04 실측: 매일 40판 QA 잡이 1판만 돌았다 — 시험은 `--games=4` 꼴만 써서 못 잡았다). 그래프 input() 이 읽는 키를 더하면 여기도 더한다.
+const VALUE_FLAGS = new Set(["days", "topic", "games", "per", "seed", "diffs", "rev", "tag", "eyeEvery", "day", "signal", "sigkey", "apk", "version", "restart_ms"]);
 const STATUSES = ["queued", "running", "continue", "waiting", "held", "failed", "stalled", "gave_up", "expired", "blocked", "done"];
 const NOTIFY = /^(DONE|WAITING|EXPIRED|GAVE_UP|STUCK) /;
 
@@ -513,8 +515,10 @@ function pausedLine(ctx, thread) {
   return true;
 }
 
-async function cmdStart(ctx, [graph, thread], flags) {
+async function cmdStart(ctx, [graph, thread, ...extra], flags) {
   checkThread(thread);
+  // 남는 위치 인자 = 값 플래그로 등록 안 된 `--키 값` 의 값 — 조용히 버리면 기본값으로 돈다
+  if (extra.length) throw new UsageError(`알 수 없는 인자 ${extra.join(" ")} — 값 플래그는 --키=값 으로 쓰거나 run.mjs VALUE_FLAGS 에 더한다`);
   if (pausedLine(ctx, thread)) return 0;
   const { liveMode } = await import("./lib/gates.mjs");
   const mode = liveMode(ctx.cfg);
