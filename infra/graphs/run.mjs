@@ -870,6 +870,9 @@ async function tickThreadInner(ctx, row0) {
   }
 }
 
+// 자원 관문을 건너뛰는 그래프 — 읽기 전용·LLM 없음·사본 없음인 것만(당직 D0, PLAN §13.3). PAUSED 는 이들도 막는다.
+const GATE_EXEMPT_GRAPHS = new Set(["duty-verify"]);
+
 // 당직 D0 틱 고리(lib/duty-intake.mjs): 게이트웨이 heartbeat 기록 + 재시작마다 duty-verify 스레드(그림자) 대기열 등록.
 // 고리의 고장은 틱을 멈추지 않는다 — 보류 기록(held scope duty)으로 남기고 틱은 계속 간다(그래프 하나가 잡 전체를 꺼뜨리지 않게와 같은 원칙).
 async function dutyHook(ctx) {
@@ -922,7 +925,22 @@ async function cmdTick(ctx) {
   if (gates.length) {
     ctx.metric("held", { scope: "tick", reasons: gates.map((x) => x.gate), detail: gates.map((x) => x.detail).join(" / ") });
     say(`HOLD ${gates.map((x) => `${x.gate}: ${x.detail}`).join(" · ")}`);
-    ctx.metric("tick", { ms: Math.round(performance.now() - t0), outcome: "hold" });
+    // 자원 관문(디스크·사용량·토큰·LLM 보류·야간)은 사본을 만들고 LLM 을 부르는 무거운 그래프를 막으려는 것이다.
+    // 읽기 전용·LLM 없는 당직 확인(GATE_EXEMPT_GRAPHS)은 시스템이 나쁠 때일수록 돌아야 한다 — 10-04 실측: 디스크 관문(13.2 < 16.2GiB)이
+    // D0 대조를 막았다. PAUSED(멈춤 스위치)는 예외 없이 지킨다.
+    let n = 0;
+    if (!gates.some((x) => x.gate === "paused")) {
+      const seen = new Set();
+      for (;;) {
+        if (overBudget(ctx) || fs.existsSync(ctx.cfg.pausedPath)) break;
+        const row = tickCandidates(ctx).find((r) => GATE_EXEMPT_GRAPHS.has(r.graph) && !seen.has(r.thread_id));
+        if (!row) break;
+        seen.add(row.thread_id);
+        const r = await tickThread(ctx, row);
+        if (r !== "locked" && r !== "skip") n++;
+      }
+    }
+    ctx.metric("tick", { ms: Math.round(performance.now() - t0), outcome: "hold", exempt_threads: n });
     failures.forEach(say);
     return 0;
   }

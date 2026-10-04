@@ -165,6 +165,28 @@ test("대기: 재시작 + 3분 전에는 CONTINUE(확인 안 함), 지나면 확
   assert.equal(b.dv()[0].status, "continue", "당직 판정 줄이 없으면 compare 가 기다린다");
 });
 
+test("관문: 디스크 부족(자원 관문)에도 D0 는 확인까지 가고 다른 그래프는 HOLD, PAUSED 면 D0 도 멈춘다(10-04 실측: 디스크 관문이 D0 대조를 막음)", (t) => {
+  const b = box(t);
+  b.bootAndRestart();
+  b.transcript([use("tu1", "mcp__openclaw__sessions_list", R0 + 60_000), result("tu1", R0 + 61_000)]);
+  const blocked = { LG_DISK_FLOOR_GIB: "100000" };
+  assert.equal(run(b.env, ["start", "smoke", "s-blocked", "--queue"], { extraEnv: { LG_NOW: String(R0 + 2 * MIN) } }).code, 0);
+  const r1 = b.tick(R0 + 4 * MIN, blocked);
+  assert.equal(r1.code, 0, r1.out);
+  assert.match(r1.out, /HOLD disk/, "자원 관문은 그대로 알린다");
+  assert.equal(b.dvm("verify").length, 1, "디스크 관문이 걸려도 D0 확인은 돈다");
+  assert.equal(b.dvm("verify")[0].verdict, "ok");
+  const smoke = b.threads().find((x) => x.thread === "s-blocked");
+  assert.equal(smoke.status, "queued", "무거운 그래프(연습 그래프)는 관문에 막혀 그대로 대기");
+  // PAUSED 는 예외 없음
+  const b2 = box(t);
+  b2.bootAndRestart();
+  fs.writeFileSync(path.join(b2.sb.state, "PAUSED"), "");
+  const r2 = b2.tick(R0 + 4 * MIN, blocked);
+  assert.equal(r2.code, 0, r2.out);
+  assert.equal(b2.dvm("verify").length, 0, "PAUSED 면 D0 도 확인하지 않는다");
+});
+
 test("확인 broken: 재시작 뒤 오픈클로 도구 '권한 끊김'(감지기와 같은 판별) — 인용·다른 도구는 세지 않는다", (t) => {
   const b = box(t);
   b.bootAndRestart();
