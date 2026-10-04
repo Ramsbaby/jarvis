@@ -76,7 +76,9 @@ import json, os, sys
 
 frag_path, dest_path = sys.argv[1], sys.argv[2]
 with open(frag_path) as fh:
-    frag = {k: v for k, v in json.load(fh).items() if not k.startswith("_")}
+    raw = json.load(fh)
+frag = {k: v for k, v in raw.items() if not k.startswith("_")}
+forbidden = raw.get("_forbidden", [])   # 병합은 키를 못 지우므로 금지 키는 따로 뺀다
 
 dest = {}
 if os.path.exists(dest_path):
@@ -95,6 +97,8 @@ for key, value in frag.items():
         dest["env"].update(value)      # env 는 깊은 병합 — 기존 변수를 지우지 않는다
     else:
         dest[key] = value
+for key in forbidden:
+    dest.pop(key, None)
 
 os.makedirs(os.path.dirname(dest_path), exist_ok=True)
 tmp = dest_path + ".tmp"

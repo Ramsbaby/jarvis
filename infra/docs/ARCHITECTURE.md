@@ -278,6 +278,10 @@ PostToolUse (Write|Edit) — auto memory → RAG 다리
     · 훅이 그 경로를 감시하는가 — `post-memory-sync.sh --print-watched` 로 부작용 없이 확인
     · SSoT 미이관 실파일이 10분 넘게 쌓였는가(훅 사망 조기 경보)
   설정 계약 정본: dotfiles/claude/settings.memory.json (install.sh 가 병합)
+  2026-10-04 변경: autoMemoryDirectory 는 계약상 **금지 키**다(_forbidden). Claude Code 가
+    프로젝트별 경로에 쓰므로 키가 남으면 기억이 갈라진다. install.sh 가 지우고,
+    Check 6 은 키가 없으면 정상 · 되살아나면 automem-setting-forbidden 으로 경보한다.
+    신규 기억의 RAG 진입은 openclaw-memory-mirror.sh 프로젝트별 단계 → rag-index.mjs 가 맡는다.
 
 SessionStart (startup only)
   └─ session-context.sh

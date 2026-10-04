@@ -1,7 +1,8 @@
 {
   "_comment": "Claude Code auto memory 설정 계약. install.sh 가 ~/.claude/settings.json 에 병합한다(덮어쓰지 않는다). 전체 settings.json 은 개인 절대경로를 담고 있어 공개 저장소에 두지 않는다 — 여기에는 auto memory 계약만 둔다. symlink-topology-audit.sh Check 6 이 이 값과 실제 설정의 일치를 감시한다.",
+  "_comment_forbidden": "2026-10-04 autoMemoryDirectory 를 계약에서 뺐다. Claude Code 는 09-13 부터 프로젝트별 경로(~/.claude/projects/<slug>/memory)에 기억을 쓰는데, 이 키가 남아 있으면 OpenClaw 2026.9.8 이후 앱 대화가 옛 폴더만 읽어 프로젝트 기억 40개가 세션에 안 실렸다. _forbidden 키는 install.sh 가 지우고 Check 6 이 다시 생기면 경보한다.",
+  "_forbidden": ["autoMemoryDirectory"],
   "autoMemoryEnabled": true,
-  "autoMemoryDirectory": "~/.openclaw-data/runtime/claude-automemory",
   "env": {
     "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0"
   }

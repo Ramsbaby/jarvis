@@ -356,7 +356,16 @@ if [[ -f "$CLAUDE_SETTINGS" && -f "$AUTOMEM_CONTRACT" ]]; then
   want="$(read_json_str "$AUTOMEM_CONTRACT" autoMemoryDirectory)"
   have="$(read_json_str "$CLAUDE_SETTINGS" autoMemoryDirectory)"
 
-  if [[ -z "$have" ]]; then
+  if [[ -z "$want" ]]; then
+    # 2026-10-04: 계약이 이 키를 금지로 바꿨다(settings.memory.json _forbidden). Claude Code 는
+    #   프로젝트별 경로에 기억을 쓰고, 키가 남으면 앱 대화가 옛 폴더만 읽어 기억이 갈라진다.
+    #   없으면 정상이고, 아래 옛 경로 다리 검사는 대상이 없으므로 건너뛴다.
+    if [[ -n "$have" ]]; then
+      emit "warn" "automem-setting-forbidden" "$CLAUDE_SETTINGS" "autoMemoryDirectory 가 되살아남 (${have}) — 계약상 금지"
+      alert_throttled "automem-setting-forbidden" "$CLAUDE_SETTINGS" "⚠️ 금지된 auto memory 경로 설정이 되살아남" "$have"
+      violations=$((violations + 1))
+    fi
+  elif [[ -z "$have" ]]; then
     # 이 값이 없으면 Claude 는 세션마다 새 임시 디렉터리에 기억을 쌓았다 버린다.
     emit "warn" "automem-setting-missing" "$CLAUDE_SETTINGS" "autoMemoryDirectory 미설정 (기대=${want})"
     alert_throttled "automem-setting-missing" "$CLAUDE_SETTINGS" "⚠️ auto memory 경로 설정이 사라짐" "기대=${want}"
