@@ -358,6 +358,19 @@ Bootstrap failed: 5: Input/output error
   assert.equal(d.verified, true);
   assert.equal(d.ts, Date.parse("2026-10-04T19:45:42+09:00"));
   assert.equal(nextDutyJudgement(L, Date.parse("2026-10-04T20:00:00+09:00")), null);
+  // 10-04 실측: 당직은 재시작 뒤 확인을 정기 회차 줄 본문에 적었다(키 sweep:call-20-00) — 본문 문장으로 판정을 읽는다
+  const r2 = Date.parse("2026-10-04T18:10:12+09:00");
+  const L2 = [
+    { ts: "2026-10-04T18:18:42+09:00", key: "windows.bluetooth", item: "블루투스 동글 시작 실패", verified: true },
+    { ts: "2026-10-04T20:06:00+09:00", key: "sweep:call-20-00", item: "20:00 호출 대응 — crit 0, 도구 경로 정상(sessions_list ok, 18:10 재시작 뒤)", verified: true },
+  ].map((x) => JSON.stringify(x)).join("\n");
+  const d2 = nextDutyJudgement(L2, r2);
+  assert.equal(d2.verified, true, "본문 '도구 경로 정상' = 정상 판정");
+  assert.equal(d2.via, "text");
+  const L3 = JSON.stringify({ ts: "2026-10-04T20:06:00+09:00", key: "sweep:call-20-00", item: "도구 경로 끊김 재발(authority closed) — 안전 재시작 요청" });
+  assert.equal(nextDutyJudgement(L3, r2).verified, false, "본문 '끊김' = 고장 판정");
+  const L4 = JSON.stringify({ ts: "2026-10-04T20:06:00+09:00", key: "sweep:call-20-00", item: "crit 0, warn 4건 판정" });
+  assert.equal(nextDutyJudgement(L4, r2), null, "도구 경로 언급 없는 줄은 판정 아님");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lg-test-dvp-"));
   try {
     fs.writeFileSync(path.join(dir, "a.jsonl"), [use("x", "mcp__openclaw__nodes", restart + 1000), result("x", restart + 2000, { error: true, text: `${AUTHORITY_CLOSED} node.list` }),

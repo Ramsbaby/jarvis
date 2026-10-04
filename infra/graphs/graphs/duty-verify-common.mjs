@@ -194,14 +194,28 @@ export function scanGatewayLogs(P, sinceMs, untilMs) {
 // ── 당직 장부(읽기만) — 재시작 뒤 첫 gateway.tool_authority 판정 줄 ─────────────
 // 장부 ts 는 당직이 손으로 적어 실제 기록 시각보다 늦을 수 있다(10-04 16:57 줄은 16:55 재시작보다 뒤 ts). 그래서 '이 재시작을 부른 줄'
 // (verified 가 true 가 아니고, first_seen 이 재시작 이전이고, 조치에 재시작이 적힌 줄)은 판정으로 보지 않는다.
+// 10-04 실측: 당직은 재시작 뒤 확인을 gateway.tool_authority 키가 아니라 정기 회차 줄(key "sweep:call-HH-MM" 등) 안에
+// "도구 경로 정상(sessions_list ok …)" 문장으로 적었다 → 키가 다르면 본문에서 도구 경로 판정 문장을 찾는다.
+const TOOL_PATH_OK = /도구\s*경로\s*(정상|살아|ok)|sessions_list\s*(ok|정상)/i;
+const TOOL_PATH_BAD = /도구\s*경로\s*(끊|막|실패|죽)|authority closed|sessions_list\s*(실패|fail)/i;
+function textJudgement(r) {
+  const body = [r?.item, r?.fix, r?.evidence].map((v) => String(v ?? "")).join(" ");
+  if (TOOL_PATH_BAD.test(body)) return false;
+  if (TOOL_PATH_OK.test(body)) return true;
+  return null;
+}
 export function nextDutyJudgement(text, restartMs) {
   for (const line of String(text ?? "").split("\n")) {
-    if (!line.includes(LEDGER_KEY)) continue;
+    if (!line.includes(LEDGER_KEY) && !/도구\s*경로|sessions_list|authority closed/i.test(line)) continue;
     let r;
     try { r = JSON.parse(line); } catch { continue; }
-    if (r?.key !== LEDGER_KEY) continue;
-    const ts = Date.parse(r.ts ?? "");
+    const ts = Date.parse(r?.ts ?? "");
     if (!(ts > restartMs)) continue;
+    if (r?.key !== LEDGER_KEY) {
+      const v = textJudgement(r);
+      if (v === null) continue;
+      return { ts, firstSeen: null, verified: v, mode: String(r.mode ?? "").slice(0, 20), via: "text" };
+    }
     const firstSeen = Date.parse(r.first_seen ?? "");
     const cause = r.verified !== true && Number.isFinite(firstSeen) && firstSeen <= restartMs && /재시작|restart/i.test(String(r.fix ?? ""));
     if (cause) continue;
