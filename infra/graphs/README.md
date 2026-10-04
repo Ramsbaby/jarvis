@@ -229,6 +229,34 @@ LLM 이 사본에 쓴 뒤에는 그 사본에 격리 밖 시험 명령(`flutter.
 - 쓰기 노드(⑦·⑨)는 `--permission-mode acceptEdits`(-p 에서는 쓰기 허락을 물을 사람이 없어 Write 가 거부된다 — 10-03 실호출). --restricted 가 작업 폴더 밖 쓰기를 막는다(haiku 실측).
 - 시험: `test/gostop-1b.test.mjs` 24개(가짜 claude script 모드 — 허락 모드 없으면 쓰기 거부, 가짜 격리 실행기 `fake-sandboxed.mjs`, 가짜 apksigner·firebase).
 
+## 당직 D0 그림자 — 게이트웨이 재시작 뒤 확인 (`duty-verify`, PLAN §13.3)
+
+주인님 10-04 동결 예외(`docs/duty-standing-approvals.md`). **결과는 `lg.` 기록에만** — 당직 장부·감지기·절차서는 읽기만 한다. 새 잡 없이 `lg-tick` 이 한다.
+
+```
+틱 고리(lib/duty-intake.mjs, 관문 앞·PAUSED 면 안 함)
+  ├─ 게이트웨이 확인(gateway.listen-pid·gateway.proc) → 기록 lg.restart.heartbeat {gw_pid, gw_start, gw_up, open[상태 스레드], jobs[돌고 있는 분리 실행]}
+  └─ 재시작 접수: ~/.openclaw/logs/gateway-restart.log 의 'restart attempt' 줄(커서 뒤) + 기록에 없는 pid 바뀜
+       → 재시작마다 스레드 'dv-<재시작 초>' 하나(그림자 고정 — LIVE 스위치와 무관, 이미 있으면 안 올림). 처음 틱은 지금부터 본다
+duty-verify:dv-<초>
+  wait     재시작 + 3분(LG_DV_WAIT_SEC) 전이면 CONTINUE
+  verify   LLM 0. 포트 주인(lsof)·새 pid·시작 시각 ≥ 재시작 − 2분(ps etime)·HTTP /health(curl 127.0.0.1) · 재시작 뒤 대화 기록(~/.claude/projects)의
+           오픈클로 도구 결과 중 'Gateway client authority closed…' 로 시작하는 오류(감지기 authority_failures 와 같은 판별) 0 ·
+           게이트웨이 로그(/tmp/openclaw/openclaw-<날>.log·~/Library/Logs/openclaw/gateway.log 끝 8MB)의 같은 문구 0 → ok | broken | unknown(다음 재시작에 덮임 등)
+  record   lg.duty.verify(phase verify, 근거 숫자만) + effect 'would append ledger line key=gateway.tool_authority verified=…' — 그림자라 실행 안 함(fn 은 장부를 쓰지 않고 실패)
+  compare  재시작 뒤 첫 장부 gateway.tool_authority 판정 줄(이 재시작을 부른 줄 — verified≠true·first_seen 이 재시작 전·조치에 재시작 — 은 뺌)과 대조
+           → lg.duty.verify(phase compare: agreement true·false(kind mismatch·later_break)·none·n/a + survival). 줄이 없으면 14시간(LG_DV_COMPARE_H)까지 CONTINUE
+```
+
+- 끝(DONE)은 알리지 않는다(`meta.quietDone`) — 틱 출력엔 `--verbose` 의 `OK … done(알림 없음)` 만. GAVE_UP·EXPIRED 는 그대로 알린다.
+- 재시작 생존 실측(PLAN §3 미실측): compare 가 재시작 직전 heartbeat 의 열린 스레드·분리 실행을 본다 — 스레드는 재시작 뒤 단계를 끝냈나(progressed·waiting·stalled), 분리 실행은 재시작 뒤 결과를 썼거나 heartbeat 가 이어졌나(survived·killed). `node lg-report.mjs` 의 'D0' 칸이 일치율·생존 실측 횟수를 낸다.
+- OpenClaw CLI(`openclaw health`·`sessions`)는 쓰지 않는다 — 목록에 올릴 수 없다(S15). 그래서 능동 확인(세션 목록 호출)은 없고, 살아 있음은 포트·프로세스·`/health`, 도구 경로는 재시작 뒤 실제 도구 결과(수동 관찰)로 본다. `tool_ok`(재시작 뒤 성공한 오픈클로 도구 결과 수)가 0 이면 '실패 없음'이지 '작동 확인'은 아니다.
+- 관문(사용량 묵음 02~08시·야간 01:30~04:30 등)에 걸린 틱도 heartbeat·접수는 하지만 스레드는 관문이 풀린 틱에 돈다 — 그만큼 확인이 늦다(`delay_s`).
+- 끄기: `touch ~/.openclaw-data/runtime/state/graphs/DUTY_VERIFY_OFF`(heartbeat·접수 멈춤. 이미 올라간 dv 스레드는 읽기만 하고 끝난다). 다시: 그 파일을 지운다. 접수 상태 `duty-verify/intake.json`.
+- 설정: `LG_DV_WAIT_SEC`(180) · `LG_DV_COMPARE_H`(14) · `LG_GATEWAY_PORT`(18789) · 읽는 곳 `LG_DV_RESTART_LOG`·`LG_DV_CLAUDE_PROJECTS`·`LG_DV_GW_LOG_DIR`·`LG_DV_GW_LOG`·`LG_DV_DUTY_LEDGER` · `LG_DUTY_VERIFY=0`(끔 — 시험 모드에서는 `1` 일 때만 켜짐).
+- 손으로: `sh lg.sh start duty-verify dv-manual-1 --topic 2026-10-04T16:55:49+09:00`(바로 돌림 — 지난 재시작을 다시 보기. LIVE 면 보류).
+- 시험: `test/duty-verify.test.mjs` 19개(가짜 lsof·ps·curl `fixtures/fake-gw.mjs`, 가짜 재시작 기록·대화 기록·게이트웨이 로그·장부, 진짜 당직 장부 지문 앞뒤 대조).
+
 ## 분리 실행 `lib/detach.mjs` (설계 §6)
 
 작업 폴더 `jobs/<스레드>/<노드>/<시도>/` — 이 폴더 만들기(원자적)가 `(thread, node, attempt)` 잠금이다. 틱이 겹쳐도 한 번만 띄운다.
@@ -268,6 +296,8 @@ LLM 이 사본에 쓴 뒤에는 그 사본에 격리 밖 시험 명령(`flutter.
 | `held` | scope(tick·thread·command·sweep) · reasons(관문 이름·llm_day·llm_thread·token_cap·login·usage_limit·code_defect·node·effect_unknown·stuck·hook_leak) |
 | `llm` | model · models · in · out · cache_create · cache_read · total · cost_usd · ms · ok · detached |
 | `effect`(outcome: would_run·ran·dedup·failed·unknown·recovered, key 는 지문만 — 원문은 effects.jsonl) · `stuck` · `tick` · `gc` · `failed` · `bench`(M8) | |
+| `lg.duty.verify`(D0) | phase(verify·compare) · verdict · restart · reasons · tool_fail·tool_ok·gwlog_fail · agreement · kind · survival |
+| `lg.restart.heartbeat`(D0, 틱마다) | gw_pid · gw_start · gw_up · open · jobs |
 
 `node lg-report.mjs`가 M1(끊긴 스레드 중 다음 틱들이 이어 간 비율 — 끊긴 뒤 단계를 하나라도 끝냄. 그 뒤 사람이 답하지 않은 승인 만료는 '버려짐'이 아니다) · M3(같은 key 중복 실행 — verify 가 '안 일어났다'고 확인한 뒤의 재실행은 중복이 아니다) · M4(끝나지 않은 스레드 중 마지막 기록이 48시간 넘은 것 — 대기열·답 받음 포함) · M6(날짜별 호출·토큰·비용, Fable 0) 표와 M2·M5·M8 칸을 낸다.
 

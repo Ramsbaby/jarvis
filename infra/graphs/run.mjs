@@ -143,6 +143,9 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
   const heartbeatSec = cfg.testMode && process.env.LG_TEST_HEARTBEAT_SEC ? Number(process.env.LG_TEST_HEARTBEAT_SEC) : 30;
   const scratch = path.join(cfg.jobsDir, thread, "_scratch");
   const BENCH = new Set(["bench", "reproduced", "diag_match", "hidden_pass", "ai_misjudge", "signal"]);
+  const DUTY_FIELDS = new Set(["phase", "verdict", "restart", "source", "trigger", "outcome", "pid_before", "pid_after", "gw_start", "new_pid", "up", "health",
+    "tool_fail", "tool_fail_methods", "tool_ok", "gwlog_fail", "delay_s", "reasons", "unknown", "agreement", "kind", "duty", "duty_ts", "duty_first_seen",
+    "duty_mode", "survival"]);
   const tools = {
     mode,
     run: createRun({ cfg, registry: reg, thread, mode, timeLeft }),
@@ -167,6 +170,8 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
     bench: (fields = {}) => metric("bench", { thread, ...Object.fromEntries(Object.entries(fields).filter(([k]) => BENCH.has(k))) }),
     // 판정 §8 '격리 위반 시도'(1b): 격리 실행이 위반으로 끝남(종료 98)·검증 중 사본이 바뀜 등. 종류 낱말과 짧은 설명만 남긴다.
     sandboxViolation: (kind, detail = "") => metric("sandbox_violation", { thread, kind: String(kind).replace(/[^a-z0-9_]/g, "").slice(0, 40), detail: String(detail).replace(/\s+/g, " ").slice(0, 160) }),
+    // 당직 D0 판정 기록(lg.duty.verify, PLAN §13.3). 정해진 필드만 — 원문(대화·장부 문장)은 남기지 않는다(S4)
+    dutyVerify: (fields = {}) => metric("lg.duty.verify", { thread, ...Object.fromEntries(Object.entries(fields).filter(([k]) => DUTY_FIELDS.has(k))) }),
     // 다른 그래프의 스레드를 대기열에 올린다(접수 → 수정, S13). 다음 틱이 시작한다. 이미 있는 스레드면 다시 올리지 않는다(멱등).
     // 모드는 이 스레드 모드와 지금 LIVE 스위치 중 낮은 쪽 — 그림자 접수가 실제 수정을 낳지 않게.
     enqueue(graphName, threadName, input = {}) {
@@ -315,8 +320,10 @@ async function settle(ctx, g, thread, { fresh = false, answered = false } = {}) 
   }
   if (!r.s.next?.length) {
     const summary = String(g.mod.summarize ? g.mod.summarize(r.s.values ?? {}) : "");
-    announce(ctx, thread, `DONE ${thread} ${summary}`,
-      () => ctx.store.updateThread(thread, { status: "done", note: summary.slice(0, 300), hold_reason: null, fail_sig: null, fail_count: 0 }, t));
+    const finish = () => ctx.store.updateThread(thread, { status: "done", note: summary.slice(0, 300), hold_reason: null, fail_sig: null, fail_count: 0 }, t);
+    // meta.quietDone: 틱에서 끝나도 주인님께 알리지 않는다(결과는 기록에만 — 당직 D0 그림자). 수동 명령은 그대로 DONE 을 낸다.
+    if (ctx.isTick && g.mod.meta?.quietDone === true) { finish(); say(`OK ${thread} done(알림 없음) ${summary}`); }
+    else announce(ctx, thread, `DONE ${thread} ${summary}`, finish);
     const v = r.s.values ?? {};
     ctx.metric("done", { thread, graph: g.name, mode: row?.mode ?? "shadow", verified: typeof v.verify_log === "string" ? v.verify_log : null });
     return 0;
@@ -859,6 +866,21 @@ async function tickThreadInner(ctx, row0) {
   }
 }
 
+// 당직 D0 틱 고리(lib/duty-intake.mjs): 게이트웨이 heartbeat 기록 + 재시작마다 duty-verify 스레드(그림자) 대기열 등록.
+// 고리의 고장은 틱을 멈추지 않는다 — 보류 기록(held scope duty)으로 남기고 틱은 계속 간다(그래프 하나가 잡 전체를 꺼뜨리지 않게와 같은 원칙).
+async function dutyHook(ctx) {
+  try {
+    const { dutyTick } = await import("./lib/duty-intake.mjs");
+    const r = await dutyTick({ cfg: ctx.cfg, store: ctx.store, metric: ctx.metric, now: ctx.now, registry: await registry(ctx),
+      timeLeft: () => ctx.cfg.jobLimitMs - elapsedMs(), graphExists: (g) => fs.existsSync(path.join(HERE, "graphs", `${g}.mjs`)) });
+    if (r.created?.length) say(`QUEUED ${r.created.join(" ")} 게이트웨이 재시작 확인(당직 D0 그림자)`);
+  } catch (e) {
+    ctx.metric("held", { scope: "duty", reasons: ["duty_hook"], error: errHead(firstLine(e)) });
+    say(`HELD duty-intake ${firstLine(e)}`);
+    if (process.env.LG_DEBUG) warn(e?.stack ?? String(e));
+  }
+}
+
 async function cmdTick(ctx) {
   ctx.isTick = true;
   const t0 = performance.now();
@@ -875,6 +897,7 @@ async function cmdTick(ctx) {
     return 1;
   }
   await registry(ctx); // 허용 목록이 망가졌으면 여기서 진짜 오류(1) — 스레드마다 보류로 숨기지 않는다
+  await dutyHook(ctx); // 당직 D0: heartbeat + 게이트웨이 재시작 접수(관문 앞 — 보류 틱에도 기록·접수는 한다)
   const failures = await sweep(ctx);
   for (const f of failures) ctx.metric("held", { scope: "sweep", reasons: ["sweep_error"], detail: errHead(f) });
   expireIdle(ctx);

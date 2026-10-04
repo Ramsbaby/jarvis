@@ -1040,6 +1040,64 @@
       ],
       "timeoutSec": 60,
       "maxSeconds": 90
+    },
+    "gateway.listen-pid": {
+      "desc": "당직 D0(duty-verify) — 게이트웨이 포트에 LISTEN 하는 pid(읽기 전용). 없으면 코드 1. OpenClaw CLI 는 S15 로 쓰지 않는다",
+      "bin": "/usr/sbin/lsof",
+      "argv": [
+        "-nP",
+        "-t",
+        "-i",
+        "{spec}",
+        "-sTCP:LISTEN"
+      ],
+      "params": {
+        "spec": "^TCP:[0-9]{2,5}$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "cwd": "/",
+      "timeoutSec": 15
+    },
+    "gateway.proc": {
+      "desc": "당직 D0 — 게이트웨이 프로세스 나이(etime, 시작 시각 = 지금 - 나이). 읽기 전용",
+      "bin": "/bin/ps",
+      "argv": [
+        "-o",
+        "pid=,etime=",
+        "-p",
+        "{pid}"
+      ],
+      "params": {
+        "pid": "^[1-9][0-9]{0,6}$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "cwd": "/",
+      "timeoutSec": 10
+    },
+    "gateway.health": {
+      "desc": "당직 D0 — 게이트웨이 HTTP /health(인증 없는 살아 있음 확인, 127.0.0.1 만). 읽기 전용",
+      "bin": "/usr/bin/curl",
+      "argv": [
+        "-s",
+        "-m",
+        "5",
+        "{url}"
+      ],
+      "params": {
+        "url": "^http://127\\.0\\.0\\.1:[0-9]{2,5}/health$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "cwd": "/",
+      "timeoutSec": 10
     }
   }
 }

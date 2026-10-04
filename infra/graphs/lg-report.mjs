@@ -107,11 +107,32 @@ const bench = ev.filter((r) => r.ev === "bench");
 const m8 = { runs: bench.length, reproduced: bench.filter((r) => r.reproduced === true).length, diag_match: bench.filter((r) => r.diag_match === true).length,
   hidden_pass: bench.filter((r) => r.hidden_pass === true).length, ai_misjudge: bench.filter((r) => r.ai_misjudge === true).length };
 
+// D0 당직 그림자(PLAN §13.3) — 합격: 7일간 당직 판정과 100% 일치 + 게이트웨이 재시작 생존 실측 3회 이상
+//   verify: 재시작 뒤 확인 판정 · compare: 다음 당직 장부 판정과 일치(true·false·none·n/a) · 생존: 재시작을 건넌 스레드·분리 실행이 이어 갔나
+const dvv = ev.filter((r) => r.ev === "lg.duty.verify" && r.phase === "verify");
+const dvc = ev.filter((r) => r.ev === "lg.duty.verify" && r.phase === "compare");
+const hbs = ev.filter((r) => r.ev === "lg.restart.heartbeat");
+const d0 = { verified: dvv.length, verdicts: {}, compared: dvc.length, agreement: {}, kinds: {}, heartbeats: hbs.length,
+  gw_changes: hbs.filter((r, i) => i > 0 && r.gw_pid && hbs[i - 1].gw_pid && r.gw_pid !== hbs[i - 1].gw_pid).length,
+  survival: { measured: 0, with_load: 0, open: 0, progressed: 0, waiting: 0, stalled: 0, jobs: 0, jobs_survived: 0, jobs_killed: 0 } };
+for (const r of dvv) d0.verdicts[r.verdict] = (d0.verdicts[r.verdict] ?? 0) + 1;
+for (const r of dvc) {
+  d0.agreement[String(r.agreement)] = (d0.agreement[String(r.agreement)] ?? 0) + 1;
+  d0.kinds[r.kind] = (d0.kinds[r.kind] ?? 0) + 1;
+  const s = r.survival ?? {};
+  if (!s.measured) continue;
+  d0.survival.measured++;
+  if ((s.open ?? 0) + (s.jobs ?? 0) > 0) d0.survival.with_load++; // 재시작을 실제로 건넌 일이 있었던 재시작만 '생존 실측'으로 센다
+  for (const k of ["open", "progressed", "waiting", "stalled", "jobs", "jobs_survived", "jobs_killed"]) d0.survival[k] += s[k] ?? 0;
+}
+const agreeN = d0.agreement.true ?? 0, judged = agreeN + (d0.agreement.false ?? 0);
+d0.agreement_rate = pct(agreeN, judged);
+
 const held = {};
 for (const r of ev.filter((x) => x.ev === "held")) for (const g of r.reasons ?? []) held[g] = (held[g] ?? 0) + 1;
 const ticks = ev.filter((r) => r.ev === "tick");
 
-const report = { range: { since: flag("since") ?? null, until: flag("until") ?? null }, now: iso(now), events: ev.length, effects: fx.length, ticks: ticks.length, held, m1, m2, m3, m4, m5, m6, m8 };
+const report = { range: { since: flag("since") ?? null, until: flag("until") ?? null }, now: iso(now), events: ev.length, effects: fx.length, ticks: ticks.length, held, m1, m2, m3, m4, m5, m6, m8, d0 };
 if (args.includes("--json")) { process.stdout.write(`${JSON.stringify(report, null, 1)}\n`); process.exit(0); }
 
 const L = [];
@@ -131,5 +152,10 @@ L.push("## M5 승인 요청 사유 — 필드 waiting.reason", "", "| 요청 | �
   `| ${m5.requests} | ${Object.entries(m5.by_reason).map(([k, n]) => `${k} ${n}`).join(" · ") || "—"} | ${m5.no_reason} |`, "");
 L.push("## M8 값을 했나 — 사건 bench", "", "| 벤치 실행 | 재현 | 원인 일치 | 숨긴 정답 통과 | AI 분기 오판 |", "|---|---|---|---|---|",
   `| ${m8.runs} | ${m8.reproduced} | ${m8.diag_match} | ${m8.hidden_pass} | ${m8.ai_misjudge} |`, "");
+L.push("## D0 당직 그림자 — 게이트웨이 재시작 뒤 확인 (합격: 7일 당직 판정 100% 일치 + 생존 실측 3회 이상)", "",
+  "| 확인 | 판정별 | 대조 | 일치(true·false) | 그 밖 | 일치율 |", "|---|---|---|---|---|---|",
+  `| ${d0.verified} | ${Object.entries(d0.verdicts).map(([k, n]) => `${k} ${n}`).join(" · ") || "—"} | ${d0.compared} | ${agreeN}·${d0.agreement.false ?? 0} | ${Object.entries(d0.agreement).filter(([k]) => k !== "true" && k !== "false").map(([k, n]) => `${k} ${n}`).join(" · ") || "—"} | ${d0.agreement_rate} |`, "",
+  "| heartbeat | 게이트웨이 바뀜 | 생존 실측(건넌 일 있음) | 열린 스레드 → 이어 감·대기·멈춤 | 분리 실행 → 살아남음·죽음 |", "|---|---|---|---|---|",
+  `| ${d0.heartbeats} | ${d0.gw_changes} | ${d0.survival.measured}(${d0.survival.with_load}) | ${d0.survival.open} → ${d0.survival.progressed}·${d0.survival.waiting}·${d0.survival.stalled} | ${d0.survival.jobs} → ${d0.survival.jobs_survived}·${d0.survival.jobs_killed} |`, "");
 L.push(`보류 사유 횟수: ${Object.entries(held).map(([k, n]) => `${k} ${n}`).join(" · ") || "없음"}`);
 process.stdout.write(`${L.join("\n")}\n`);
