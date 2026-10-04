@@ -87,9 +87,10 @@ if (( MAPPED_GHOST > 0 )); then
   TITLE="🚨 Rule-Hook 매핑 GHOST 발견"
   DETAIL="${MAPPED_GHOST}건 룰이 hook 매핑은 표기됐으나 실제 hook 코드 부재. false-positive 매핑은 학습 사이클 파괴."
 elif (( COVERAGE_PCT < 30 )); then
-  SEVERITY="warning"
-  TITLE="⚠️ Rule-Hook 매핑 갭 ${COVERAGE_PCT}%"
-  DETAIL="총 ${TOTAL}건 룰 중 hook 매핑 ${F_HOOK}건 (${COVERAGE_PCT}%). 목표 30%↑. Compound Engineering 사이클 강화 필요."
+  # 커버리지 부족은 목표 대비 추세 지표이지 고장이 아니다 — 경고 표시를 내면 감지기가 매주 '잡 경보'로 올려
+  # 3일+ 열린 소음이 된다(09-28 판정 false, 10-05 재발). 고장 신호는 위 GHOST(매핑됐는데 코드 없음)뿐.
+  TITLE="ℹ️ Rule-Hook 매핑 커버리지 ${COVERAGE_PCT}% (목표 30%, 추세는 ledger)"
+  DETAIL="총 ${TOTAL}건 룰 중 hook 매핑 ${F_HOOK}건 (${COVERAGE_PCT}%). 목표 30%↑."
 fi
 
 log "판정: severity=${SEVERITY} ${TITLE}"
