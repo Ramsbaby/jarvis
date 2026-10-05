@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { sandbox, run, appWith, fakeClaude, counts, at, T0, DAY, HOUR, NODE, ROOT } from "./helpers.mjs";
@@ -95,7 +96,7 @@ test("허용 목록 검사(S15): OpenClaw CLI·셸·env·인터프리터 즉석 
   assert.throws(bad({ bin: "/Users/me/bin/openclaw", argv: ["automations", "list"] }), /OpenClaw/);
   assert.throws(bad({ bin: "/usr/bin/git", argv: ["-C", "/x", "openclaw"] }), /OpenClaw CLI 금지/);
   assert.throws(bad({ bin: NODE, argv: ["/usr/local/lib/node_modules/openclaw/dist/cli.js", "cron"] }), /OpenClaw CLI 금지/);
-  assert.doesNotThrow(bad({ bin: "/usr/bin/git", argv: ["-C", "/Users/x/.openclaw-data/runtime/graphs/gostop/sandbox/s1", "status"] }), "경로에 .openclaw 가 든 인자는 정상");
+  assert.doesNotThrow(bad({ bin: "/usr/bin/git", argv: ["-C", path.join(os.homedir(), ".openclaw-data/runtime/graphs/gostop/sandbox/s1"), "status"] }), "경로에 .openclaw 가 든 인자는 정상");
   assert.throws(bad({ bin: "/bin/sh", argv: ["-c", "ls"] }), /셸·env/);
   assert.throws(bad({ bin: "/usr/bin/env", argv: ["node"] }), /셸·env/);
   assert.throws(bad({ bin: NODE, argv: ["-e", "1"] }), /즉석 코드/);
@@ -192,7 +193,8 @@ test("그래프 안 effect: 그림자로 시작한 스레드는 LIVE 를 켜도 
 test("S6 자가 시험: 사용자 훅 로그에 graphs 쪽 claude 호출 흔적이 있으면 selftest·tick 이 ERROR(1)로 멈춘다", (t) => {
   const sb = sandbox(t);
   const hook = path.join(sb.dir, "stop-mistake-extract.log");
-  fs.writeFileSync(hook, "[2026-10-03 15:50:38] [stop-mistake-extract] start cwd=/Users/x/.openclaw/workspace\n");
+  fs.writeFileSync(hook, `[2026-10-03 15:50:38] [stop-mistake-extract] start cwd=${path.join(os.homedir(), ".openclaw/workspace")}
+`);
   const env = { ...tickEnv(sb), LG_HOOK_LOGS: hook };
   assert.match(run(env, ["selftest"]).first, /^OK selftest .* 훅 누수 0\(1개 로그\)/);
   assert.equal(run(env, ["tick"]).first, "NO_REPLY");
