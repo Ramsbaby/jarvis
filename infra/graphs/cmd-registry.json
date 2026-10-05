@@ -1098,6 +1098,35 @@
       ],
       "cwd": "/",
       "timeoutSec": 10
+    },
+    "graphs.flutter-running": {
+      "desc": "디스크 관문 자가 회복 전 확인 — 어디서든 flutter(빌드·시험)가 돌고 있으면 코드 0. 돌고 있으면 산출물을 지우지 않는다(10-05)",
+      "bin": "/usr/bin/pgrep",
+      "argv": [
+        "-f",
+        "flutter_tools.snapshot"
+      ],
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 10
+    },
+    "graphs.flutter-clean": {
+      "desc": "디스크 관문 자가 회복 — 고스톱 저장소의 다시 만들 수 있는 빌드 산출물(build/·.dart_tool 일부)을 flutter 자신의 정리 명령으로 치운다. 10-05 실측 1.5GB(릴리스 빌드 뒤)",
+      "bin": "/opt/homebrew/bin/flutter",
+      "argv": [
+        "clean"
+      ],
+      "cwd": "{repo}",
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 180
     }
   }
 }

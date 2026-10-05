@@ -873,6 +873,29 @@ async function tickThreadInner(ctx, row0) {
 // 자원 관문을 건너뛰는 그래프 — 읽기 전용·LLM 없음·사본 없음인 것만(당직 D0, PLAN §13.3). PAUSED 는 이들도 막는다.
 const GATE_EXEMPT_GRAPHS = new Set(["duty-verify"]);
 
+// 관문 보류가 일을 붙잡고 오래 가면 한 번 알린다(10-05: 매일 QA 가 디스크 관문에 막힌 걸 아무도 몰랐다 — HOLD 는 알림 대상이 아니었다).
+// 야간(quiet)·멈춤(paused)은 일부러 세우는 것이라 빼고 센다. 같은 이유의 보류가 이어지는 동안은 한 번만, 풀리면 처음부터 다시 잰다.
+function noteHold(ctx, gates, pendingWork) {
+  const f = path.join(ctx.cfg.stateDir, "hold-since.json");
+  const reasons = gates.map((x) => x.gate).filter((x) => x !== "quiet" && x !== "paused");
+  const waiting = reasons.length ? pendingWork() : [];
+  if (!waiting.length) { fs.rmSync(f, { force: true }); return; }
+  const key = reasons.join(",");
+  let st = null;
+  try { st = JSON.parse(fs.readFileSync(f, "utf8")); } catch { st = null; }
+  const now = ctx.now();
+  if (!st || st.key !== key) {
+    fs.writeFileSync(f, JSON.stringify({ key, since: now, notified: false }), { mode: 0o600 });
+    return;
+  }
+  if (st.notified || now - st.since < ctx.cfg.gates.holdNotifyMs) return;
+  const mins = Math.round((now - st.since) / 60_000);
+  const detail = gates.filter((x) => reasons.includes(x.gate)).map((x) => x.detail).join(" / ");
+  const names = waiting.slice(0, 3).map((r) => r.thread_id).join(", ") + (waiting.length > 3 ? ` 외 ${waiting.length - 3}` : "");
+  announce(ctx, waiting[0].thread_id, `STUCK ${waiting[0].thread_id} 관문 보류 ${mins}분째 — ${detail} · 기다리는 일: ${names}`,
+    () => fs.writeFileSync(f, JSON.stringify({ ...st, notified: true }), { mode: 0o600 }));
+}
+
 // 당직 D0 틱 고리(lib/duty-intake.mjs): 게이트웨이 heartbeat 기록 + 재시작마다 duty-verify 스레드(그림자) 대기열 등록.
 // 고리의 고장은 틱을 멈추지 않는다 — 보류 기록(held scope duty)으로 남기고 틱은 계속 간다(그래프 하나가 잡 전체를 꺼뜨리지 않게와 같은 원칙).
 async function dutyHook(ctx) {
@@ -921,7 +944,17 @@ async function cmdTick(ctx) {
   }
   dailyGc(ctx);
   pruneSandboxes(ctx);
-  const gates = checkGates(ctx.cfg, ctx.store, ctx.now());
+  let gates = checkGates(ctx.cfg, ctx.store, ctx.now());
+  const pendingWork = () => tickCandidates(ctx).filter((r) => !GATE_EXEMPT_GRAPHS.has(r.graph));
+  // 디스크 관문 자가 회복(10-05): 기다리는 일이 있으면 다시 만들 수 있는 빌드 산출물부터 치우고 한 번 다시 잰다.
+  if (gates.some((x) => x.gate === "disk") && pendingWork().length) {
+    const { reclaimDisk } = await import("./lib/reclaim.mjs");
+    const { createRun } = await import("./lib/run.mjs");
+    const rc = await reclaimDisk(ctx.cfg.gates, createRun({ cfg: ctx.cfg, registry: await registry(ctx), thread: "_tick", mode: "shadow" }));
+    if (rc.dirs.length) ctx.metric("reclaim", { scope: "tick", ran: rc.ran, dirs: rc.dirs });
+    if (rc.ran) gates = checkGates(ctx.cfg, ctx.store, ctx.now());
+  }
+  noteHold(ctx, gates, pendingWork);
   if (gates.length) {
     ctx.metric("held", { scope: "tick", reasons: gates.map((x) => x.gate), detail: gates.map((x) => x.detail).join(" / ") });
     say(`HOLD ${gates.map((x) => `${x.gate}: ${x.detail}`).join(" · ")}`);

@@ -9,6 +9,7 @@ import { iso } from "./config.mjs";
 export const EVENTS = new Set([
   "start", "node_start", "node_end", "continue", "interrupted", "resumed", "waiting", "answered", "expired", "held",
   "gave_up", "done", "llm", "effect", "stuck", "tick", "gc", "failed", "bench", "fault", "sandbox_violation",
+  "reclaim", // 디스크 관문 자가 회복(10-05) — 치운 폴더·건너뛴 이유
   "lg.duty.verify", "lg.restart.heartbeat", // 당직 D0 그림자(PLAN §13.3) — 재시작 뒤 확인 판정 · 틱마다 게이트웨이 pid·시작 시각(재시작 생존 실측)
 ]);
 

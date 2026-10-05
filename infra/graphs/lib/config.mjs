@@ -88,6 +88,14 @@ export function loadConfig(env = process.env) {
       quiet: timeWindow(env, "LG_QUIET", "01:30-04:30"), // 야간 소크 시간 — 새 일을 시작하지 않는다
       loginRecheckMs: num(env, "LG_LOGIN_RECHECK_MIN", 360) * 60_000, // 로그인 만료 표식 뒤 다시 시도해 보기까지
       limitRecheckMs: num(env, "LG_LIMIT_RECHECK_MIN", 60) * 60_000, // 사용량 한도(429) 표식 뒤 다시 시도해 보기까지
+      // 디스크 관문 자가 회복(10-05): 막히면 다시 만들 수 있는 flutter 빌드 산출물(build/)을 그 도구의 정리 명령으로 치우고 한 번 다시 잰다
+      //   (lib/reclaim.mjs — 명령은 허용 목록 graphs.flutter-running · graphs.flutter-clean).
+      //   10-05 실측: 릴리스 빌드가 build/ 1.5GB 를 다시 채워 여유 15.8 < 16.2GiB — 매일 QA 가 10:00·10:30 두 틱을 조용히 보류했다.
+      reclaimFlutterDirs: env.LG_RECLAIM_FLUTTER_DIRS !== undefined
+        ? env.LG_RECLAIM_FLUTTER_DIRS.split(":").filter(Boolean)
+        : [path.join(home, "projects", "gostop_app")],
+      // 일이 기다리는데 관문 보류가 이만큼 이어지면 한 번 알린다(야간·멈춤 스위치 보류는 빼고). 같은 보류가 풀릴 때까지 다시 알리지 않는다.
+      holdNotifyMs: num(env, "LG_HOLD_NOTIFY_MIN", 30) * 60_000,
     },
     // 사용자 훅 로그 — 자가 시험이 graphs 쪽 claude 호출 흔적(줄)이 0 인지 본다(S6). 훅이 되살아나면 여기에 작업 폴더가 찍힌다.
     hookLogs: (env.LG_HOOK_LOGS !== undefined ? env.LG_HOOK_LOGS.split(":") : ["stop-mistake-extract.log", "session-save.log"].map(
