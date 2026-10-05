@@ -93,7 +93,8 @@ export function loadConfig(env = process.env) {
       diskMarginGiB: num(env, "LG_DISK_MARGIN_GIB", policy.workMarginGiB),
       usagePath: path.resolve(env.LG_USAGE_FILE || path.join(home, ".openclaw", "workspace", "state", "orchestrator", "latest.md")),
       usageMaxPct: num(env, "LG_USAGE_MAX_PCT", 80),
-      usageMaxAgeMs: num(env, "LG_USAGE_MAX_AGE_H", 6) * 3_600_000,
+      // 사용량 값은 감지기 정규 회차(08·11·14·17·20시)가 갱신한다 — 밤 공백이 12시간이라 6시간 기준이면 매일 02~08시 틱이 HOLD 됐다(10-06 감사). 실제 한도 도달은 llm-hold 표식이 따로 막는다.
+      usageMaxAgeMs: num(env, "LG_USAGE_MAX_AGE_H", 13) * 3_600_000,
       quiet: timeWindow(env, "LG_QUIET", "01:30-04:30"), // 야간 소크 시간 — 새 일을 시작하지 않는다
       loginRecheckMs: num(env, "LG_LOGIN_RECHECK_MIN", 360) * 60_000, // 로그인 만료 표식 뒤 다시 시도해 보기까지
       limitRecheckMs: num(env, "LG_LIMIT_RECHECK_MIN", 60) * 60_000, // 사용량 한도(429) 표식 뒤 다시 시도해 보기까지

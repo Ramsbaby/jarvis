@@ -1,7 +1,7 @@
 // gates.mjs — 틱 관문(PLAN §3). 하나라도 걸리면 그 틱은 스레드를 진행하지 않고 HOLD(종료 0)로 끝난다. 사유는 metrics 에 남긴다.
 //   paused      PAUSED 파일이 있다(전체 정지)
 //   disk        디스크 여유 < 경고선 15GiB + 사본 예상(LG_COPY_EST_GIB) + 1GiB  (감지기와 같은 재는 법: statvfs bavail, 데이터 볼륨)
-//   usage_*     주간 사용량 ≥ 80% · 못 읽음 · 6시간 넘게 묵음. 출처는 감지기(orchestrator-scan.py scan_usage → usage_findings)가
+//   usage_*     주간 사용량 ≥ 80% · 못 읽음 · 13시간 넘게 묵음. 출처는 감지기(orchestrator-scan.py scan_usage → usage_findings)가
 //               `claude -p /usage` 로 받아 대시보드 스냅샷(state/orchestrator/latest.md)의 '클로드 사용량' 줄에 쓰는 값이다. 읽기만 한다.
 //               스냅샷은 정규 회차(08·11·14·17·20시)에만 다시 쓰이므로 밤에는 02시 무렵부터 08시까지 '묵음'으로 쉰다.
 //   login       클로드 로그인 만료 표식(호출 오류 문구로 판정, lib/claude.mjs) — 표식 뒤 6시간이 지나면 한 번 다시 시도해 본다

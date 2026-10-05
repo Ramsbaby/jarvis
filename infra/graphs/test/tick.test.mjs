@@ -124,6 +124,15 @@ export function build({ checkpointer }) {
   assert.match(lg(env, ["tick"]).first, /^DONE q1 approved\/rejected$/);
 });
 
+test("관문: 감지기 밤 공백(20시→08시, 최대 12시간) 안의 사용량 값은 묵은 값이 아니다 — 10-06 02~08시 매일 HOLD 회귀", async (t) => {
+  const sb = sandbox(t);
+  assert.match(run(tickEnv(sb), ["start", "smoke", "g1", "--queue"]).first, /^OK g1 queued/);
+  const env = { ...tickEnv(sb, { usage: { at: Date.now() - 9.5 * HOUR } }), LG_QUIET: "" };
+  run(env, ["tick"]);
+  const m = fs.readFileSync(path.join(sb.state, "metrics.jsonl"), "utf8");
+  assert.doesNotMatch(m, /usage_stale/);
+});
+
 test("관문: 걸리면 HOLD(종료 0·NO_REPLY), 노드는 하나도 돌지 않고 사유는 metrics 에 — 7종", async (t) => {
   const cases = [
     ["paused", (sb, env) => { fs.mkdirSync(sb.state, { recursive: true }); fs.writeFileSync(path.join(sb.state, "PAUSED"), ""); return env; }],
@@ -131,7 +140,7 @@ test("관문: 걸리면 HOLD(종료 0·NO_REPLY), 노드는 하나도 돌지 않
     ["usage_high", (sb) => tickEnv(sb, { usage: { week: 85 } })],
     ["usage_unreadable", (sb, env) => ({ ...env, LG_USAGE_FILE: path.join(sb.dir, "없음.md") })],
     ["usage_unreadable", (sb) => tickEnv(sb, { usage: { row: false } })],
-    ["usage_stale", (sb) => tickEnv(sb, { usage: { at: Date.now() - 7 * HOUR } })],
+    ["usage_stale", (sb) => tickEnv(sb, { usage: { at: Date.now() - 14 * HOUR } })],
     ["login", (sb, env) => { fs.mkdirSync(sb.state, { recursive: true }); fs.writeFileSync(path.join(sb.state, "llm-hold.json"), JSON.stringify({ reason: "login", at: Date.now() })); return env; }],
     ["usage_limit", (sb, env) => { fs.mkdirSync(sb.state, { recursive: true }); fs.writeFileSync(path.join(sb.state, "llm-hold.json"), JSON.stringify({ reason: "usage_limit", at: Date.now() })); return env; }],
     ["quiet", (sb) => { const two = new Date(2026, 9, 4, 2, 0).getTime(); return { ...tickEnv(sb, { now: two }), LG_QUIET: "01:30-04:30", LG_NOW: String(two) }; }],
