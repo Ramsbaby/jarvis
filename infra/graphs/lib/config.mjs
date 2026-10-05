@@ -39,6 +39,12 @@ function dailyList(env, key, dflt) {
 export function loadConfig(env = process.env) {
   const home = env.HOME || os.homedir();
   const stateDir = path.resolve(env.LG_STATE_DIR || path.join(home, ".openclaw-data", "runtime", "state", "graphs"));
+  // 디스크 기준선 정본 — 없거나 깨졌으면 같은 값(10-05 이전 숫자). 감시·실기 QA 일꾼도 이 파일을 읽는다.
+  const policy = { floorGiB: 15, workCopyGiB: 0.2, workMarginGiB: 1 };
+  try {
+    const p = JSON.parse(fs.readFileSync(env.LG_DISK_POLICY || path.join(home, ".openclaw", "workspace", "config", "disk-policy.json"), "utf8"));
+    for (const k of Object.keys(policy)) if (Number.isFinite(Number(p[k]))) policy[k] = Number(p[k]);
+  } catch { /* 기본값 */ }
   const testMode = env.LG_TEST_MODE === "1";
   // 명령 허용 목록은 저장소 파일이 정본이다. 시험 모드에서만 다른 파일로 바꿀 수 있다(운영에서 환경변수로 목록을 넓히지 못하게).
   if (env.LG_CMD_REGISTRY && !testMode) throw new Error("LG_CMD_REGISTRY 는 시험 모드(LG_TEST_MODE=1)에서만 쓴다");
@@ -77,23 +83,18 @@ export function loadConfig(env = process.env) {
     testMode,
     gates: {
       diskPath: env.LG_DISK_PATH || (fs.existsSync("/System/Volumes/Data") ? "/System/Volumes/Data" : stateDir),
-      diskFloorGiB: num(env, "LG_DISK_FLOOR_GIB", 15), // 감지기 경고선
+      // 디스크 숫자는 워크스페이스 config/disk-policy.json 하나에서(감시·실기 QA 일꾼과 같은 파일, 10-05). 환경변수가 있으면 그것(시험용).
+      diskFloorGiB: num(env, "LG_DISK_FLOOR_GIB", policy.floorGiB), // 건강선(감시 경고선 = 건강선 + 사본 + 여유 = 이 관문과 같은 선)
       // 작업 사본 예상 크기 — 1a 실측(10-03 벤치 실주행, 기록 문서 정리 뒤): 사본 31MB + 깨끗한 내보내기 31MB + 시험 뒤 build 91MB
       // (풀기 전 tar 91MB 는 시험 전에 지운다) = 최고 0.15GiB → 0.2
-      copyEstGiB: num(env, "LG_COPY_EST_GIB", 0.2),
-      diskMarginGiB: num(env, "LG_DISK_MARGIN_GIB", 1),
+      copyEstGiB: num(env, "LG_COPY_EST_GIB", policy.workCopyGiB),
+      diskMarginGiB: num(env, "LG_DISK_MARGIN_GIB", policy.workMarginGiB),
       usagePath: path.resolve(env.LG_USAGE_FILE || path.join(home, ".openclaw", "workspace", "state", "orchestrator", "latest.md")),
       usageMaxPct: num(env, "LG_USAGE_MAX_PCT", 80),
       usageMaxAgeMs: num(env, "LG_USAGE_MAX_AGE_H", 6) * 3_600_000,
       quiet: timeWindow(env, "LG_QUIET", "01:30-04:30"), // 야간 소크 시간 — 새 일을 시작하지 않는다
       loginRecheckMs: num(env, "LG_LOGIN_RECHECK_MIN", 360) * 60_000, // 로그인 만료 표식 뒤 다시 시도해 보기까지
       limitRecheckMs: num(env, "LG_LIMIT_RECHECK_MIN", 60) * 60_000, // 사용량 한도(429) 표식 뒤 다시 시도해 보기까지
-      // 디스크 관문 자가 회복(10-05): 막히면 다시 만들 수 있는 flutter 빌드 산출물(build/)을 그 도구의 정리 명령으로 치우고 한 번 다시 잰다
-      //   (lib/reclaim.mjs — 명령은 허용 목록 graphs.flutter-running · graphs.flutter-clean).
-      //   10-05 실측: 릴리스 빌드가 build/ 1.5GB 를 다시 채워 여유 15.8 < 16.2GiB — 매일 QA 가 10:00·10:30 두 틱을 조용히 보류했다.
-      reclaimFlutterDirs: env.LG_RECLAIM_FLUTTER_DIRS !== undefined
-        ? env.LG_RECLAIM_FLUTTER_DIRS.split(":").filter(Boolean)
-        : [path.join(home, "projects", "gostop_app")],
       // 일이 기다리는데 관문 보류가 이만큼 이어지면 한 번 알린다(야간·멈춤 스위치 보류는 빼고). 같은 보류가 풀릴 때까지 다시 알리지 않는다.
       holdNotifyMs: num(env, "LG_HOLD_NOTIFY_MIN", 30) * 60_000,
     },

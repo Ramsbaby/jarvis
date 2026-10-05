@@ -1,23 +1,20 @@
 // reclaim.mjs — 디스크 관문 자가 회복(10-05). 틱이 디스크 관문에 막히고 기다리는 일이 있을 때만 부른다.
-// 다시 만들 수 있는 것만, 그 도구 자신의 정리 명령으로 치운다 — flutter 저장소의 build/ 를 `flutter clean` 으로.
-//   왜 trash 가 아닌가: 휴지통은 같은 디스크라 공간이 생기지 않는다. 정리 명령은 그 도구가 다음 빌드에서 다시 만드는 것만 지운다.
-//   건너뛰는 때: 대화 작업 표식(.jarvis-busy)이 있거나 어디서든 flutter 가 돌고 있으면(빌드·시험 도중 산출물을 지우지 않게).
-//   명령은 허용 목록 입구(run(cmdId))로만 — graphs.flutter-running · graphs.flutter-clean (S10).
-import fs from "node:fs";
-import path from "node:path";
+// 치우는 일은 워크스페이스의 scripts/disk-reclaim.sh 하나가 한다 — 당직(disk.*)도 같은 도구를 쓴다(두 벌이 갈리지 않게).
+//   다시 만들어지는 것만(flutter 빌드 산출물·옛 QA APK·uv/npm 캐시·랭그래프 시험 임시), 대화 작업·돌던 flutter 는 건너뛴다.
+//   명령은 허용 목록 입구(run(cmdId))로만 — graphs.disk-reclaim (S10).
+export function lastJson(text) {
+  const lines = String(text ?? "").trim().split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) { try { return JSON.parse(lines[i]); } catch { /* 앞 줄로 */ } }
+  return null;
+}
 
-export async function reclaimDisk(g, run) {
-  const dirs = [];
-  for (const dir of g.reclaimFlutterDirs ?? []) {
-    if (!fs.existsSync(path.join(dir, "build"))) continue;
-    if (fs.existsSync(path.join(dir, ".jarvis-busy"))) { dirs.push({ dir, skip: "busy" }); continue; }
-    try {
-      if ((await run("graphs.flutter-running", {})).code === 0) { dirs.push({ dir, skip: "flutter_running" }); continue; }
-      const r = await run("graphs.flutter-clean", { repo: dir });
-      dirs.push({ dir, ok: r.code === 0, code: r.code ?? null });
-    } catch (e) { // 허용 목록에 없거나 경로 검사에 걸림 — 틱은 멈추지 않고 기록만
-      dirs.push({ dir, skip: "error", error: String(e?.message ?? e).split("\n")[0].slice(0, 200) });
-    }
+export async function reclaimDisk(run) {
+  try {
+    const r = await run("graphs.disk-reclaim", {});
+    const j = lastJson(r.stdout);
+    return { ran: r.code === 0 && !!j?.ok && !j?.busy, code: r.code ?? null, busy: !!j?.busy,
+      free_before: j?.free_before ?? null, free_after: j?.free_after ?? null, steps: j?.steps ?? [] };
+  } catch (e) { // 허용 목록에 없거나 스크립트가 없음 — 틱은 멈추지 않고 기록만
+    return { ran: false, error: String(e?.message ?? e).split("\n")[0].slice(0, 200) };
   }
-  return { ran: dirs.some((x) => x.ok), dirs };
 }

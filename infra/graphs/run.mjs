@@ -946,13 +946,13 @@ async function cmdTick(ctx) {
   pruneSandboxes(ctx);
   let gates = checkGates(ctx.cfg, ctx.store, ctx.now());
   const pendingWork = () => tickCandidates(ctx).filter((r) => !GATE_EXEMPT_GRAPHS.has(r.graph));
-  // 디스크 관문 자가 회복(10-05): 기다리는 일이 있으면 다시 만들 수 있는 빌드 산출물부터 치우고 한 번 다시 잰다.
+  // 디스크 관문 자가 회복(10-05): 기다리는 일이 있으면 다시 만들 수 있는 것부터 치우고(당직과 같은 도구) 한 번 다시 잰다.
   if (gates.some((x) => x.gate === "disk") && pendingWork().length) {
     const { reclaimDisk } = await import("./lib/reclaim.mjs");
     const { createRun } = await import("./lib/run.mjs");
-    const rc = await reclaimDisk(ctx.cfg.gates, createRun({ cfg: ctx.cfg, registry: await registry(ctx), thread: "_tick", mode: "shadow" }));
-    if (rc.dirs.length) ctx.metric("reclaim", { scope: "tick", ran: rc.ran, dirs: rc.dirs });
-    if (rc.ran) gates = checkGates(ctx.cfg, ctx.store, ctx.now());
+    const rc = await reclaimDisk(createRun({ cfg: ctx.cfg, registry: await registry(ctx), thread: "_tick", mode: "shadow" }));
+    ctx.metric("reclaim", { scope: "tick", ...rc });
+    gates = checkGates(ctx.cfg, ctx.store, ctx.now());
   }
   noteHold(ctx, gates, pendingWork);
   if (gates.length) {

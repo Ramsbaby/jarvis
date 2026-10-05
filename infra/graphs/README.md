@@ -294,7 +294,7 @@ duty-verify:dv-<초>
 | `continue`(reason: budget·pending·paused) · `interrupted`(cause: signal·exit·stalled) · `resumed`(from) | |
 | `waiting`(reason ← interrupt 값의 `reason`, M5) · `answered`(decision) | |
 | `held` | scope(tick·thread·command·sweep) · reasons(관문 이름·llm_day·llm_thread·token_cap·login·usage_limit·code_defect·node·effect_unknown·stuck·hook_leak) |
-| `reclaim` | scope(tick) · ran(치웠나) · dirs([{dir, ok·code 또는 skip: busy·flutter_running·error}]) — 디스크 관문 자가 회복(10-05, lib/reclaim.mjs) |
+| `reclaim` | scope(tick) · ran · busy · free_before · free_after · steps · error — 디스크 관문 자가 회복(10-05, lib/reclaim.mjs → 워크스페이스 scripts/disk-reclaim.sh, 당직과 같은 도구) |
 | `llm` | model · models · in · out · cache_create · cache_read · total · cost_usd · ms · ok · detached |
 | `effect`(outcome: would_run·ran·dedup·failed·unknown·recovered, key 는 지문만 — 원문은 effects.jsonl) · `stuck` · `tick` · `gc` · `failed` · `bench`(M8) | |
 | `lg.duty.verify`(D0) | phase(verify·compare) · verdict · restart · reasons · tool_fail·tool_ok·gwlog_fail · agreement · kind · survival |
