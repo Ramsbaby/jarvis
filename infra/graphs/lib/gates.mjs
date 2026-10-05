@@ -12,8 +12,10 @@ import fs from "node:fs";
 
 const GiB = 2 ** 30;
 
-export function diskGate(g, statfs = fs.statfsSync) {
-  const need = g.diskFloorGiB + g.copyEstGiB + g.diskMarginGiB;
+// started=true: 이미 시작한 일을 이어 갈 때 — 사본·여유는 그 일이 쓰라고 떼어 둔 몫이라 건강선만 본다(10-05: QA 가 자기가 켠
+//   에뮬레이터·녹화로 15.6GiB 가 되자 16.2 관문에 걸려 2시간 반 스스로 멈췄다). 새로 시작할 때는 건강선 + 사본 + 여유.
+export function diskGate(g, statfs = fs.statfsSync, { started = false } = {}) {
+  const need = started ? g.diskFloorGiB : g.diskFloorGiB + g.copyEstGiB + g.diskMarginGiB;
   let free;
   try {
     const s = statfs(g.diskPath);
@@ -21,7 +23,10 @@ export function diskGate(g, statfs = fs.statfsSync) {
   } catch (e) {
     return { gate: "disk", detail: `디스크 여유를 못 읽음(${g.diskPath}): ${e.code ?? e.message}` };
   }
-  if (!(free >= need)) return { gate: "disk", detail: `디스크 여유 ${free.toFixed(1)}GiB < ${need}GiB(경고선 ${g.diskFloorGiB} + 사본 ${g.copyEstGiB} + ${g.diskMarginGiB})` };
+  if (!(free >= need)) {
+    const why = started ? `건강선 ${g.diskFloorGiB}` : `경고선 ${g.diskFloorGiB} + 사본 ${g.copyEstGiB} + ${g.diskMarginGiB}`;
+    return { gate: "disk", detail: `디스크 여유 ${free.toFixed(1)}GiB < ${Math.round(need * 100) / 100}GiB(${why})` };
+  }
   return null;
 }
 

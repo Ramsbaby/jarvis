@@ -3,8 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { sandbox, run, at, T0 } from "./helpers.mjs";
-import { tickEnv, writeRegistry } from "./helpers0b.mjs";
+import { sandbox, run, at, T0, appWith } from "./helpers.mjs";
+import { tickEnv, writeRegistry, STEPS } from "./helpers0b.mjs";
 import { loadConfig } from "../lib/config.mjs";
 
 const MIN = 60_000;
@@ -82,4 +82,39 @@ test("디스크 기준선은 정책 파일 하나에서 — 관문 = 건강선 +
   assert.equal(d.diskFloorGiB + d.copyEstGiB + d.diskMarginGiB, 16.2, "파일이 없으면 같은 기본값");
   const o = loadConfig({ ...sb.env, LG_DISK_POLICY: pol, LG_DISK_FLOOR_GIB: "1" }).gates;
   assert.equal(o.diskFloorGiB, 1, "환경변수(시험용)가 이긴다");
+});
+
+test("일하는 선만 모자라고 건강선은 지키면 이미 시작한 일은 이어 가고 새 일만 막는다 · 건강선 아래면 이어 가지도 않는다", (t) => {
+  const sb = sandbox(t);
+  const lg = appWith(sb, { steps: STEPS });
+  const fk = fakeReclaim(sb, '{"ok":true,"free_before":15.6,"free_after":15.6,"steps":[]}');
+  const base = { ...tickEnv(sb), ...fk.env, LG_TICK_BUDGET_SEC: "1.2", LG_TEST_STEP_MS: "1000" };
+  const statusOf = (env, th) => JSON.parse(lg(env, ["status", th, "--json"]).out);
+  lg(base, ["start", "steps", "s1", "--queue"]);
+  lg(base, ["tick"]);
+  assert.equal(statusOf(base, "s1").status, "continue", "관문 없이 시작해 이어가기 상태");
+  // 일하는 선(건강선 0 + 사본 0 + 여유 100000)은 모자라고 건강선(0)은 지킨다 — 10-05 QA 가 자기 녹화로 15.6GiB 가 된 상황
+  const work = { ...base, LG_DISK_FLOOR_GIB: "0", LG_COPY_EST_GIB: "0", LG_DISK_MARGIN_GIB: "100000" };
+  lg(work, ["start", "steps", "q2", "--queue"]);
+  let done = false;
+  for (let i = 0; i < 6 && !done; i++) {
+    const r = lg(work, ["tick", "--verbose"]);
+    assert.match(r.out, /HOLD disk/);
+    done = statusOf(work, "s1").status === "done";
+  }
+  assert.ok(done, "시작한 s1 은 관문 보류 틱에서도 끝까지 간다");
+  assert.equal(statusOf(work, "q2").status, "queued", "새 일 q2 는 시작하지 않는다");
+
+  const sb2 = sandbox(t);
+  const lg2 = appWith(sb2, { steps: STEPS });
+  const fk2 = fakeReclaim(sb2, '{"ok":true,"steps":[]}');
+  const base2 = { ...tickEnv(sb2), ...fk2.env, LG_TICK_BUDGET_SEC: "1.2", LG_TEST_STEP_MS: "1000" };
+  lg2(base2, ["start", "steps", "s3", "--queue"]);
+  lg2(base2, ["tick"]);
+  const before = JSON.parse(lg2(base2, ["status", "s3", "--json"]).out);
+  const unhealthy = { ...base2, LG_DISK_FLOOR_GIB: "100000" };
+  lg2(unhealthy, ["tick"]);
+  const after = JSON.parse(lg2(unhealthy, ["status", "s3", "--json"]).out);
+  assert.equal(after.status, "continue");
+  assert.equal(after.progress, before.progress, "건강선 아래면 이어 가지도 않는다");
 });

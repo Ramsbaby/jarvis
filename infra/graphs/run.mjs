@@ -954,7 +954,11 @@ async function cmdTick(ctx) {
     ctx.metric("reclaim", { scope: "tick", ...rc });
     gates = checkGates(ctx.cfg, ctx.store, ctx.now());
   }
-  noteHold(ctx, gates, pendingWork);
+  // 디스크(일하는 선)만 걸렸고 건강선은 지켜지면, 이미 시작한 일은 이어 간다 — 새로 시작(대기열)만 막는다(10-05 자기 정지).
+  const { diskGate } = await import("./lib/gates.mjs");
+  const startedMayRun = gates.length > 0 && gates.every((x) => x.gate === "disk") && !diskGate(ctx.cfg.gates, undefined, { started: true });
+  const blockedWork = () => pendingWork().filter((r) => !(startedMayRun && r.status !== "queued"));
+  noteHold(ctx, gates, blockedWork);
   if (gates.length) {
     ctx.metric("held", { scope: "tick", reasons: gates.map((x) => x.gate), detail: gates.map((x) => x.detail).join(" / ") });
     say(`HOLD ${gates.map((x) => `${x.gate}: ${x.detail}`).join(" · ")}`);
@@ -966,14 +970,14 @@ async function cmdTick(ctx) {
       const seen = new Set();
       for (;;) {
         if (overBudget(ctx) || fs.existsSync(ctx.cfg.pausedPath)) break;
-        const row = tickCandidates(ctx).find((r) => GATE_EXEMPT_GRAPHS.has(r.graph) && !seen.has(r.thread_id));
+        const row = tickCandidates(ctx).find((r) => (GATE_EXEMPT_GRAPHS.has(r.graph) || (startedMayRun && r.status !== "queued")) && !seen.has(r.thread_id));
         if (!row) break;
         seen.add(row.thread_id);
         const r = await tickThread(ctx, row);
         if (r !== "locked" && r !== "skip") n++;
       }
     }
-    ctx.metric("tick", { ms: Math.round(performance.now() - t0), outcome: "hold", exempt_threads: n });
+    ctx.metric("tick", { ms: Math.round(performance.now() - t0), outcome: "hold", exempt_threads: n, started_continue: startedMayRun });
     failures.forEach(say);
     return 0;
   }
