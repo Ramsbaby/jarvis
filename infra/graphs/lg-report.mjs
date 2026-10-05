@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // lg-report.mjs — 판정 집계(PLAN §2 M1~M8). 추가 전용 기록 metrics.jsonl·effects.jsonl 만 읽는다(쓰지 않는다).
 //   node lg-report.mjs [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--json]
-// M1·M3·M4·M6 은 지금 기록으로 센다. M2·M5·M8 은 그래프가 남길 필드를 정해 두고 칸만 만든다:
+// M1·M3·M4·M6·M7 은 지금 기록으로 센다(M7 은 당직 장부 — cfg.ledgerPath). M2·M5·M8 은 그래프가 남길 필드를 정해 두고 칸만 만든다:
 //   M2  done.verified   — 검증 노드 통과 기록(로그 경로). 그래프 상태에 verify_log 를 두면 실행기가 done 줄에 옮긴다
 //   M5  waiting.reason  — 승인 요청 사유(USER.md 예외 낱말: game_ai·payment·iap·external_send·play_submit·repo_visibility·delete)
 //   M8  bench 사건      — tools.bench({ bench, reproduced, diag_match, hidden_pass, ai_misjudge, signal })
 import { loadConfig, iso } from "./lib/config.mjs";
+import fs from "node:fs";
 import { readJsonl } from "./lib/metrics.mjs";
 
 const HOLD_MS = 48 * 3_600_000;
@@ -128,11 +129,26 @@ for (const r of dvc) {
 const agreeN = d0.agreement.true ?? 0, judged = agreeN + (d0.agreement.false ?? 0);
 d0.agreement_rate = pct(agreeN, judged);
 
+// M7 주인님이 먼저 찾은 루프 고장 — 당직 장부에서 key 가 lg.·graphs. 로 시작하고 found_by:"owner" 인 줄(10-05: 손으로 세던 정의가
+//   graphs.* 를 빠뜨렸다). 같은 key·같은 날은 한 사건으로 묶는다(원인 규명 줄을 덧붙여도 한 건).
+const m7 = { lines: 0, incidents: [] };
+try {
+  const seen = new Set();
+  for (const line of fs.readFileSync(cfg.ledgerPath, "utf8").split("\n")) {
+    let d; try { d = JSON.parse(line); } catch { continue; }
+    const k = String(d.key ?? ""), t = Date.parse(d.ts ?? "");
+    if (d.found_by !== "owner" || !(k.startsWith("lg.") || k.startsWith("graphs.")) || !(t >= since && t <= until)) continue;
+    m7.lines++;
+    const id = `${day(t)} ${k}`;
+    if (!seen.has(id)) { seen.add(id); m7.incidents.push({ day: day(t), key: k, item: String(d.item ?? "").slice(0, 80) }); }
+  }
+} catch (e) { m7.error = `장부를 못 읽음: ${e.code ?? e.message}`; }
+
 const held = {};
 for (const r of ev.filter((x) => x.ev === "held")) for (const g of r.reasons ?? []) held[g] = (held[g] ?? 0) + 1;
 const ticks = ev.filter((r) => r.ev === "tick");
 
-const report = { range: { since: flag("since") ?? null, until: flag("until") ?? null }, now: iso(now), events: ev.length, effects: fx.length, ticks: ticks.length, held, m1, m2, m3, m4, m5, m6, m8, d0 };
+const report = { range: { since: flag("since") ?? null, until: flag("until") ?? null }, now: iso(now), events: ev.length, effects: fx.length, ticks: ticks.length, held, m1, m2, m3, m4, m5, m6, m7, m8, d0 };
 if (args.includes("--json")) { process.stdout.write(`${JSON.stringify(report, null, 1)}\n`); process.exit(0); }
 
 const L = [];
@@ -147,6 +163,8 @@ L.push("## M6 비용·한도 (추가 돈 0원 · Fable 0)", "", "| 날짜 | 호�
 for (const d of m6.days) L.push(`| ${d.day} | ${d.calls}(${d.ok}) | ${d.in} | ${d.out} | ${d.cache_create} | ${d.cache_read} | ${d.total} | ${d.cost_usd} |`);
 if (!m6.days.length) L.push("| — | 0 | 0 | 0 | 0 | 0 | 0 | 0 |");
 L.push("", `Fable 호출 ${m6.fable_calls} · 하루 최댓값 ${m6.max_day_total} 토큰(10-28 상한 = 그림자 ② 하루 최댓값 × 1.5)`, "");
+L.push("## M7 주인님이 먼저 찾은 루프 고장 (기준 0) — 당직 장부 key lg.·graphs. · found_by owner", "", "| 사건 | 장부 줄 | 목록 |", "|---|---|---|",
+  `| ${m7.error ? "?" : m7.incidents.length} | ${m7.lines} | ${m7.error ?? (m7.incidents.map((x) => `${x.day} ${x.key}`).join(" · ") || "—")} |`, "");
 L.push("## M2 검증 없는 완료 (기준 0) — 필드 done.verified", "", "| 완료 | 검증 기록 있음 | 없음 |", "|---|---|---|", `| ${m2.done} | ${m2.verified} | ${m2.unverified} |`, "");
 L.push("## M5 승인 요청 사유 — 필드 waiting.reason", "", "| 요청 | 사유별 | 사유 없음 |", "|---|---|---|",
   `| ${m5.requests} | ${Object.entries(m5.by_reason).map(([k, n]) => `${k} ${n}`).join(" · ") || "—"} | ${m5.no_reason} |`, "");

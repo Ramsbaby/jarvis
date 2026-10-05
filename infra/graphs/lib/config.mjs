@@ -58,6 +58,8 @@ export function loadConfig(env = process.env) {
     pendingPath: path.join(stateDir, "pending.jsonl"),
     metricsPath: path.join(stateDir, "metrics.jsonl"), // 추가 전용 — gc 대상이 아니다(판정일 + 30일 보존)
     effectsPath: path.join(stateDir, "effects.jsonl"), // 추가 전용 — gc 대상이 아니다
+    // 당직 장부(워크스페이스) — M7(주인님이 먼저 찾은 루프 고장) 집계용. 읽기만 한다.
+    ledgerPath: path.resolve(env.LG_LEDGER || path.join(home, ".openclaw", "workspace", "state", "duty", "ledger.jsonl")),
     jobsDir: path.join(stateDir, "jobs"), // 분리 실행 작업 폴더(스레드별) — gc 가 스레드와 함께 지운다
     pausedPath: path.join(stateDir, "PAUSED"), // 있으면 전체 정지
     livePath: path.join(stateDir, "LIVE"), // 없으면 그림자. 모드는 스레드 시작 때 고정한다
