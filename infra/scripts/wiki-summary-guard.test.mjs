@@ -37,3 +37,17 @@ test('본문이 비면 버린다', () => {
 test('서문 + 빈 구분선 + 진짜 머리말(10-06 family 실물)은 서문만 잘라 통과', () => {
   assert.equal(cleanSummary('기존 구조를 존중하며 업데이트하겠습니다.\n\n---\n\n' + GOOD), GOOD);
 });
+
+test('머리말 정상이어도 작업 메모·진행 표시(10-07 03:30 career 실물)는 버린다', () => {
+  const bad = GOOD + '\n## 기술 환경\n\nwiki-slots.mjs 사용 시 runtime/wiki 디렉토리가 현재 없는 상태. 2026-08-27에는 존재했으나 이후 삭제되어 슬롯 정본 조회 시 빈 결과 반환.\n\n---\n\n**진행:** 요약 갱신 완료 ✅\n';
+  assert.equal(cleanSummary(bad), null);
+});
+
+test('진행 표시 한 줄만 붙어도 버린다', () => {
+  assert.equal(cleanSummary(GOOD + '\n진행: 바꿈 ✅ → 시험 ✅\n'), null);
+});
+
+test('본문 속 평범한 "진행 중"·"완료" 표현은 통과', () => {
+  const ok = GOOD + '- 고스톱 출시 진행 중, 게임제작업 등록 완료.\n';
+  assert.equal(cleanSummary(ok), ok);
+});
