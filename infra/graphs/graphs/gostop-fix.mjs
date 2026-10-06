@@ -16,7 +16,7 @@ import { StateGraph, Annotation, START, END, interrupt } from "@langchain/langgr
 import {
   repoPath, sandboxDir, runDir, gostopDir, keyDir, mkdirp, writeAtomic, dirBytes, forbiddenPresent, applyInject, busyReason, pruneHistoryDocs, leakScan,
   readTestOutput, judgeRepro, reproExcerpt, DIAG_SCHEMA, parseDiag, scopeOf, diagMatch, reproCommand, short, DIFF_TEST, SOAK_TEST,
-  hasH5Frame, hasAiPolicy, sameFiles, AI_POLICY, copyTree, lastJson, judgeReproFiles, restoreFiles, analyzeCounts, failureItems, runnerLoadFlakes, seedFor,
+  hasH5Frame, hasAiPolicy, overlayAiPolicy, aiMisjudge, sameFiles, AI_POLICY, copyTree, lastJson, judgeReproFiles, restoreFiles, analyzeCounts, failureItems, runnerLoadFlakes, seedFor,
   REVIEW_SCHEMA, parseReview, reviewPass, reproTestPrompt, fixPrompt, reviewPrompt,
   safeTarget, readNoFollow, copyNoFollow, redQuality, aiCallsites, h5FrameUse,
   toolCrash, crashLine, loadBench, benchFile, gradeSpec, gradeVerdict,
@@ -198,6 +198,8 @@ export function build({ checkpointer, llm, tools }) {
       fs.rmSync(tar, { force: true });
       for (const dir of dirs) pruneHistoryDocs(dir); // 수정 원장·작업 기록·QA 보고 — 정답이 적혀 있다(H3 상1)
       if (s.signal?.kind === "inject") for (const dir of dirs) applyInject(dir, s.signal.inject);
+      // 벤치 기준 커밋에 AI 결정 비교 시험이 없으면(10-03 이전) 지금 것을 얹는다 — 없으면 AI 분기 판정이 늘 폴백이라 M8 'AI 분기 오판'을 못 잰다(10-07)
+      if (s.signal?.bench && hasAiPolicy(repo)) for (const dir of dirs) if (!hasAiPolicy(dir)) overlayAiPolicy(repo, dir);
       const bad = dirs.flatMap((d) => forbiddenPresent(d));
       if (bad.length) throw Object.assign(new Error(`사본에 있으면 안 되는 것이 있다: ${bad.join(", ")}`), { codeDefect: true });
       // 의존성은 LLM 이 손대기 전 여기서만(격리 안 pub get 은 불가 — H4). clean 에는 하지 않는다(패치 기준).
@@ -907,7 +909,7 @@ export function build({ checkpointer, llm, tools }) {
   function recordBench(s, dir, status, diagMatchOk, hiddenPass) {
     try { fs.writeFileSync(path.join(dir, "bench-recorded"), status, { flag: "wx", mode: 0o600 }); } catch { return; /* 이미 적음 */ }
     tools.bench({ bench: s.signal.bench.id, reproduced: s.repro === "skipped" ? null : s.repro === "reproduced", diag_match: diagMatchOk,
-      ...(s.stage === "1b" ? { hidden_pass: hiddenPass } : {}), signal: s.signal?.kind });
+      ...(s.stage === "1b" ? { hidden_pass: hiddenPass, ai_misjudge: aiMisjudge(s.aiCheck, s.signal.bench.expect) } : {}), signal: s.signal?.kind });
   }
 
   // ════════════════ 벤치 숨긴 정답 채점(M8) — plan 뒤. LLM 단계는 여기 오기 전에 다 끝났다 ════════════════

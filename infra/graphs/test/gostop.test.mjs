@@ -481,6 +481,23 @@ test("디스크 관문: 경고선 15 + 사본 실측(LG_COPY_EST_GIB 기본값) 
 });
 
 // ── 도우미 단위 ───────────────────────────────────────────────────
+test("M8 AI 분기 오판: 비교 판정과 사례 기대가 어긋날 때만 true · 못 쟀으면 null · 옛 기준 커밋엔 AI 비교 시험(.dart)만 얹는다(10-07)", () => {
+  assert.equal(C.aiMisjudge("pass", null), false, "규칙 결함 사례(기본: AI 결정 안 바뀜)에서 같음 = 옳은 판정");
+  assert.equal(C.aiMisjudge("fail", null), true, "규칙 수정인데 AI 결정이 바뀌었다고 판정 = 오판");
+  assert.equal(C.aiMisjudge("fail", { aiChange: true }), false);
+  assert.equal(C.aiMisjudge("pass", { aiChange: true }), true);
+  assert.equal(C.aiMisjudge("unavailable", null), null);
+  const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "lg-aip-")), repo = path.join(tmp, "repo"), dir = path.join(tmp, "copy");
+  fs.mkdirSync(dir);
+  fs.mkdirSync(path.join(repo, "test", "ai_policy"), { recursive: true });
+  for (const f of ["ai_policy_gen_test.dart", "ai_policy_compare_test.dart", "ai_policy_core.dart", "README.md"]) fs.writeFileSync(path.join(repo, "test", "ai_policy", f), "// x\n");
+  assert.equal(C.hasAiPolicy(dir), false);
+  assert.equal(C.overlayAiPolicy(repo, dir), 3);
+  assert.equal(C.hasAiPolicy(dir), true);
+  assert.equal(fs.existsSync(path.join(dir, "test", "ai_policy", "README.md")), false, "README 는 사례 이름이 적혀 있어 얹지 않는다");
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
 test("전체 시험 견주기: 사본 경로(work/·base/)가 달라도 같은 실패는 같다 · 시험 실행기 연결 고장으로 못 실은 파일만 따로 센다(10-07)", () => {
   const SB = "/Users/x/.openclaw-data/runtime/state/graphs/gostop/sandbox/bench_t";
   const full = (dir, extra = "") => [

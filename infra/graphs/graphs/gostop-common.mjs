@@ -380,6 +380,20 @@ export const AI_POLICY = { gen: "test/ai_policy/ai_policy_gen_test.dart", compar
   trusted: ["test/ai_policy/ai_policy_core.dart", "test/ai_policy/ai_policy_compare_test.dart"] };
 export const hasH5Frame = (dir) => fs.existsSync(path.join(dir, H5_SUPPORT));
 export const hasAiPolicy = (dir) => [AI_POLICY.gen, ...AI_POLICY.trusted].every((rel) => fs.existsSync(path.join(dir, rel)));
+// 벤치 기준 커밋이 AI 결정 비교 시험(10-03 추가)보다 오래됐을 때 지금 저장소의 시험 코드(.dart)만 사본에 얹는다 — 오늘 루프가 쓰는
+// 검증 도구로 옛 결함을 잰다(정답이 아니다). README 는 사례 이름이 적혀 있어(누설 검사에 걸림) 얹지 않는다. 얹은 파일 수를 돌려준다.
+export function overlayAiPolicy(repo, dir) {
+  const rel = path.dirname(AI_POLICY.gen);
+  const names = fs.readdirSync(path.join(repo, rel)).filter((f) => f.endsWith(".dart")).sort();
+  for (const f of names) copyNoFollow(path.join(repo, rel, f), dir, `${rel}/${f}`);
+  return names.length;
+}
+// 벤치 M8 'AI 분기 오판' — 정본 수정이 AI 결정을 바꾸는 사례인지(expect.aiChange, 기본 false: 규칙 결함 사례는 AI 영역을 고치지 않는다)와
+// 그래프의 AI 결정 비교 판정(pass=같음·fail=바뀜)이 어긋나면 true. 비교를 못 했으면(unavailable) null — '안 잼'으로 남긴다.
+export function aiMisjudge(aiCheck, expect) {
+  if (aiCheck !== "pass" && aiCheck !== "fail") return null;
+  return (aiCheck === "fail") !== !!expect?.aiChange;
+}
 // 비교기(AI 결정 비교 시험)가 깨끗한 쪽과 바이트까지 같은가 — 패치가 비교기를 고쳤으면 그 비교는 믿지 않는다(ai-policy.sh 와 같은 규칙)
 export function sameFiles(a, b, rels) {
   for (const rel of rels) {
