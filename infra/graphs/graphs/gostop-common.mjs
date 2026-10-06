@@ -386,8 +386,10 @@ export function overlayAiPolicy(repo, dir) {
   const rel = path.dirname(AI_POLICY.gen);
   const names = fs.readdirSync(path.join(repo, rel)).filter((f) => f.endsWith(".dart")).sort();
   for (const f of names) copyNoFollow(path.join(repo, rel, f), dir, `${rel}/${f}`);
-  return names.length;
+  return names.map((f) => `${rel}/${f}`);
 }
+// 분석 출력에서 얹은 AI 비교 시험 파일의 오류 수 — 옛 커밋의 API 와 안 맞으면(10-07 69a0144^: aiDifficulty 매개변수 없음) 도로 뺀다
+export const aiPolicyErrors = (raw) => strip(raw).split("\n").filter((l) => /^\s*error • .* • (?:\S*\/)?test\/ai_policy\/[^ ]+:\d+:\d+ • /.test(l)).length;
 // 벤치 M8 'AI 분기 오판' — 정본 수정이 AI 결정을 바꾸는 사례인지(expect.aiChange, 기본 false: 규칙 결함 사례는 AI 영역을 고치지 않는다)와
 // 그래프의 AI 결정 비교 판정(pass=같음·fail=바뀜)이 어긋나면 true. 비교를 못 했으면(unavailable) null — '안 잼'으로 남긴다.
 export function aiMisjudge(aiCheck, expect) {

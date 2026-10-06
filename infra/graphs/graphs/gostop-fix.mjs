@@ -16,7 +16,7 @@ import { StateGraph, Annotation, START, END, interrupt } from "@langchain/langgr
 import {
   repoPath, sandboxDir, runDir, gostopDir, keyDir, mkdirp, writeAtomic, dirBytes, forbiddenPresent, applyInject, busyReason, pruneHistoryDocs, leakScan,
   readTestOutput, judgeRepro, reproExcerpt, DIAG_SCHEMA, parseDiag, scopeOf, diagMatch, reproCommand, short, DIFF_TEST, SOAK_TEST,
-  hasH5Frame, hasAiPolicy, overlayAiPolicy, aiMisjudge, sameFiles, AI_POLICY, copyTree, lastJson, judgeReproFiles, restoreFiles, analyzeCounts, failureItems, runnerLoadFlakes, seedFor,
+  hasH5Frame, hasAiPolicy, overlayAiPolicy, aiPolicyErrors, aiMisjudge, sameFiles, AI_POLICY, copyTree, lastJson, judgeReproFiles, restoreFiles, analyzeCounts, failureItems, runnerLoadFlakes, seedFor,
   REVIEW_SCHEMA, parseReview, reviewPass, reproTestPrompt, fixPrompt, reviewPrompt,
   safeTarget, readNoFollow, copyNoFollow, redQuality, aiCallsites, h5FrameUse,
   toolCrash, crashLine, loadBench, benchFile, gradeSpec, gradeVerdict,
@@ -199,13 +199,23 @@ export function build({ checkpointer, llm, tools }) {
       for (const dir of dirs) pruneHistoryDocs(dir); // 수정 원장·작업 기록·QA 보고 — 정답이 적혀 있다(H3 상1)
       if (s.signal?.kind === "inject") for (const dir of dirs) applyInject(dir, s.signal.inject);
       // 벤치 기준 커밋에 AI 결정 비교 시험이 없으면(10-03 이전) 지금 것을 얹는다 — 없으면 AI 분기 판정이 늘 폴백이라 M8 'AI 분기 오판'을 못 잰다(10-07)
-      if (s.signal?.bench && hasAiPolicy(repo)) for (const dir of dirs) if (!hasAiPolicy(dir)) overlayAiPolicy(repo, dir);
+      const overlaid = s.stage !== "1a" && s.signal?.bench && hasAiPolicy(repo) && !hasAiPolicy(clean) ? dirs.map((dir) => overlayAiPolicy(repo, dir))[0] : [];
       const bad = dirs.flatMap((d) => forbiddenPresent(d));
       if (bad.length) throw Object.assign(new Error(`사본에 있으면 안 되는 것이 있다: ${bad.join(", ")}`), { codeDefect: true });
       // 의존성은 LLM 이 손대기 전 여기서만(격리 안 pub get 은 불가 — H4). clean 에는 하지 않는다(패치 기준).
       for (const dir of s.stage === "1a" ? [work] : [work, base]) {
         const pg = await tools.run("flutter.pub-get-offline", { dir });
         if (pg.code !== 0) throw new Error(`pub get --offline 실패(코드 ${pg.code}): ${short(pg.stdout + pg.stderr, 300)}`);
+      }
+      if (overlaid.length) {
+        // 얹은 시험이 이 옛 커밋에서 컴파일되는지 기준 사본 분석으로 본다 — 안 되면 도로 뺀다(전체 시험이 '컴파일 오류'로 수정을 거절하지 않게).
+        // 분석 자체가 안 돌았으면(결과 줄 없음) 믿지 않고 뺀다 — 그러면 AI 분기는 예전처럼 폴백이다
+        const ptmp = path.join(root, "tmp", "0");
+        fs.rmSync(ptmp, { recursive: true, force: true });
+        mkdirp(ptmp);
+        const an = await tools.run("sandbox.flutter-analyze", { dir: base, tmp: ptmp });
+        const raw = `${an.stdout ?? ""}${an.stderr ?? ""}`;
+        if (aiPolicyErrors(raw) || !/issues? found|No issues found/.test(raw)) for (const dir of dirs) for (const rel of overlaid) fs.rmSync(path.join(dir, rel), { force: true });
       }
       fs.writeFileSync(ready, s.base, { mode: 0o600 });
     }

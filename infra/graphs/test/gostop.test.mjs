@@ -492,7 +492,9 @@ test("M8 AI 분기 오판: 비교 판정과 사례 기대가 어긋날 때만 tr
   fs.mkdirSync(path.join(repo, "test", "ai_policy"), { recursive: true });
   for (const f of ["ai_policy_gen_test.dart", "ai_policy_compare_test.dart", "ai_policy_core.dart", "README.md"]) fs.writeFileSync(path.join(repo, "test", "ai_policy", f), "// x\n");
   assert.equal(C.hasAiPolicy(dir), false);
-  assert.equal(C.overlayAiPolicy(repo, dir), 3);
+  assert.deepEqual(C.overlayAiPolicy(repo, dir), ["test/ai_policy/ai_policy_compare_test.dart", "test/ai_policy/ai_policy_core.dart", "test/ai_policy/ai_policy_gen_test.dart"]);
+  assert.equal(C.aiPolicyErrors("  error • The named parameter 'aiDifficulty' isn't defined • test/ai_policy/ai_policy_corpus.dart:439:7 • undefined_named_parameter\n1 issue found."), 1);
+  assert.equal(C.aiPolicyErrors("  error • x • lib/a.dart:1:2 • y\n  warning • z • test/ai_policy/a.dart:1:2 • w\n2 issues found."), 0, "다른 파일 오류·경고는 세지 않는다");
   assert.equal(C.hasAiPolicy(dir), true);
   assert.equal(fs.existsSync(path.join(dir, "test", "ai_policy", "README.md")), false, "README 는 사례 이름이 적혀 있어 얹지 않는다");
   fs.rmSync(tmp, { recursive: true, force: true });
