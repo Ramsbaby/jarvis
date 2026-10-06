@@ -947,11 +947,12 @@ export function build({ checkpointer, llm, tools }) {
       tools.sandboxViolation("exit98", `채점 ${g.phase} — ${short(r.raw.split("LG-SANDBOX").pop(), 160)}`);
       return { gradeHandle: null, grade: { ...g, error: "격리 위반(98)" }, route: "bench_record", log: ["grade 격리 위반"] };
     }
-    const runs = [...g.runs, { phase: g.phase, test: g.tests[g.idx], rc: r.code, secs: r.secs, failed: r.out.failed.slice(0, 10), log: rel(s, logFile) }];
+    // compileError: 정답 시험이 이 코드에서 컴파일되지 않음(수정 커밋이 새로 만든 이름을 정답 시험이 부르면 패치 뒤에도 그렇다 — 채점의 한계로 따로 적는다)
+    const runs = [...g.runs, { phase: g.phase, test: g.tests[g.idx], rc: r.code, secs: r.secs, failed: r.out.failed.slice(0, 10), compileError: r.out.compileError, log: rel(s, logFile) }];
     if (g.idx + 1 < g.tests.length) return { gradeHandle: null, gradeRelaunch: 0, grade: { ...g, runs, idx: g.idx + 1 }, route: "grade_launch" };
     if (g.phase === "patched") return { gradeHandle: null, grade: { ...g, runs }, route: "bench_record", log: ["grade 끝"] };
-    // 대조군 끝 — 패치 전에 정답 시험이 빨강이어야 그 정답으로 채점할 수 있다
-    if (!runs.every((x) => x.rc !== 0)) return { gradeHandle: null, grade: { ...g, runs, controlRed: false }, route: "bench_record", log: ["grade 대조군이 빨강이 아님 — 채점 불가"] };
+    // 대조군 끝 — 패치 전에 정답 시험이 시험 실패(종료 1)로 빨강이어야 그 정답으로 채점할 수 있다(시간 초과 124 등은 빨강이 아니다)
+    if (!runs.every((x) => x.rc === 1)) return { gradeHandle: null, grade: { ...g, runs, controlRed: false }, route: "bench_record", log: ["grade 대조군이 빨강이 아님 — 채점 불가"] };
     const ap = await tools.run("patch.apply-grade", { dir: g.dir, patch: s.fullPatch.file });
     if (ap.code !== 0) return { gradeHandle: null, grade: { ...g, runs, controlRed: true, applied: false, error: `패치 적용 실패(코드 ${ap.code}): ${short(ap.stdout + ap.stderr, 200)}` }, route: "bench_record" };
     for (const t of g.tests) copyNoFollow(path.join(g.answers, t), g.dir, t);
@@ -971,7 +972,7 @@ export function build({ checkpointer, llm, tools }) {
     const md = ["", "## 숨긴 정답 채점(벤치 M8 — LLM 단계가 끝난 뒤)",
       `- 결과: **${hidden === true ? "통과" : hidden === false ? "실패" : "판정 대상 아님"}**${why ? ` — ${why}` : ""}`,
       ...(g.tests ? [`- 정답 시험(${g.source === "origin" ? "수정 커밋의 시험" : "그 결함을 잡는 기존 시험"}): ${g.tests.join(", ")}`] : []),
-      ...(g.runs ?? []).map((x) => `- ${x.phase === "control" ? "대조군(패치 전)" : "패치 뒤"} ${x.test}: rc=${x.rc} ${x.secs}s${x.failed.length ? ` · 실패 ${short(x.failed.slice(0, 3).join(" | "), 200)}` : ""} · 로그 ${x.log}`), ""];
+      ...(g.runs ?? []).map((x) => `- ${x.phase === "control" ? "대조군(패치 전)" : "패치 뒤"} ${x.test}: rc=${x.rc} ${x.secs}s${x.compileError ? " (컴파일 오류)" : ""}${x.failed.length ? ` · 실패 ${short(x.failed.slice(0, 3).join(" | "), 200)}` : ""} · 로그 ${x.log}`), ""];
     try { fs.appendFileSync(path.join(dir, "plan.md"), md.join("\n")); } catch { /* 없음 */ }
     recordBench(s, dir, s.status, s.benchMatch, hidden);
     if (g.dir) for (const sub of ["build", ".dart_tool"]) fs.rmSync(path.join(g.dir, sub), { recursive: true, force: true });
