@@ -255,6 +255,8 @@ test("대조: 이 재시작을 부른 장부 줄은 빼고 다음 판정(verifie
     assert.equal(c[0].duty_ts, "2026-10-04T19:45:42+09:00");
     assert.equal(b.dv()[0].status, "done");
     assert.equal(sha(b.f.ledger), before);
+    const done = metrics(b.sb).find((m) => m.ev === "done" && m.graph === "duty-verify");
+    assert.match(done.verified, /^duty-verify 재시작 .* 판정 ok\(근거: .*\) · 당직 대조 true — metrics lg\.duty\.verify$/, "M2 — 판정이 난 확인은 확인 기록을 남긴다");
   });
   await t.test("판정 줄 없음 → 창(LG_DV_COMPARE_H) 안에서는 CONTINUE, 지나면 none", (tt) => {
     const b = box(tt, { over: { LG_DV_COMPARE_H: "1" } });

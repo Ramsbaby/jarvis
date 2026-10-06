@@ -174,6 +174,8 @@ test("1a 끝까지: 역사 없는 사본(정답 커밋·정답 시험 안 보임
   assert.equal(b.length, 1);
   assert.equal(b[0].reproduced, true);
   assert.equal(b[0].diag_match, true);
+  const done = metrics(x.sb).find((m) => m.ev === "done" && m.thread === "gostop-fix:bench:t1:r1");
+  assert.match(done.verified, /^gostop-fix ready\(1a\): 재현 reproduced · 진단 있음 — .*plan\.md$/, "M2 — 끝난 상태를 뒷받침하는 확인 기록");
   assert.deepEqual(repoState(x.repo), before, "본 저장소 HEAD·status 불변");
 });
 
@@ -184,6 +186,7 @@ test("흔들림: 두 번 결과가 다르면 flaky — 진단하지 않는다", 
   const res = resultOf(x, "bench:t1:r1");
   assert.equal(res.status, "flaky");
   assert.equal(x.fc.calls().filter((c) => c.input.includes("정해진 JSON")).length, 0, "진단 호출 0");
+  assert.match(metrics(x.sb).find((m) => m.ev === "done").verified, /^gostop-fix flaky: 재현 실행 2회 판정 — /, "M2");
 });
 
 test("재현 안 됨: 두 번 다 초록이면 not_reproduced", async (t) => {
@@ -355,10 +358,13 @@ test("접수: 어젯밤 소크 불일치 → 씨앗 신호, 하루 3건까지만
   assert.deepEqual(queued.map((v) => v.status), ["queued", "queued", "queued"]);
   assert.ok(queued.every((v) => /^gostop-fix:soak:normal:\d+:abc1234$/.test(v.thread)));
   assert.equal(x.fc.calls().length, 0, "접수는 LLM 0회");
+  const doneOf = (th) => metrics(x.sb).find((m) => m.ev === "done" && m.thread === th);
+  assert.match(doneOf(`gostop-intake:${day}`).verified, /^gostop-intake 올림 3\(이미 있음 0\) · 장부 확인\(다시 올림 0 · 오늘 3\/3\) — .*intake-state\.json$/, "M2");
   // 같은 날 다시: 새 신호 없음(이미 읽은 소크) → 벤치로 가지 않고, 하루 상한도 찼다
   const r2 = run(x.env, ["start", "gostop-intake", `gostop-intake:${day}-b`, `--day=${day}`]);
   assert.equal(r2.code, 0);
   assert.equal(listThreads(x).filter((v) => v.graph === "gostop-fix").length, DAY_CAP);
+  assert.match(doneOf(`gostop-intake:${day}-b`).verified, /^gostop-intake 올림 0\(이미 있음 0\)/, "같은 것을 다시 올리지 않았다는 확인");
 });
 
 test("접수: CI 실패(읽기 전용 gh) → 실패 로그 발췌를 남기고 시험 파일이 보이면 그 시험으로 재현. gh 가 막히면 적고 넘어간다", async (t) => {

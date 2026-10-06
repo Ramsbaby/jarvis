@@ -27,7 +27,8 @@ sh $G/lg.sh tick                                  # 예약 잡의 정본(30분�
 sh $G/lg.sh answer <스레드> approved [N]          # 또는 rejected — 대화 중 자비스가 쓰는 길. 답만 적고 끝난다(1초 안). N = WAITING 의 '질문 #N'
 sh $G/lg.sh start smoke smoke-2026-10-04 --queue  # 등록만 — 다음 틱이 시작한다(--topic 주제, --llm: haiku 1회)
 sh $G/lg.sh status [<스레드>] [--json] [--all]    # 읽기만
-node $G/lg-report.mjs [--since 2026-10-07] [--json]   # 판정 집계 M1~M8
+node $G/lg-report.mjs [--since 2026-10-07|--hours 24] [--json]   # 판정 집계 M1~M8
+sh $G/lg.sh watch [--dry-run]                     # 감시 — 기준 밖이면 한국어 요약 + 지시함 '- [ ]', 없으면 NO_REPLY(예약 잡 graphs: lg-watch daily 08:40)
 sh $G/lg.sh selftest                              # 저장 부품·허용 목록·사용자 훅 누수
 # 시험·디버그용(사람이 보고 있을 때): start(바로 돌림)·resume(답을 바로 적용)·retry(바로 이어 감)·sweep·gc
 ```
@@ -281,6 +282,7 @@ duty-verify:dv-<초>
 ## 부수효과 `effect(key, kind, fn)` (S10)
 
 원장 `effects.jsonl`(추가 전용). 그림자: `{key, kind, wouldRun}`만(같은 key는 한 줄). 실제: `started` → `fn` → `ok`/`failed`.
+**보고성 종류(`REPORT_KINDS` — 지금 `orders_append`)는 그림자에서도 실제 길로 낸다**(기록에 `report:true`). 그림자가 막는 것은 코드 변경·배포이지 발견을 알리는 일이 아니다(10-06: 고스톱 QA 발견 9건이 '했을 일'로만 남아 수리 목록에 0건). 당직 장부(`duty.ledger_append`)는 공사 동결이라 그대로 그림자. 중복 막기는 모드를 가리지 않고 같은 key 의 실제 기록(`would_run` 이 아닌 줄)으로 본다 — 옛 그림자 '했을 일'은 실행을 막지 않는다.
 같은 key가 `ok`면 다시 하지 않는다(다른 스레드라도). `started`만 있고 끝이 없으면 결과를 모르니 보류 — `verify()`가 일어났다고 확인하면 `ok`로 적고 넘어간다. 같은 key를 두 프로세스가 동시에 내지 않게 key별 잠금(죽은 주인 것만 넘겨받는다).
 
 ## 기록·집계 (S17)
@@ -299,6 +301,10 @@ duty-verify:dv-<초>
 | `effect`(outcome: would_run·ran·dedup·failed·unknown·recovered, key 는 지문만 — 원문은 effects.jsonl) · `stuck` · `tick` · `gc` · `failed` · `bench`(M8) | |
 | `lg.duty.verify`(D0) | phase(verify·compare) · verdict · restart · reasons · tool_fail·tool_ok·gwlog_fail · agreement · kind · survival |
 | `lg.restart.heartbeat`(D0, 틱마다) | gw_pid · gw_start · gw_up · open · jobs |
+
+**M2 확인 기록(`verify_log`):** 그래프는 끝나기 전에 확인한 것을 상태 `verify_log` 에 적고, 확인이 안 되면 비워 둔다(빈 값 = 검증 없는 완료). gostop-qa 요약 파일 + 올린 발견 id 가 전부 지시함에 있음 · gostop-intake 장부를 다시 읽어 올린 것이 '본 것'에 있고 전날까지 본 것을 다시 올리지 않았고 하루 상한 안 · gostop-fix 끝난 상태의 근거(`fixVerifyLog` — ready·would_ask 는 마지막 수정의 격리 검증 전부 통과 + 검토 통과, 포기는 비움) · duty-verify 판정 ok·broken(unknown 은 비움) · smoke 수집·초안·승인 답.
+
+**감시(`scripts/lg-watch.mjs`, 매일 08:40):** `lg-report --json` 을 최근 24시간·전체·7일(벤치) 세 창으로 읽어 기준 밖이면 요약을 내고 지시함 끝에 `- [ ] (당직 몫) **랭그래프 이상 — …** [lg-watch:<열쇠>]` 를 덧붙인다(같은 열쇠의 열린 줄이 있으면 다시 안 올림). 보는 것: 틱 0회 · M2 · M3 중복·결과 모름 · M4 · M7 · M1 버려짐 · Fable · 보류(같은 사유 하루 6회 또는 연속 4틱, 야간 금지 quiet 는 뺌, code_defect·effect_unknown·hook_leak·stuck 은 1회부터) · 벤치 M8 기준 미달·한 번도 안 잰 칸 · 고스톱 실기 QA 상급 발견(오늘·어제 `signals.json`)이 지시함에 없음.
 
 `node lg-report.mjs`가 M1(끊긴 스레드 중 다음 틱들이 이어 간 비율 — 끊긴 뒤 단계를 하나라도 끝냄. 그 뒤 사람이 답하지 않은 승인 만료는 '버려짐'이 아니다) · M3(같은 key 중복 실행 — verify 가 '안 일어났다'고 확인한 뒤의 재실행은 중복이 아니다) · M4(끝나지 않은 스레드 중 마지막 기록이 48시간 넘은 것 — 대기열·답 받음 포함) · M6(날짜별 호출·토큰·비용, Fable 0) 표와 M2·M5·M8 칸을 낸다.
 

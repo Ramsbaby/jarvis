@@ -4,9 +4,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { sandbox, run, fakeClaude, NODE, FIXTURES } from "./helpers.mjs";
-import { tickEnv, effects } from "./helpers0b.mjs";
+import { tickEnv, effects, metrics } from "./helpers0b.mjs";
 import os from "node:os";
-import { appendOrder, lastJson, input } from "../graphs/gostop-qa.mjs";
+import { appendOrder, hasOrderId, lastJson, input } from "../graphs/gostop-qa.mjs";
 import { loadRegistry } from "../lib/run.mjs";
 
 const FAKE = path.join(FIXTURES, "fake-gqa.mjs");
@@ -78,7 +78,7 @@ test("순수 함수 — 입력 기본값·마지막 JSON 줄·지시함 한 번�
   assert.match(txt, /- \[ \] 다른 일\n\n## 고스톱 실기 QA 자동 — 2026-10-03\n- \[ \] 첫째 \(id A1\)\n- \[ \] 둘째 \(id B2\)\n$/);
 });
 
-test("정상 흐름(그림자) — 4판·2판씩: 판 두 묶음, 묶음마다 눈 검사 1차+확인, 지시함은 '했을 일' 1번", async (t) => {
+test("정상 흐름(그림자) — 4판·2판씩: 판 두 묶음, 묶음마다 눈 검사 1차+확인, 지시함은 보고성이라 실제로 한 줄(10-06)", async (t) => {
   const { env, calls, claude, sb } = setup(t);
   assert.match(run(env, ["start", "gostop-qa", "qa-t1", "--queue", "--games=4", "--per=2", "--seed=100", "--day=2026-10-03"]).first, /^OK qa-t1 queued shadow/);
   const done = await tickUntilDone(env, "qa-t1");
@@ -91,8 +91,11 @@ test("정상 흐름(그림자) — 4판·2판씩: 판 두 묶음, 묶음마다 �
   assert.ok(claude.calls().every((x) => x.args.includes("--restricted")), "claude 는 --restricted 로만");
   assert.ok(claude.calls().every((x) => x.args.includes("Read")), "읽기 도구만");
   const eff = effects(sb).filter((e) => e.kind === "orders_append");
-  assert.equal(eff.length, 1, "같은 발견 id 는 '했을 일'도 한 줄");
-  assert.equal(fs.existsSync(env.GQA_ORDERS), false, "그림자 — 지시함을 쓰지 않는다");
+  assert.deepEqual(eff.map((e) => [e.mode, e.status, e.report]), [["shadow", "started", true], ["shadow", "ok", true]], "그림자여도 보고성은 실제로 한 번 — 같은 id 는 다시 안 함");
+  const txt = fs.readFileSync(env.GQA_ORDERS, "utf8");
+  assert.equal(txt.match(/id D1-aaaa\)/g)?.length, 1, "그림자 — 지시함에 한 줄(발견을 숨기지 않는다)");
+  const fin = metrics(sb).find((m) => m.ev === "done" && m.thread === "qa-t1");
+  assert.match(fin.verified, /^gostop-qa 판 4\/4 · 지시함 1\/1 확인 — .*summary\.md$/, "M2 — 요약 파일과 지시함 줄을 확인하고 끝낸다");
   assert.ok(c.some((x) => x.cmd === "cleanup"), "눈 검사가 끝난 묶음은 원본을 지운다");
   assert.ok(c.at(-1).cmd === "emu-down", "끝나면 우리 에뮬레이터를 끈다");
 });
@@ -150,6 +153,29 @@ test("실제 모드 — 지시함에 하루 제목 아래 한 줄, 다음 스레
   const txt = fs.readFileSync(env.GQA_ORDERS, "utf8");
   assert.equal(txt.match(/id D1-aaaa\)/g)?.length, 1, txt);
   assert.match(txt, /## 고스톱 실기 QA 자동 — 2026-10-03/);
+});
+
+test("그림자 — 옛 '했을 일' 기록은 실제 쓰기를 막지 않고, 다른 날 같은 발견은 다시 안 올린다 · 손으로 옮긴 줄의 id 도 알아본다", async (t) => {
+  const { env, sb } = setup(t);
+  fs.mkdirSync(sb.state, { recursive: true });
+  // 10-03 처럼 그림자가 '했을 일'로만 남긴 기록 — 백필은 하지 않지만 같은 발견이 다시 나오면 이번엔 올라가야 한다
+  fs.writeFileSync(path.join(sb.state, "effects.jsonl"), `${JSON.stringify({ key: "gostop-qa-order:D1-aaaa", kind: "orders_append", mode: "shadow", status: "would_run", wouldRun: true, thread: "old" })}\n`);
+  run(env, ["start", "gostop-qa", "qa-d1", "--queue", "--games=1", "--per=1", "--seed=700", "--day=2026-10-06"]);
+  await tickUntilDone(env, "qa-d1");
+  run(env, ["start", "gostop-qa", "qa-d2", "--queue", "--games=1", "--per=1", "--seed=800", "--day=2026-10-07"]);
+  await tickUntilDone(env, "qa-d2");
+  const txt = fs.readFileSync(env.GQA_ORDERS, "utf8");
+  assert.equal(txt.match(/D1-aaaa/g)?.length, 1, txt);
+  assert.match(txt, /## 고스톱 실기 QA 자동 — 2026-10-06/);
+  assert.doesNotMatch(txt, /2026-10-07/, "다음 날은 제목도 줄도 더하지 않는다");
+  assert.equal(effects(sb).filter((e) => e.status === "ok").length, 1);
+  const v = metrics(sb).filter((m) => m.ev === "done").map((m) => m.verified);
+  assert.equal(v.length, 2);
+  assert.ok(v.every((x) => /지시함 1\/1 확인/.test(x)), JSON.stringify(v));
+  // 다른 작업이 '(id …)' 꼴이 아니게 옮겨 적은 줄도 같은 발견으로 본다 — 낱말 경계로만
+  assert.equal(hasOrderId("- [x] 멈춤 정리 — `D1-aaaa` 참고", "D1-aaaa"), true);
+  assert.equal(hasOrderId("- [ ] XD1-aaaa1", "D1-aaaa"), false);
+  assert.equal(appendOrder(env.GQA_ORDERS, "2026-10-08", "- [ ] 또 (id D1-aaaa)", "D1-aaaa"), false);
 });
 
 test("허용 목록의 '~/' 는 홈으로 펼친 뒤 같은 검사를 받는다(공개 저장소에 사용자 경로를 박지 않는다)", (t) => {

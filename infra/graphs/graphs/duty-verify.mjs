@@ -30,6 +30,7 @@ const State = Annotation.Root({
   shadow_effect: Annotation({ reducer: last, default: () => null }),
   cmp: Annotation({ reducer: last, default: () => null }),
   survival: Annotation({ reducer: last, default: () => null }),
+  verify_log: Annotation({ reducer: last, default: () => null }), // 판정 M2 — compare 가 남긴 확인 요지(판정이 unknown 이면 비워 둔다)
   log: Annotation({ reducer: (a, b) => a.concat(b), default: () => [] }),
 });
 
@@ -120,7 +121,11 @@ export function build({ checkpointer, tools }) {
     const survival = measureSurvival(tools.stateDir, s.restart_ms, now);
     const cmp = { agreement, kind, duty, duty_ts: d ? isoLocal(d.ts) : null, duty_first_seen: d?.firstSeen ? isoLocal(d.firstSeen) : null, duty_mode: d?.mode ?? null };
     tools.dutyVerify({ phase: "compare", verdict: s.verdict, restart: s.restart, source: s.source, ...cmp, survival });
-    return { cmp, survival, log: [`compare ${agreement}`] };
+    // 판정 M2: 확인을 끝냈다고 할 수 있는 것은 도구 경로 판정이 났을 때(ok·broken)뿐 — unknown 은 확인 못 한 완료로 남긴다
+    const verify_log = s.verdict === "ok" || s.verdict === "broken"
+      ? `duty-verify 재시작 ${s.restart} 판정 ${s.verdict}(근거: 포트 주인·새 pid·/health·대화 기록 권한 끊김 ${s.check?.tool_fail ?? "?"}·게이트웨이 로그 ${s.check?.gwlog_fail ?? "?"}) · 당직 대조 ${agreement} — metrics lg.duty.verify`
+      : null;
+    return { cmp, survival, verify_log, log: [`compare ${agreement}`] };
   }
 
   return new StateGraph(State)

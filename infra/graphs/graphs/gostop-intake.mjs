@@ -25,6 +25,7 @@ const State = Annotation.Root({
   fresh: Annotation({ reducer: last, default: () => [] }),
   enqueued: Annotation({ reducer: last, default: () => [] }),
   skipped: Annotation({ reducer: last, default: () => [] }),
+  verify_log: Annotation({ reducer: last, default: () => null }), // 판정 M2 — enqueue 가 장부를 다시 읽어 확인한 것
   log: Annotation({ reducer: (a, b) => a.concat(b), default: () => [] }),
 });
 
@@ -155,8 +156,10 @@ export function build({ checkpointer, tools }) {
   }
 
   // 대기열에 올린다 — 하루 3건 이하. 이미 있는 스레드는 실행기가 거절한다(멱등). 장부는 끝에 한 번 쓴다.
+  // 끝나기 전에 장부를 다시 읽어 확인한다(판정 M2): 올린 것이 모두 '본 것'에 적혔고, 전날까지 본 것을 다시 올리지 않았고, 하루 상한 안.
   function enqueue(s) {
     const L = readLedger(tools.stateDir);
+    const seenBefore = { ...L.seen };
     const today = L.daily[s.day] ?? [];
     const room = Math.max(0, DAY_CAP - today.length);
     const enqueued = [], skipped = [...s.skipped];
@@ -172,8 +175,16 @@ export function build({ checkpointer, tools }) {
     const cut = kstDay(tools.now() - 60 * 86_400_000);
     for (const d of Object.keys(L.daily)) if (d < cut) delete L.daily[d];
     for (const [k, d] of Object.entries(L.seen)) if (d < cut) delete L.seen[k];
-    writeAtomic(ledgerPath(tools.stateDir), `${JSON.stringify(L, null, 1)}\n`);
-    return { enqueued, skipped, log: [`enqueue ${enqueued.length}${skipped.length ? ` · 미룸·뺌 ${skipped.length}` : ""}`] };
+    const file = writeAtomic(ledgerPath(tools.stateDir), `${JSON.stringify(L, null, 1)}\n`);
+    const back = readLedger(tools.stateDir);
+    const fresh = enqueued.filter((e) => !e.existed);
+    const unseen = enqueued.filter((e) => !back.seen[e.sigkey]).map((e) => e.sigkey);
+    const again = fresh.filter((e) => seenBefore[e.sigkey] && seenBefore[e.sigkey] !== s.day).map((e) => e.sigkey);
+    const todayN = (back.daily[s.day] ?? []).length;
+    const problems = [...(unseen.length ? [`장부에 안 적힘 ${unseen.join(",")}`] : []), ...(again.length ? [`전에 본 것을 다시 올림 ${again.join(",")}`] : []),
+      ...(todayN > DAY_CAP ? [`하루 ${todayN}건 > ${DAY_CAP}`] : [])];
+    const verify_log = problems.length ? null : `gostop-intake 올림 ${fresh.length}(이미 있음 ${enqueued.length - fresh.length}) · 장부 확인(다시 올림 0 · 오늘 ${todayN}/${DAY_CAP}) — ${file}`;
+    return { enqueued, skipped, verify_log, log: [`enqueue ${enqueued.length}${skipped.length ? ` · 미룸·뺌 ${skipped.length}` : ""}${problems.length ? ` · 확인 실패: ${problems.join("; ")}` : ""}`] };
   }
 
   return new StateGraph(State)

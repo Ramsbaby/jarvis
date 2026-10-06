@@ -7,4 +7,9 @@ if [ ! -x "$NODE" ]; then
   echo "ERROR - node 고정 Node 가 없다: $NODE (LG_NODE 로 지정)"
   exit 1
 fi
+# watch: 판정 집계를 읽어 기준 밖이면 알리고 지시함에 올린다(scripts/lg-watch.mjs, 예약 잡 graphs: lg-watch daily)
+if [ "${1:-}" = "watch" ]; then
+  shift
+  exec "$NODE" "$(dirname "$0")/scripts/lg-watch.mjs" "$@"
+fi
 exec "$NODE" "$(dirname "$0")/run.mjs" "$@"

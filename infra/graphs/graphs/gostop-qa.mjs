@@ -10,7 +10,9 @@
 // 책갈피: 판 번호(next)가 체크포인트에 남는다. 에뮬레이터가 죽으면 emu 로 돌아가 같은 판부터, 게이트웨이가 재시작돼도
 //         분리 실행은 살아 있고 다음 틱의 확인 노드가 잇는다. 끝난 판은 다시 두지 않는다.
 // LLM: 스레드당 5회 상한이라 판마다 부르지 않는다 — 판 묶음(eyeEvery 묶음)마다 1차(haiku) 1회 + 확인(sonnet) 1회.
-// 부수효과: 지시함(orders.md) 줄만 — effect 로(그림자면 '했을 일'만). 신호 파일(signals.json)은 우리 상태 파일이라 일꾼이 쓴다.
+// 부수효과: 지시함(orders.md) 줄만 — effect 'orders_append'(보고성이라 그림자에서도 실제로 쓴다, lib/effects.mjs REPORT_KINDS).
+//   같은 발견 id 는 effect 열쇠와 지시함 본문 대조로 날짜·스레드를 넘어 한 번만. 신호 파일(signals.json)은 우리 상태 파일이라 일꾼이 쓴다.
+// 끝(finish): 요약 파일과 '올린 id 가 전부 지시함에 있다'를 확인해 verify_log 에 남긴다(판정 M2) — 확인이 안 되면 비워 둔다.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -48,6 +50,7 @@ const State = Annotation.Root({
   llmCalls: Annotation({ reducer: last, default: () => 0 }),
   posted: Annotation({ reducer: last, default: () => [] }),
   result: Annotation({ reducer: last }),
+  verify_log: Annotation({ reducer: last, default: () => null }), // 판정 M2 — finish 가 확인한 것(실행기가 done.verified 로 옮긴다)
   log: Annotation({ reducer: (a, b) => a.concat(b), default: () => [] }),
 });
 
@@ -100,10 +103,17 @@ function checkJob(tools, s, key, label) {
 
 function bump(s, key) { return { ...s.att, [key]: (s.att[key] ?? 1) + 1 }; }
 
+// 지시함 본문에 발견 id 가 있나 — '(…, id X)' 꼴이 아니어도(손으로 옮긴 줄·다른 작업이 쓴 줄) id 낱말이 통째로 있으면 있다고 본다
+export function hasOrderId(text, id) {
+  const esc = String(id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^A-Za-z0-9_-])${esc}(?![A-Za-z0-9_-])`, "m").test(String(text ?? ""));
+}
+const readOrders = (file) => { try { return fs.readFileSync(file, "utf8"); } catch { return ""; } };
+
 // 지시함에 하루 제목 아래로 한 줄. 이미 있으면(같은 id) 쓰지 않는다.
 export function appendOrder(file, day, line, id) {
   const cur = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-  if (cur.includes(`id ${id})`)) return false;
+  if (hasOrderId(cur, id)) return false;
   const head = `## 고스톱 실기 QA 자동 — ${day}`;
   let add = "";
   if (!cur.includes(head)) add += `${cur.endsWith("\n") || !cur ? "" : "\n"}\n${head}\n`;
@@ -270,7 +280,7 @@ export function build({ checkpointer, llm, tools }) {
         const file = ordersPath();
         const res = await tools.effect(`gostop-qa-order:${o.id}`, "orders_append",
           () => appendOrder(file, s.day, o.line, o.id),
-          { verify: () => fs.existsSync(file) && fs.readFileSync(file, "utf8").includes(`id ${o.id})`) });
+          { verify: () => hasOrderId(readOrders(file), o.id) });
         if (!posted.includes(o.id)) posted.push(o.id);
         void res;
       }
@@ -301,12 +311,18 @@ export function build({ checkpointer, llm, tools }) {
     }
     const md = [`# 고스톱 실기 QA 묶음 — ${s.base} (${s.day})`, "",
       `- 판 ${s.next}/${s.games} · 커밋 ${String(s.sha ?? "").slice(0, 8)} · 씨앗 ${s.seed0}~ · 난이도 ${s.diffs} · 모드 ${tools.mode}`,
-      `- 확정 발견 ${total}건(상 ${sev.상} · 중 ${sev.중} · 하 ${sev.하}) · 지시함 후보 ${s.posted.length} · AI 호출 ${s.llmCalls}회 토큰 ${s.tokens}(캐시 포함) 약 $${s.costUsd.toFixed(2)} · 판당 ${Math.round(s.tokens / Math.max(1, s.next))}토큰`,
+      `- 확정 발견 ${total}건(상 ${sev.상} · 중 ${sev.중} · 하 ${sev.하}) · 지시함 ${s.posted.length}건(이미 있던 것 포함) · AI 호출 ${s.llmCalls}회 토큰 ${s.tokens}(캐시 포함) 약 $${s.costUsd.toFixed(2)} · 판당 ${Math.round(s.tokens / Math.max(1, s.next))}토큰`,
       s.failed ? `- 실패: ${s.failed}` : "", "", "| 묶음 | 판 | 결과 | 발견 | 요지 |", "|---|---|---|---|---|", ...rows].join("\n");
     const out = path.join(stateRoot(), s.day, `${s.base}-summary.md`);
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, md + "\n");
-    return { result: `${s.failed ? "실패 — " + s.failed + " · " : ""}판 ${s.next}/${s.games} · 발견 ${total}(상 ${sev.상}) · 지시함 ${s.posted.length} · ${out}`, log: ["finish"] };
+    // 판정 M2: 끝났다고 하기 전에 확인한다 — 요약 파일이 있고, 올린 발견 id 가 전부 지시함에 있다. 실패한 묶음·빠진 id 면 비워 둔다.
+    const ordersText = readOrders(ordersPath());
+    const missing = s.posted.filter((id) => !hasOrderId(ordersText, id));
+    const verify_log = !s.failed && fs.existsSync(out) && !missing.length
+      ? `gostop-qa 판 ${s.next}/${s.games} · 지시함 ${s.posted.length}/${s.posted.length} 확인 — ${out}` : null;
+    return { verify_log, result: `${s.failed ? "실패 — " + s.failed + " · " : ""}판 ${s.next}/${s.games} · 발견 ${total}(상 ${sev.상}) · 지시함 ${s.posted.length}${missing.length ? `(빠짐 ${missing.join(",")})` : ""} · ${out}`,
+      log: [`finish${verify_log ? " 확인됨" : ` 확인 못 함${s.failed ? "(실패)" : ""}${missing.length ? ` 지시함 빠짐 ${missing.length}` : ""}`}`] };
   }
 
   const afterBuild = (s) => (s.failed ? "finish" : s.apk ? "emu_launch" : "build_launch");

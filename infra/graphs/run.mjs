@@ -327,7 +327,8 @@ async function settle(ctx, g, thread, { fresh = false, answered = false } = {}) 
     if (ctx.isTick && g.mod.meta?.quietDone === true) { finish(); say(`OK ${thread} done(알림 없음) ${summary}`); }
     else announce(ctx, thread, `DONE ${thread} ${summary}`, finish);
     const v = r.s.values ?? {};
-    ctx.metric("done", { thread, graph: g.name, mode: row?.mode ?? "shadow", verified: typeof v.verify_log === "string" ? v.verify_log : null });
+    // 판정 M2: 그래프 상태의 verify_log(끝내기 전에 확인한 것) — 없거나 빈 글이면 '검증 없는 완료'로 센다
+    ctx.metric("done", { thread, graph: g.name, mode: row?.mode ?? "shadow", verified: typeof v.verify_log === "string" && v.verify_log ? v.verify_log.slice(0, 300) : null });
     return 0;
   }
   // interrupt 없이 다음 노드가 남았다 = 노드 단위 진행 도중이다. 여기 오면 안 된다(advance 가 다음 단계를 돈다).

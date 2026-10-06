@@ -13,6 +13,7 @@ const State = Annotation.Root({
   draft: Annotation(),
   decision: Annotation(),
   result: Annotation(),
+  verify_log: Annotation(), // 판정 M2 — finalize 가 확인한 것
   log: Annotation({ reducer: (a, b) => a.concat(b), default: () => [] }),
 });
 
@@ -54,7 +55,10 @@ export function build({ checkpointer, llm }) {
     })
     .addNode("finalize", (s) => {
       trace("finalize");
-      return { result: s.decision === "approved" ? `완료 — ${s.draft}` : "반려됨", log: ["finalize"] };
+      // 판정 M2: 수집 2건·초안·승인 답이 상태에 다 있어야 확인된 완료다
+      const ok = s.items?.length === 2 && !!s.draft && (s.decision === "approved" || s.decision === "rejected");
+      return { result: s.decision === "approved" ? `완료 — ${s.draft}` : "반려됨",
+        verify_log: ok ? `smoke 수집 ${s.items.length}·초안 ${s.draft.length}자·승인 답 ${s.decision}` : null, log: ["finalize"] };
     })
     .addEdge(START, "collect")
     .addEdge("collect", "think")

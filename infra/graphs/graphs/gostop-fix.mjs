@@ -119,6 +119,7 @@ const State = Annotation.Root({
   violation: Annotation({ reducer: last, default: () => null }),
   merge: Annotation({ reducer: last, default: () => null }),
   commit: Annotation({ reducer: last, default: () => null }),
+  verify_log: Annotation({ reducer: last, default: () => null }), // 판정 M2 — plan 이 끝난 상태를 뒷받침하는 확인을 적는다(fixVerifyLog)
   log: Annotation({ reducer: (a, b) => a.concat(b), default: () => [] }),
 });
 
@@ -130,6 +131,26 @@ export function input(flags) {
   return { sigkey, signal: { ...signal, sigkey } };
 }
 export const summarize = (v) => `${v.status ?? "?"}${v.repro ? ` · 재현 ${v.repro}` : ""}${v.planPath ? ` · ${v.planPath}` : ""}`;
+
+// 판정 M2 — 끝난 상태(status)를 뒷받침하는 확인 기록. 고칠 안(plan.md)이 있어야 하고, 상태마다 근거가 다르다:
+//   ready·would_ask(1b) 마지막 수정의 격리 검증 단계 전부 통과 + 검토 통과 · (1a) 재현됨 + 진단 · not_reproduced·flaky 재현 실행 기록
+//   no_red 빨간불 확인 기록 · rule_decision 규칙 공백 진단. 포기(gave_up)·근거 없음은 null — '확인 없이 끝남'으로 센다.
+export function fixVerifyLog(s, status, planPath) {
+  if (!planPath || !fs.existsSync(planPath)) return null;
+  const tail = ` — ${planPath}`;
+  if (status === "ready" || status === "would_ask") {
+    if (s.stage === "1b") {
+      const v = (s.steps ?? []).filter((x) => x.phase === "verify" && x.fix === s.fixAttempt);
+      if (!s.verifyOk || !s.review?.pass || !v.length || !v.every((x) => x.ok)) return null;
+      return `gostop-fix ${status}: 격리 검증 ${v.map((x) => x.id).join(",")} 통과 · 검토 통과${tail}`;
+    }
+    return (s.repro === "reproduced" || s.repro === "skipped") && s.diag ? `gostop-fix ${status}(1a): 재현 ${s.repro} · 진단 있음${tail}` : null;
+  }
+  if (status === "not_reproduced" || status === "flaky") return s.reproRuns?.length ? `gostop-fix ${status}: 재현 실행 ${s.reproRuns.length}회 판정${tail}` : null;
+  if (status === "no_red") return s.redRuns?.length ? `gostop-fix no_red: 패치 전 빨간불 확인 ${s.redRuns.length}회 모두 아님${tail}` : null;
+  if (status === "rule_decision") return s.diag?.rule_gap ? `gostop-fix rule_decision: 규칙 공백 진단${tail}` : null;
+  return null;
+}
 
 export function build({ checkpointer, llm, tools }) {
   const repo = repoPath();
@@ -844,7 +865,8 @@ export function build({ checkpointer, llm, tools }) {
     if (bench) { try { fs.writeFileSync(path.join(dir, "bench-recorded"), status, { flag: "wx", mode: 0o600 }); firstBench = true; } catch { /* 이미 적음 */ } }
     if (firstBench) tools.bench({ bench: bench.id, reproduced: s.repro === "skipped" ? null : s.repro === "reproduced", diag_match: match?.ok ?? null, signal: sg.kind });
     for (const d of [s.work, s.baseDir, s.merge?.dir].filter(Boolean)) for (const sub of ["build", ".dart_tool"]) fs.rmSync(path.join(d, sub), { recursive: true, force: true });
-    return { status, planPath, log: [`plan ${status}`] };
+    const verify_log = fixVerifyLog(s, status, planPath);
+    return { status, planPath, verify_log, log: [`plan ${status}${verify_log ? "" : " (확인 기록 없음)"}`] };
   }
 
   const R = (s) => s.route; // 갈림길 노드가 고른 다음 노드
