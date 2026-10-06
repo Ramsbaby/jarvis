@@ -10,6 +10,9 @@
 //   '엔진과 같다'처럼 콜론·괄호 없이 쓴 말은 표식이 아니다.
 // 경로마다: 건너뛰지 않은(skip 없음) test·testWidgets 가 하나 이상이고 그 안에 expect·expectLater 가 있어야 센다.
 // 어려움: 라이브 AI 시험(또는 라이브 AI 묶음) 안에 AIDifficulty.hard 나 AIDifficulty.values 가 있어야 한다.
+//   그 시험을 감싼 범위(바깥 group·파일 맨 위)의 '시험 밖' 코드에 그 시험보다 앞서 둔 것도 센다 — 난이도 목록을 바깥 group 에
+//   선언하고 그 목록을 돌며 '라이브 AI: …' 시험을 만드는 꼴(10-07 실측: 이 꼴의 정당한 재현 시험이 두 번 거절돼 gave_up).
+//   감싸지 않는 옆 group·옆 시험 안의 낱말은 세지 않는다.
 // 한계(정직): 정적 확인이다 — 이름만 붙이고 실제로 그 경로를 안 타는 시험은 못 잡는다. 그건 실행 증명(coverage-check)이 잡는다.
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -150,7 +153,18 @@ export function checkThreePaths(sources, { markers = DEFAULT_MARKERS, requireHar
     for (const g of groups) {
       if (tag(g.name).includes("liveAi") && HARD.some((h) => hasHard(toks, g.start, g.end, h))) liveAiHard = true;
     }
-    for (const c of calls.filter((x) => x.kind !== "group")) {
+    const testCalls = calls.filter((x) => x.kind !== "group");
+    // c 를 감싼 범위의 시험 밖 코드(c 보다 앞) — 옆 시험 안·c 를 감싸지 않는 group 안은 뺀다
+    const hardInScope = (c) => {
+      const blocked = [...testCalls.filter((x) => x !== c), ...groups.filter((g) => !(g.start < c.start && g.end > c.end))];
+      for (let i = 0; i < c.start; i++) {
+        if (blocked.some((x) => i >= x.start && i <= x.end)) continue;
+        const at = (h) => toks[i].t === "id" && toks[i].v === h[0] && (h.length === 1 || (toks[i + 1]?.v === "." && toks[i + 2]?.v === h[1]));
+        if (HARD.some(at)) return true;
+      }
+      return false;
+    };
+    for (const c of testCalls) {
       const enclosing = groups.filter((g) => g.start < c.start && g.end > c.end);
       if (c.skip || enclosing.some((g) => g.skip)) { tests.push({ name: c.name, skipped: true }); continue; }
       const own = tag(c.name);
@@ -161,7 +175,7 @@ export function checkThreePaths(sources, { markers = DEFAULT_MARKERS, requireHar
       tests.push({ name: c.name, paths: pathsOf, expects });
       if (!expects) continue;
       for (const p of pathsOf) paths[p].push(c.name);
-      if (pathsOf.includes("liveAi") && HARD.some((h) => hasHard(toks, c.start, c.end, h))) liveAiHard = true;
+      if (pathsOf.includes("liveAi") && (HARD.some((h) => hasHard(toks, c.start, c.end, h)) || hardInScope(c))) liveAiHard = true;
     }
   }
   const missing = Object.entries(paths).filter(([, v]) => !v.length).map(([k]) => k);

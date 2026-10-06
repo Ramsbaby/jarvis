@@ -424,7 +424,10 @@ export function build({ checkpointer, llm, tools }) {
     const tp = s.markers === "h5" ? await tools.run("repro.three-path-h5", { file }) : await tools.run("repro.three-path", { file });
     const tj = lastJson(tp.stdout);
     if (!tj) throw new Error(`3경로 확인 출력 없음(코드 ${tp.code}): ${short(tp.stderr, 200)}`);
-    if (!tj.ok) return retryOrStop(`3경로 시험 틀이 모자란다 — 빠진 것: ${tj.missing.join(", ")}(엔진·라이브 사람·라이브 AI 묶음마다 expect 가 있는 시험, 라이브 AI 는 어려움 포함)`, { reproTest: jr.test });
+    // 고칠 자리를 글자로 알려 준다 — '어려움 포함'만으로는 같은 꼴을 다시 써 왔다(10-07 실측)
+    const hardHint = tj.missing.includes("liveAiHard")
+      ? " — 'AIDifficulty.hard' 또는 'AIDifficulty.values' 를 글자 그대로 '라이브 AI: …' 시험 본문 안이나 그 시험을 감싼 group 의 시험 밖 코드(그 시험보다 앞)에 써라. 옆 시험 안·다른 파일·그 시험 뒤에 쓴 것은 세지 않는다" : "";
+    if (!tj.ok) return retryOrStop(`3경로 시험 틀이 모자란다 — 빠진 것: ${tj.missing.join(", ")}(엔진·라이브 사람·라이브 AI 묶음마다 expect 가 있는 시험, 라이브 AI 는 어려움 포함)${hardHint}`, { reproTest: jr.test });
     if (s.markers === "h5") {
       const src = String(readNoFollow(file) ?? "");
       const h5 = h5FrameUse(src, jr.support.map((f) => String(readNoFollow(path.join(s.work, f)) ?? "")));

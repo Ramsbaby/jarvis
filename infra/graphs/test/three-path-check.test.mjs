@@ -110,3 +110,37 @@ test("여러 파일로 나뉘어 있어도 합쳐서 본다", () => {
   assert.equal(checkThreePaths([a, b]).ok, true);
   assert.equal(checkThreePaths([a]).ok, false);
 });
+
+// 10-07 실측: 난이도 목록을 바깥 group(표식 없는 '라이브')에 선언하고 그 목록을 돌며 '라이브 AI: …' 시험을 만든 정당한 재현 시험이
+// liveAiHard 로 두 번 거절돼 gave_up. 감싼 범위의 시험 밖 코드(시험보다 앞)는 센다 — 옆 시험·옆 group 안의 낱말은 세지 않는다.
+const HOISTED = `
+void main() {
+  group('엔진: 강제 스톱', () { test('엔진: A 가 이긴다', () { expect(1, 1); }); });
+  group('라이브', () {
+    test('라이브 사람: A 가 이긴다', () async { expect(1, 1); });
+    final difficulties = <AIDifficulty>{ AIDifficulty.hard, ...AIDifficulty.values };
+    for (final d in difficulties) {
+      test('라이브 AI: 난이도 \${d.name} — A 가 이긴다', () async { expect(await playAi(d), 1); });
+    }
+  });
+}
+`;
+test("어려움: 감싼 group 의 시험 밖 코드에 둔 난이도 목록(시험보다 앞)도 센다 — 파일 맨 위 상수도", () => {
+  const r = checkThreePaths(HOISTED);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.liveAiHard, true);
+  const top = HOISTED.replace("void main() {", "const kDiffs = [AIDifficulty.hard];\nvoid main() {")
+    .replace("final difficulties = <AIDifficulty>{ AIDifficulty.hard, ...AIDifficulty.values };", "final difficulties = kDiffs;");
+  assert.equal(checkThreePaths(top).liveAiHard, true);
+});
+
+test("어려움: 옆 시험 본문·감싸지 않는 옆 group·시험 뒤에 쓴 낱말은 세지 않는다", () => {
+  const easyOnly = HOISTED.replace("{ AIDifficulty.hard, ...AIDifficulty.values }", "{ AIDifficulty.easy }");
+  assert.deepEqual(checkThreePaths(easyOnly).missing, ["liveAiHard"]);
+  // 옆 시험(라이브 사람) 본문
+  assert.deepEqual(checkThreePaths(easyOnly.replace("async { expect(1, 1); }", "async { expect(AIDifficulty.hard, 1); }")).missing, ["liveAiHard"]);
+  // 감싸지 않는 옆 group(엔진) 안의 시험 밖 코드
+  assert.deepEqual(checkThreePaths(easyOnly.replace("group('엔진: 강제 스톱', () {", "group('엔진: 강제 스톱', () { final x = AIDifficulty.hard;")).missing, ["liveAiHard"]);
+  // 라이브 AI 시험보다 뒤
+  assert.deepEqual(checkThreePaths(easyOnly.replace("    }\n  });\n}", "    }\n    final late = AIDifficulty.hard;\n  });\n}")).missing, ["liveAiHard"]);
+});
