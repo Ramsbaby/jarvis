@@ -481,6 +481,35 @@ test("디스크 관문: 경고선 15 + 사본 실측(LG_COPY_EST_GIB 기본값) 
 });
 
 // ── 도우미 단위 ───────────────────────────────────────────────────
+test("전체 시험 견주기: 사본 경로(work/·base/)가 달라도 같은 실패는 같다 · 시험 실행기 연결 고장으로 못 실은 파일만 따로 센다(10-07)", () => {
+  const SB = "/Users/x/.openclaw-data/runtime/state/graphs/gostop/sandbox/bench_t";
+  const full = (dir, extra = "") => [
+    `00:31 +10 -1: ${SB}/${dir}/test/data/services/push_test.dart: 알림 타입 8개 [E]`,
+    `  Expected: 8`,
+    extra,
+    `00:40 +11 -2: Some tests failed.`,
+  ].join("\n");
+  const w = C.readTestOutput(full("work"), 1), b = C.readTestOutput(full("base"), 1);
+  assert.deepEqual(w.failed, ["test/data/services/push_test.dart: 알림 타입 8개"]);
+  const base = new Set(C.failureItems(b));
+  assert.deepEqual(C.failureItems(w).filter((x) => !base.has(x)), [], "기존 실패를 이번 수정의 새 실패로 세지 않는다");
+  assert.equal(C.relTestName(`loading ${SB}/work/test/a/b_test.dart`), "loading test/a/b_test.dart");
+  assert.equal(C.relTestName("조커 시험"), "조커 시험");
+  // 실행기 연결 고장 — 파일을 싣기도 전에 죽음(시험 코드 탓 아님)
+  const sock = [
+    "Shell: [ERROR:flutter/shell/testing/tester_main.cc(686)] Unhandled exception",
+    "Shell: Exception: SocketException: Connection failed (OS Error: Operation not permitted, errno = 1), address = 127.0.0.1, port = 62245",
+    `Shell: #12     main (file://${SB}/tmp/10/t/flutter_tools.x/flutter_test_listener.y/listener.dart:51:13)`,
+    `02:06 +2940 ~2 -151: loading ${SB}/work/test/presentation/providers/gukjin_live_test.dart [E]`,
+    `  Failed to load "${SB}/work/test/presentation/providers/gukjin_live_test.dart": Shell subprocess cleanly reported an error.`,
+  ].join("\n");
+  assert.deepEqual(C.runnerLoadFlakes(full("work", sock)), ["test/presentation/providers/gukjin_live_test.dart"]);
+  // 컴파일 오류로 못 실은 것은 실행기 고장이 아니다(수정 탓일 수 있다)
+  const comp = `test/presentation/providers/gukjin_live_test.dart:3:1: Error: x\n02:06 +1 -1: loading ${SB}/work/test/presentation/providers/gukjin_live_test.dart [E]\n  Failed to load "x": Compilation failed`;
+  assert.deepEqual(C.runnerLoadFlakes(comp), []);
+  assert.deepEqual(C.runnerLoadFlakes(full("work")), []);
+});
+
 test("판독·판정 도우미: 재현 출력 서명(메모·결정 수 제외)·흔들림·진단 JSON·범위·벤치 대조·표식·--json-schema 자리", () => {
   const out = (memo) => `★ 라이브↔엔진 재생 대조: 1판 / 결정 18건 재생 / 불일치 1\n  ⛔ seed=7: 라이브와 엔진의 끝 상태가 다르다\n    seat0 확정 점수: 라이브 4 / 엔진 6\n    결정 18건, 완주=true, 메모: ${memo}\n00:18 +0 -1: Some tests failed.\n`;
   const a = C.readTestOutput(out("1"), 1), b = C.readTestOutput(out("2"), 1);

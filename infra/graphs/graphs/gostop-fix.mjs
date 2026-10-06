@@ -16,7 +16,7 @@ import { StateGraph, Annotation, START, END, interrupt } from "@langchain/langgr
 import {
   repoPath, sandboxDir, runDir, gostopDir, keyDir, mkdirp, writeAtomic, dirBytes, forbiddenPresent, applyInject, busyReason, pruneHistoryDocs, leakScan,
   readTestOutput, judgeRepro, reproExcerpt, DIAG_SCHEMA, parseDiag, scopeOf, diagMatch, reproCommand, short, DIFF_TEST, SOAK_TEST,
-  hasH5Frame, hasAiPolicy, sameFiles, AI_POLICY, copyTree, lastJson, judgeReproFiles, restoreFiles, analyzeCounts, failureItems, seedFor,
+  hasH5Frame, hasAiPolicy, sameFiles, AI_POLICY, copyTree, lastJson, judgeReproFiles, restoreFiles, analyzeCounts, failureItems, runnerLoadFlakes, seedFor,
   REVIEW_SCHEMA, parseReview, reviewPass, reproTestPrompt, fixPrompt, reviewPrompt,
   safeTarget, readNoFollow, copyNoFollow, redQuality, aiCallsites, h5FrameUse,
   toolCrash, crashLine, loadBench, benchFile, gradeSpec, gradeVerdict,
@@ -112,6 +112,7 @@ const State = Annotation.Root({
   aiGenSha: Annotation({ reducer: last, default: () => null }),
   steps: Annotation({ reducer: last, default: () => [] }), // 단계 기록(모든 시도)
   needBase: Annotation({ reducer: last, default: () => ({}) }), // 실패한 단계의 실패 항목 — 깨끗한 내보내기에서도 실패하는지 본다
+  loadRetry: Annotation({ reducer: last, default: () => [] }), // 전체 시험에서 시험 실행기 연결 고장으로 싣지 못한 파일 — 그 파일만 다시 돈다
   analyzeBase: Annotation({ reducer: last, default: () => null }),
   verifyOk: Annotation({ reducer: last, default: () => null }),
   verifyFail: Annotation({ reducer: last, default: () => null }),
@@ -530,7 +531,7 @@ export function build({ checkpointer, llm, tools }) {
     }
     const reasons = j.reasons ?? [];
     const next = s.mode === "live" && reasons.length ? "scope_gate" : "steps_launch";
-    return { scopeFinal: j, phase: "verify", stepsDone: [], needBase: {}, verifyOk: null, verifyFail: null, route: next,
+    return { scopeFinal: j, phase: "verify", stepsDone: [], needBase: {}, loadRetry: [], verifyOk: null, verifyFail: null, route: next,
       log: [`scope_check 허용 ${j.allowed?.length ?? 0} · 사유 ${reasons.map((x) => `${x.path}:${x.reason}`).join(", ") || "없음"} · AI ${s.aiCheck}`] };
   }
   // 실제 모드 + 사유 — 순수 interrupt
@@ -562,6 +563,8 @@ export function build({ checkpointer, llm, tools }) {
       { id: "mini_diff", cmd: "sandbox.flutter-test-defines", params: { dir: W, test: DIFF_TEST, d1: "REPLAY_GAMES=20", d2: `REPLAY_SEED_BASE=${seed}`, d3: "LG_NOOP=1" } },
       { id: "mini_hard", cmd: "sandbox.flutter-test-defines", params: { dir: W, test: SOAK_TEST, d1: "SOAK_GAMES=6", d2: `SOAK_SEED_BASE=${seed + 1}`, d3: "SOAK_DIFFICULTY=hard" } },
       { id: "mini_easy", cmd: "sandbox.flutter-test-defines", params: { dir: W, test: SOAK_TEST, d1: "SOAK_GAMES=4", d2: `SOAK_SEED_BASE=${seed + 2}`, d3: "SOAK_DIFFICULTY=easy" } },
+      // 전체 시험에서 시험 실행기 연결 고장으로 싣지도 못한 파일 — 빼지 않고 그 파일만 한 번 더 돌려 잰다(10-07)
+      ...(s.loadRetry ?? []).map((f, i) => ({ id: `full_retry${i + 1}`, cmd: "sandbox.flutter-test", params: { dir: W, test: f } })),
     ].flatMap((m) => [{ ...m, kind: "green_or_base" }, ...(s.needBase[m.id] ? [{ ...m, id: `${m.id}_base`, params: { ...m.params, dir: CL }, kind: "base", of: m.id }] : [])]);
     return [
       ...target, three,
@@ -620,11 +623,19 @@ export function build({ checkpointer, llm, tools }) {
         const n = analyzeCounts(r.raw), b = s.analyzeBase ?? { errors: 0, warnings: 0 };
         return { ok: n.errors <= b.errors && n.warnings <= b.warnings, detail: `오류 ${n.errors}(기준 ${b.errors})·경고 ${n.warnings}(기준 ${b.warnings})` };
       }
-      case "green_or_base":
+      case "green_or_base": {
         if (r.code === 0) return { ok: true, detail: "초록" };
         if (r.out.compileError || r.code === 124) return { ok: false, detail: r.code === 124 ? "시간 상한 초과" : `컴파일 오류 — ${ex()}` };
+        // 시험 실행기 자체가 연결을 못 열어 싣지 못한 파일(10-07 격리 안 127.0.0.1 연결 EPERM 1건)은 수정 탓도 기존 결함도 아니다 —
+        // 비교에서 떼어 내 그 파일만 다시 돌린다(full_retryN). 다시 돌려도 실패하면 그때는 보통 실패처럼 깨끗한 내보내기와 견준다.
+        const flakes = step.id === "full" ? runnerLoadFlakes(r.raw).slice(0, 3) : [];
+        const items = failureItems(r.out).filter((x) => !flakes.some((f) => x === `loading ${f}`));
+        const upd = flakes.length ? { loadRetry: flakes } : {};
+        const fl = flakes.length ? ` · 시험 실행기 연결 고장으로 못 실은 ${flakes.length}개는 다시 돌림` : "";
+        if (!items.length) return { ok: true, detail: `실패 없음${fl}`, upd };
         // 실패 — 깨끗한 내보내기에서도 같은 실패인지 본다(격리 환경·기존 결함 탓을 이번 수정 탓으로 몰지 않게)
-        return { ok: true, pendingBase: true, detail: `실패 ${failureItems(r.out).length} — 깨끗한 내보내기와 견줌`, upd: { needBase: { ...s.needBase, [step.id]: failureItems(r.out).slice(0, 200) } } };
+        return { ok: true, pendingBase: true, detail: `실패 ${items.length} — 깨끗한 내보내기와 견줌${fl}`, upd: { ...upd, needBase: { ...s.needBase, [step.id]: items.slice(0, 200) } } };
+      }
       case "base": {
         const mine = s.needBase[step.of] ?? [];
         const base = new Set(failureItems(r.out));

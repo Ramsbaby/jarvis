@@ -134,6 +134,9 @@ export function busyReason(repo, nowMs, lastCommitSec) {
 // ── 재현 출력 판독(사람이 쓴 기존 시험의 출력) ─────────────────────
 // 차분 대조: '⛔ seed=N: …' 블록(들여쓴 4칸 줄까지). 일반 시험: 실패한 시험 이름. 서명은 흔들림 판정에 쓴다.
 const strip = (s) => String(s).replace(/\u001b\[[0-9;]*m/g, "");
+// 실패한 시험 이름 앞의 절대경로(격리 사본마다 다른 …/work/·…/base/)를 저장소 기준 경로로 줄인다 — 같은 시험을 사본끼리 견줄 수 있게.
+// 10-07: 전체 시험을 깨끗한 내보내기와 견줄 때 경로가 달라 기존 실패 99건이 전부 '이번 수정에서 새로 실패'로 세어져 옳은 수정이 거절됐다.
+export const relTestName = (n) => String(n).replace(/^(loading )?\/\S*\/((?:test|integration_test)\/[^\s:]*\.dart)/, "$1$2");
 export function readTestOutput(raw, rc, signal = null) {
   const lines = strip(raw).replace(/\r/g, "\n").split("\n");
   const blocks = [];
@@ -147,7 +150,8 @@ export function readTestOutput(raw, rc, signal = null) {
   const failed = [];
   for (const l of lines) {
     const m = /^\d{2}:\d{2} \+\d+(?: ~\d+)? -\d+: (.+?) \[E\]\s*$/.exec(l.trim());
-    if (m && !failed.includes(m[1])) failed.push(m[1].slice(0, 200));
+    const name = m && relTestName(m[1]).slice(0, 200);
+    if (name && !failed.includes(name)) failed.push(name);
   }
   const compileError = lines.some((l) => /^(?:lib|test)\/\S+\.dart:\d+:\d+: Error:/.test(l.trim()) || /Failed to load ".*": Compilation failed/.test(l));
   const summary = lines.map((l) => l.trim()).find((l) => /^★ /.test(l)) ?? null;
@@ -503,8 +507,24 @@ export function h5FrameUse(testSrc, supportSrcs = []) {
   for (const s of supportSrcs) if (/\b(threePathAiDifficulties|runEnginePath|ThreePathHarness)\b/.test(s)) why.push("도우미 파일이 3경로 틀의 이름을 다시 정의한다");
   return { ok: why.length === 0, why };
 }
+// 시험 실행기(flutter_test_listener)가 자기 연결을 못 열어 싣지 못한 시험 파일(저장소 기준 경로) — 시험 코드가 돌기도 전의 실행 환경 고장이다.
+// 'loading <파일> [E]' 바로 앞(40줄 안)에 그 실행기의 처리 안 된 SocketException 이 있을 때만 센다. 컴파일 오류는 여기 들지 않는다.
+export function runnerLoadFlakes(raw) {
+  const lines = strip(raw).replace(/\r/g, "\n").split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\d{2}:\d{2} \+\d+(?: ~\d+)? -\d+: loading (\S+\.dart) \[E\]\s*$/.exec(lines[i].trim());
+    if (!m) continue;
+    const back = lines.slice(Math.max(0, i - 40), i).join("\n");
+    if (/SocketException/.test(back) && /flutter_test_listener/.test(back) && !/Compilation failed|: Error:/.test(back)) {
+      const f = relTestName(m[1]);
+      if (/^(?:test|integration_test)\//.test(f) && !out.includes(f)) out.push(f);
+    }
+  }
+  return out;
+}
 // 실패 항목(불일치 블록 첫 줄 + 실패한 시험 이름) — 기준(깨끗한 내보내기)과 견줄 때 쓴다
-export const failureItems = (out) => [...new Set([...out.blocks.map((b) => b[0]), ...out.failed])];
+export const failureItems = (out) => [...new Set([...out.blocks.map((b) => b[0]), ...out.failed.map(relTestName)])];
 
 // 씨앗 — sigkey 로 정해진 수(같은 스레드는 같은 판)
 export function seedFor(sigkey, base = 20261000) {
