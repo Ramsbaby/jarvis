@@ -281,6 +281,28 @@ test("시간 초과: 격리 안 프로세스를 나무째 끄고 124 에 해당�
   assert.ok(r.ms < 30_000);
 });
 
+// 10-04~06 실측: 분리 실행은 출력을 상태 폴더(홈 아래) jobs/<…>/stdout 파일로 받는다. 입구(CLI)가 그 fd 를 격리 안에 그대로 물려주면
+// 홈 아래 메타데이터 막음이 fd 1 의 fstat 까지 막아 dart 가 시작하다 죽었다(종료 255 · 'Failed to get type of stdio handle (fd 1)') —
+// 벤치 빨간불 확인 4회가 전부 이것으로 no_red. 입구는 늘 파이프로 받아 흘려야 한다.
+test("출력 자리가 홈 아래 파일이어도(분리 실행 jobs/…/stdout) CLI 로 띄운 dart 가 stdout·stderr 를 쓰고 종료 코드를 그대로 낸다", { skip: SKIP }, (t) => {
+  const w = world(t);
+  const caches = path.join(H, "Library", "Caches");
+  const outDir = fs.mkdtempSync(path.join(fs.existsSync(caches) ? caches : H, "lg-sbx-out-"));
+  t.after(() => fs.rmSync(outDir, { recursive: true, force: true }));
+  const script = path.join(fs.realpathSync(w.tmp), "hello.dart");
+  fs.writeFileSync(script, "import 'dart:io';\nvoid main() { stdout.writeln('LG-OUT ok'); stderr.writeln('LG-ERR ok'); exitCode = 1; }\n");
+  const of = path.join(outDir, "stdout"), ef = path.join(outDir, "stderr");
+  const fo = fs.openSync(of, "a", 0o600), fe = fs.openSync(ef, "a", 0o600);
+  const cli = path.join(path.dirname(sbx.PROFILE), "sandboxed-run.mjs");
+  const r = spawnSync(process.execPath, [cli, "--copy", w.copy, "--tmp", w.tmp, "--timeout-sec", "120", "--", "dart", script], { stdio: ["ignore", fo, fe], timeout: 150_000 });
+  fs.closeSync(fo); fs.closeSync(fe);
+  const out = fs.readFileSync(of, "utf8"), err = fs.readFileSync(ef, "utf8");
+  assert.doesNotMatch(err, /Failed to get type of stdio handle/, err.slice(0, 300));
+  assert.equal(r.status, 1, `종료 코드는 그대로 — ${err.slice(0, 300)}`);
+  assert.match(out, /LG-OUT ok/);
+  assert.match(err, /LG-ERR ok/);
+});
+
 const FLUTTER_SKIP = SKIP || (process.env.LG_SANDBOX_FLUTTER === "0" ? "LG_SANDBOX_FLUTTER=0" : !fs.existsSync(path.join(GOSTOP, ".git")) ? "고스톱 저장소 없음" : false);
 
 test("flutter 오프라인 초록: 고스톱 HEAD 를 git archive 로 푼 새 사본(셰이더 컴파일부터)에서 격리 안 flutter test — 시험 코드 자신도 밖에 못 닿는다", { skip: FLUTTER_SKIP, timeout: 600_000 }, async (t) => {

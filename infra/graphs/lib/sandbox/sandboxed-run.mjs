@@ -14,7 +14,7 @@
 // - 사본·임시 폴더 경로를 검사한다: 정해진 뿌리 아래 · 홈·SDK·pub 캐시를 품지 않음 · 서로 겹치지 않음(겹치면 .git 보호가 풀린다).
 // - 도는 동안 0.5초마다 격리 안 프로세스의 리슨 소켓을 본다. 루프백이 아닌 주소(0.0.0.0·LAN)에 리슨하면 바로 모두 끈다 —
 //   격리 규칙만으로는 이것을 막을 수 없다(아래 nonLoopbackListeners 주석, 10-03 실측).
-// - 출력은 그대로 흘려보내고 종료 코드도 그대로 낸다. 시간 초과는 124, 준비 오류는 97, 격리 위반 시도는 98(stderr 'LG-SANDBOX …').
+// - 출력은 파이프로 받아 그대로 흘려보내고(격리 안에 우리 출력 파일을 물려주지 않는다 — runSandboxed 주석) 종료 코드도 그대로 낸다. 시간 초과는 124, 준비 오류는 97, 격리 위반 시도는 98(stderr 'LG-SANDBOX …').
 // 맥 전용이다(sandbox-exec). 다른 OS 에서는 97(not_darwin)로 닫힌 쪽 실패.
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -242,17 +242,25 @@ export function killTree(pid) {
 
 // 띄워서 끝날 때까지 기다린다. 자식은 우리 프로세스 묶음에 둔다 — 분리 실행 껍데기가 묶음째 끄면 격리 안까지 함께 꺼진다.
 // 감시(watchMs 마다): 격리 안 프로세스가 루프백 아닌 주소로 리슨하면 바로 나무째 끄고 violation 을 남긴다(CLI 종료 코드 98).
+// stdio: "pipe"(모아서 돌려줌) · "forward"(파이프로 받아 우리 stdout·stderr 로 흘림 — 모으지 않는다).
+//   격리 안에는 늘 파이프만 준다. 우리 출력을 그대로 물려주면(inherit) 그 끝이 홈 아래 파일일 때(분리 실행의 jobs/<…>/stdout)
+//   격리 규칙(홈 아래 메타데이터 막음)이 fd 1 의 fstat 까지 막아 dart 가 시작하다 죽는다 — 'Failed to get type of stdio handle (fd 1)',
+//   종료 255·0초(10-04~06 벤치 빨간불 확인 4회 전부. 같은 시험이 파이프·/tmp 파일로는 정상 빨강 — 10-06 실측).
 export function runSandboxed(cmd, { timeoutMs = 30 * 60_000, stdio = "pipe", maxCapture = 4_000_000, watchMs = 500 } = {}) {
+  if (stdio !== "pipe" && stdio !== "forward") throw new SandboxError("bad_args", `stdio 는 pipe·forward 만: ${stdio}`);
   return new Promise((resolve) => {
     const t0 = Date.now();
-    const child = spawn(cmd.bin, cmd.argv, { cwd: cmd.cwd, env: cmd.env, stdio: stdio === "inherit" ? ["ignore", "inherit", "inherit"] : ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd.bin, cmd.argv, { cwd: cmd.cwd, env: cmd.env, stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = "", timedOut = false, violation = null, closed = false;
     const watch = watchMs > 0 ? setInterval(() => {
       if (closed || violation) return;
       const bad = nonLoopbackListeners([child.pid, ...descendants(child.pid)]);
       if (bad.length) { violation = `nonloopback_listen ${bad.map((b) => `${b.proc}:${b.pid}@${b.addr}`).join(",")}`; killTree(child.pid); }
     }, watchMs) : null;
-    if (stdio !== "inherit") {
+    if (stdio === "forward") {
+      child.stdout.pipe(process.stdout, { end: false });
+      child.stderr.pipe(process.stderr, { end: false });
+    } else {
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
       child.stdout.on("data", (d) => { if (out.length < maxCapture) out += d; });
@@ -347,10 +355,12 @@ async function main() {
       process.exit(r.ok ? 0 : 3);
     }
     const cmd = sandboxCommand({ copy: o.copy, tmp: o.tmp, tool: o.tool, args: o.args, aiPolicyDir: o.aiPolicyDir ?? null });
-    const r = await runSandboxed(cmd, { timeoutMs: o.timeoutSec * 1000, stdio: "inherit" });
-    if (r.violation) { process.stderr.write(`LG-SANDBOX violation: ${r.violation} — 격리 안 프로세스를 모두 껐다\n`); process.exit(EXIT_VIOLATION); }
-    if (r.timedOut) { process.stderr.write(`LG-SANDBOX timeout: ${o.timeoutSec}초를 넘겨 격리 안 프로세스를 모두 껐다\n`); process.exit(EXIT_TIMEOUT); }
-    process.exit(r.code ?? (r.signal ? 128 + (os.constants.signals[r.signal] ?? 0) : EXIT_SETUP));
+    const r = await runSandboxed(cmd, { timeoutMs: o.timeoutSec * 1000, stdio: "forward" });
+    // 우리 stdout 이 파이프면 맥에서 쓰기가 비동기다 — 흘려보낸 출력이 다 나간 뒤에 끝낸다(안 그러면 끝부분이 잘린다)
+    const exit = async (code) => { for (const s of [process.stdout, process.stderr]) await new Promise((res) => s.write("", res)); process.exit(code); };
+    if (r.violation) { process.stderr.write(`LG-SANDBOX violation: ${r.violation} — 격리 안 프로세스를 모두 껐다\n`); return exit(EXIT_VIOLATION); }
+    if (r.timedOut) { process.stderr.write(`LG-SANDBOX timeout: ${o.timeoutSec}초를 넘겨 격리 안 프로세스를 모두 껐다\n`); return exit(EXIT_TIMEOUT); }
+    return exit(r.code ?? (r.signal ? 128 + (os.constants.signals[r.signal] ?? 0) : EXIT_SETUP));
   } catch (e) {
     process.stderr.write(`LG-SANDBOX ${e.code ?? "error"}: ${e.message}\n`);
     process.exit(EXIT_SETUP);

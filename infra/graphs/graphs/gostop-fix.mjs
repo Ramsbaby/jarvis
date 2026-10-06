@@ -19,6 +19,7 @@ import {
   hasH5Frame, hasAiPolicy, sameFiles, AI_POLICY, copyTree, lastJson, judgeReproFiles, restoreFiles, analyzeCounts, failureItems, seedFor,
   REVIEW_SCHEMA, parseReview, reviewPass, reproTestPrompt, fixPrompt, reviewPrompt,
   safeTarget, readNoFollow, copyNoFollow, redQuality, aiCallsites, h5FrameUse,
+  toolCrash, crashLine, loadBench, benchFile, gradeSpec, gradeVerdict,
 } from "./gostop-common.mjs";
 import crypto from "node:crypto";
 
@@ -120,6 +121,11 @@ const State = Annotation.Root({
   merge: Annotation({ reducer: last, default: () => null }),
   commit: Annotation({ reducer: last, default: () => null }),
   verify_log: Annotation({ reducer: last, default: () => null }), // 판정 M2 — plan 이 끝난 상태를 뒷받침하는 확인을 적는다(fixVerifyLog)
+  // ── 벤치 숨긴 정답 채점(M8) — plan 뒤, LLM 단계가 다 끝난 다음 ──
+  benchMatch: Annotation({ reducer: last, default: () => null }), // plan 의 진단 일치(diag_match)
+  grade: Annotation({ reducer: last, default: () => null }), // { dir, tests, source, answers, phase, idx, runs, controlRed, applied, error } 또는 { skipped, hidden_pass }
+  gradeHandle: Annotation({ reducer: last, default: () => null }),
+  gradeRelaunch: Annotation({ reducer: last, default: () => 0 }),
   log: Annotation({ reducer: (a, b) => a.concat(b), default: () => [] }),
 });
 
@@ -450,6 +456,14 @@ export function build({ checkpointer, llm, tools }) {
     // 시험이 사본을 바꿨나(LLM 시험 코드가 lib 를 고쳐 놓는 길) — redbase 대비 변경이 없어야 한다
     const px = await extract(s, s.redbase, `red-check-${s.rtAttempt}`);
     if (!px.ok || px.files.length) return violate(s, "copy_changed", `빨간불 확인 중 사본이 바뀜: ${px.ok ? px.files.map((f) => f.path).join(", ") : px.reason}`);
+    // 시험 도구가 시험을 하나도 못 돌리고 끝남(dart 예외 255 등) — 재현 시험 탓이 아니다. 같은 시험을 다시 띄우고(작성 횟수에 안 셈),
+    // 끝내 안 되면 gave_up(실행 환경 고장). 재현 시험을 다시 쓰게 하지 않는다(10-04~06 no_red 4건이 전부 이것이었다)
+    if (toolCrash(r.code, r.raw)) {
+      const why = `시험 도구가 시험을 돌리지 못하고 끝남(코드 ${r.code}) — ${crashLine(r.raw)}`;
+      const runs = [...s.redRuns, { attempt: s.rtAttempt, rc: r.code, red: false, toolCrash: true, failed: [], compileError: false, secs: r.secs, log: rel(s, logFile) }];
+      if (s.redRelaunch + 1 < MAX_RELAUNCH) return { redRuns: runs, redHandle: null, redRelaunch: s.redRelaunch + 1, route: "verify_red_launch", log: [`verify_red ${short(why, 120)} — 다시 띄움`] };
+      return { redRuns: runs, redHandle: null, rtError: `빨간불 확인 — ${why} ${MAX_RELAUNCH}회(재현 시험이 아니라 실행 환경 고장)`, route: "plan", log: [`verify_red 도구 고장 ${MAX_RELAUNCH}회 끝`] };
+    }
     const out = r.out;
     const q = redQuality(out, r.raw); // 표식 붙은 경로 시험이 단언으로 실패해야 빨간불(H10 중6)
     const red = r.code === 1 && q.ok;
@@ -644,9 +658,18 @@ export function build({ checkpointer, llm, tools }) {
       const step = stepsFor(s).find((x) => x.id === s.stepId);
       if (!step) throw new Error(`단계 ${s.stepId} 가 목록에 없다`);
       const r = checkCmd(s.stepHandle, `${s.phase}:${step.id}`);
-      if (r.dead) {
-        if (s.stepRelaunch + 1 < MAX_RELAUNCH) return { stepHandle: null, stepRelaunch: s.stepRelaunch + 1, route: "steps_launch", log: [`${s.phase}:${step.id} ${r.dead} — 다시 띄움`] };
-        r.code = -1; r.raw = r.dead; r.out = readTestOutput("", 1);
+      // 시험 도구가 시험을 하나도 못 돌리고 끝남 — 결과 없이 죽음(dead)과 같이 다시 띄운다. 수정 탓이 아니다
+      const crash = !r.dead && toolCrash(r.code, r.raw) ? `시험 도구가 시험을 돌리지 못하고 끝남(코드 ${r.code}) — ${crashLine(r.raw)}` : null;
+      if (r.dead || crash) {
+        if (s.stepRelaunch + 1 < MAX_RELAUNCH) return { stepHandle: null, stepRelaunch: s.stepRelaunch + 1, route: "steps_launch", log: [`${s.phase}:${step.id} ${short(r.dead ?? crash, 120)} — 다시 띄움`] };
+        // 검증 단계의 실행 환경 고장은 재수정(opus)으로 보내지 않는다 — gave_up(AI 비교·반영 준비는 아래 기존 길: 폴백·반영 실패)
+        if (s.phase === "verify") {
+          const lf = saveLog(s, `${s.phase}-${s.fixAttempt}-${step.id}`, r.raw ?? r.dead);
+          const rec = { phase: s.phase, fix: s.fixAttempt, id: step.id, ok: false, rc: r.code ?? null, secs: r.secs ?? null, detail: `실행 환경 고장 ${MAX_RELAUNCH}회 — ${r.dead ?? crash}`, log: rel(s, lf) };
+          return { steps: [...s.steps, rec], stepHandle: null, stepRelaunch: 0, verifyOk: false, verifyFail: { id: step.id, detail: rec.detail },
+            fixError: `검증 '${step.id}' ${rec.detail}(수정 탓이 아니다)`, route: "plan", log: [`${s.phase}:${step.id} 실행 환경 고장 끝`] };
+        }
+        r.code = -1; r.raw = r.dead ?? crash; r.out = readTestOutput("", 1); r.dead = r.dead ?? crash;
       }
       const logFile = saveLog(s, `${s.phase}-${s.fixAttempt}-${step.id}`, r.raw);
       if (r.code === 98) return violate(s, "exit98", `${s.phase}:${step.id} — ${short(r.raw.split("LG-SANDBOX").pop(), 160)}`);
@@ -789,7 +812,7 @@ export function build({ checkpointer, llm, tools }) {
       "", "## 빨간 시험 → 수정 → 검증(1b)",
       `- 재현 시험: ${s.reproTest ?? "-"}${s.threePath ? ` (3경로 ${JSON.stringify(s.threePath)})` : ""} · 작성 ${s.rtAttempt}회${s.rtError ? ` — ${s.rtError}` : ""}`,
       `- 시험 파일 자리: ${s.reproTest && s.work ? path.join(s.work, s.reproTest) : "-"}`,
-      ...s.redRuns.map((x) => `- 빨간불 확인 ${x.attempt}: ${x.red ? "빨강" : "아님"} rc=${x.rc} ${x.secs}s 실패 ${x.failed.length}${x.compileError ? " (컴파일 오류)" : ""} · 로그 ${x.log}`),
+      ...s.redRuns.map((x) => `- 빨간불 확인 ${x.attempt}: ${x.red ? "빨강" : "아님"} rc=${x.rc} ${x.secs}s 실패 ${x.failed.length}${x.compileError ? " (컴파일 오류)" : ""}${x.toolCrash ? " (시험 도구 고장 — 다시 띄움)" : ""} · 로그 ${x.log}`),
       `- 수정: ${s.fixAttempt}회${s.fixError ? ` — ${s.fixError}` : ""} · 정본 패치 ${r(s.fullPatch?.file)} (${s.fullPatch?.files?.map((f) => `${f.path}+${f.added}-${f.removed}`).join(", ") ?? "-"})`,
       `- 이번 수정만: ${r(s.fixPatch?.file)} · AI 결정 비교: ${s.aiCheck}${s.aiDetail ? ` (${s.aiDetail})` : ""}`,
       ...(s.scopeFinal ? [`- 수정 범위: ${s.scopeFinal.reasons?.length ? s.scopeFinal.reasons.map((x) => `${s.mode === "shadow" ? "물었을 것" : "승인 사유"} ${x.path}: ${x.reason}`).join(" / ") : "승인 사유 없음"}`] : []),
@@ -860,13 +883,99 @@ export function build({ checkpointer, llm, tools }) {
       ...(s.stage === "1b" ? { stage: "1b", reproTest: s.reproTest, reproSupport: s.reproSupport, threePath: s.threePath, rtAttempt: s.rtAttempt, rtError: s.rtError, redRuns: s.redRuns, noRed: s.noRed,
         fixAttempt: s.fixAttempt, fixError: s.fixError, fixPatch: s.fixPatch, fullPatch: s.fullPatch, aiCheck: s.aiCheck, aiDetail: s.aiDetail, scopeFinal: s.scopeFinal,
         steps: s.steps, verifyOk: s.verifyOk, review: s.review, violation: s.violation, merge: s.merge, commit: s.commit, calls: { ...s.calls, sonnet: sonnetUsed(s) }, work: s.work } : {}) }, null, 1)}\n`);
-    // 판정 M8 은 스레드당 한 번(plan 이 다시 돌아도 두 번 세지 않게 표식 파일)
-    let firstBench = false;
-    if (bench) { try { fs.writeFileSync(path.join(dir, "bench-recorded"), status, { flag: "wx", mode: 0o600 }); firstBench = true; } catch { /* 이미 적음 */ } }
-    if (firstBench) tools.bench({ bench: bench.id, reproduced: s.repro === "skipped" ? null : s.repro === "reproduced", diag_match: match?.ok ?? null, signal: sg.kind });
     for (const d of [s.work, s.baseDir, s.merge?.dir].filter(Boolean)) for (const sub of ["build", ".dart_tool"]) fs.rmSync(path.join(d, sub), { recursive: true, force: true });
+    // 판정 M8 — 1b 벤치는 숨긴 정답 채점(grade_*) 뒤 bench_record 가 적는다. 1a 는 여기서
+    if (bench && s.stage !== "1b") recordBench(s, dir, status, match?.ok ?? null, null);
     const verify_log = fixVerifyLog(s, status, planPath);
-    return { status, planPath, verify_log, log: [`plan ${status}${verify_log ? "" : " (확인 기록 없음)"}`] };
+    return { status, planPath, verify_log, benchMatch: match?.ok ?? null, log: [`plan ${status}${verify_log ? "" : " (확인 기록 없음)"}`] };
+  }
+  // 판정 M8 은 스레드당 한 번(다시 돌아도 두 번 세지 않게 표식 파일)
+  function recordBench(s, dir, status, diagMatchOk, hiddenPass) {
+    try { fs.writeFileSync(path.join(dir, "bench-recorded"), status, { flag: "wx", mode: 0o600 }); } catch { return; /* 이미 적음 */ }
+    tools.bench({ bench: s.signal.bench.id, reproduced: s.repro === "skipped" ? null : s.repro === "reproduced", diag_match: diagMatchOk,
+      ...(s.stage === "1b" ? { hidden_pass: hiddenPass } : {}), signal: s.signal?.kind });
+  }
+
+  // ════════════════ 벤치 숨긴 정답 채점(M8) — plan 뒤. LLM 단계는 여기 오기 전에 다 끝났다 ════════════════
+  // 정답(역사 사례: 수정 커밋의 시험 · 회귀 주입: 그 변형을 잡는 기존 시험)은 여기서 처음 읽는다 — 사본·프롬프트·상태 어디에도 그 전에 없다.
+  // 채점 사본(grade) = 깨끗한 내보내기 복제(사람 코드) → pub get → 정답 시험(대조군: 빨강이어야 채점할 수 있다) → 정본 패치
+  // → 정답 시험을 사람 판으로 다시 쓴다(패치가 그 자리를 건드렸어도) → 초록이면 hidden_pass. 시험은 격리 실행(패치는 LLM 코드).
+  // 그림자에서 고칠 안이 낼 수 있는 것(ready·would_ask)만 채점한다 — 그 밖 상태는 '낼 패치 없음'(false), 규칙 결정 사례는 대상 아님(null).
+  async function gradePrep(s) {
+    const bench = s.signal.bench;
+    let c = null;
+    try { c = loadBench(benchFile()).cases.find((x) => x.id === bench.id) ?? null; } catch { /* 없으면 아래 skip */ }
+    const spec = gradeSpec(c, { status: s.status, patch: s.fullPatch?.file ?? null, leak: s.leak });
+    if (spec.skip) return { grade: { skipped: spec.skip, hidden_pass: spec.hidden_pass }, route: "bench_record", log: [`grade 건너뜀 — ${spec.skip}`] };
+    const fail = (error) => ({ grade: { tests: spec.tests, source: spec.source, error }, route: "bench_record", log: [`grade 준비 실패 — ${short(error, 120)}`] });
+    // 정답 시험 사람 판을 사본 밖(runs/<키>/grade-answers)에 둔다 — 대조군 앞과 패치 뒤에 같은 것을 쓴다
+    const answers = path.join(rdir(s), "grade-answers");
+    fs.rmSync(answers, { recursive: true, force: true });
+    for (const t of spec.tests) {
+      if (spec.source === "origin") {
+        const r = await tools.run("git.show-file", { repo, spec: `${spec.rev}:${t}` });
+        if (r.code !== 0 || !r.stdout) return fail(`정답 시험을 못 읽음 ${spec.rev}:${t}(코드 ${r.code}) ${short(r.stderr, 120)}`);
+        writeAtomic(safeTarget(mkdirp(answers), t), r.stdout);
+      } else {
+        try { copyNoFollow(path.join(s.clean, t), mkdirp(answers), t); } catch (e) { return fail(`정답 시험이 깨끗한 내보내기에 없다: ${t} — ${short(e.message, 120)}`); }
+      }
+    }
+    const dir = copyTree(s.clean, path.join(sandboxDir(tools.stateDir, s.sigkey), "grade"));
+    const pg = await tools.run("flutter.pub-get-offline", { dir }); // 사람 코드일 때만(패치 전)
+    if (pg.code !== 0) return fail(`pub get --offline 실패(코드 ${pg.code}): ${short(pg.stdout + pg.stderr, 200)}`);
+    for (const t of spec.tests) copyNoFollow(path.join(answers, t), dir, t);
+    return { grade: { dir, tests: spec.tests, source: spec.source, answers, phase: "control", idx: 0, runs: [] }, gradeRelaunch: 0, route: "grade_launch",
+      log: [`grade 준비 — 정답 ${spec.tests.length}개(${spec.source})`] };
+  }
+  async function gradeLaunch(s) {
+    const g = s.grade;
+    if (g.phase === "control" && g.idx === 0 && !s.gradeRelaunch) await canary(s, g.dir);
+    const seq = s.seq + 1;
+    const h = tools.launch("sandbox.flutter-test", { dir: g.dir, tmp: freshTmp(s, seq), test: g.tests[g.idx] }, { node: `grade_${g.phase}`, attempt: seq });
+    return { seq, gradeHandle: h, route: "grade_check", log: [`grade ${g.phase} ${g.tests[g.idx]} 띄움(${seq})`] };
+  }
+  async function gradeCheck(s) {
+    const g = s.grade;
+    const r = checkCmd(s.gradeHandle, `채점 ${g.phase}`);
+    const crash = r.dead ?? (r.code === 97 ? `격리 준비 오류(97) ${short(r.raw.split("LG-SANDBOX").pop(), 120)}` : toolCrash(r.code, r.raw) ? `시험 도구 고장(코드 ${r.code}) — ${crashLine(r.raw)}` : null);
+    if (crash) {
+      if (s.gradeRelaunch + 1 < MAX_RELAUNCH) return { gradeHandle: null, gradeRelaunch: s.gradeRelaunch + 1, route: "grade_launch", log: [`grade ${short(crash, 120)} — 다시 띄움`] };
+      return { gradeHandle: null, grade: { ...g, error: `채점 실행 실패 ${MAX_RELAUNCH}회 — ${crash}` }, route: "bench_record", log: ["grade 실행 실패 끝"] };
+    }
+    const logFile = saveLog(s, `grade-${g.phase}-${g.idx + 1}`, r.raw);
+    if (r.code === 98) {
+      tools.sandboxViolation("exit98", `채점 ${g.phase} — ${short(r.raw.split("LG-SANDBOX").pop(), 160)}`);
+      return { gradeHandle: null, grade: { ...g, error: "격리 위반(98)" }, route: "bench_record", log: ["grade 격리 위반"] };
+    }
+    const runs = [...g.runs, { phase: g.phase, test: g.tests[g.idx], rc: r.code, secs: r.secs, failed: r.out.failed.slice(0, 10), log: rel(s, logFile) }];
+    if (g.idx + 1 < g.tests.length) return { gradeHandle: null, gradeRelaunch: 0, grade: { ...g, runs, idx: g.idx + 1 }, route: "grade_launch" };
+    if (g.phase === "patched") return { gradeHandle: null, grade: { ...g, runs }, route: "bench_record", log: ["grade 끝"] };
+    // 대조군 끝 — 패치 전에 정답 시험이 빨강이어야 그 정답으로 채점할 수 있다
+    if (!runs.every((x) => x.rc !== 0)) return { gradeHandle: null, grade: { ...g, runs, controlRed: false }, route: "bench_record", log: ["grade 대조군이 빨강이 아님 — 채점 불가"] };
+    const ap = await tools.run("patch.apply-grade", { dir: g.dir, patch: s.fullPatch.file });
+    if (ap.code !== 0) return { gradeHandle: null, grade: { ...g, runs, controlRed: true, applied: false, error: `패치 적용 실패(코드 ${ap.code}): ${short(ap.stdout + ap.stderr, 200)}` }, route: "bench_record" };
+    for (const t of g.tests) copyNoFollow(path.join(g.answers, t), g.dir, t);
+    return { gradeHandle: null, gradeRelaunch: 0, grade: { ...g, runs, controlRed: true, applied: true, phase: "patched", idx: 0 }, route: "grade_launch", log: ["grade 대조군 빨강 → 패치 적용"] };
+  }
+  function benchRecord(s) {
+    const dir = runDir(tools.stateDir, s.sigkey);
+    const g = s.grade ?? { skipped: "채점하지 않음", hidden_pass: null };
+    const hidden = gradeVerdict(g);
+    const { answers: _a, ...shown } = g;
+    // result.json·plan.md 에 덧붙인다(plan 이 쓴 것은 그대로)
+    try {
+      const res = JSON.parse(fs.readFileSync(path.join(dir, "result.json"), "utf8"));
+      writeAtomic(path.join(dir, "result.json"), `${JSON.stringify({ ...res, grade: { ...shown, hidden_pass: hidden } }, null, 1)}\n`);
+    } catch { /* plan 이 못 썼으면 건너뛴다 */ }
+    const why = g.skipped ?? g.error ?? (g.controlRed === false ? "대조군(패치 전)에서 정답 시험이 빨강이 아니다 — 채점 불가" : null);
+    const md = ["", "## 숨긴 정답 채점(벤치 M8 — LLM 단계가 끝난 뒤)",
+      `- 결과: **${hidden === true ? "통과" : hidden === false ? "실패" : "판정 대상 아님"}**${why ? ` — ${why}` : ""}`,
+      ...(g.tests ? [`- 정답 시험(${g.source === "origin" ? "수정 커밋의 시험" : "그 결함을 잡는 기존 시험"}): ${g.tests.join(", ")}`] : []),
+      ...(g.runs ?? []).map((x) => `- ${x.phase === "control" ? "대조군(패치 전)" : "패치 뒤"} ${x.test}: rc=${x.rc} ${x.secs}s${x.failed.length ? ` · 실패 ${short(x.failed.slice(0, 3).join(" | "), 200)}` : ""} · 로그 ${x.log}`), ""];
+    try { fs.appendFileSync(path.join(dir, "plan.md"), md.join("\n")); } catch { /* 없음 */ }
+    recordBench(s, dir, s.status, s.benchMatch, hidden);
+    if (g.dir) for (const sub of ["build", ".dart_tool"]) fs.rmSync(path.join(g.dir, sub), { recursive: true, force: true });
+    return { log: [`bench_record 숨긴 정답 ${hidden}`] };
   }
 
   const R = (s) => s.route; // 갈림길 노드가 고른 다음 노드
@@ -894,6 +1003,10 @@ export function build({ checkpointer, llm, tools }) {
     .addNode("merge_prep", mergePrep)
     .addNode("commit_push", commitPush)
     .addNode("plan", plan)
+    .addNode("grade_prep", gradePrep)
+    .addNode("grade_launch", gradeLaunch)
+    .addNode("grade_check", gradeCheck)
+    .addNode("bench_record", benchRecord)
     .addEdge(START, "preflight")
     .addEdge("preflight", "sandbox")
     .addConditionalEdges("sandbox", (s) => (s.leak ? "plan" : "reproduce_launch"), ["reproduce_launch", "plan"])
@@ -917,6 +1030,10 @@ export function build({ checkpointer, llm, tools }) {
     .addConditionalEdges("review_check", R, ["review_launch", "fix_launch", "merge_prep", "commit_push", "plan"])
     .addConditionalEdges("merge_prep", R, ["steps_launch", "plan"])
     .addEdge("commit_push", "plan")
-    .addEdge("plan", END)
+    .addConditionalEdges("plan", (s) => (s.signal?.bench && s.stage === "1b" ? "grade_prep" : END), ["grade_prep", END])
+    .addConditionalEdges("grade_prep", R, ["grade_launch", "bench_record"])
+    .addEdge("grade_launch", "grade_check")
+    .addConditionalEdges("grade_check", R, ["grade_launch", "bench_record"])
+    .addEdge("bench_record", END)
     .compile({ checkpointer });
 }

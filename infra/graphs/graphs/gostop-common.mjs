@@ -163,6 +163,21 @@ export function readTestOutput(raw, rc, signal = null) {
   return { red, rc: rc == null ? null : Number(rc), infra, toolError, blocks, failed, compileError, summary, sig: red ? (sig || "(실패 · 서명 없음)") : "" };
 }
 
+// 시험 도구가 시험을 하나도 돌리지 못하고 끝났나 — 진행 줄('00:01 +0: …')이 하나도 없고, 종료 코드가 시험 결과(0·1)·시간 초과(124)·
+// 격리 준비(97)·격리 위반(98)이 아니다(dart 의 처리 안 된 예외는 255). 시험(LLM 이 쓴 재현 시험·수정) 탓이 아니라 실행 환경 탓이다 —
+// 시험을 다시 쓰게 하거나 재수정으로 보내지 않는다(10-04~06: 격리 stdio 고장의 255·0초가 'no_red' 로 끝났다).
+const TEST_PROGRESS_RE = /^\s*\d{2}:\d{2} \+\d+/m;
+export function toolCrash(code, raw) {
+  if (code == null || [0, 1, 97, 98, 124].includes(Number(code))) return false;
+  return !TEST_PROGRESS_RE.test(strip(raw).replace(/\r/g, "\n"));
+}
+// 도구 고장 출력의 대표 한 줄(처리 안 된 예외면 그 예외 줄)
+export function crashLine(raw) {
+  const lines = strip(raw).split("\n").map((l) => l.trim()).filter(Boolean);
+  const i = lines.findIndex((l) => /^Unhandled exception:?$/.test(l));
+  return short(i >= 0 && lines[i + 1] ? lines[i + 1] : lines[0] ?? "(출력 없음)", 200);
+}
+
 // 2회 결과 → 재현 판정. 둘 다 같은 서명의 빨간불 = reproduced, 둘 다 초록 = not_reproduced, 그 밖 = flaky.
 export function judgeRepro(runs) {
   if (runs.length < 2) return null;
@@ -253,6 +268,40 @@ export function loadBench(file = BENCH_FILE) {
   const j = readJson(file);
   if (!j || !Array.isArray(j.cases)) throw new Error(`벤치 목록을 못 읽음: ${file}`);
   return j;
+}
+// 채점(gostop-fix grade_prep)이 읽는 벤치 파일 — 시험만 LG_BENCH_FILE 로 가짜 사례를 준다
+export const benchFile = () => process.env.LG_BENCH_FILE || BENCH_FILE;
+
+// 숨긴 정답 채점(M8) 계획 — 사례·고칠 안 상태·정본 패치로 정한다. 정답은 사본 밖(벤치 파일·본 저장소)에서 LLM 단계가 다 끝난 뒤에만 읽는다.
+//   역사 사례: 수정 커밋(origin)의 시험(hiddenTests) — 본 저장소에서 꺼낸다(git.show-file)
+//   회귀 주입·시험 신호: 그 변형을 잡는 기존 시험(test) — 깨끗한 내보내기의 사람 판(설계 §1 '지금 있는 시험이 정답')
+// 돌려주는 값: { tests, source: "origin"|"clean", rev? } 또는 { skip, hidden_pass(false·null) }
+//   hidden_pass null = 채점 대상이 아니다(규칙 결정 사례 · 누설 · 정답이 정해지지 않음). false = 고쳐야 했는데 낼 패치가 없다.
+export const ANSWER_TEST_RE = /^test\/(?:[A-Za-z0-9_]+\/)*[A-Za-z0-9_]+_test\.dart$/;
+export function gradeSpec(c, { status, patch, leak = null } = {}) {
+  if (!c) return { skip: "벤치 사례를 찾지 못함", hidden_pass: null };
+  if (leak) return { skip: "정답 누설로 진단하지 않은 사례", hidden_pass: null };
+  const ruleCase = c.expect?.status === "rule_decision";
+  if (ruleCase && !patch) return { skip: `규칙 결정 사례(${status}) — 사람이 규칙을 정해야 고친다(숨긴 정답은 그 결정)`, hidden_pass: null };
+  if (!["ready", "would_ask"].includes(status) || !patch) return { skip: `낼 패치 없음(${status})`, hidden_pass: false };
+  const tests = c.hiddenTests?.length ? c.hiddenTests : (c.kind === "inject" || c.kind === "test") && c.test ? [c.test] : [];
+  if (!tests.length) return { skip: "정답 시험이 정해지지 않은 사례", hidden_pass: null };
+  const bad = tests.filter((t) => !ANSWER_TEST_RE.test(t));
+  if (bad.length) return { skip: `정답 시험 경로가 규칙 밖: ${bad.join(", ")}`, hidden_pass: null };
+  if (c.hiddenTests?.length) {
+    if (!/^[0-9a-f]{7,40}$/.test(String(c.origin ?? ""))) return { skip: `정답 커밋(origin)이 없다: ${c.origin}`, hidden_pass: null };
+    return { tests, source: "origin", rev: c.origin };
+  }
+  return { tests, source: "clean" };
+}
+// 채점 결과 → hidden_pass. 대조군(패치 전)이 빨강이 아니면 그 정답으로는 채점할 수 없다(null). 실행 고장도 null.
+export function gradeVerdict(g) {
+  if (!g) return null;
+  if (g.skipped) return g.hidden_pass ?? null;
+  if (g.error || g.controlRed === false) return null;
+  const patched = (g.runs ?? []).filter((r) => r.phase === "patched");
+  if (!patched.length || patched.length < (g.tests ?? []).length) return null;
+  return patched.every((r) => r.rc === 0);
 }
 // 진단이 벤치 정답과 맞나(H3 상2 — 프롬프트 낱말은 채점하지 않는다. 낱말은 '실패한 시험' 이름으로 이미 프롬프트에 있다):
 //   ① 기대 파일이 진단 파일 1~2위 안에 있고 ② 근거('파일:줄')가 정답 자리(수정·주입한 줄 범위) ±NEAR 줄 안을 가리키며

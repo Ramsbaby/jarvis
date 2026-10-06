@@ -545,3 +545,106 @@ test("release(실제 전용): 서명 지문이 기대값과 다르면(가짜 키
   assert.match(shadow.st.result ?? JSON.stringify(shadow.st), /shadow/);
   assert.equal(shadow.fad, false);
 });
+
+// ── 실행 환경 고장은 LLM 탓이 아니다(10-04~06 실측: 격리 stdio 고장의 255·0초가 벤치 4건을 no_red 로 끝냈다) ─────────
+test("빨간불 확인에서 시험 도구가 시작하다 죽으면(255·진행 줄 없음) 같은 시험을 다시 띄운다 — 재현 시험을 다시 쓰게 하지 않고 ready", async (t) => {
+  const { x, st } = await runFix(t, { sbCtl: { crash: { match: RT, times: 1 } } });
+  assert.equal(st.status, "done", JSON.stringify(st));
+  const res = result(x);
+  assert.equal(res.status, "ready", res.note);
+  assert.equal(calls(x, "repro").length, 1, "재현 시험 작성 1회");
+  assert.equal(res.rtAttempt, 1);
+  assert.deepEqual(res.redRuns.map((r) => [r.rc, !!r.toolCrash, r.red]), [[255, true, false], [1, false, true]]);
+  assert.match(fs.readFileSync(path.join(C.runDir(x.sb.state, SIG), "plan.md"), "utf8"), /시험 도구 고장 — 다시 띄움/);
+});
+
+test("빨간불 확인 도구 고장이 3회 이어지면 gave_up(실행 환경 고장) — no_red 가 아니다 · 재현 시험 작성 1회 · opus 0회", async (t) => {
+  const { x, st } = await runFix(t, { sbCtl: { crash: { match: RT, times: 99 } } });
+  assert.equal(st.status, "done", JSON.stringify(st));
+  const res = result(x);
+  assert.equal(res.status, "gave_up");
+  assert.equal(res.noRed, false);
+  assert.match(res.note, /실행 환경 고장/);
+  assert.match(res.note, /Failed to get type of stdio handle/);
+  assert.equal(res.redRuns.filter((r) => r.toolCrash).length, 3);
+  assert.equal(calls(x, "repro").length, 1);
+  assert.equal(calls(x, "fix").length, 0);
+});
+
+test("검증 단계(전체 시험)의 도구 고장은 재수정(opus)으로 보내지 않는다 — 3회 다시 띄운 뒤 gave_up", async (t) => {
+  const { x, st } = await runFix(t, { sbCtl: { crash: { match: "--reporter", times: 99 } } });
+  assert.equal(st.status, "done", JSON.stringify(st));
+  const res = result(x);
+  assert.equal(res.status, "gave_up");
+  assert.match(res.fixError, /검증 'full' 실행 환경 고장 3회/);
+  assert.equal(calls(x, "fix").length, 1, "재수정 없음");
+  assert.equal(calls(x, "review").length, 0);
+  const full = res.steps.filter((s) => s.id === "full");
+  assert.equal(full.length, 1);
+  assert.equal(full[0].ok, false);
+});
+
+// ── 벤치 숨긴 정답 채점(M8) ─────────────────────────────────────────
+const ANSWER_TEST = "test/presentation/providers/gukjin_answer_test.dart";
+function benchFor(x, over = {}) {
+  const f = path.join(x.sb.dir, "bench.json");
+  fs.writeFileSync(f, JSON.stringify({ version: 2, cases: [{ id: "t1", kind: "seed", origin: x.answer.slice(0, 12), rev: `${x.answer.slice(0, 12)}^`, test: C.DIFF_TEST,
+    defines: ["REPLAY_GAMES=1", "REPLAY_SEED_BASE=202656775"], hiddenTests: [ANSWER_TEST], expect: { status: "ready", ruleGap: false, files: ["lib/domain/game/turn_manager.dart"] }, ...over }] }));
+  x.env.LG_BENCH_FILE = f;
+}
+const benchEv = (x) => metrics(x.sb).filter((m) => m.ev === "bench");
+
+test("숨긴 정답 채점(M8): ready 뒤 수정 커밋의 정답 시험을 채점 사본에서 — 대조군 빨강 → 패치 뒤 초록 → hidden_pass true · 정답은 LLM 사본·프롬프트에 없다", async (t) => {
+  const x = setup(t);
+  benchFor(x);
+  assert.equal(start(x).code, 0);
+  const st = await drive(x);
+  assert.equal(st.status, "done", JSON.stringify(st));
+  const res = result(x);
+  assert.equal(res.status, "ready", res.note);
+  assert.equal(res.grade.hidden_pass, true, JSON.stringify(res.grade));
+  assert.equal(res.grade.source, "origin");
+  assert.deepEqual(res.grade.runs.map((r) => [r.phase, r.test, r.rc]), [["control", ANSWER_TEST, 1], ["patched", ANSWER_TEST, 0]]);
+  const b = benchEv(x);
+  assert.equal(b.length, 1);
+  assert.equal(b[0].hidden_pass, true);
+  assert.equal(b[0].diag_match, true);
+  // 정답은 plan 뒤 채점 사본(grade)에만 — LLM 이 일한 사본(work)·프롬프트에는 없다
+  assert.ok(!fs.existsSync(path.join(work(x), ANSWER_TEST)));
+  assert.match(fs.readFileSync(path.join(C.sandboxDir(x.sb.state, SIG), "grade", ANSWER_TEST), "utf8"), /ANSWER-MARKER-7f3a/);
+  for (const c of x.fc.calls()) assert.doesNotMatch(c.input, /ANSWER-MARKER-7f3a|gukjin_answer_test/);
+  assert.match(fs.readFileSync(path.join(C.runDir(x.sb.state, SIG), "plan.md"), "utf8"), /## 숨긴 정답 채점[\s\S]*결과: \*\*통과\*\*/);
+  const gr = traceOf(x.sb, "sb-trace.jsonl").filter((c) => c.copy.endsWith("/grade") && !c.canary);
+  assert.deepEqual(gr.map((c) => c.args.at(-1)), [ANSWER_TEST, ANSWER_TEST], "채점 격리 실행 = 대조군 1 + 패치 뒤 1");
+});
+
+test("숨긴 정답이 그래프 검증보다 엄하면 hidden_pass false — 그래프가 ready 여도 채점은 실패로 적는다", async (t) => {
+  const x = setup(t, { sbCtl: { gradeGreen: { file: "lib/domain/game/turn_manager.dart", contains: "return 7" } } });
+  benchFor(x);
+  assert.equal(start(x).code, 0);
+  assert.equal((await drive(x)).status, "done");
+  const res = result(x);
+  assert.equal(res.status, "ready");
+  assert.equal(res.grade.hidden_pass, false);
+  assert.deepEqual(res.grade.runs.map((r) => [r.phase, r.rc]), [["control", 1], ["patched", 1]]);
+  assert.equal(benchEv(x)[0].hidden_pass, false);
+});
+
+test("채점 대상: 낼 패치가 없으면(no_red) false · 규칙 결정 사례는 null(사람이 규칙을 정해야 한다) — 채점 실행 0", async (t) => {
+  const a = setup(t, { sbCtl: { green: { file: "lib/domain/game/turn_manager.dart", contains: "return 4" } } });
+  benchFor(a);
+  assert.equal(start(a).code, 0);
+  assert.equal((await drive(a)).status, "done");
+  assert.equal(result(a).status, "no_red");
+  assert.equal(result(a).grade.hidden_pass, false);
+  assert.match(result(a).grade.skipped, /낼 패치 없음\(no_red\)/);
+  assert.equal(benchEv(a)[0].hidden_pass, false);
+  const b = setup(t, { script: { diag: { ...DIAG, rule_gap: true, rule_gap_detail: "규칙서에 조항 없음" } } });
+  benchFor(b, { expect: { status: "rule_decision", ruleGap: true, files: ["lib/domain/game/turn_manager.dart"] } });
+  assert.equal(start(b).code, 0);
+  assert.equal((await drive(b)).status, "done");
+  assert.equal(result(b).status, "rule_decision");
+  assert.equal(result(b).grade.hidden_pass, null);
+  assert.equal(benchEv(b)[0].hidden_pass, null);
+  for (const y of [a, b]) assert.equal(traceOf(y.sb, "sb-trace.jsonl").filter((c) => c.copy.endsWith("/grade")).length, 0);
+});

@@ -10,6 +10,9 @@
 //   aiVerdict: same·changed·…   — AI 결정 비교 결과(compare)
 //   canary: "fail"              — 격리 점검 실패
 //   covMiss: true               — lcov 의 바뀐 줄 실행 횟수를 0 으로
+//   crash: { match, times }     — 인자에 match 가 든 실행은 처음 times 번 시험 도구가 시작하다 죽는다(dart 예외, 종료 255, 진행 줄 없음 —
+//                                 10-04~06 격리 stdio 고장 흉내). 횟수는 제어 파일 옆 crash-count 파일로 센다
+//   gradeGreen: { file, contains } — 채점 사본(grade)에서만 쓰는 '고쳐졌다' 조건(숨긴 정답이 그래프 검증보다 엄할 때 흉내)
 //   trace: 부를 때마다 한 줄
 import fs from "node:fs";
 import path from "node:path";
@@ -36,8 +39,17 @@ if (o.canary) {
   process.exit(ctl.canary === "fail" ? 3 : 0);
 }
 if (ctl.violation && argv.join(" ").includes(ctl.violation)) { process.stderr.write("LG-SANDBOX violation: nonloopback_listen dart:1@0.0.0.0.80 — 격리 안 프로세스를 모두 껐다\n"); process.exit(98); }
+if (ctl.crash && argv.join(" ").includes(ctl.crash.match)) {
+  const cf = path.join(path.dirname(ctlFile), "crash-count");
+  const n = Number(fs.existsSync(cf) ? fs.readFileSync(cf, "utf8") : 0) + 1;
+  fs.writeFileSync(cf, String(n));
+  if (n <= (ctl.crash.times ?? Infinity)) {
+    process.stderr.write("Unhandled exception:\nFileSystemException: Failed to get type of stdio handle (fd 1), path = '' (OS Error: Operation not permitted, errno = 1)\n#0      _StdIOUtils._getStdioOutputStream (dart:io-patch/stdio_patch.dart:35:7)\n");
+    process.exit(255);
+  }
+}
 const read = (rel) => { try { return fs.readFileSync(path.join(o.copy, rel), "utf8"); } catch { return null; } };
-const g = ctl.green ?? { file: "lib/domain/game/turn_manager.dart", contains: "return 6" };
+const g = (path.basename(o.copy) === "grade" && ctl.gradeGreen) || ctl.green || { file: "lib/domain/game/turn_manager.dart", contains: "return 6" };
 const fixed = (read(g.file) ?? "").includes(g.contains);
 const isBase = path.basename(o.copy) === "base";
 

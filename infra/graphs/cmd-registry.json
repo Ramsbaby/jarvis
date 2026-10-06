@@ -96,6 +96,26 @@
       "timeoutSec": 30,
       "maxSeconds": 45
     },
+    "git.show-file": {
+      "desc": "고스톱 본 저장소 읽기 — 커밋 하나의 시험 파일 한 개(벤치 숨긴 정답 채점, gostop-fix grade_prep). 그래프의 LLM 단계가 모두 끝난 뒤(plan 뒤)에만 부른다 — 내용은 채점 사본(grade)에만 쓰고 LLM 에 보이지 않는다. 실측 0.1초 미만",
+      "bin": "/usr/bin/git",
+      "argv": [
+        "-C",
+        "{repo}",
+        "show",
+        "{spec}"
+      ],
+      "params": {
+        "repo": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)*gostop_app$",
+        "spec": "^[0-9a-f]{7,40}:test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$"
+      },
+      "modes": [
+        "shadow",
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
     "tar.extract-sandbox": {
       "desc": "사본 풀기 — 설정·비밀(.claude·.mcp.json·key.properties·서명 키·google-services.json·GoogleService-Info.plist)은 빼고 푼다(설계 §2). 실측 1초 미만",
       "bin": "/usr/bin/tar",
@@ -131,7 +151,7 @@
       "maxSeconds": 45
     },
     "flutter.pub-get-offline": {
-      "desc": "사본 의존성 — 기존 pub 캐시에서만 채운다(네트워크 없음). 실측 2~3초",
+      "desc": "사본 의존성 — 기존 pub 캐시에서만 채운다(네트워크 없음). 실측 2~3초 · 벤치 채점 사본(grade)은 사람 코드일 때만(패치 전)",
       "bin": "/opt/homebrew/bin/flutter",
       "argv": [
         "pub",
@@ -140,7 +160,7 @@
       ],
       "cwd": "{dir}",
       "params": {
-        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$"
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge|grade)$"
       },
       "modes": [
         "shadow",
@@ -508,7 +528,7 @@
         "--canary"
       ],
       "params": {
-        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$",
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge|grade)$",
         "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}$"
       },
       "modes": [
@@ -519,7 +539,7 @@
       "maxSeconds": 90
     },
     "sandbox.flutter-test": {
-      "desc": "1b 격리 시험(lg-test.sb) — 사본의 시험 파일 하나. 재현 시험 빨간불(⑧)·초록(⑪①②). 종료 0·1(시험 실패)·97(준비)·98(격리 위반)·124(시간). 실측 13~50초(H4) — 안쪽 상한 900초, 최대 시간 1440초",
+      "desc": "1b 격리 시험(lg-test.sb) — 사본의 시험 파일 하나. 재현 시험 빨간불(⑧)·초록(⑪①②). 종료 0·1(시험 실패)·97(준비)·98(격리 위반)·124(시간). 실측 13~50초(H4) — 안쪽 상한 900초, 최대 시간 1440초 · 벤치 숨긴 정답 채점(grade — 대조군·패치 뒤)",
       "bin": "@node",
       "argv": [
         "@graphs/lib/sandbox/sandboxed-run.mjs",
@@ -537,7 +557,7 @@
         "{test}"
       ],
       "params": {
-        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge)$",
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/(?:work|base|merge|grade)$",
         "tmp": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/tmp/[0-9]{1,6}$",
         "test": "^test/(?:[A-Za-z0-9_]+/)*[A-Za-z0-9_]+_test\\.dart$"
       },
@@ -840,6 +860,30 @@
         "patch": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,60}\\.(?:diff|txt)$"
       },
       "modes": [
+        "live"
+      ],
+      "timeoutSec": 30,
+      "maxSeconds": 45
+    },
+    "patch.apply-grade": {
+      "desc": "벤치 숨긴 정답 채점(gostop-fix grade) — 채점 사본(grade: 깨끗한 내보내기 + pub get)에 정본 패치를 적용(git 없이). 상태 폴더 안 채점 사본만 바꾼다",
+      "bin": "/usr/bin/patch",
+      "argv": [
+        "-p1",
+        "-N",
+        "-t",
+        "-s",
+        "-d",
+        "{dir}",
+        "-i",
+        "{patch}"
+      ],
+      "params": {
+        "dir": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+gostop/sandbox/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/grade$",
+        "patch": "^/(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+runs/[A-Za-z0-9][A-Za-z0-9._-]{0,80}/[A-Za-z0-9][A-Za-z0-9._-]{0,60}\\.(?:diff|txt)$"
+      },
+      "modes": [
+        "shadow",
         "live"
       ],
       "timeoutSec": 30,

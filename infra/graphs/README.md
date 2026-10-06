@@ -190,7 +190,9 @@ LLM 이 사본에 쓴 뒤에는 그 사본에 격리 밖 시험 명령(`flutter.
                  → redbase = 깨끗한 내보내기 + 재현 시험(이후 '이번 수정만' 패치의 기준)
 ⑧ verify_red     격리 점검(sandbox.canary) → sandbox.flutter-test 로 패치 전 빨간불(표식 붙은 경로 시험이 Expected/Actual 단언으로 실패 —
                  컴파일 오류·파일 싣다 죽음(loading [E])·예외만은 빨간불이 아니다).
-                 시험 실행 뒤 사본이 redbase 와 같아야(다르면 격리 위반). 아니면 ⑦ 다시, 2회면 no_red(수정하지 않는다)
+                 시험 실행 뒤 사본이 redbase 와 같아야(다르면 격리 위반). 아니면 ⑦ 다시, 2회면 no_red(수정하지 않는다).
+                 시험 도구가 시험을 하나도 못 돌리고 끝나면(진행 줄 없음 + 종료 0·1·97·98·124 밖 — dart 예외 255) 재현 시험 탓이 아니다:
+                 같은 시험을 다시 띄우고(작성 횟수에 안 셈) 3회면 gave_up(실행 환경 고장). ⑪ 의 단계도 같다(재수정으로 보내지 않는다)
 ⑨ fix            opus ×1 + 재수정 ×≤2. 정본 패치는 git 없이(patch.extract): fix-N.diff(redbase 대비) · patch-N.diff(clean 대비 — 반영할 것)
    [AI 결정 비교] 사본에 고스톱 test/ai_policy(H5)가 있고 lib 를 바꿨을 때만: 기준 사본(base)에서 gen(결과는 격리 밖 runs/ai-gen 에 지문과 함께)
                  → 패치 사본에서 compare(sandbox.ai-policy, 종료 코드와 판정이 맞아야 pass). 비교기 두 파일이 깨끗한 쪽과 같아야 믿는다.
@@ -211,6 +213,11 @@ LLM 이 사본에 쓴 뒤에는 그 사본에 격리 밖 시험 명령(`flutter.
                  다르다(실제 모드 켜기 전 주인님 결정). verify: 원격 master 가 남겨 둔 커밋 해시면 '일어남'(틱이 push 중에 죽어도 이어 간다)
 ⑭ plan           상태 ready · no_red · would_ask · gave_up(격리 위반·재현 시험 실패·수정 3회·반려) · rule_decision · not_reproduced · flaky.
                  plan.md 에 재현 시험 자리·빨간불 로그·정본 패치·검증 표·검토·커밋 기록, result.json 에 전부
+⑰ grade_*        벤치만(1b), plan 뒤 — LLM 단계가 다 끝난 다음. 숨긴 정답(역사: 수정 커밋의 hiddenTests — git.show-file / 회귀 주입: 그 변형을 잡는
+                 기존 시험 — 깨끗한 내보내기의 사람 판)을 여기서 처음 읽는다. 채점 사본 grade = clean 복제 + pub get(사람 코드) → 정답 시험 격리 실행
+                 (대조군: 빨강이어야 채점 가능) → patch.apply-grade(정본 패치) → 정답 시험을 사람 판으로 다시 써서 격리 실행 → 초록이면 hidden_pass.
+                 ready·would_ask 만 채점. 낼 패치가 없으면 false, 규칙 결정 사례·누설·대조군 초록·실행 고장은 null(판정 대상 아님)
+   bench_record  result.json 의 grade · plan.md '숨긴 정답 채점' 절 · 사건 bench(hidden_pass 포함, 스레드당 한 번)
 ```
 
 - 사본 셋: `work`(LLM 작업 폴더) · `clean`(패치 기준 — pub get·시험을 돌리지 않는다. 돌리면 생성 파일이 '바뀐 파일'로 섞인다) · `base`(기준 실행용, pub get 함).
@@ -219,7 +226,10 @@ LLM 이 사본에 쓴 뒤에는 그 사본에 격리 밖 시험 명령(`flutter.
 - 예산: 진단 2 + 재현 시험 2 + 수정 3 + 검토 3 + 요약 1 = 11, 스레드 상한 12(그래프 `meta.llmPerThread` — 실행기가 `LG_LLM_MAX_PER_THREAD` 보다 크면 이 값을 쓴다, 12 이하). 모델별 상한 `LG_GOSTOP_SONNET_CAP`(7)·`LG_GOSTOP_OPUS_CAP`(3). Fable 금지.
 - 격리 위반(종료 98·사본 무단 변경)은 gave_up + 지표 `sandbox_violation`(§8). 준비 오류(97)는 던져 재시도(3회 → GAVE_UP). 격리 점검 실패는 보류(`sandbox_canary`).
 - 명령(cmd-registry, 1b): `sandbox.canary`·`sandbox.flutter-test`·`sandbox.flutter-test-defines`·`sandbox.flutter-test-all`·`sandbox.flutter-analyze`·`sandbox.flutter-cov-ai`·`sandbox.ai-policy`
-  · `patch.extract`·`patch.allowlist`·`repro.three-path`·`repro.three-path-h5`·`cov.check`(그림자·실제) · `patch.apply-copy`·`apk.cert-fingerprint`(실제) · effect(실제): `git.worktree-add`·`git.apply-index`·`git.commit-file`·`git.push-master`·`git.worktree-remove`·`fad.distribute`.
+  · `patch.extract`·`patch.allowlist`·`repro.three-path`·`repro.three-path-h5`·`cov.check`·벤치 채점 `git.show-file`·`patch.apply-grade`(그림자·실제) · `patch.apply-copy`·`apk.cert-fingerprint`(실제) · effect(실제): `git.worktree-add`·`git.apply-index`·`git.commit-file`·`git.push-master`·`git.worktree-remove`·`fad.distribute`.
+- 격리 실행 입구(sandboxed-run.mjs)는 격리 안에 늘 파이프만 주고 받아서 흘린다. 분리 실행의 출력 파일(상태 폴더 = 홈 아래)을 그대로 물려주면
+  홈 아래 메타데이터 막음이 fd 1 의 fstat 까지 막아 dart 가 시작하다 죽는다(255 · 'Failed to get type of stdio handle') — 10-04~06 벤치 빨간불 확인
+  4회가 전부 이것이었다. 벤치 실주행(gostop-bench-live)·격리 시험은 파이프로 불러 못 잡았다 → `sandbox.test.mjs` '출력 자리가 홈 아래 파일이어도'.
   홈 경로를 목록에 박지 않는다: `bin: "@node"`(이 실행기의 고정 Node) · `argv: "@graphs/<경로>"`(이 폴더 아래 파일, `..` 금지).
 - `gostop-release:<versionCode>`(실제 전용, 최소판): APK 를 상태 폴더 비공개 복사본으로 옮겨 해시를 고정 → `apksigner verify --print-certs`(v1·v2·v3 서명 검사)
   서명자 SHA-256 을 `LG_RELEASE_CERT_SHA256` 과 대조 — 다르면 `signing_mismatch` 로 멈추고 배포 effect 를 내지 않는다. 맞으면 복사본 해시를 다시 보고
@@ -228,7 +238,8 @@ LLM 이 사본에 쓴 뒤에는 그 사본에 격리 밖 시험 명령(`flutter.
   검증은 정본 패치가 아니라 work 전체에서 돈다(맨 위 build·.dart_tool 은 지문 밖). 로그인·한도 뒤 다시 띄운 호출도 스레드 상한 12 에 든다.
 - 실호출: `LG_GOSTOP_STAGE=1b node test/gostop-bench-live.mjs <출력> hist-69a0144` — 상태는 /private/tmp 아래(격리 실행 뿌리), 끝나면 숨긴 정답 시험으로 채점(대조군 빨강 → 패치 뒤 초록). `LG_BENCH_STATE` 로 이어 돌릴 수 있다.
 - 쓰기 노드(⑦·⑨)는 `--permission-mode acceptEdits`(-p 에서는 쓰기 허락을 물을 사람이 없어 Write 가 거부된다 — 10-03 실호출). --restricted 가 작업 폴더 밖 쓰기를 막는다(haiku 실측).
-- 시험: `test/gostop-1b.test.mjs` 24개(가짜 claude script 모드 — 허락 모드 없으면 쓰기 거부, 가짜 격리 실행기 `fake-sandboxed.mjs`, 가짜 apksigner·firebase).
+- 시험: `test/gostop-1b.test.mjs` 30개(가짜 claude script 모드 — 허락 모드 없으면 쓰기 거부, 가짜 격리 실행기 `fake-sandboxed.mjs`(도구 고장 `crash`·채점 사본 조건 `gradeGreen` 포함), 가짜 apksigner·firebase).
+  채점 시험은 `LG_BENCH_FILE` 로 가짜 벤치 사례를 준다(운영은 `bench/gostop.json`).
 
 ## 당직 D0 그림자 — 게이트웨이 재시작 뒤 확인 (`duty-verify`, PLAN §13.3)
 
