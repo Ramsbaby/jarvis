@@ -25,6 +25,7 @@ import { spawnSync } from 'node:child_process';
 import {
   getSchema, getPage, WIKI_ROOT,
 } from '../discord/lib/wiki-engine.mjs';
+import { cleanSummary } from './wiki-summary-guard.mjs';
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
 const HOME         = homedir();
@@ -281,7 +282,8 @@ async function main() {
     let existingSummary = null;
     try {
       if (existsSync(d.summaryPath)) {
-        existingSummary = readFileSync(d.summaryPath, 'utf-8');
+        // 망가진 옛 요약(권한 요청문 등)을 '참고용'으로 다시 먹이지 않는다 — 같은 쓰레기가 되풀이됐다(10-06).
+        existingSummary = cleanSummary(readFileSync(d.summaryPath, 'utf-8'));
       }
     } catch { /* ignore */ }
 
@@ -292,10 +294,14 @@ async function main() {
         continue;
       }
 
-      // 후처리: LLM이 코드 펜스로 감싸는 경우 제거
-      summary = summary.replace(/^```(?:markdown|md|yaml)?\s*\n/gm, '').replace(/\n```\s*$/gm, '');
-      // 후처리: "검토했습니다" 류 내러티브 첫 줄 제거
-      summary = summary.replace(/^(?:.*검토.*|.*확인.*|.*작성합니다.*|.*정리합니다.*)\n+/m, '');
+      // 후처리: 코드 펜스·머리말 앞 서문 제거, 머리말(type: summary) 없거나 권한 요청문이면 버림(옛 요약 유지)
+      const cleaned = cleanSummary(summary);
+      if (!cleaned) {
+        log(`${d.domain}: LLM 응답이 요약 형식 아님(머리말 없음 또는 되묻기) — 버림, 옛 요약 유지`);
+        llmCalls++;
+        continue;
+      }
+      summary = cleaned;
 
       // 🛡️ PII 마스킹 가드 (2026-04-26 5차 verify 적발 — addFactToWiki SSoT 우회 경로 차단)
       // _summary.md 직접 writeFileSync는 wiki-engine.addFactToWiki 가드 안 거침 → 별도 적용 필수.
