@@ -1370,7 +1370,15 @@ export class RAGEngine {
     // optimize() 성공 여부와 무관하게 독립 실행 — 누적된 soft-delete 행 정리.
     try {
       const deletedCount = await this.table.countRows('deleted = true');
-      if (deletedCount > 0) {
+      // [2026-10-08] 대량 soft-delete 는 영구 삭제하지 않는다 — 10-08 02:00 고아 정리가 7.1만 행(65%)을 지운 뒤
+      //   03:00 이 블록이 그대로 비워 되돌릴 길이 없어졌다. 지운 표시만 남아 있으면 deleted=false 로 되살릴 수 있다.
+      //   전체의 30% 넘게(최소 1,000행) 지워졌으면 보류하고, 확인 뒤 RAG_COMPACT_ALLOW_MASS_PURGE=1 로 다시 돌린다.
+      const totalRows = deletedCount > 0 ? await this.table.countRows() : 0;
+      const massMin = Number(process.env.RAG_COMPACT_MASS_MIN ?? 1000);
+      const massPurge = deletedCount >= massMin && deletedCount / Math.max(1, totalRows) > 0.3;
+      if (massPurge && process.env.RAG_COMPACT_ALLOW_MASS_PURGE !== '1') {
+        console.log(`⚠️ [rag] compact: 지운 표시 ${deletedCount}/${totalRows}행(${Math.round(deletedCount * 100 / totalRows)}%) — 대량 삭제 의심, 영구 삭제 보류(되살릴 수 있게 둠). 확인 뒤 RAG_COMPACT_ALLOW_MASS_PURGE=1`);
+      } else if (deletedCount > 0) {
         await this.table.delete('deleted = true');
         // delete() 이후 manifest가 변경되므로 table 참조 갱신
         await this.refreshTable().catch(e =>

@@ -62,5 +62,26 @@ echo "[3] system-cleanup 이 inbox 를 지우지 않는다"
 bash -n "$REPO/infra/scripts/system-cleanup.sh" && ok "문법" || bad "문법 오류"
 if grep -nE 'inbox.*-delete|-delete.*inbox' "$REPO/infra/scripts/system-cleanup.sh"; then bad "inbox 삭제 줄이 있다"; else ok "inbox 삭제 줄 없음"; fi
 
+echo "[4] 압축이 대량 soft-delete 를 영구 삭제하지 않는다"
+compact_run() {   # 고아 5개 soft-delete(처음 한 번) → compact → 남은 '지운 표시' 행 수
+  HOME="$TMP" BOT_HOME="$TMP/rt" "$@" "$NODE" --input-type=module -e "
+    const { RAGEngine } = await import('$TMP/projects/jarvis/rag/lib/rag-engine.mjs');
+    const e = new RAGEngine('$TMP/rt/rag/lancedb'); await e.init();
+    if ((await e.table.countRows('deleted = true')) === 0)
+      await e.deleteBySources(['a','b','c','d','e'].map(x => '$TMP/gone/' + x + '.md'));
+    await e.compact();
+    console.log('DELETED_LEFT=' + await e.table.countRows('deleted = true'));
+  " 2>&1
+}
+seed
+out="$(compact_run env RAG_COMPACT_MASS_MIN=1)"
+grep -q "영구 삭제 보류" <<<"$out" && ok "⚠️ 보류 문구" || bad "보류 문구 없음: $(tail -3 <<<"$out")"
+grep -q "DELETED_LEFT=5" <<<"$out" && ok "지운 표시 5행 그대로(되살릴 수 있음)" || bad "영구 삭제됨: $(grep DELETED_LEFT <<<"$out")"
+out="$(compact_run env RAG_COMPACT_MASS_MIN=1 RAG_COMPACT_ALLOW_MASS_PURGE=1)"
+grep -q "DELETED_LEFT=0" <<<"$out" && ok "확인 뒤 허용하면 비움" || bad "허용해도 안 비움: $(grep DELETED_LEFT <<<"$out")"
+seed
+out="$(compact_run env)"
+grep -q "DELETED_LEFT=0" <<<"$out" && ok "소량(1,000행 미만)은 예전처럼 비움" || bad "소량도 막힘: $(grep DELETED_LEFT <<<"$out")"
+
 echo "결과: 통과 $PASS · 실패 $FAIL"
 [[ $FAIL -eq 0 ]]
