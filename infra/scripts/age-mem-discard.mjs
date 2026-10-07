@@ -54,6 +54,7 @@ log('=== AgeMem DISCARD 시작 ===');
 //   "소스 파일이 사라진 것" = 의도적 삭제 또는 이동 → RAG 청크 고아 확정.
 // ─────────────────────────────────────────────────────────────────────────────
 let orphanDeleted = 0;
+let orphanBlocked = false;
 const orphanSources = [];
 const DRYRUN = process.env.DRYRUN === '1';
 
@@ -89,7 +90,14 @@ const DRYRUN = process.env.DRYRUN === '1';
     const orphanCandidates = allSources.filter(src => src && !existsSync(src));
     log(`DB source: ${allSources.length}개 / 고아(원본없음): ${orphanCandidates.length}개${DRYRUN ? ' [DRYRUN]' : ''}`);
 
-    if (DRYRUN) {
+    // [2026-10-08] 대량 삭제 차단 — 10-04 inbox 30일 정리가 대화 기록 2,499개를 지웠고, 10-08 02:00 이 정리가
+    //   그 2,552개 소스(약 7.1만 청크, 전체 65%)를 고아로 지운 뒤 03:00 압축이 되돌릴 길을 없앴다.
+    //   한 번에 많이 사라졌다면 청소할 쓰레기가 아니라 사고(경로 이관·정리 정책 충돌)다 — 지우지 않고 ⚠️ 로 배달한다.
+    const maxDelete = Number(process.env.AGEMEM_MAX_DELETE ?? Math.max(50, Math.floor(allSources.length * 0.02)));
+    if (orphanCandidates.length > maxDelete) {
+      orphanBlocked = true;
+      console.log(`⚠️ 고아 ${orphanCandidates.length}개 > 한도 ${maxDelete}개 — 대량 삭제 차단(지우지 않음). 원본이 왜 사라졌는지 먼저 확인. 예: ${orphanCandidates.slice(0, 3).map(s => s.replace(HOME, '~')).join(' · ')}`);
+    } else if (DRYRUN) {
       orphanDeleted = orphanCandidates.length;
     } else if (orphanCandidates.length > 0) {
       // [2026-07-08] 배치 soft-delete(IN 절) — 순차(100건/2분) 대비 대폭 빠름 → watcher 중단 시간 최소화.
@@ -154,7 +162,7 @@ const lines = [
 ];
 
 if (orphanSources.length > 0) {
-  lines.push('## 삭제된 고아 소스', '');
+  lines.push(orphanBlocked ? '## 대량 삭제 차단 — 지우지 않은 고아 소스(표본)' : '## 삭제된 고아 소스', '');
   orphanSources.forEach(s => lines.push(`- \`${s.replace(HOME, '~')}\``));
   lines.push('');
 }

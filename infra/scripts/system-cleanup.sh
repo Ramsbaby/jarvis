@@ -109,12 +109,14 @@ main() {
         _log "recon 백업 정리: ${recon_deleted}개 삭제 — 7일 retention"
     fi
 
-    # 8. inbox/ 정리 — Claude CLI 대화 내보내기 30일 초과 제거 (RAG 인덱싱 완료 후 불필요)
+    # 8. inbox/ — 지우지 않는다(2026-10-08). 옛 규칙은 "RAG 색인 후 불필요"라며 30일 넘은 대화 기록을 지웠지만,
+    #   RAG 는 원본이 사라진 소스를 지운다(rag-watch unlink → 삭제 대기열, 주간 age-mem-discard 고아 정리).
+    #   10-04 03:50 여기서 2,499개를 지웠고 10-08 02:00 고아 정리가 그 청크 약 7.1만(전체 65%)을 지웠다 — 원본이 정본이다.
+    #   파일당 수십 KB, 3천 개여도 100MB 안쪽이다.
     if [[ -d "${BOT_HOME}/inbox" ]]; then
-        local inbox_before inbox_deleted
-        inbox_before=$(find "${BOT_HOME}/inbox" -type f -name "claude-cli-*" 2>/dev/null | wc -l | tr -d ' ')
-        inbox_deleted=$(find "${BOT_HOME}/inbox" -type f -name "claude-cli-*" -mtime +30 -delete -print 2>/dev/null | wc -l | tr -d ' ')
-        _log "inbox/ 정리: ${inbox_deleted}개 삭제 (${inbox_before}개 중) — 30일 retention"
+        local inbox_count
+        inbox_count=$(find "${BOT_HOME}/inbox" -type f -name "claude-cli-*" 2>/dev/null | wc -l | tr -d ' ')
+        _log "inbox/ 보존: ${inbox_count}개 (삭제 안 함 — RAG 원본)"
     fi
 
     # 9. 오래된 debug 로그 정리 (3일 이상 된 파일)
