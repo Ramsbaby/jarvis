@@ -14,7 +14,18 @@
 
 set -euo pipefail
 
-export BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
+# 2026-10-08: 예전엔 BOT_HOME 기본값(~/.jarvis = 실제 런타임)에서 돌아 진짜 로그·캐시에 시험 기록을 쓰고,
+#   7월의 진짜 로그를 읽어 실패했다. 이제 임시 BOT_HOME 에 이 저장소의 라이브러리를 복사해 가둬 돌린다.
+INFRA_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BOT_HOME="$(mktemp -d)"
+trap 'rm -rf "$BOT_HOME"' EXIT
+export BOT_HOME
+mkdir -p "$BOT_HOME/lib"
+cp "$INFRA_DIR/lib/file-state-cache.sh" "$INFRA_DIR/lib/file-state-contradiction-guard.sh" \
+   "$INFRA_DIR/lib/file-state-dev-queue-bridge.sh" "$INFRA_DIR/lib/task-queue-guard.mjs" "$BOT_HOME/lib/"
+# 가짜 task-store: propose 를 거절해 수동 기록(JSONL) 경로를 타게 한다 — 진짜 tasks.db 무접촉.
+printf '%s\n' "console.log(JSON.stringify({ action: 'rejected' }));" > "$BOT_HOME/lib/task-store.mjs"
+export JARVIS_TASK_QUEUE_ENABLED=1
 
 # 색상 정의 (터미널 출력용)
 readonly RED='\033[0;31m'
@@ -117,7 +128,8 @@ test_cache_file_operations() {
     init_file_state_cache "$RESPONSE_ID" || return 1
 
     # 테스트: 존재하는 파일
-    if is_file_exists "/etc/hostname"; then
+    # /etc/hostname 은 리눅스에만 있다(맥에서 늘 실패) — 맥·리눅스 모두에 있는 /etc/hosts 로.
+    if is_file_exists "/etc/hosts"; then
         printf '%b✓%b Existing file correctly detected\n' "$GREEN" "$NC"
     else
         printf '%b✗%b Existing file not detected\n' "$RED" "$NC"
@@ -215,7 +227,9 @@ test_dev_queue_integration() {
 
         printf '%b✓%b All log entries are valid JSON\n' "$GREEN" "$NC"
     else
-        printf '%b⚠%b Log file not created (expected in some environments)\n' "$YELLOW" "$NC"
+        # 가짜 task-store 가 propose 를 거절하므로 수동 기록이 반드시 생겨야 한다.
+        printf '%b✗%b Log file not created\n' "$RED" "$NC"
+        return 1
     fi
 
     return 0
@@ -267,20 +281,23 @@ test_integrated_flow() {
 test_backward_compatibility() {
     print_header "TEST 6: 기존 스크립트 호환성"
 
+    # 예전 경로(${BOT_HOME}/../infra)는 런타임 이관 뒤 없는 곳이라 아무것도 안 보고 통과했다 — 이 저장소를 본다.
     local scripts=(
-        "${BOT_HOME}/../infra/bin/ask-claude.sh"
-        "${BOT_HOME}/../infra/lib/guards.sh"
-        "${BOT_HOME}/../infra/lib/coder-functions.sh"
+        "${INFRA_DIR}/bin/ask-claude.sh"
+        "${INFRA_DIR}/lib/guards.sh"
+        "${INFRA_DIR}/lib/coder-functions.sh"
     )
 
     for script in "${scripts[@]}"; do
-        if [[ -f "$script" ]]; then
-            if bash -n "$script" 2>/dev/null; then
-                printf '%b✓%b %s syntax OK\n' "$GREEN" "$NC" "$(basename "$script")"
-            else
-                printf '%b✗%b %s syntax error\n' "$RED" "$NC" "$(basename "$script")"
-                return 1
-            fi
+        if [[ ! -f "$script" ]]; then
+            printf '%b✗%b %s missing\n' "$RED" "$NC" "$script"
+            return 1
+        fi
+        if bash -n "$script" 2>/dev/null; then
+            printf '%b✓%b %s syntax OK\n' "$GREEN" "$NC" "$(basename "$script")"
+        else
+            printf '%b✗%b %s syntax error\n' "$RED" "$NC" "$(basename "$script")"
+            return 1
         fi
     done
 

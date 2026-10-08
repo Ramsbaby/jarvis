@@ -119,22 +119,13 @@ record_manual_task_entry() {
 
     mkdir -p "$BOT_HOME/logs" || return 1
 
+    # 한 줄 JSON(JSONL) — 여러 줄로 쓰면 아래 줄 단위 조회가 조각을 배열에 넣는다(2026-10-08).
     local task_record
-    task_record=$(cat <<EOF
-{
-  "ts": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "task_id": "$new_task_id",
-  "action": "enqueue_file_state_task",
-  "original_task_id": "$original_task_id",
-  "violation_type": "FILE_STATE_CONTRADICTION",
-  "violation_description": "$violation_desc",
-  "severity": "$severity",
-  "cluster_id": "cl-6f0c8cc1df90e995",
-  "status": "pending",
-  "source": "file-state-guard"
-}
-EOF
-    )
+    task_record=$(jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg task_id "$new_task_id" \
+        --arg orig "$original_task_id" --arg desc "$violation_desc" --arg sev "$severity" \
+        '{ts: $ts, task_id: $task_id, action: "enqueue_file_state_task", original_task_id: $orig,
+          violation_type: "FILE_STATE_CONTRADICTION", violation_description: $desc, severity: $sev,
+          cluster_id: "cl-6f0c8cc1df90e995", status: "pending", source: "file-state-guard"}') || return 1
 
     printf '%s\n' "$task_record" >> "$BOT_HOME/logs/file-state-dev-queue-log.jsonl"
 
@@ -160,7 +151,7 @@ get_pending_file_state_analysis_tasks() {
     printf '[' > /tmp/pending-tasks.json
     local first=true
     while IFS= read -r line; do
-        if printf '%s' "$line" | grep -q '"status": "pending"'; then
+        if printf '%s' "$line" | grep -qE '^\{.*"status": ?"pending"'; then
             if [[ "$first" == true ]]; then
                 printf '%s' "$line" >> /tmp/pending-tasks.json
                 first=false

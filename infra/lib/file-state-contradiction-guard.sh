@@ -25,30 +25,36 @@ export BOT_HOME="${BOT_HOME:-${HOME}/.jarvis}"
 # [1] 정규식 패턴 정의
 # ═════════════════════════════════════════════════════════════════════════════════
 
+# 2026-10-08: `.*` 는 한 줄 끝까지 탐욕스럽게 먹어 한 줄 안의 여러 문장이 1회로 세졌다 → 문장 안으로 묶는다([^.?!]*).
+#   `[다음]` 같은 한글 대괄호는 C 로케일에서 바이트 집합이라 '없어서'까지 맞았다 → (다|음) 교대로.
+#   해요체·합니다체('있어요'·'있습니다')도 존재로 센다.
+_FSCG_S='[^.?!]*'
+
 # 파일 존재 긍정 표현
 EXIST_PATTERNS=(
-    "파일.*존재"
-    "파일.*있다"
-    "파일.*생성"
-    "파일.*작성"
-    "파일.*저장"
-    "파일이 .*생겼"
-    "파일 .*생성"
-    "이미 .*존재"
-    "파일 .*있[다음]"
+    "파일${_FSCG_S}존재"
+    "파일${_FSCG_S}있(다|어|습)"
+    "파일${_FSCG_S}생성"
+    "파일${_FSCG_S}작성"
+    "파일${_FSCG_S}저장"
+    "파일이 ${_FSCG_S}생겼"
+    "파일 ${_FSCG_S}생성"
+    "이미 ${_FSCG_S}존재"
+    "파일 ${_FSCG_S}있(다|음)"
 )
 
 # 파일 부재 표현
 NOT_EXIST_PATTERNS=(
-    "파일.*없다"
-    "파일.*없[음다]"
-    "파일이 .*없[다음]"
-    "파일 .*부재"
-    "파일 .*미존재"
+    "파일${_FSCG_S}없다"
+    "파일${_FSCG_S}없(음|다)"
+    "파일이 ${_FSCG_S}없(다|음)"
+    "파일 ${_FSCG_S}부재"
+    "파일 ${_FSCG_S}미존재"
     "파일이 없"
-    "파일 .*없는"
-    "파일 .*부족"
+    "파일 ${_FSCG_S}없는"
+    "파일 ${_FSCG_S}부족"
 )
+unset _FSCG_S
 
 # ═════════════════════════════════════════════════════════════════════════════════
 # [2] count_pattern_occurrences — 정규식 패턴 매칭 횟수 계산
@@ -183,20 +189,13 @@ report_contradiction() {
 
     mkdir -p "$BOT_HOME/logs" || return 1
 
+    # 한 줄 JSON(JSONL) — 여러 줄로 쓰면 줄 단위로 읽는 쪽(통계·시험)이 깨진다(2026-10-08).
     local report
-    report=$(cat <<EOF
-{
-  "ts": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "task_id": "$task_id",
-  "cluster_id": "cl-6f0c8cc1df90e995",
-  "violation_type": "FILE_STATE_CONTRADICTION",
-  "exist_assertions": $exist_count,
-  "not_exist_assertions": $not_exist_count,
-  "severity": "ERROR",
-  "message": "파일 존재/부재 상태 모순: 동일 응답에서 서로 모순되는 상태 보고"
-}
-EOF
-    )
+    report=$(jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg task_id "$task_id" \
+        --argjson e "$exist_count" --argjson n "$not_exist_count" \
+        '{ts: $ts, task_id: $task_id, cluster_id: "cl-6f0c8cc1df90e995",
+          violation_type: "FILE_STATE_CONTRADICTION", exist_assertions: $e, not_exist_assertions: $n,
+          severity: "ERROR", message: "파일 존재/부재 상태 모순: 동일 응답에서 서로 모순되는 상태 보고"}') || return 1
 
     printf '%s\n' "$report" >> "$BOT_HOME/logs/file-state-contradictions.jsonl"
 
@@ -218,19 +217,11 @@ report_repetitive_assertion() {
     mkdir -p "$BOT_HOME/logs" || return 1
 
     local report
-    report=$(cat <<EOF
-{
-  "ts": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "task_id": "$task_id",
-  "cluster_id": "cl-6f0c8cc1df90e995",
-  "violation_type": "FILE_STATE_REPETITIVE",
-  "exist_assertions": $exist_count,
-  "not_exist_assertions": $not_exist_count,
-  "severity": "WARN",
-  "message": "파일 상태를 과도하게 많이 언급 (혼동 가능성)"
-}
-EOF
-    )
+    report=$(jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg task_id "$task_id" \
+        --argjson e "$exist_count" --argjson n "$not_exist_count" \
+        '{ts: $ts, task_id: $task_id, cluster_id: "cl-6f0c8cc1df90e995",
+          violation_type: "FILE_STATE_REPETITIVE", exist_assertions: $e, not_exist_assertions: $n,
+          severity: "WARN", message: "파일 상태를 과도하게 많이 언급 (혼동 가능성)"}') || return 1
 
     printf '%s\n' "$report" >> "$BOT_HOME/logs/file-state-contradictions.jsonl"
 
@@ -262,8 +253,9 @@ get_contradiction_stats() {
     local error_count
     local warn_count
 
-    error_count=$(grep "$today_date" "$log_file" | grep '"severity": "ERROR"' | wc -l)
-    warn_count=$(grep "$today_date" "$log_file" | grep '"severity": "WARN"' | wc -l)
+    # 옛 여러 줄 기록은 날짜와 심각도가 다른 줄이라 원래도 0 으로 셌다 — 한 줄 기록만 센다.
+    error_count=$(grep "$today_date" "$log_file" | grep -cE '"severity": ?"ERROR"') || error_count=0
+    warn_count=$(grep "$today_date" "$log_file" | grep -cE '"severity": ?"WARN"') || warn_count=0
 
     cat <<EOF
 {
