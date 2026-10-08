@@ -20,7 +20,7 @@ log() { echo "[$(ts)] [mistake-pattern-analyzer] $*" | tee -a "$LOG_FILE"; }
 log "=== Mistake Pattern Analysis start ==="
 
 # [2026-07-22] 본체+아카이브 glob 집계(아카이빙 후 카운트·키워드 분포 왜곡 방지). SIZE_KB는 활성본 기준 유지.
-source "$HOME/projects/jarvis/infra/lib/learned-mistakes-glob.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/learned-mistakes-glob.sh"
 TOTAL=$(lm_grep "^## 2026-" | wc -l | tr -d ' \n')
 SIZE_KB=$(($(wc -c < "$WIKI_LM") / 1024))
 HEADERS=$(lm_grep "^## 2026-" | sed 's/^## 2026-[0-9-]* — //')
@@ -55,11 +55,19 @@ RECENT_30D=$(grep -oE "^## (2026-[0-9]+-[0-9]+)" "$WIKI_LM" 2>/dev/null | awk -v
   d=$2; if (d >= c) cnt++;
 } END { print cnt+0 }')
 
-# 상태 판정
+# 상태 판정 — 변화량 기준(2026-10-09 자가 감사).
+#   예전 기준(누적>1500·크기>1500KB·30일>50)은 9월부터 영구 참이라 WARN 이 열흘 넘게 '확인함'으로만 눌려 있었다.
+#   이제 '지난 30일 건수'가 7일 이상 전 기록보다 25%↑이고 10건↑ 늘었을 때만 WARN. 첫날(기록 없음)은 기준선.
+#   크기는 아카이빙이 필요하다는 정보로만 남긴다(경보 아님).
+HIST="${HOME}/.openclaw-data/runtime/state/mistake-pattern-history.tsv"
+TODAY=$(date '+%Y-%m-%d')
+WEEK_AGO=$(date -v-7d '+%Y-%m-%d' 2>/dev/null || date -d '7 days ago' '+%Y-%m-%d')
+BASE=$(awk -F'\t' -v w="$WEEK_AGO" '$1 <= w { v=$2 } END { print v }' "$HIST" 2>/dev/null || true)
 STATUS="OK"
-(( TOTAL > 1500 )) && STATUS="WARN"
-(( RECENT_30D > 50 )) && STATUS="WARN"
-(( SIZE_KB > 1500 )) && STATUS="WARN"
+if [[ -n "$BASE" ]] && (( RECENT_30D * 4 > BASE * 5 && RECENT_30D - BASE >= 10 )); then
+  STATUS="WARN"
+fi
+grep -q "^${TODAY}"$'\t' "$HIST" 2>/dev/null || printf '%s\t%s\n' "$TODAY" "$RECENT_30D" >> "$HIST"
 
 # JSON 결과
 cat > "$RESULT" <<JSON
@@ -75,7 +83,8 @@ cat > "$RESULT" <<JSON
 }
 JSON
 
-log "총 $TOTAL / ${SIZE_KB}KB / 30d=$RECENT_30D / 임계초과=$HIGH / 1위=$TOP_KW / status=$STATUS"
+log "총 $TOTAL / ${SIZE_KB}KB / 30d=$RECENT_30D(7일 전 ${BASE:-기록없음}) / 임계초과=$HIGH / 1위=$TOP_KW / status=$STATUS"
+(( SIZE_KB > 1500 )) && log "참고: 활성 오답노트 ${SIZE_KB}KB — 월별 아카이빙 필요(경보 아님)"
 
 if (( HIGH > 0 )); then
   echo "🔄 만성 패턴 (≥3회):"
