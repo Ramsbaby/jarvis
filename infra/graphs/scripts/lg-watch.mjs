@@ -22,6 +22,8 @@ export const HELD_DAY_MAX = 6; // 같은 사유 보류가 창 안에서 6회(틱
 export const HELD_STREAK_MAX = 4; // 같은 사유로 연달아 4틱(2시간) 이상
 export const HELD_EXPECTED = new Set(["quiet"]); // 01:30~04:30 야간 금지 — 설계상 매일 6~7틱
 export const HELD_SERIOUS = new Set(["code_defect", "effect_unknown", "hook_leak", "stuck"]); // 1회라도 사람이 볼 것
+// LLM 호출만 막는 사유(10-10) — 실행기는 돌고 LLM 을 안 쓰는 단계는 간다. 알림 글을 '일을 멈췄다'로 쓰지 않는다
+export const HELD_LLM_ONLY = new Set(["usage_high", "usage_unreadable", "usage_stale", "login", "usage_limit", "token_cap", "token_thread", "llm_day", "llm_thread"]);
 const REPORT_HINT = "node ~/projects/jarvis/infra/graphs/lg-report.mjs --hours 24";
 
 const kstDay = (ms) => new Date(ms + 9 * 3_600_000).toISOString().slice(0, 10);
@@ -76,7 +78,7 @@ export function findIssues({ day, all, bench, qaMissing = [] }) {
     const st = day.held_streak?.[reason] ?? { max: 0, current: 0 };
     if (HELD_SERIOUS.has(reason) || n >= HELD_DAY_MAX || st.max >= HELD_STREAK_MAX) {
       add(`held:${reason}`, `보류 '${reason}' ${n}회(최장 연속 ${st.max}틱${st.current ? ` · 지금도 ${st.current}틱째` : ""})`,
-        `실행기가 이 사유로 일을 멈췄다(기준: 하루 ${HELD_DAY_MAX}회 또는 연속 ${HELD_STREAK_MAX}틱${HELD_SERIOUS.has(reason) ? " — 위험 사유는 1회부터" : ""})`);
+        `${HELD_LLM_ONLY.has(reason) ? "이 사유로 LLM 호출이 막혔다 — LLM 을 안 쓰는 단계는 진행하고, LLM 을 부르는 스레드만 보류된다" : "실행기가 이 사유로 일을 멈췄다"}(기준: 하루 ${HELD_DAY_MAX}회 또는 연속 ${HELD_STREAK_MAX}틱${HELD_SERIOUS.has(reason) ? " — 위험 사유는 1회부터" : ""})`);
     }
   }
   const m8 = bench.m8;

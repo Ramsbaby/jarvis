@@ -133,7 +133,7 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
   const { createRun, resolveCommand, CmdNotAllowed, killRunChildren } = await import("./lib/run.mjs");
   const { createEffect, effectScope } = await import("./lib/effects.mjs");
   const detach = await import("./lib/detach.mjs");
-  const { liveMode } = await import("./lib/gates.mjs");
+  const { liveMode, llmCallGates } = await import("./lib/gates.mjs");
   active.killChildren = () => { killActiveChildren(); killRunChildren(); };
   const { cfg, now, metric } = ctx;
   const timeLeft = ctx.isTick ? () => cfg.jobLimitMs - elapsedMs() : null; // 틱만 — 잡 시간 상한(600초) 안에서
@@ -141,7 +141,8 @@ async function openGraph(ctx, name, thread, { check = true, mode = "shadow" } = 
   // 보류 표식(hold_ref)은 환경 손잡이(LG_LLM_MAX_PER_THREAD) 값 그대로 — 그 값을 올려야 풀리는 것은 같다.
   const perThread = Math.max(cfg.llm.perThread, Math.min(12, Math.floor(Number(mod.meta?.llmPerThread)) || 0));
   const llmCfg = perThread === cfg.llm.perThread ? cfg : { ...cfg, llm: { ...cfg.llm, perThread, perThreadRef: cfg.llm.perThread } };
-  const llm = createClaude({ store: ctx.store, cfg: llmCfg, now, thread, metric, timeLeft });
+  // 틱에서는 LLM 을 부르기 직전에 LLM 예산 관문을 본다 — 걸렸으면 그 스레드만 보류(틱 전체가 아니라). 수동 명령은 전처럼 관문을 보지 않는다(사람이 보고 있다).
+  const llm = createClaude({ store: ctx.store, cfg: llmCfg, now, thread, metric, timeLeft, gate: ctx.isTick ? () => llmCallGates(cfg, now()) : null });
   const heartbeatSec = cfg.testMode && process.env.LG_TEST_HEARTBEAT_SEC ? Number(process.env.LG_TEST_HEARTBEAT_SEC) : 30;
   const scratch = path.join(cfg.jobsDir, thread, "_scratch");
   const BENCH = new Set(["bench", "reproduced", "diag_match", "hidden_pass", "ai_misjudge", "signal"]);
@@ -823,8 +824,10 @@ async function tickThreadInner(ctx, row0) {
     if (row.hold_reason === "code_defect" && row.hold_ref === codeHash(row.graph)) return "skip"; // 코드가 그대로면 다시 해도 같다
     if (row.hold_reason === "effect_unknown") return "skip"; // 결과 모르는 부수효과 — 사람이 확인해야 한다(기한이 지나면 만료 보고)
     // LLM 상한 보류: 풀릴 수 없는 동안은 노드를 다시 돌리지 않는다(앞부분 일을 틱마다 되풀이하지 않게)
-    if ((row.hold_reason === "llm_day" || row.hold_reason === "token_cap") && row.hold_ref === ctx.storeMod.localDay(ctx.now())) return "skip";
+    if (["llm_day", "token_cap", "token_thread"].includes(row.hold_reason) && row.hold_ref === ctx.storeMod.localDay(ctx.now())) return "skip";
     if (row.hold_reason === "llm_thread" && row.hold_ref === String(ctx.cfg.llm.perThread)) return "skip";
+    // LLM 예산 관문(주간 사용량·로그인·한도 표식)에 걸려 호출 앞에서 선 스레드 — 그 관문이 걸려 있는 동안은 같다
+    if (LLM_CALL_HOLDS.has(row.hold_reason) && ctx.llmCallGates?.().length) return "skip";
     const t = ctx.now();
     if (row.status === "running") {
       // 실행 중으로 적혔는데 잠금 주인이 없다 = 끊김(게이트웨이 재시작·SIGKILL). 재시도로 센다.
@@ -895,27 +898,40 @@ async function tickThreadInner(ctx, row0) {
 // 자원 관문을 건너뛰는 그래프 — 읽기 전용·LLM 없음·사본 없음인 것만(당직 D0, PLAN §13.3). PAUSED 는 이들도 막는다.
 const GATE_EXEMPT_GRAPHS = new Set(["duty-verify"]);
 
-// 관문 보류가 일을 붙잡고 오래 가면 한 번 알린다(10-05: 매일 QA 가 디스크 관문에 막힌 걸 아무도 몰랐다 — HOLD 는 알림 대상이 아니었다).
-// 야간(quiet)·멈춤(paused)은 일부러 세우는 것이라 빼고 센다. 같은 이유의 보류가 이어지는 동안은 한 번만, 풀리면 처음부터 다시 잰다.
-function noteHold(ctx, gates, pendingWork) {
+// LLM 호출 앞에서 스레드를 세우는 관문 사유(lib/gates.mjs llmCallGates 가 내는 것) — 하루 토큰 상한(token_cap)은 날짜로 따로 본다
+const LLM_CALL_HOLDS = new Set(["usage_high", "usage_unreadable", "usage_stale", "login", "usage_limit"]);
+const fmtDur = (ms) => { const m = Math.round(ms / 60_000); return m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`; };
+
+// 관문 보류가 일을 붙잡고 오래 가면 알린다(10-05: 매일 QA 가 디스크 관문에 막힌 걸 아무도 몰랐다 — HOLD 는 알림 대상이 아니었다).
+// 붙잡힌 일 = 틱을 세운 관문(디스크) 뒤에서 기다리는 일 + LLM 예산 관문 때문에 호출 앞에서 보류된 스레드(LLM 없이 가는 일은 붙잡힌 것이 아니다).
+// 야간(quiet)·멈춤(paused)은 일부러 세우는 것이라 빼고 센다. 처음은 holdNotifyMs(30분) 뒤, 같은 보류가 이어지면 holdRenotifyMs(3시간)마다 다시 —
+// 몇 번째 알림인지와 총 보류 시간을 적는다(10-09: 한 번만 알려 token_cap 보류 19시간이 조용했다). 사유가 바뀌어도 겹치는 사유가 있으면 같은 보류로 잇고,
+// 붙잡힌 일이 없어지면 처음부터 다시 잰다. 틱의 스레드 진행이 끝난 뒤에 부른다(이번 틱에 새로 보류된 스레드까지 센다).
+function noteHold(ctx, { hard, soft, startedMayRun }) {
   const f = path.join(ctx.cfg.stateDir, "hold-since.json");
-  const reasons = gates.map((x) => x.gate).filter((x) => x !== "quiet" && x !== "paused");
-  const waiting = reasons.length ? pendingWork() : [];
+  const open = tickCandidates(ctx).filter((r) => !GATE_EXEMPT_GRAPHS.has(r.graph));
+  const blockers = hard.filter((x) => x.gate !== "quiet" && x.gate !== "paused");
+  const byHard = blockers.length ? open.filter((r) => !(startedMayRun && r.status !== "queued")) : [];
+  const bySoft = soft.length ? open.filter((r) => r.status === "held" && (LLM_CALL_HOLDS.has(r.hold_reason) || r.hold_reason === "token_cap")) : [];
+  const waiting = [...new Map([...byHard, ...bySoft].map((r) => [r.thread_id, r])).values()];
   if (!waiting.length) { fs.rmSync(f, { force: true }); return; }
-  const key = reasons.join(",");
+  const by = [...(byHard.length ? blockers : []), ...(bySoft.length ? soft : [])];
+  const reasons = by.map((x) => x.gate);
+  const now = ctx.now();
   let st = null;
   try { st = JSON.parse(fs.readFileSync(f, "utf8")); } catch { st = null; }
-  const now = ctx.now();
-  if (!st || st.key !== key) {
-    fs.writeFileSync(f, JSON.stringify({ key, since: now, notified: false }), { mode: 0o600 });
-    return;
-  }
-  if (st.notified || now - st.since < ctx.cfg.gates.holdNotifyMs) return;
-  const mins = Math.round((now - st.since) / 60_000);
-  const detail = gates.filter((x) => reasons.includes(x.gate)).map((x) => x.detail).join(" / ");
+  // 옛 판 파일({ key, since, notified })도 읽는다 — 알린 적이 있으면 첫 알림 때를 30분 뒤로 본다
+  const prev = st && Number.isFinite(st.since) ? (st.reasons ?? String(st.key ?? "").split(",").filter(Boolean)) : null;
+  if (!prev || !prev.some((x) => reasons.includes(x))) st = { since: now, count: 0, lastAt: null };
+  else st = { since: st.since, count: st.count ?? (st.notified ? 1 : 0), lastAt: st.lastAt ?? (st.notified ? st.since + ctx.cfg.gates.holdNotifyMs : null) };
+  const save = (x) => fs.writeFileSync(f, JSON.stringify({ ...x, reasons }), { mode: 0o600 });
+  const due = st.count === 0 ? now - st.since >= ctx.cfg.gates.holdNotifyMs
+    : ctx.cfg.gates.holdRenotifyMs > 0 && now - st.lastAt >= ctx.cfg.gates.holdRenotifyMs;
+  if (!due) { save(st); return; }
+  const detail = by.map((x) => x.detail).join(" / ");
   const names = waiting.slice(0, 3).map((r) => r.thread_id).join(", ") + (waiting.length > 3 ? ` 외 ${waiting.length - 3}` : "");
-  announce(ctx, waiting[0].thread_id, `STUCK ${waiting[0].thread_id} 관문 보류 ${mins}분째 — ${detail} · 기다리는 일: ${names}`,
-    () => fs.writeFileSync(f, JSON.stringify({ ...st, notified: true }), { mode: 0o600 }));
+  announce(ctx, waiting[0].thread_id, `STUCK ${waiting[0].thread_id} 관문 보류 ${fmtDur(now - st.since)}째(알림 ${st.count + 1}회째) — ${detail} · 기다리는 일: ${names}`,
+    () => save({ ...st, count: st.count + 1, lastAt: now }));
 }
 
 // 당직 D0 틱 고리(lib/duty-intake.mjs): 게이트웨이 heartbeat 기록 + 재시작마다 duty-verify 스레드(그림자) 대기열 등록.
@@ -936,7 +952,8 @@ async function dutyHook(ctx) {
 async function cmdTick(ctx) {
   ctx.isTick = true;
   const t0 = performance.now();
-  const { checkGates } = await import("./lib/gates.mjs");
+  const { checkGates, diskGate, isLlmGate, llmCallGates } = await import("./lib/gates.mjs");
+  ctx.llmCallGates = () => llmCallGates(ctx.cfg, ctx.now());
   if (fs.existsSync(ctx.cfg.pausedPath)) { // 전체 정지 — 정리·만료도 하지 않는다
     ctx.metric("held", { scope: "tick", reasons: ["paused"] });
     ctx.metric("tick", { ms: Math.round(performance.now() - t0), outcome: "paused" });
@@ -976,15 +993,19 @@ async function cmdTick(ctx) {
     ctx.metric("reclaim", { scope: "tick", ...rc });
     gates = checkGates(ctx.cfg, ctx.store, ctx.now());
   }
+  // 틱을 세우는 관문(멈춤·디스크·야간)과 LLM 호출만 막는 관문(주간 사용량·로그인·한도 표식·하루 토큰 상한)을 가른다(10-10).
+  // LLM 예산 관문은 구독 한도를 지키려는 것(PLAN §4 S8·R1)이라 토큰을 안 쓰는 단계를 세울 까닭이 없다 — 틱은 돌고(대기열의 새 일도 시작한다),
+  // LLM 을 부르려는 순간에 그 스레드만 보류된다(lib/claude.mjs reserve). 새 일도 시작하는 까닭: 매일 QA 는 대기열로 들어오고 40판의 대부분이
+  // LLM 없는 단계다. 수정 그래프는 사본·재현까지 가서 진단(LLM) 앞에 서고 한 번에 하나(serial)라 사본은 하나만 생긴다. 디스크·야간은 지금대로다.
+  const hard = gates.filter((x) => !isLlmGate(x));
+  const soft = gates.filter((x) => isLlmGate(x));
   // 디스크(일하는 선)만 걸렸고 건강선은 지켜지면, 이미 시작한 일은 이어 간다 — 새로 시작(대기열)만 막는다(10-05 자기 정지).
-  const { diskGate } = await import("./lib/gates.mjs");
-  const startedMayRun = gates.length > 0 && gates.every((x) => x.gate === "disk") && !diskGate(ctx.cfg.gates, undefined, { started: true });
-  const blockedWork = () => pendingWork().filter((r) => !(startedMayRun && r.status !== "queued"));
-  noteHold(ctx, gates, blockedWork);
-  if (gates.length) {
+  const startedMayRun = hard.length > 0 && hard.every((x) => x.gate === "disk") && !diskGate(ctx.cfg.gates, undefined, { started: true });
+  const holdInfo = { hard, soft, startedMayRun };
+  if (hard.length) {
     ctx.metric("held", { scope: "tick", reasons: gates.map((x) => x.gate), detail: gates.map((x) => x.detail).join(" / ") });
     say(`HOLD ${gates.map((x) => `${x.gate}: ${x.detail}`).join(" · ")}`);
-    // 자원 관문(디스크·사용량·토큰·LLM 보류·야간)은 사본을 만들고 LLM 을 부르는 무거운 그래프를 막으려는 것이다.
+    // 틱을 세우는 관문(디스크·야간)은 사본을 만드는 무거운 그래프와 새 일 시작을 막으려는 것이다.
     // 읽기 전용·LLM 없는 당직 확인(GATE_EXEMPT_GRAPHS)은 시스템이 나쁠 때일수록 돌아야 한다 — 10-04 실측: 디스크 관문(13.2 < 16.2GiB)이
     // D0 대조를 막았다. PAUSED(멈춤 스위치)는 예외 없이 지킨다.
     let n = 0;
@@ -999,9 +1020,14 @@ async function cmdTick(ctx) {
         if (r !== "locked" && r !== "skip") n++;
       }
     }
+    noteHold(ctx, holdInfo);
     ctx.metric("tick", { ms: Math.round(performance.now() - t0), outcome: "hold", exempt_threads: n, started_continue: startedMayRun });
     failures.forEach(say);
     return 0;
+  }
+  if (soft.length) { // 틱은 돈다 — 기록만 남긴다(scope llm). 보류는 LLM 을 부르는 스레드에서 따로 적힌다(scope thread)
+    ctx.metric("held", { scope: "llm", reasons: soft.map((x) => x.gate), detail: soft.map((x) => x.detail).join(" / ") });
+    say(`LLM_HOLD ${soft.map((x) => `${x.gate}: ${x.detail}`).join(" · ")} — LLM 호출만 보류, 그 밖의 단계는 진행`);
   }
   await dailyStart(ctx);
   const seen = new Set();
@@ -1015,7 +1041,8 @@ async function cmdTick(ctx) {
     const r = await tickThread(ctx, row);
     if (r !== "locked" && r !== "skip") { n++; outcome = "ran"; }
   }
-  ctx.metric("tick", { ms: Math.round(performance.now() - t0), threads: n, outcome });
+  noteHold(ctx, holdInfo);
+  ctx.metric("tick", { ms: Math.round(performance.now() - t0), threads: n, outcome, ...(soft.length ? { llm_gates: soft.map((x) => x.gate) } : {}) });
   failures.forEach(say);
   return 0;
 }

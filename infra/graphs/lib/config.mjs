@@ -98,8 +98,10 @@ export function loadConfig(env = process.env) {
       quiet: timeWindow(env, "LG_QUIET", "01:30-04:30"), // 야간 소크 시간 — 새 일을 시작하지 않는다
       loginRecheckMs: num(env, "LG_LOGIN_RECHECK_MIN", 360) * 60_000, // 로그인 만료 표식 뒤 다시 시도해 보기까지
       limitRecheckMs: num(env, "LG_LIMIT_RECHECK_MIN", 60) * 60_000, // 사용량 한도(429) 표식 뒤 다시 시도해 보기까지
-      // 일이 기다리는데 관문 보류가 이만큼 이어지면 한 번 알린다(야간·멈춤 스위치 보류는 빼고). 같은 보류가 풀릴 때까지 다시 알리지 않는다.
+      // 일이 기다리는데 관문 보류가 이만큼 이어지면 알린다(야간·멈춤 스위치 보류는 빼고).
       holdNotifyMs: num(env, "LG_HOLD_NOTIFY_MIN", 30) * 60_000,
+      // 같은 보류가 이어지면 이 간격으로 다시 알린다(0 = 한 번만). 10-09 token_cap 보류가 19시간 이어지는 동안 알림은 첫 30분에 한 번뿐이었다.
+      holdRenotifyMs: num(env, "LG_HOLD_RENOTIFY_MIN", 180) * 60_000,
     },
     // 사용자 훅 로그 — 자가 시험이 graphs 쪽 claude 호출 흔적(줄)이 0 인지 본다(S6). 훅이 되살아나면 여기에 작업 폴더가 찍힌다.
     hookLogs: (env.LG_HOOK_LOGS !== undefined ? env.LG_HOOK_LOGS.split(":") : ["stop-mistake-extract.log", "session-save.log"].map(
@@ -109,6 +111,15 @@ export function loadConfig(env = process.env) {
       perDay: num(env, "LG_LLM_MAX_PER_DAY", 20),
       // 하루 토큰 상한 — 입력·출력·캐시 생성·캐시 읽기를 모두 더한 값. 그림자 ② 판정(10-28) 때 '하루 최댓값 × 1.5'로 다시 정한다.
       dayTokenCap: num(env, "LG_DAY_TOKEN_CAP", 3_000_000),
+      // 스레드 하나가 하루에 쓸 수 있는 토큰(같은 합). 0 = 끔. 10-03~10-10 실측: 평소 스레드·하루 최댓값 769,167(qa-20261007) × 1.5 ≈ 1,200,000 —
+      // 넘긴 것은 셋뿐(4,019,409 · 2,179,915 · 1,511,915, 모두 gostop-fix). 이 값 + 호출 하나(아래 약 1.6M) < 하루 상한이라 한 스레드가 하루를 다 못 쓴다.
+      threadDayTokenCap: num(env, "LG_THREAD_DAY_TOKEN_CAP", 1_200_000),
+      // 호출 하나의 상한 — 달러 어림(claude --max-budget-usd, 턴 사이에 CLI 가 재서 멈춘다). 0 = 끔. 10-09 opus 수정 호출 하나가 47턴·$2.73·4,019,409 토큰을
+      // 썼다(프롬프트 4.5KB — 도구로 큰 파일을 읽으며 턴마다 맥락을 다시 읽은 것). 그 밖 61회의 최댓값은 $0.909(1,362,384 토큰)이라 1달러는 지금까지의
+      // 정상 호출을 하나도 자르지 않고, 큰 호출의 실측 단가($0.62~0.91/100만 토큰)로 약 110~160만 토큰에서 멈춘다.
+      callBudgetUsd: num(env, "LG_LLM_CALL_BUDGET_USD", 1),
+      // 프롬프트 글자 수 상한 — 넘으면 부르지 않는다(코드 결함). 실측 최댓값 11,667바이트(검토 프롬프트)의 약 8배.
+      maxPromptChars: num(env, "LG_LLM_MAX_PROMPT_CHARS", 100_000),
       defaultModel: env.LG_LLM_MODEL || "sonnet",
       timeoutMs: num(env, "LG_LLM_TIMEOUT_SEC", 300) * 1000,
       bin: env.LG_CLAUDE_BIN || null,

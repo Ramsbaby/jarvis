@@ -133,16 +133,11 @@ test("관문: 감지기 밤 공백(20시→08시, 최대 12시간) 안의 사용
   assert.doesNotMatch(m, /usage_stale/);
 });
 
-test("관문: 걸리면 HOLD(종료 0·NO_REPLY), 노드는 하나도 돌지 않고 사유는 metrics 에 — 7종", async (t) => {
+// LLM 예산 관문(주간 사용량·로그인·한도 표식·하루 토큰 상한)은 틱을 세우지 않는다 — LLM 호출만 막는다(10-10, test/llm-gates.test.mjs)
+test("관문: 틱을 세우는 3종(멈춤·디스크·야간)은 걸리면 HOLD(종료 0·NO_REPLY), 노드는 하나도 돌지 않고 사유는 metrics 에", async (t) => {
   const cases = [
     ["paused", (sb, env) => { fs.mkdirSync(sb.state, { recursive: true }); fs.writeFileSync(path.join(sb.state, "PAUSED"), ""); return env; }],
     ["disk", (sb, env) => ({ ...env, LG_DISK_FLOOR_GIB: "100000" })],
-    ["usage_high", (sb) => tickEnv(sb, { usage: { week: 85 } })],
-    ["usage_unreadable", (sb, env) => ({ ...env, LG_USAGE_FILE: path.join(sb.dir, "없음.md") })],
-    ["usage_unreadable", (sb) => tickEnv(sb, { usage: { row: false } })],
-    ["usage_stale", (sb) => tickEnv(sb, { usage: { at: Date.now() - 14 * HOUR } })],
-    ["login", (sb, env) => { fs.mkdirSync(sb.state, { recursive: true }); fs.writeFileSync(path.join(sb.state, "llm-hold.json"), JSON.stringify({ reason: "login", at: Date.now() })); return env; }],
-    ["usage_limit", (sb, env) => { fs.mkdirSync(sb.state, { recursive: true }); fs.writeFileSync(path.join(sb.state, "llm-hold.json"), JSON.stringify({ reason: "usage_limit", at: Date.now() })); return env; }],
     ["quiet", (sb) => { const two = new Date(2026, 9, 4, 2, 0).getTime(); return { ...tickEnv(sb, { now: two }), LG_QUIET: "01:30-04:30", LG_NOW: String(two) }; }],
   ];
   for (const [gate, setup] of cases) {
@@ -159,7 +154,7 @@ test("관문: 걸리면 HOLD(종료 0·NO_REPLY), 노드는 하나도 돌지 않
   }
 });
 
-test("관문: 하루 토큰 상한 — 응답 usage 로 센 토큰이 상한에 닿으면 다음 틱은 HOLD", (t) => {
+test("관문: 하루 토큰 상한 — 응답 usage 로 센 토큰이 상한에 닿으면 LLM 을 부르는 스레드는 보류(claude 를 부르지 않는다)", (t) => {
   const sb = sandbox(t);
   const fake = fakeClaude(sb, "tokens");
   const env = { ...tickEnv(sb), LG_CLAUDE_BIN: fake.bin, LG_DAY_TOKEN_CAP: "1000" };
@@ -168,7 +163,8 @@ test("관문: 하루 토큰 상한 — 응답 usage 로 센 토큰이 상한에 
   assert.equal(statusJson({ ...sb, env }).llm.tokensToday, 1350, "입력 100 + 출력 50 + 캐시 생성 200 + 캐시 읽기 1000");
   assert.equal(run(env, ["start", "smoke", "k2", "--llm", "--queue"]).code, 0);
   assert.equal(run(env, ["tick"]).first, "NO_REPLY");
-  assert.ok(metrics(sb).some((e) => e.ev === "held" && e.scope === "tick" && e.reasons.includes("token_cap")));
+  assert.ok(metrics(sb).some((e) => e.ev === "held" && e.scope === "thread" && e.thread === "k2" && e.reasons.includes("token_cap")));
+  assert.equal(JSON.parse(run(env, ["status", "k2", "--json"]).out).hold, "token_cap");
   assert.equal(fake.calls().length, 1, "상한을 넘긴 뒤에는 claude 를 부르지 않는다");
 });
 

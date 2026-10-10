@@ -838,3 +838,85 @@ test("재검토 B 하: 채점 근거 — 넓은 범위는 근거가 아니다 ·
   assert.equal(r.code, 0, r.out + r.err);
   assert.ok(!fs.existsSync(path.join(root, "a")));
 });
+
+// 10-10: LLM 예산 관문이 호출만 막게 되면서 수정 스레드는 재현까지 가서 진단(LLM) 앞에 선다 — 몇 시간~며칠 서 있는 사이 당직·대화가 먼저 고치는 일이
+// 흔하다(씨앗 203013939: 고쳐진 지 5시간 뒤에 시작해 477만 토큰). 재현 판정이 3시간 넘게 묵었고 그 사이 master 가 움직였으면, LLM 을 부르기 전에
+// 지금 master 를 새로 내보내 같은 재현을 다시 돌린다 — 두 번 다 통과면 AI 를 더 쓰지 않고 not_reproduced 로 끝낸다.
+const HOURS = 3_600_000;
+async function driveAt(x, thread, ms, { max = 60, until = ["done", "waiting", "gave_up", "expired"] } = {}) {
+  const extra = { extraEnv: { LG_NOW: String(ms) } };
+  for (let i = 0; i < max; i++) {
+    const st = JSON.parse(run(x.env, ["status", thread, "--json"], extra).out);
+    if (until.includes(st.status)) return st;
+    run(x.env, ["tick"], extra);
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  return JSON.parse(run(x.env, ["status", thread, "--json"], extra).out);
+}
+// master 가 아직 안 고쳐진 코드인 저장소에서 소크 스레드를 시작해, 주간 사용량 관문 때문에 진단(LLM) 앞에 세워 둔다
+async function heldAtDiagnose(t, seed) {
+  const x = setup(t, { flutter: { mode: "mismatch-old" } }); // 옛 코드(score() => 4)면 불일치, 고쳐진 코드면 통과
+  git(x.repo, ["reset", "-q", "--hard", x.base]); // master = 아직 안 고쳐진 코드
+  const usage = path.join(x.sb.dir, "latest.md");
+  const t0 = Date.now();
+  writeUsage(usage, { at: t0, week: 85 });
+  const sig = soakSignals({ ...soakSummary("20261005", [seed]), head: x.base.slice(0, 7) }).signals[0];
+  const th = `gostop-fix:${sig.sigkey}`;
+  assert.equal(startFix(x, sig.sigkey, sig).code, 0);
+  const st = await drive(x, th, { until: ["held", "done", "gave_up"] });
+  assert.equal(st.status, "held", JSON.stringify(st));
+  assert.equal(st.hold, "usage_high", "재현(LLM 없음)까지 가서 진단 앞에 섰다");
+  assert.equal(x.fc.calls().length, 0);
+  assert.equal(traceOf(x.sb, "flutter-trace.jsonl").filter((r) => r.sub === "test").length, 2, "재현 2회는 관문과 상관없이 돌았다");
+  return { x, sig, th, t0, usage };
+}
+const flutterTests = (x) => traceOf(x.sb, "flutter-trace.jsonl").filter((r) => r.sub === "test");
+
+test("재개 확인: LLM 앞에 선 사이 master 에서 고쳐졌으면 AI 0회로 not_reproduced — 지금 master 를 새로 내보내 두 번 돌려 확인한다", async (t) => {
+  const { x, sig, th, t0, usage } = await heldAtDiagnose(t, 21);
+  git(x.repo, ["reset", "-q", "--hard", x.answer]); // 그 사이 누가 고쳐 master 에 넣었다
+  const later = t0 + 4 * HOURS;
+  writeUsage(usage, { at: later, week: 50 }); // 관문이 풀렸다
+  assert.equal((await driveAt(x, th, later)).status, "done");
+  const res = resultOf(x, sig.sigkey);
+  assert.equal(res.status, "not_reproduced");
+  assert.equal(x.fc.calls().length, 0, "이미 고쳐진 신호에 AI 0회");
+  assert.equal(res.gone.head, x.answer, "확인한 지금 master");
+  assert.equal(flutterTests(x).length, 4, "시작 때 2회 + 재개 확인 2회");
+  const rc = flutterTests(x).slice(2);
+  assert.ok(rc.every((r) => /\/gostop\/sandbox\/rc-[^/]+\/work$/.test(r.cwd)), `재개 확인은 따로 내보낸 사본에서 — ${rc.map((r) => r.cwd)}`);
+  assert.match(fs.readFileSync(path.join(C.runDir(x.sb.state, sig.sigkey), "plan.md"), "utf8"),
+    /## 요약\n처음에는 재현됐지만\([0-9a-f]{8}\), 기다리는 사이 코드가 바뀌어 지금 코드\([0-9a-f]{8}\)에서 같은 씨앗을 두 번 돌리니 문제가 나오지 않았다/);
+  assert.match(metrics(x.sb).find((m) => m.ev === "done").verified, /^gostop-fix not_reproduced: 재개 확인 2회 모두 통과/, "M2");
+  assert.equal(fs.existsSync(path.join(C.sandboxRoot(x.sb.state), `rc-${C.keyDir(sig.sigkey)}`)), false, "재개 확인 사본은 치운다");
+});
+
+test("재개 확인: master 가 움직였어도 아직 재현되면 이어서 진단한다(1회 빨강이면 충분) · 3시간 안이거나 master 가 그대로면 다시 돌리지 않는다", async (t) => {
+  // ① master 가 움직였지만(무관한 커밋) 문제는 그대로
+  const a = await heldAtDiagnose(t, 22);
+  put(a.x.repo, "docs/notes.md", "무관한 변경\n");
+  git(a.x.repo, ["add", "-A"]);
+  git(a.x.repo, ["commit", "-q", "-m", "docs: 무관"]);
+  const later = a.t0 + 4 * HOURS;
+  writeUsage(a.usage, { at: later, week: 50 });
+  assert.equal((await driveAt(a.x, a.th, later)).status, "done");
+  assert.equal(resultOf(a.x, a.sig.sigkey).repro, "reproduced");
+  assert.notEqual(resultOf(a.x, a.sig.sigkey).status, "not_reproduced");
+  assert.equal(flutterTests(a.x).length, 3, "재개 확인 1회(빨강) — 아직 남아 있다");
+  assert.equal(a.x.fc.calls().filter((c) => c.kind === "diag").length, 1, "이어서 진단했다");
+  // ② 3시간 안에 풀리면(master 가 움직였어도) 다시 돌리지 않는다
+  const b = await heldAtDiagnose(t, 23);
+  git(b.x.repo, ["reset", "-q", "--hard", b.x.answer]);
+  const soon = b.t0 + 1 * HOURS;
+  writeUsage(b.usage, { at: soon, week: 50 });
+  assert.equal((await driveAt(b.x, b.th, soon)).status, "done");
+  assert.equal(flutterTests(b.x).length, 2, "재현 판정이 아직 새것이다");
+  assert.equal(b.x.fc.calls().filter((c) => c.kind === "diag").length, 1);
+  // ③ 오래 섰어도 master 가 그대로면 다시 돌리지 않는다
+  const c = await heldAtDiagnose(t, 24);
+  const day = c.t0 + 20 * HOURS;
+  writeUsage(c.usage, { at: day, week: 50 });
+  assert.equal((await driveAt(c.x, c.th, day)).status, "done");
+  assert.equal(flutterTests(c.x).length, 2);
+  assert.equal(c.x.fc.calls().filter((r) => r.kind === "diag").length, 1);
+});

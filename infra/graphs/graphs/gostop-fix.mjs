@@ -6,6 +6,9 @@
 //       → (실제 + 사유) scope_gate → ⑪ verify(격리 실행: 대상·3경로·실행 증명·분석·전체·미니 대조 30판) → ⑫ review(sonnet, 읽기만)
 //       ⑬ ⑩(재현 시험 건드림)·⑪·⑫ 실패 → ⑨ 로(수정 통틀어 3회) → (실제 전용) ⑮ merge_prep → ⑯ commit_push(effect) → ⑭ plan
 //   그림자: ⑮ 는 건너뛰고 ⑯ 은 effect 가 '했을 일'만 적는다.
+//   재개 확인(10-10): LLM 을 띄우는 노드(④⑦⑨⑫)는 띄우기 전에 '재현 판정이 3시간 넘게 묵었고 그 사이 master 가 움직였나'를 본다(소크 신호만).
+//       그렇다면 recheck_prep → recheck_launch ⇄ recheck_check: 지금 master 를 따로 내보내 같은 재현을 다시 돌린다. 두 번 다 통과면 이미 고쳐진 것 —
+//       AI 를 더 쓰지 않고 plan(not_reproduced)으로 끝낸다. 한 번이라도 빨강이면 그 노드로 돌아가 이어 간다.
 // 1a 단계(LG_GOSTOP_STAGE=1a)는 LLM 이 쓴 코드를 실행하지 않는다. 1b 의 LLM 코드는 lg-test.sb 격리 안(sandbox.* 명령)에서만 돈다 —
 // LLM 이 사본에 쓴 뒤에는 격리 밖 시험 명령(flutter.*)을 그 사본에 쓰지 않는다.
 // 본 저장소는 읽기만 한다(git 읽기 명령 · 표식 파일 확인). 사본은 상태 폴더 gostop/sandbox/<sigkey>/ 에 역사 없이 푼다(§2).
@@ -14,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { StateGraph, Annotation, START, END, interrupt } from "@langchain/langgraph";
 import {
-  repoPath, sandboxDir, runDir, gostopDir, keyDir, mkdirp, writeAtomic, dirBytes, forbiddenPresent, applyInject, busyReason, pruneHistoryDocs, leakScan,
+  repoPath, sandboxDir, sandboxRoot, runDir, gostopDir, keyDir, mkdirp, writeAtomic, dirBytes, forbiddenPresent, applyInject, busyReason, pruneHistoryDocs, leakScan,
   readTestOutput, judgeRepro, reproExcerpt, DIAG_SCHEMA, parseDiag, scopeOf, diagMatch, reproCommand, short, DIFF_TEST, SOAK_TEST,
   hasH5Frame, hasAiPolicy, overlayAiPolicy, aiPolicyErrors, aiMisjudge, sameFiles, AI_POLICY, copyTree, lastJson, judgeReproFiles, restoreFiles, analyzeCounts, failureItems, runnerLoadFlakes, seedFor,
   REVIEW_SCHEMA, parseReview, reviewPass, reproTestPrompt, fixPrompt, reviewPrompt,
@@ -42,6 +45,10 @@ const FIX_TIMEOUT_MS = 15 * 60_000; // opus 수정 — 최대 시간 23분(설�
 const RT_TIMEOUT_MS = 12 * 60_000;
 const REVIEW_TIMEOUT_MS = 10 * 60_000;
 const RW_TOOLS = ["Read", "Grep", "Glob", "Edit", "Write"]; // --restricted 가 작업 폴더(사본) 안에 가둔다. 범위는 결과(정본 패치)로 다시 본다
+// 재현 판정을 믿는 시간. 이보다 묵었고 그 사이 master 가 움직였으면 LLM 을 부르기 전에 지금 master 에서 다시 재현해 본다(재개 확인).
+// 3시간: 관문·상한에 걸리지 않은 흐름은 재현 → 진단 → 재현 시험 → 첫 수정이 30분 틱으로 2시간쯤(10-08 실측 10:30 → 13:30)이라 평소엔 걸리지 않고,
+// 검증을 거친 재수정(실측 +5시간·+10.5시간)과 관문에 서 있다 재개하는 경우에 걸린다. 시험은 LG_GOSTOP_FRESH_MIN 으로 바꾼다.
+const freshMs = () => { const v = Number(process.env.LG_GOSTOP_FRESH_MIN); return (Number.isFinite(v) && v >= 0 ? v : 180) * 60_000; };
 const modelCap = (m) => { const v = Number(process.env[m === "opus" ? "LG_GOSTOP_OPUS_CAP" : "LG_GOSTOP_SONNET_CAP"]); return Number.isFinite(v) && v > 0 ? v : (m === "opus" ? 3 : 7); };
 
 const last = (a, b) => (b === undefined ? a : b);
@@ -57,6 +64,11 @@ const State = Annotation.Root({
   reproHandle: Annotation({ reducer: last, default: () => null }),
   reproAttempt: Annotation({ reducer: last, default: () => 1 }),
   repro: Annotation({ reducer: last, default: () => null }), // reproduced · not_reproduced · flaky · skipped · compile_error · failed
+  reproAt: Annotation({ reducer: last, default: () => null }), // 재현 판정이 난 때(ms) — 재개 확인의 기준
+  fresh: Annotation({ reducer: last, default: () => null }), // { head, at } 재개 확인으로 '아직 재현된다'를 본 master 와 그때
+  recheck: Annotation({ reducer: last, default: () => null }), // 재개 확인 진행 { head, back, dir, gen, runs, attempt, handle }
+  recheckGen: Annotation({ reducer: last, default: () => 0 }), // 재개 확인 횟수(분리 실행 이름이 겹치지 않게)
+  gone: Annotation({ reducer: last, default: () => null }), // { head, runs } 재개 확인에서 지금 master 는 두 번 다 통과 — 이미 고쳐졌다
   diagHandle: Annotation({ reducer: last, default: () => null }),
   diagAttempt: Annotation({ reducer: last, default: () => 1 }),
   diagJob: Annotation({ reducer: last, default: () => 1 }), // 분리 실행 시도 번호(다시 띄울 때마다 +1 — 같은 번호는 같은 결과 파일)
@@ -153,6 +165,7 @@ export function fixVerifyLog(s, status, planPath) {
     }
     return (s.repro === "reproduced" || s.repro === "skipped") && s.diag ? `gostop-fix ${status}(1a): 재현 ${s.repro} · 진단 있음${tail}` : null;
   }
+  if (status === "not_reproduced" && s.gone) return s.gone.runs?.length ? `gostop-fix not_reproduced: 재개 확인 ${s.gone.runs.length}회 모두 통과(지금 master ${String(s.gone.head).slice(0, 8)})${tail}` : null;
   if (status === "not_reproduced" || status === "flaky") return s.reproRuns?.length ? `gostop-fix ${status}: 재현 실행 ${s.reproRuns.length}회 판정${tail}` : null;
   if (status === "no_red") return s.redRuns?.length ? `gostop-fix no_red: 패치 전 빨간불 확인 ${s.redRuns.length}회 모두 아님${tail}` : null;
   if (status === "rule_decision") return s.diag?.rule_gap ? `gostop-fix rule_decision: 규칙 공백 진단${tail}` : null;
@@ -262,7 +275,78 @@ export function build({ checkpointer, llm, tools }) {
       compileError: out.compileError, toolError: out.toolError, secs: Math.round(((st.endedAt ?? 0) - (st.startedAt ?? 0)) / 1000), log: logFile };
     const runs = [...s.reproRuns, run];
     const verdict = judgeRepro(runs);
-    return { reproRuns: runs, reproHandle: null, reproAttempt: 1, repro: verdict, log: [`reproduce_check ${n}/2 rc=${run.rc} ${run.secs}s${verdict ? ` → ${verdict}` : ""}`] };
+    return { reproRuns: runs, reproHandle: null, reproAttempt: 1, repro: verdict, ...(verdict ? { reproAt: tools.now() } : {}), log: [`reproduce_check ${n}/2 rc=${run.rc} ${run.secs}s${verdict ? ` → ${verdict}` : ""}`] };
+  }
+
+  // ── 재개 확인(10-10) ─────────────────────────────────────────────
+  // LLM 예산 관문이 호출만 막으면서 스레드는 재현까지 가서 LLM 앞에 몇 시간~며칠 선다. 그 사이 당직·대화가 먼저 고치는 일이 흔하다
+  // (씨앗 203013939: 고쳐진 지 5시간 뒤에 시작해 진단·재현 시험·수정 3회에 477만 토큰). 시작 때의 '지금 master 에서 재현'(preflight)만으로는 못 막는다.
+  // 소크 신호만 본다 — 벤치·주입·CI 는 그 커밋이 곧 문제라 master 가 움직여도 대상이 같다.
+  async function staleHead(s) {
+    if (s.signal?.source !== "soak" || s.repro !== "reproduced" || s.gone) return null;
+    const seen = s.fresh ?? { head: s.base, at: s.reproAt };
+    if (!seen.at || tools.now() - seen.at < freshMs()) return null; // 판정이 아직 새것(또는 이 칸이 생기기 전에 시작한 스레드)
+    const r = await tools.run("git.rev-parse", { repo, rev: "master" });
+    const head = r.code === 0 ? r.stdout.trim() : "";
+    return /^[0-9a-f]{40}$/.test(head) && head !== seen.head ? head : null;
+  }
+  // LLM 을 띄우는 노드(④⑦⑨⑫)가 첫 줄에서 부른다: 묵은 판정이면 재개 확인으로 돌리는 갱신을 돌려주고(끝나면 그 노드로 돌아온다), 아니면 null.
+  // 노드 안에서 보는 까닭 — 관문에 걸려 선 스레드는 바로 그 노드부터 다시 돈다(앞 노드에서 보면 재개 때 건너뛴다).
+  async function recheckFirst(s, name) {
+    const head = await staleHead(s);
+    if (!head) return null;
+    const gen = s.recheckGen + 1;
+    return { recheck: { head, back: name, gen, runs: [], attempt: 1, handle: null }, recheckGen: gen, route: "recheck_prep",
+      log: [`${name} 앞 재개 확인 — 재현 판정 ${Math.round((tools.now() - (s.fresh?.at ?? s.reproAt)) / 60_000)}분 전 · master ${String(s.fresh?.head ?? s.base).slice(0, 8)} → ${head.slice(0, 8)}`] };
+  }
+  // 재개 확인 사본: 본 사본과 다른 묶음(sandbox/rc-<키>/work) — LLM 이 손댄 사본·표식과 섞이지 않고, 허용 목록의 사본 자리(…/work) 그대로다
+  const rcRoot = (s) => path.join(sandboxRoot(tools.stateDir), `rc-${keyDir(s.sigkey)}`.slice(0, 81));
+  async function recheckPrep(s) {
+    const root = rcRoot(s), dir = path.join(root, "work"), tar = path.join(root, "src.tar");
+    fs.rmSync(root, { recursive: true, force: true });
+    mkdirp(dir);
+    const a = await tools.run("git.archive", { repo, out: tar, rev: s.recheck.head });
+    if (a.code !== 0) throw new Error(`재개 확인: git archive 실패(코드 ${a.code}): ${short(a.stderr)}`);
+    const x = await tools.run("tar.extract-sandbox", { tar, dir });
+    fs.rmSync(tar, { force: true });
+    if (x.code !== 0) throw new Error(`재개 확인: tar 풀기 실패(코드 ${x.code}): ${short(x.stderr)}`);
+    const bad = forbiddenPresent(dir);
+    if (bad.length) throw Object.assign(new Error(`재개 확인 사본에 있으면 안 되는 것이 있다: ${bad.join(", ")}`), { codeDefect: true });
+    const pg = await tools.run("flutter.pub-get-offline", { dir });
+    if (pg.code !== 0) throw new Error(`재개 확인: pub get --offline 실패(코드 ${pg.code}): ${short(pg.stdout + pg.stderr, 300)}`);
+    return { recheck: { ...s.recheck, dir }, route: "recheck_launch", log: [`recheck_prep master ${s.recheck.head.slice(0, 8)} 내보냄`] };
+  }
+  function recheckLaunch(s) {
+    const k = s.recheck;
+    const rc = reproCommand(s.signal, k.dir);
+    const n = k.runs.length + 1;
+    const opts = { node: `recheck_${k.gen}_${n}`, attempt: k.attempt };
+    const h = rc.cmd === "flutter.test-defines" ? tools.launch("flutter.test-defines", rc.params, opts) : tools.launch("flutter.test-file", rc.params, opts);
+    return { recheck: { ...k, handle: h }, route: "recheck_check", log: [`recheck_launch ${n}/2 시도 ${k.attempt}`] };
+  }
+  function recheckCheck(s) {
+    const k = s.recheck;
+    const st = tools.check(k.handle);
+    if (st.state === "running") throw tools.pending(`재개 확인 ${k.runs.length + 1}/2 진행 중`);
+    const done = (upd, msg) => { fs.rmSync(rcRoot(s), { recursive: true, force: true }); return { ...upd, recheck: null, log: [msg] }; };
+    // 아직 재현된다고 보고 돌아간다 — 이 master 에서는 freshMs 동안 다시 묻지 않는다
+    const back = (msg) => done({ fresh: { head: k.head, at: tools.now() }, route: k.back }, msg);
+    if (st.state === "dead" || st.timedOut || st.error || st.code == null || st.signal) {
+      const why = st.state === "dead" ? `분리 실행 ${st.reason}` : st.timedOut ? "시간 제한 초과" : st.error ? `띄우기 오류 ${short(st.error, 80)}` : `신호로 끝남(${st.signal ?? "코드 없음"})`;
+      // 확인을 못 했다 — 처음 재현 판정을 그대로 믿고 이어 간다(고쳐졌다는 증거가 없다)
+      if (k.attempt + 1 > MAX_REPRO_ATTEMPTS) return back(`recheck ${why} — ${MAX_REPRO_ATTEMPTS}회 끝, 확인 못 함 → ${k.back}`);
+      return { recheck: { ...k, handle: null, attempt: k.attempt + 1 }, route: "recheck_launch", log: [`recheck ${why} — 다시 띄움(${k.attempt + 1})`] };
+    }
+    const raw = tools.output(k.handle, "stdout") + tools.output(k.handle, "stderr");
+    const out = readTestOutput(raw, st.code, st.signal ?? null);
+    const n = k.runs.length + 1;
+    const logFile = writeAtomic(path.join(runDir(tools.stateDir, s.sigkey), `recheck-${k.gen}-${n}.log`), raw.slice(-200_000));
+    const run = { n, rc: out.rc, red: out.red, secs: Math.round(((st.endedAt ?? 0) - (st.startedAt ?? 0)) / 1000), log: logFile };
+    const runs = [...k.runs, run];
+    if (out.compileError || out.toolError) return back(`recheck ${n}/2 ${out.compileError ? "컴파일 오류" : "시험 도구 오류"} — 확인 못 함 → ${k.back}`);
+    if (run.red) return back(`recheck ${n}/2 rc=${run.rc} ${run.secs}s 아직 재현된다(master ${k.head.slice(0, 8)}) → ${k.back}`);
+    if (runs.length < 2) return { recheck: { ...k, runs, handle: null, attempt: 1 }, route: "recheck_launch", log: [`recheck ${n}/2 rc=${run.rc} ${run.secs}s 통과 — 한 번 더`] };
+    return done({ gone: { head: k.head, runs }, route: "plan" }, `recheck 2/2 통과 — 지금 master ${k.head.slice(0, 8)} 에서는 재현되지 않는다 → plan`);
   }
   const afterReproCheck = (s) => {
     if (s.repro === "failed" || s.repro === "compile_error" || s.repro === "tool_error") return "plan";
@@ -297,12 +381,14 @@ export function build({ checkpointer, llm, tools }) {
     );
     return lines.join("\n");
   }
-  function diagnoseLaunch(s) {
+  async function diagnoseLaunch(s) {
+    const rck = await recheckFirst(s, "diagnose_launch");
+    if (rck) return rck;
     // 로그인 만료·사용량 한도 뒤에는 관문과 같은 시간을 쉰다(그사이 틱 관문도 llm-hold 로 쉰다). 쉬는 동안은 보류 — 다음 틱에 다시 본다.
     if (s.diagWaitUntil && tools.now() < s.diagWaitUntil) throw tools.hold(`진단 호출 쉼 — ${new Date(s.diagWaitUntil).toISOString()} 뒤 다시`, "llm_wait");
     const h = llm.launchAsk(diagPrompt(s), { model: "sonnet", node: "diagnose", attempt: s.diagJob, tools: ["Read", "Grep", "Glob"], cwd: s.work,
       jsonSchema: DIAG_SCHEMA, timeoutMs: DIAG_TIMEOUT_MS });
-    return { diagHandle: h, diagWaitUntil: null, log: [`diagnose_launch 시도 ${s.diagAttempt} · 실행 ${s.diagJob}`] };
+    return { diagHandle: h, diagWaitUntil: null, route: "diagnose_check", log: [`diagnose_launch 시도 ${s.diagAttempt} · 실행 ${s.diagJob}`] };
   }
   function diagnoseCheck(s) {
     const st = llm.checkAsk(s.diagHandle);
@@ -414,7 +500,9 @@ export function build({ checkpointer, llm, tools }) {
     : { ...upd, fixError: `수정 ${MAX_FIX_ATTEMPTS}회 끝 — ${short(feedback, 300)}`, route: "plan", log: [`수정 ${MAX_FIX_ATTEMPTS}회 끝`] });
 
   // ⑦ 재현 시험 — sonnet, 작업 폴더 = 사본, 쓰기 도구. 결과로 test/repro/ 새 파일만 남았는지 다시 본다(아래 check).
-  function reproTestLaunch(s) {
+  async function reproTestLaunch(s) {
+    const rck = await recheckFirst(s, "repro_test_launch");
+    if (rck) return rck;
     const first = s.reproRuns[0];
     const prompt = reproTestPrompt({ signal: s.signal, repro: s.repro === "skipped" ? "재현 수단 없음(제보만)" : `판정 ${s.repro}\n${reproExcerpt(first)}`,
       diag: s.diag, h5: s.markers === "h5", feedback: s.rtFeedback, existing: s.reproTest });
@@ -501,7 +589,9 @@ export function build({ checkpointer, llm, tools }) {
   }
 
   // ⑨ 수정 — opus, 쓰기 도구, 작업 폴더 = 사본. 정본 패치는 git 없이.
-  function fixLaunch(s) {
+  async function fixLaunch(s) {
+    const rck = await recheckFirst(s, "fix_launch");
+    if (rck) return rck;
     const lastRed = s.redRuns.at(-1);
     const red = lastRed ? [`실패한 시험(${lastRed.failed.length}): ${lastRed.failed.slice(0, 8).join(" | ")}`].join("\n") : "";
     const attempt = s.fixHandle ? s.fixAttempt : s.fixAttempt + 1;
@@ -736,7 +826,9 @@ export function build({ checkpointer, llm, tools }) {
   function verifySummary(s) {
     return s.steps.filter((x) => x.phase === "verify" && x.fix === s.fixAttempt).map((x) => `- ${x.id}: ${x.ok ? "통과" : "실패"} — ${x.detail}`).join("\n") || "(없음)";
   }
-  function reviewLaunch(s) {
+  async function reviewLaunch(s) {
+    const rck = await recheckFirst(s, "review_launch");
+    if (rck) return rck;
     let patch = "";
     try { patch = fs.readFileSync(s.fullPatch.file, "utf8"); } catch { /* 없으면 빈 패치로 묻는다 */ }
     const l = launchLlm(s, "review", "sonnet", reviewPrompt({ signal: s.signal, diag: s.diag, patch, verify: verifySummary(s) }),
@@ -860,6 +952,7 @@ export function build({ checkpointer, llm, tools }) {
   async function plan(s) {
     let status, note = null;
     if (s.leak) { status = "gave_up"; note = `벤치 정답 누설 — ${s.leak.map((h) => `${h.file}(${h.term})`).join(", ")}`; }
+    else if (s.gone) { status = "not_reproduced"; note = `재개 확인 — 처음엔 재현됐으나 지금 master ${String(s.gone.head).slice(0, 8)} 에서는 두 번 다 통과(이미 고쳐짐)`; }
     else if (s.repro === "flaky") status = "flaky";
     else if (s.repro === "not_reproduced") status = "not_reproduced";
     else if (s.repro === "failed" || s.repro === "compile_error" || s.repro === "tool_error" || s.diagError) { status = "gave_up"; note = s.diagError ?? `재현 ${s.repro}`; }
@@ -876,7 +969,10 @@ export function build({ checkpointer, llm, tools }) {
     // 누설로 진단을 안 한 사례는 채점하지 않는다(분모에서 뺀다 — 진단 실패와 다르다, 재검토 B 하4)
     const match = bench && !s.leak ? diagMatch(bench.expect, s.diag, status) : null;
     let summary = null;
-    if (status === "not_reproduced" && !s.diag) {
+    if (s.gone) {
+      // 재개 확인에서 이미 고쳐진 것으로 드러났다 — 진단이 있어도 요약에 AI 를 쓰지 않는다
+      summary = `처음에는 재현됐지만(${String(s.base ?? "").slice(0, 8)}), 기다리는 사이 코드가 바뀌어 지금 코드(${String(s.gone.head).slice(0, 8)})에서 같은 씨앗을 두 번 돌리니 문제가 나오지 않았다. 이미 고쳐진 것으로 보고 AI 를 더 쓰지 않고 끝낸다. 할 일 없음 — 남아 있는 문제라면 밤샘 점검의 새 씨앗이 다시 잡는다.`;
+    } else if (status === "not_reproduced" && !s.diag) {
       // 재현되지 않은 신호는 요약할 진단이 없다 — 정해진 문장으로 적고 AI 를 부르지 않는다(10-10: 이미 고쳐진 소크 신호는 AI 0회로 끝난다)
       const at = String(s.base ?? "").slice(0, 8);
       summary = s.signal?.source === "soak"
@@ -902,6 +998,7 @@ export function build({ checkpointer, llm, tools }) {
       `- 상태: **${status}**${s.mode === "shadow" ? " (그림자)" : ""}${note ? ` — ${note}` : ""}`,
       `- 신호: ${sg.source ?? "?"} · ${sg.kind ?? "?"} · 대상 ${String(s.base ?? sg.rev ?? "").slice(0, 12)}`,
       `- 재현: ${s.repro ?? "-"}${s.reproRuns.length ? ` (${s.reproRuns.map((r) => `rc=${r.rc} ${r.secs}s`).join(" / ")})` : ""}`,
+      ...(s.gone ? [`- 재개 확인: 지금 master ${String(s.gone.head).slice(0, 12)} 에서 통과 (${s.gone.runs.map((r) => `rc=${r.rc} ${r.secs}s`).join(" / ")}) — 이미 고쳐짐`] : []),
       `- 사본: ${s.work ?? "-"} (${s.sizes ? `${Math.round(s.sizes.work / 1e6)}MB + 깨끗한 내보내기 ${Math.round(s.sizes.clean / 1e6)}MB` : "-"})`,
       ...(summary ? ["", "## 요약", summary] : []),
       ...(s.reproRuns.length ? ["", "## 재현 발췌", "```", reproExcerpt(s.reproRuns[0]), "```"] : []),
@@ -916,7 +1013,7 @@ export function build({ checkpointer, llm, tools }) {
       "",
     ].join("\n");
     const planPath = writeAtomic(path.join(dir, "plan.md"), md);
-    writeAtomic(path.join(dir, "result.json"), `${JSON.stringify({ sigkey: s.sigkey, status, note, leak: s.leak, repro: s.repro, runs: s.reproRuns.map(({ blocks, ...r }) => r), diag: s.diag, diagError: s.diagError, scope: s.scope, bench: bench ? { id: bench.id, match } : null, mode: s.mode, base: s.base, sizes: s.sizes,
+    writeAtomic(path.join(dir, "result.json"), `${JSON.stringify({ sigkey: s.sigkey, status, note, leak: s.leak, repro: s.repro, gone: s.gone, runs: s.reproRuns.map(({ blocks, ...r }) => r), diag: s.diag, diagError: s.diagError, scope: s.scope, bench: bench ? { id: bench.id, match } : null, mode: s.mode, base: s.base, sizes: s.sizes,
       ...(s.stage === "1b" ? { stage: "1b", reproTest: s.reproTest, reproSupport: s.reproSupport, threePath: s.threePath, rtAttempt: s.rtAttempt, rtError: s.rtError, redRuns: s.redRuns, noRed: s.noRed,
         fixAttempt: s.fixAttempt, fixError: s.fixError, fixPatch: s.fixPatch, fullPatch: s.fullPatch, aiCheck: s.aiCheck, aiDetail: s.aiDetail, scopeFinal: s.scopeFinal,
         steps: s.steps, verifyOk: s.verifyOk, review: s.review, violation: s.violation, merge: s.merge, commit: s.commit, calls: { ...s.calls, sonnet: sonnetUsed(s) }, work: s.work } : {}) }, null, 1)}\n`);
@@ -1023,6 +1120,9 @@ export function build({ checkpointer, llm, tools }) {
     .addNode("reproduce_launch", reproduceLaunch)
     .addNode("reproduce_check", reproduceCheck)
     .addNode("diagnose_launch", diagnoseLaunch)
+    .addNode("recheck_prep", recheckPrep)
+    .addNode("recheck_launch", recheckLaunch)
+    .addNode("recheck_check", recheckCheck)
     .addNode("diagnose_check", diagnoseCheck)
     .addNode("scope_precheck", scopePrecheck)
     .addNode("owner_gate", ownerGate)
@@ -1050,21 +1150,24 @@ export function build({ checkpointer, llm, tools }) {
     .addConditionalEdges("sandbox", (s) => (s.leak ? "plan" : "reproduce_launch"), ["reproduce_launch", "plan"])
     .addConditionalEdges("reproduce_launch", (s) => (s.repro === "skipped" ? "diagnose_launch" : "reproduce_check"), ["reproduce_check", "diagnose_launch"])
     .addConditionalEdges("reproduce_check", afterReproCheck, ["reproduce_launch", "diagnose_launch", "plan"])
-    .addEdge("diagnose_launch", "diagnose_check")
+    .addConditionalEdges("diagnose_launch", (s) => (s.route === "recheck_prep" ? "recheck_prep" : "diagnose_check"), ["diagnose_check", "recheck_prep"])
+    .addEdge("recheck_prep", "recheck_launch")
+    .addEdge("recheck_launch", "recheck_check")
+    .addConditionalEdges("recheck_check", R, ["recheck_launch", "diagnose_launch", "repro_test_launch", "fix_launch", "review_launch", "plan"])
     .addConditionalEdges("diagnose_check", afterDiagCheck, ["diagnose_launch", "scope_precheck", "plan"])
     .addConditionalEdges("scope_precheck", afterScope, ["owner_gate", "repro_test_launch", "plan"])
     .addConditionalEdges("owner_gate", afterOwner, ["repro_test_launch", "plan"])
-    .addConditionalEdges("repro_test_launch", R, ["repro_test_check", "plan"])
+    .addConditionalEdges("repro_test_launch", R, ["repro_test_check", "recheck_prep", "plan"])
     .addConditionalEdges("repro_test_check", R, ["repro_test_launch", "verify_red_launch", "plan"])
     .addEdge("verify_red_launch", "verify_red_check")
     .addConditionalEdges("verify_red_check", R, ["verify_red_launch", "repro_test_launch", "fix_launch", "plan"])
-    .addConditionalEdges("fix_launch", R, ["fix_check", "plan"])
+    .addConditionalEdges("fix_launch", R, ["fix_check", "recheck_prep", "plan"])
     .addConditionalEdges("fix_check", R, ["fix_launch", "steps_launch", "scope_check", "plan"])
     .addConditionalEdges("scope_check", R, ["fix_launch", "scope_gate", "steps_launch", "plan"])
     .addConditionalEdges("scope_gate", afterScopeGate, ["steps_launch", "plan"])
     .addEdge("steps_launch", "steps_check")
     .addConditionalEdges("steps_check", R, ["steps_launch", "scope_check", "fix_launch", "review_launch", "commit_push", "plan"])
-    .addConditionalEdges("review_launch", R, ["review_check", "plan"])
+    .addConditionalEdges("review_launch", R, ["review_check", "recheck_prep", "plan"])
     .addConditionalEdges("review_check", R, ["review_launch", "fix_launch", "merge_prep", "commit_push", "plan"])
     .addConditionalEdges("merge_prep", R, ["steps_launch", "plan"])
     .addEdge("commit_push", "plan")

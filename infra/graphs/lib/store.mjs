@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS lg_threads (
   progress_at INTEGER,           -- 마지막으로 단계를 끝낸 때 — 보류 48시간 기한의 기준
   fail_sig TEXT,                 -- 마지막 실패의 서명(노드 + 오류 모양). 같은 서명이 되풀이되면 센다
   fail_count INTEGER NOT NULL DEFAULT 0,
-  hold_reason TEXT,              -- held 의 까닭: llm_budget · token_cap · login · usage_limit · code_defect · node · effect_unknown · paused
+  hold_reason TEXT,              -- held 의 까닭: llm_day · llm_thread · token_cap · token_thread · usage_* · login · usage_limit · code_defect · node · effect_unknown
   hold_ref TEXT,                 -- code_defect 때 코드 지문 — 코드가 바뀌어야 다시 시도한다
   answer TEXT,                   -- answer 명령이 적은 답(approved·rejected). 틱이 적용하면 비운다
   answer_key TEXT,               -- 그 답이 가리키는 질문 열쇠(interrupt_id) — 질문이 바뀌면 옛 답은 쓰지 않는다
@@ -283,7 +283,7 @@ export class Store {
 
   // ── LLM 호출 상한 ───────────────────────────────────────────────
   // 부르기 전에 자리를 잡는다(실패한 호출도 센다 — 재시도 폭주 방지). 하루 토큰 상한도 여기서 본다(이미 넘었으면 부르지 않는다).
-  reserveLlmCall({ thread, node, model, now, perThread, perDay, dayTokenCap }) {
+  reserveLlmCall({ thread, node, model, now, perThread, perDay, dayTokenCap, threadDayTokenCap = null }) {
     const day = localDay(now);
     return this.tx(() => {
       const nThread = this.db.prepare("SELECT count(*) AS n FROM lg_llm_calls WHERE thread_id=?").get(thread).n;
@@ -296,6 +296,11 @@ export class Store {
         const tok = this.dayTokens(now);
         if (tok >= dayTokenCap) return { ok: false, reason: `하루 토큰 상한 ${dayTokenCap}에 닿음(${day}, 오늘 ${tok}) — 다음 날`, kind: "token_cap", ref: day };
       }
+      // 스레드 하나의 하루 몫 — 한 스레드가 하루 상한을 혼자 쓰지 못하게(10-09: 스레드 하나 4,019,409)
+      if (threadDayTokenCap) {
+        const mine = this.threadDayTokens(thread, now);
+        if (mine >= threadDayTokenCap) return { ok: false, reason: `스레드 하루 토큰 상한 ${threadDayTokenCap}에 닿음(${day}, 이 스레드 오늘 ${mine}) — 다음 날`, kind: "token_thread", ref: day };
+      }
       const r = this.db.prepare("INSERT INTO lg_llm_calls(ts, day, thread_id, node, model) VALUES(?, ?, ?, ?, ?)").run(now, day, thread, node, model);
       return { ok: true, id: Number(r.lastInsertRowid) };
     });
@@ -307,6 +312,10 @@ export class Store {
   dayTokens(now) {
     return this.db.prepare("SELECT COALESCE(SUM(COALESCE(in_tok,0)+COALESCE(out_tok,0)+COALESCE(cc_tok,0)+COALESCE(cr_tok,0)),0) AS n FROM lg_llm_calls WHERE day=?")
       .get(localDay(now)).n;
+  }
+  threadDayTokens(thread, now) {
+    return this.db.prepare("SELECT COALESCE(SUM(COALESCE(in_tok,0)+COALESCE(out_tok,0)+COALESCE(cc_tok,0)+COALESCE(cr_tok,0)),0) AS n FROM lg_llm_calls WHERE thread_id=? AND day=?")
+      .get(thread, localDay(now)).n;
   }
   llmCounts(now, thread) {
     const day = this.db.prepare("SELECT count(*) AS n FROM lg_llm_calls WHERE day=?").get(localDay(now)).n;

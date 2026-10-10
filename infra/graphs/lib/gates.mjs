@@ -1,4 +1,8 @@
-// gates.mjs — 틱 관문(PLAN §3). 하나라도 걸리면 그 틱은 스레드를 진행하지 않고 HOLD(종료 0)로 끝난다. 사유는 metrics 에 남긴다.
+// gates.mjs — 틱 관문(PLAN §3). 사유는 metrics 에 남긴다. 두 갈래다(10-10):
+//   틱을 세우는 관문(paused·disk·quiet) — 하나라도 걸리면 그 틱은 스레드를 진행하지 않고 HOLD(종료 0)로 끝난다.
+//   LLM 예산 관문(usage_*·login·usage_limit·token_cap) — 구독 한도를 지키려는 것이라 LLM 호출만 막는다. 틱은 돌고, LLM 을 부르려는
+//     순간에 그 스레드만 보류된다(lib/claude.mjs reserve). 10-09 token_cap 39틱·10-10 usage_high 29틱 동안 토큰을 안 쓰는
+//     QA 단계(빌드·판 두기·분석)까지 틱째 서서 매일 40판이 10판·0판에서 멈췄다.
 //   paused      PAUSED 파일이 있다(전체 정지)
 //   disk        디스크 여유 < 경고선 15GiB + 사본 예상(LG_COPY_EST_GIB) + 1GiB  (감지기와 같은 재는 법: statvfs bavail, 데이터 볼륨)
 //   usage_*     주간 사용량 ≥ 80% · 못 읽음 · 13시간 넘게 묵음. 출처는 감지기(orchestrator-scan.py scan_usage → usage_findings)가
@@ -88,7 +92,16 @@ export function tokenGate(cfg, store, now) {
 export const paused = (cfg) => fs.existsSync(cfg.pausedPath);
 export const liveMode = (cfg) => (fs.existsSync(cfg.livePath) ? "live" : "shadow");
 
-// 관문 전부. 돌려주는 값: 걸린 것들의 배열(비면 통과).
+// LLM 예산 관문의 이름 — 이 사유로 보류된 스레드는 관문이 풀릴 때까지 틱이 다시 돌리지 않는다
+export const LLM_GATES = new Set(["usage_high", "usage_unreadable", "usage_stale", "login", "usage_limit", "token_cap"]);
+export const isLlmGate = (g) => LLM_GATES.has(g?.gate ?? g);
+
+// LLM 을 부르기 직전에 보는 관문(주간 사용량·로그인·한도 표식). 하루 토큰 상한은 장부가 자리를 잡으며 같이 본다(store.reserveLlmCall).
+export function llmCallGates(cfg, now) {
+  return [usageGate(cfg.gates, now), llmHoldGate(cfg, now)].filter(Boolean);
+}
+
+// 관문 전부. 돌려주는 값: 걸린 것들의 배열(비면 통과). 틱을 세우는 것과 LLM 만 막는 것은 isLlmGate 로 가른다.
 export function checkGates(cfg, store, now) {
   const out = [];
   if (paused(cfg)) out.push({ gate: "paused", detail: "PAUSED 스위치가 켜져 있다" });

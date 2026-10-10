@@ -648,3 +648,38 @@ test("채점 대상: 낼 패치가 없으면(no_red) false · 규칙 결정 사�
   assert.equal(benchEv(b)[0].hidden_pass, null);
   for (const y of [a, b]) assert.equal(traceOf(y.sb, "sb-trace.jsonl").filter((c) => c.copy.endsWith("/grade")).length, 0);
 });
+
+// 10-10 재개 확인(수정 앞): 재현 시험까지 쓴 뒤라도, opus 수정을 띄우기 전에 master 가 움직였으면 지금 master 에서 재현을 다시 본다 —
+// 이미 고쳐졌으면 가장 비싼 호출(10-09 한 번에 402만 토큰)을 하지 않고 not_reproduced 로 끝낸다. 시험은 판정을 믿는 시간을 0 으로 둔다.
+test("재개 확인(수정 앞): 재현 시험을 쓴 뒤 master 에서 고쳐졌으면 opus 0회로 not_reproduced — 지금 master 를 따로 내보내 두 번 통과 확인", async (t) => {
+  const x = setup(t, { extra: { LG_GOSTOP_FRESH_MIN: "0" } });
+  const key = "soak:normal:777:abc1234", th = `gostop-fix:${key}`;
+  const sig = { source: "soak", kind: "seed", rev: x.base.slice(0, 7), test: C.DIFF_TEST, defines: ["REPLAY_GAMES=1", "REPLAY_SEED_BASE=777"] };
+  assert.equal(run(x.env, ["start", "gostop-fix", th, `--sigkey=${key}`, `--signal=${JSON.stringify(sig)}`]).code, 0);
+  const st = () => JSON.parse(run(x.env, ["status", th, "--json"]).out);
+  let moved = false;
+  for (let i = 0; i < 150 && !["done", "gave_up", "expired"].includes(st().status); i++) {
+    run(x.env, ["tick"]);
+    await new Promise((r) => setTimeout(r, 120));
+    // 빨간불 확인(재현 시험 격리 실행)을 띄운 틱 뒤 — 다음 틱이 수정(opus)을 띄우기 전에 누가 master 에 고쳐 넣는다
+    if (!moved && traceOf(x.sb, "sb-trace.jsonl").some((c) => c.args.includes(RT))) {
+      put(x.repo, "lib/domain/game/turn_manager.dart", TM_FIX);
+      git(x.repo, ["add", "-A"]);
+      git(x.repo, ["commit", "-q", "-m", "fix: 사람이 먼저 고침"]);
+      fs.writeFileSync(path.join(x.sb.dir, "fake-flutter.json"), JSON.stringify({ mode: "pass", trace: path.join(x.sb.dir, "flutter-trace.jsonl") }));
+      moved = true;
+    }
+  }
+  assert.ok(moved, "재현 시험·빨간불 확인까지는 갔다");
+  assert.equal(st().status, "done");
+  const res = JSON.parse(fs.readFileSync(path.join(C.runDir(x.sb.state, key), "result.json"), "utf8"));
+  assert.equal(res.status, "not_reproduced");
+  assert.equal(res.gone.head, git(x.repo, ["rev-parse", "master"]));
+  assert.equal(calls(x, "fix").length, 0, "수정(opus)을 부르지 않았다");
+  assert.equal(calls(x, "repro").length, 1, "재현 시험까지는 썼다");
+  assert.equal(x.fc.calls().length, 2, "진단 1 + 재현 시험 1 — 요약(haiku)도 부르지 않는다");
+  const rc = traceOf(x.sb, "flutter-trace.jsonl").filter((r) => r.sub === "test").slice(2);
+  assert.equal(rc.length, 2, "재개 확인 2회");
+  assert.ok(rc.every((r) => /\/gostop\/sandbox\/rc-[^/]+\/work$/.test(r.cwd) && !r.repro), "LLM 이 손대지 않은 새 내보내기에서 돈다(재현 시험 파일 없음)");
+  assert.match(fs.readFileSync(path.join(C.runDir(x.sb.state, key), "plan.md"), "utf8"), /재개 확인: 지금 master [0-9a-f]{12} 에서 통과/);
+});

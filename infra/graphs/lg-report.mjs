@@ -160,12 +160,13 @@ try {
 const held = {};
 for (const r of ev.filter((x) => x.ev === "held")) for (const g of r.reasons ?? []) held[g] = (held[g] ?? 0) + 1;
 const ticks = ev.filter((r) => r.ev === "tick");
-// 같은 사유로 연달아 보류된 틱 — 사유별 가장 긴 연속과 지금 이어지는 연속(틱 단위 보류만, 보류 아닌 틱이 끊는다)
+// 같은 사유로 연달아 보류된 틱 — 사유별 가장 긴 연속과 지금 이어지는 연속(틱 단위 보류만, 보류 아닌 틱이 끊는다).
+// LLM 예산 관문(scope llm, 10-10)은 틱을 세우지 않으므로 그 관문이 걸린 채 돈 틱(tick 줄의 llm_gates)은 그 사유의 연속을 끊지 않는다.
 const held_streak = {};
 {
   const run = {};
   for (const r of ev) {
-    if (r.ev === "held" && r.scope === "tick") {
+    if (r.ev === "held" && (r.scope === "tick" || r.scope === "llm")) {
       const rs = new Set(r.reasons ?? []);
       for (const k of Object.keys(run)) if (!rs.has(k)) run[k] = 0;
       for (const k of rs) {
@@ -174,7 +175,7 @@ const held_streak = {};
         if (run[k] > h.max) { h.max = run[k]; h.max_since = r.ts; }
         h.last = r.ts;
       }
-    } else if (r.ev === "tick" && r.outcome !== "hold") for (const k of Object.keys(run)) run[k] = 0;
+    } else if (r.ev === "tick" && r.outcome !== "hold") { const on = new Set(r.llm_gates ?? []); for (const k of Object.keys(run)) if (!on.has(k)) run[k] = 0; }
   }
   for (const k of Object.keys(held_streak)) held_streak[k].current = run[k] ?? 0;
 }

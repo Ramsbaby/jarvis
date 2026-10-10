@@ -2,6 +2,7 @@
 // helpers.fakeClaude() 가 만든 실행 파일(#!node, 셸 없음)이 require 해서 부른다 — 셸이 끼면 PWD·SHLVL 이 더해져 환경 시험이 흐려진다.
 // 받은 인자·환경·입력·작업 폴더를 log 에 적고, mode 에 따라 답한다.
 //   ok · fable · fail · split (0a) / tokens: 실제 모양의 usage·비용 / auth: 로그인 만료 문구 / limit: 사용량 한도(429) 문구 / slow: 1.5초 뒤 답
+//   budget: 호출당 상한(--max-budget-usd)에 닿아 멈춘 모양
 const fs = require("node:fs");
 
 module.exports = function fake(log, mode) {
@@ -40,6 +41,12 @@ module.exports = function fake(log, mode) {
   }
   if (mode === "auth") { // 실제 CLI 가 로그인 만료 때 내는 모양(JSON 결과의 오류)
     process.stdout.write(JSON.stringify({ type: "result", subtype: "success", is_error: true, result: "Failed to authenticate. API Error: 401 OAuth token has expired. Please run /login" }));
+    return;
+  }
+  if (mode === "budget") { // --max-budget-usd 에 닿았을 때의 실제 모양(10-10 실측): 종료 1, usage 는 0 이고 modelUsage 에 실제 값
+    process.stdout.write(JSON.stringify({ type: "result", subtype: "error_max_budget_usd", is_error: true, num_turns: 1, result: null, terminal_reason: "budget_exhausted",
+      total_cost_usd: 0.003975, usage: { input_tokens: 0, output_tokens: 0 }, modelUsage: { "claude-haiku-4-5-20251001": { inputTokens: 3640, outputTokens: 67, costUSD: 0.003975 } } }));
+    process.exitCode = 1;
     return;
   }
   if (mode === "limit") {

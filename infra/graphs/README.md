@@ -39,7 +39,8 @@ sh $G/lg.sh selftest                              # 저장 부품·허용 목록
 lg-tick(30분마다) → run.mjs tick
   ├─ PAUSED 면 아무것도 하지 않는다(NO_REPLY)
   ├─ 정리: 기한 지난 승인 대기·48시간 진척 없는 보류 → EXPIRED / 오래된 잠금 → STUCK / 하루 1회 gc
-  ├─ 관문 하나라도 걸리면 HOLD(종료 0, 사유는 metrics)
+  ├─ 틱을 세우는 관문(멈춤·디스크·야간)이 걸리면 HOLD(종료 0, 사유는 metrics)
+  │    LLM 예산 관문(주간 사용량·로그인·한도 표식·하루 토큰)은 틱을 세우지 않는다 — LLM 을 부르는 순간 그 스레드만 보류(10-10)
   └─ 진행 가능한 스레드를 노드 단위로: 답이 적힌 대기 → 끊긴 실행 → 이어가기 → 실패(재시도) → 보류 → 대기열
        ├─ 그래프를 한 번 부를 때 한 단계만(interruptAfter "*"). 단계 앞마다 예산(8분)·PAUSED 를 본다
        ├─ 예산이 다 되면 다음 노드 앞에서 멈춤 → CONTINUE. 다음 틱이 체크포인트에서 잇는다(invoke(null))
@@ -50,10 +51,12 @@ lg-tick(30분마다) → run.mjs tick
 | 상황 | 처리 |
 |---|---|
 | 같은 오류 | 다음 틱에 다시, 3회까지(`LG_MAX_RETRIES`). 그다음에도 같으면 `GAVE_UP` |
-| 로그인 만료·사용량 한도(호출 오류 문구) | 재시도로 세지 않고 보류 + 표식(`llm-hold.json`). 관문이 6시간(한도는 1시간) 쉰 뒤 한 번 다시 해 본다. 성공하면 표식을 지운다 |
+| 로그인 만료·사용량 한도(호출 오류 문구) | 재시도로 세지 않고 보류 + 표식(`llm-hold.json`). 표식이 있는 6시간(한도는 1시간) 동안 LLM 호출 앞에서 쉬고, 지나면 한 번 다시 해 본다. 성공하면 표식을 지운다 |
+| LLM 예산 관문(`usage_*`·`login`·`usage_limit`)에 걸린 호출 | 부르지 않고 그 스레드만 보류. 관문이 걸려 있는 동안은 그 노드를 다시 돌리지 않고, 풀린 틱에 이어 간다. LLM 을 안 쓰는 스레드·단계는 그대로 간다 |
+| 호출당 상한에 닿은 호출(`call_cap`) | CLI 가 턴 사이에 멈춘다(`--max-budget-usd`). 그 호출은 실패 — 쓴 토큰은 장부에 적고, 다시 할지는 그래프가 정한다(수정 그래프는 시도 1회로 센다) |
 | 코드 결함(TypeError 등·규칙 위반·허용 목록 밖 명령) | 보류. 코드(그래프·실행기·허용 목록 지문)가 바뀔 때까지 다시 돌리지 않는다 |
 | 노드가 스스로 보류(`throw tools.hold("이유")`) | 보류. 다음 틱에 다시 해 본다 |
-| LLM 하루 상한(`llm_day`)·하루 토큰(`token_cap`)·스레드 상한(`llm_thread`) | 보류. 풀릴 수 없는 동안(같은 날·같은 상한 값)은 노드를 다시 돌리지 않는다 |
+| LLM 하루 상한(`llm_day`)·하루 토큰(`token_cap`)·스레드 하루 토큰(`token_thread`)·스레드 상한(`llm_thread`) | 보류. 풀릴 수 없는 동안(같은 날·같은 상한 값)은 노드를 다시 돌리지 않는다 |
 | 멈출 때 기록한 다음 노드가 그래프에서 사라짐(배포로 이름이 바뀜) | '끝남'으로 보지 않고 코드 결함 보류 |
 | 결과 모르는 부수효과(시작만 적히고 끝이 없음) | 보류. 사람이 확인해야 한다 |
 | 승인 대기 | 질문을 내보인 때부터 48시간. 그 안에 `answer` 로 적힌 답은 틱이 늦게 와도 유효 |
@@ -95,7 +98,15 @@ touch $S/PAUSED        # 멈춤("랭그래프 멈춰") — 잡도 끈다(PLAN §
 rm $S/PAUSED           # 다시
 ```
 
-## 관문 (틱마다, 하나라도 걸리면 HOLD)
+## 관문 (틱마다)
+
+두 갈래다(10-10). **틱을 세우는 관문**(`paused`·`disk`·`quiet`)은 하나라도 걸리면 그 틱이 HOLD 다. **LLM 예산 관문**(`usage_*`·`login`·`usage_limit`·`token_cap`)은
+구독 한도를 지키려는 것(S8)이라 LLM 호출만 막는다 — 틱은 돌고 대기열의 새 일도 시작하며, LLM 을 부르려는 순간 그 스레드만 보류된다(`lib/claude.mjs` reserve).
+10-09 `token_cap` 39틱·10-10 `usage_high` 29틱 동안 토큰을 안 쓰는 QA 단계(빌드·판 두기·분석)까지 틱째 서서 매일 40판이 10판·0판에서 멈췄던 것을 고친 것이다.
+디스크만 걸렸고 건강선은 지키면 이미 시작한 일은 이어 간다(10-05) — LLM 예산 관문이 같이 걸려 있어도 그렇다. 수동 명령(start·retry)은 전처럼 관문을 보지 않는다.
+
+일이 붙잡힌 채(틱을 세운 관문 뒤에서 기다리거나, LLM 예산 관문 때문에 호출 앞에 선 스레드) 30분(`LG_HOLD_NOTIFY_MIN`)이 지나면 `STUCK … 관문 보류 N분째(알림 1회째)` 를 내고,
+이어지면 3시간(`LG_HOLD_RENOTIFY_MIN`, 0 = 한 번만)마다 몇 번째인지·총 보류 시간과 함께 다시 낸다. 야간·멈춤은 일부러 세운 것이라 세지 않는다.
 
 | 관문 | 기준 | 출처·설정 |
 |---|---|---|
@@ -104,6 +115,14 @@ rm $S/PAUSED           # 다시
 | `usage_high`·`usage_unreadable`·`usage_stale` | 주간 사용량 ≥ 80% · 못 읽음 · 13시간 넘게 묵음 | 감지기(`orchestrator-scan.py` `scan_usage` → `usage_findings`)가 `claude -p /usage`로 받아 `state/orchestrator/latest.md`의 '클로드 사용량' 줄에 쓰는 값을 **읽기만** 한다. 주간 범위 중 Fable(금지 모델)은 뺀다. 스냅샷은 정규 회차(08·11·14·17·20시)에만 새로 쓰인다 — 밤 공백(20→08시, 12시간)을 견디게 기준을 13시간으로 둔다(10-06: 6시간이면 매일 02~08시가 통째로 쉬었다). 밤에 쉬는 것은 `LG_QUIET` 몫이다 |
 | `login`·`usage_limit` | 호출 오류 문구로 판정한 표식 | 로그인은 감지기 `LLM_AUTH_FAIL`과 같은 문구 + CLI 문구. 429·사용량 한도는 로그인 고장이 아니다(09-30 오판 전례) |
 | `token_cap` | 오늘 토큰(입력·출력·캐시 생성·캐시 읽기 합) ≥ `LG_DAY_TOKEN_CAP`(기본 3,000,000) | 10-28 '그림자 ② 하루 최댓값 × 1.5'로 다시 정한다 |
+
+**한 호출·한 스레드가 하루를 다 쓰지 못하게(10-10)** — 10-09 opus 수정 호출 하나가 47턴·4,019,409 토큰을 썼다(프롬프트는 4.5KB — 도구로 파일을 읽으며 턴마다 맥락을 다시 읽은 것).
+
+| 상한 | 기준 | 근거 |
+|---|---|---|
+| 호출당 | `claude --max-budget-usd`(달러 어림) = `LG_LLM_CALL_BUDGET_USD`(기본 1, 0 = 끔). 호출 옵션 `maxBudgetUsd` 로는 낮추기만 | 10-03~10-10 62회 중 그 호출($2.73)만 넘는다(다음은 $0.909). 큰 호출의 실측 단가($0.62~0.91/100만 토큰)로 약 110~160만 토큰에서 멈춘다. 구독 로그인에서도 멈추는 것을 실측(2.1.285) |
+| 스레드당 하루 | 그 스레드의 오늘 토큰 ≥ `LG_THREAD_DAY_TOKEN_CAP`(기본 1,200,000, 0 = 끔) → 보류 `token_thread`, 다음 날 이어 감 | 평소 스레드·하루 최댓값 769,167 × 1.5. 넘긴 것은 수정 스레드 셋뿐. 이 값 + 호출 하나 < 하루 상한 |
+| 프롬프트 크기 | 글자 수 > `LG_LLM_MAX_PROMPT_CHARS`(기본 100,000) → 부르지 않음(코드 결함) | 실측 최댓값 11,667바이트의 약 8배 |
 | `quiet` | 01:30~04:30(`LG_QUIET`) | 야간 소크 시간 |
 
 ## 그래프를 쓰는 규칙
@@ -160,6 +179,10 @@ gostop-fix:<sigkey>  (meta.serial — 한 번에 하나, S13)
   ① preflight  대화 작업 표식(.jarvis-busy · 모든 가지 30분 안 커밋)이면 HOLD(busy). 대상 커밋을 전체 해시로
                (소크 신호는 신호 커밋이 아니라 지금 master — 줄 서 있는 사이 이미 고쳐졌으면 재현 2회 초록 → not_reproduced, AI 0회.
                 더 돌 이유가 없어진 스레드는 `run.mjs cancel <스레드> --reason <이유>` 로 닫는다. 10-10)
+     재개 확인  LLM 을 띄우는 노드(④⑦⑨⑫)는 띄우기 전에 본다(소크 신호만): 재현 판정이 3시간(`LG_GOSTOP_FRESH_MIN`) 넘게 묵었고 그 사이 master 가
+               움직였으면 지금 master 를 따로 내보내(gostop/sandbox/rc-<키>/work) 같은 재현을 다시 돌린다 — 두 번 다 통과면 AI 를 더 쓰지 않고
+               not_reproduced(요약도 정해진 문장), 한 번이라도 빨강이면 그 노드로 돌아가 이어 간다. 관문·상한에 걸려 LLM 앞에 서 있는 사이
+               당직·대화가 먼저 고친 신호에 토큰을 쓰지 않게(10-10)
   ② sandbox    git archive → gostop/sandbox/<키>/work(사본)·clean(깨끗한 내보내기, 1b 패치 기준). .git 없음(역사 0),
                .claude·.mcp.json·key.properties·*.jks·*.keystore·google-services.json 제외, 기록 문서(docs 중 rules 외·context·qa·
                coverage·루트 md 등 — 수정 원장에 정답이 있다) 정리, 벤치면 정답 표지 누설 검사(있으면 진단 없이 gave_up), pub get --offline
@@ -308,7 +331,7 @@ duty-verify:dv-<초>
 | `node_start` · `node_end` | node · ok · ms |
 | `continue`(reason: budget·pending·paused) · `interrupted`(cause: signal·exit·stalled) · `resumed`(from) | |
 | `waiting`(reason ← interrupt 값의 `reason`, M5) · `answered`(decision) | |
-| `held` | scope(tick·thread·command·sweep) · reasons(관문 이름·llm_day·llm_thread·token_cap·login·usage_limit·code_defect·node·effect_unknown·stuck·hook_leak) |
+| `held` | scope(tick·llm·thread·command·sweep) · reasons(관문 이름·llm_day·llm_thread·token_cap·token_thread·login·usage_limit·code_defect·node·effect_unknown·stuck·hook_leak). scope `llm` = LLM 예산 관문이 걸린 틱(틱은 돌았다 — `tick` 줄의 `llm_gates` 에도 적힌다) |
 | `reclaim` | scope(tick) · ran · busy · free_before · free_after · steps · error — 디스크 관문 자가 회복(10-05, lib/reclaim.mjs → 워크스페이스 scripts/disk-reclaim.sh, 당직과 같은 도구) |
 | `llm` | model · models · in · out · cache_create · cache_read · total · cost_usd · ms · ok · detached |
 | `effect`(outcome: would_run·ran·dedup·failed·unknown·recovered, key 는 지문만 — 원문은 effects.jsonl) · `stuck` · `tick` · `gc` · `failed` · `bench`(M8) | |
@@ -337,8 +360,8 @@ duty-verify:dv-<초>
 
 0a: `LG_STATE_DIR` · `LG_DB` · `LG_APPROVAL_TTL_HOURS`(48) · `LG_GC_DAYS`(14) · `LG_LLM_MAX_PER_THREAD`(5) · `LG_LLM_MAX_PER_DAY`(20) · `LG_LLM_MODEL`(sonnet) · `LG_LLM_TIMEOUT_SEC`(300) · `LG_CLAUDE_BIN` · `LG_NODE` · `LG_BUSY_TIMEOUT_MS`(15000).
 1a: `LG_DAILY`(gostop-intake@04:30) · `LG_GOSTOP_REPO` · `LG_GOSTOP_SOAK_DIR`.
-1b: `LG_GOSTOP_STAGE`(1b, 스레드 시작 때 고정) · `LG_GOSTOP_SONNET_CAP`(7) · `LG_GOSTOP_OPUS_CAP`(3) · `LG_RELEASE_CERT_SHA256` · `LG_FAD_APP_ID` · `LG_FAD_GROUPS`(testers).
-0b: `LG_TICK_BUDGET_SEC`(480) · `LG_JOB_LIMIT_SEC`(600, 틱 안 LLM·명령이 끝나야 하는 시각) · `LG_DETACH_MAX_SEC`(5400, 목록에 `maxSeconds`가 없을 때의 분리 실행 최대 시간) · `LG_HOLD_TTL_HOURS`(48) · `LG_MAX_RETRIES`(3) · `LG_MAX_STEPS`(500) · `LG_LOCK_STUCK_MIN`(30, 옛 이름 `LG_LOCK_STALE_MIN`도 받는다) · `LG_DAY_TOKEN_CAP`(3000000) · `LG_DISK_PATH` · `LG_DISK_FLOOR_GIB`(15) · `LG_COPY_EST_GIB`(0.2, 1a 실측) · `LG_DISK_MARGIN_GIB`(1) · `LG_USAGE_FILE` · `LG_USAGE_MAX_PCT`(80) · `LG_USAGE_MAX_AGE_H`(13) · `LG_QUIET`(01:30-04:30, 빈 값이면 끔) · `LG_LOGIN_RECHECK_MIN`(360) · `LG_LIMIT_RECHECK_MIN`(60) · `LG_HOOK_LOGS`(콜론 구분).
+1b: `LG_GOSTOP_STAGE`(1b, 스레드 시작 때 고정) · `LG_GOSTOP_SONNET_CAP`(7) · `LG_GOSTOP_OPUS_CAP`(3) · `LG_GOSTOP_FRESH_MIN`(180, 재개 확인) · `LG_RELEASE_CERT_SHA256` · `LG_FAD_APP_ID` · `LG_FAD_GROUPS`(testers).
+0b: `LG_TICK_BUDGET_SEC`(480) · `LG_JOB_LIMIT_SEC`(600, 틱 안 LLM·명령이 끝나야 하는 시각) · `LG_DETACH_MAX_SEC`(5400, 목록에 `maxSeconds`가 없을 때의 분리 실행 최대 시간) · `LG_HOLD_TTL_HOURS`(48) · `LG_MAX_RETRIES`(3) · `LG_MAX_STEPS`(500) · `LG_LOCK_STUCK_MIN`(30, 옛 이름 `LG_LOCK_STALE_MIN`도 받는다) · `LG_DAY_TOKEN_CAP`(3000000) · `LG_THREAD_DAY_TOKEN_CAP`(1200000) · `LG_LLM_CALL_BUDGET_USD`(1) · `LG_LLM_MAX_PROMPT_CHARS`(100000) · `LG_HOLD_NOTIFY_MIN`(30) · `LG_HOLD_RENOTIFY_MIN`(180) · `LG_DISK_PATH` · `LG_DISK_FLOOR_GIB`(15) · `LG_COPY_EST_GIB`(0.2, 1a 실측) · `LG_DISK_MARGIN_GIB`(1) · `LG_USAGE_FILE` · `LG_USAGE_MAX_PCT`(80) · `LG_USAGE_MAX_AGE_H`(13) · `LG_QUIET`(01:30-04:30, 빈 값이면 끔) · `LG_LOGIN_RECHECK_MIN`(360) · `LG_LIMIT_RECHECK_MIN`(60) · `LG_HOOK_LOGS`(콜론 구분).
 시험 전용 — `LG_TEST_MODE=1`일 때만 먹는다: `LG_NOW`(시간 주입) · `LG_CMD_REGISTRY` · `LG_TEST_START_AT` · `LG_TEST_HEARTBEAT_SEC` · `LG_SMOKE_TRACE` · `LG_SMOKE_CRASH_ONCE` · `LG_SMOKE_CRASH_CODE`.
 
 ## OpenClaw 연결 예(등록하지 않았다)

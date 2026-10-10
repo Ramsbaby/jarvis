@@ -27,7 +27,7 @@ test("깨끗한 환경변수·고정 인자·빈 작업 폴더로 부른다 — 
   const calls = fake.calls();
   assert.equal(calls.length, 1);
   const [c] = calls;
-  assert.deepEqual(c.args, claudeArgs("haiku"));
+  assert.deepEqual(c.args, claudeArgs("haiku", [], { maxBudgetUsd: 1 }), "호출당 상한(기본 1달러)까지 고정 인자다");
   // 0b: 격리는 --restricted(사용자·프로젝트 설정·훅·사용자 규칙 무시, 파일 도구는 작업 폴더 안). 옛 --setting-sources project 는 규칙이 실렸다(실측)
   for (const f of ["--restricted", "--strict-mcp-config", "--no-session-persistence", "--output-format", "json"]) assert.ok(c.args.includes(f), f);
   assert.ok(!c.args.includes("--setting-sources"), "--restricted 와 섞지 않는다");
@@ -110,7 +110,7 @@ test("기본 모델은 sonnet, 모델을 안 주면 sonnet 으로 부른다", as
   const llm = createClaude({ store, cfg, now: () => T0, thread: "m1" });
   const res = await llm.ask("한 단어로 답하라");
   assert.equal(res.text, "가짜 요약 문장");
-  assert.deepEqual(fake.calls()[0].args, claudeArgs("sonnet"));
+  assert.deepEqual(fake.calls()[0].args, claudeArgs("sonnet", [], { maxBudgetUsd: 1 }));
   await assert.rejects(llm.ask("x", { model: "fable" }), { name: "LlmModelBlocked" });
   assert.equal(fake.calls().length, 1, "차단된 모델은 부르지도, 상한을 쓰지도 않는다");
   assert.equal(store.llmCounts(T0, "m1").thread, 1);

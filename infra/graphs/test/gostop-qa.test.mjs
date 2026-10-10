@@ -188,3 +188,33 @@ test("허용 목록의 '~/' 는 홈으로 펼친 뒤 같은 검사를 받는다(
   const real = loadRegistry(path.join(path.dirname(new URL(import.meta.url).pathname), "..", "cmd-registry.json"));
   for (const [id, c] of Object.entries(real.commands)) if (id.startsWith("gostop.qa-")) assert.ok(path.isAbsolute(c.argv[0]) && !c.argv[0].includes("~"), id);
 });
+
+// 10-10 주간 감사: LLM 예산 관문(10-09 하루 토큰 상한 · 10-10 주간 사용량 82%)이 걸린 날 매일 40판이 10판·0판에서 멈췄다.
+// 실행기는 이제 LLM 호출만 막는다 — QA 는 그 묶음의 AI 눈만 건너뛰고 판·결정적 검사·지시함·정리를 끝까지 한다(건너뛴 것은 결과 줄·요약에 남긴다).
+test("LLM 예산 관문이 걸린 날에도 판은 끝까지 둔다 — AI 눈 검사만 건너뛰고 결과 줄·요약에 남긴다", async (t) => {
+  const { env, calls, claude, sb } = setup(t);
+  tickEnv(sb, { usage: { week: 85 } }); // 같은 스냅샷 파일을 주간 사용량 85% 로 다시 쓴다 → usage_high
+  run(env, ["start", "gostop-qa", "qa-g1", "--queue", "--games=4", "--per=2", "--seed=100", "--day=2026-10-03"]);
+  const done = await tickUntilDone(env, "qa-g1", 30);
+  assert.match(done.line, /판 4\/4/);
+  assert.match(done.line, /AI 눈 건너뜀 2묶음/, "건너뛴 것을 숨기지 않는다");
+  const c = calls();
+  assert.deepEqual(c.filter((x) => x.cmd === "play").map((x) => [x.seed, x.games]), [["100", "2"], ["102", "2"]], "판은 다 둔다");
+  assert.equal(c.filter((x) => x.cmd === "analyze").length, 2, "결정적 검사도 다 한다");
+  assert.equal(claude.calls().length, 0, "관문이 걸린 동안 claude 는 부르지 않는다");
+  assert.equal(fs.readFileSync(env.GQA_ORDERS, "utf8").match(/id D1-aaaa\)/g)?.length, 1, "결정적 확정은 지시함에 오른다");
+  assert.ok(c.some((x) => x.cmd === "cleanup"), "원본 녹화는 전처럼 지운다(디스크)");
+  assert.equal(c.at(-1).cmd, "emu-down", "끝나면 에뮬레이터를 끈다");
+  const sum = fs.readdirSync(path.join(env.GQA_STATE, "2026-10-03")).find((f) => f.endsWith("-summary.md"));
+  assert.match(fs.readFileSync(path.join(env.GQA_STATE, "2026-10-03", sum), "utf8"), /AI 눈 검사 건너뜀 2묶음 — .*주간 사용량 85%/);
+  assert.ok(!metrics(sb).some((m) => m.ev === "held" && m.thread === "qa-g1"), "QA 스레드는 보류되지 않는다");
+});
+
+test("스레드 LLM 상한에 닿아도 QA 는 멈추지 않는다 — 남은 눈 검사만 건너뛴다", async (t) => {
+  const { env, claude } = setup(t);
+  run({ ...env, LG_LLM_MAX_PER_THREAD: "1" }, ["start", "gostop-qa", "qa-g2", "--queue", "--games=4", "--per=2", "--seed=100", "--day=2026-10-03"]);
+  const done = await tickUntilDone({ ...env, LG_LLM_MAX_PER_THREAD: "1" }, "qa-g2", 30);
+  assert.match(done.line, /판 4\/4/);
+  assert.equal(claude.calls().length, 1, "상한 1회 — 첫 묶음 1차만 불렀다");
+  assert.match(done.line, /AI 눈 건너뜀 2묶음/, "첫 묶음은 확인을, 둘째 묶음은 1차부터 건너뛰었다");
+});

@@ -53,7 +53,7 @@ test("기다리는 일이 없으면 부르지 않는다 · 다른 정리가 돌�
   assert.equal(rc[0].busy, true);
 });
 
-test("일을 붙잡은 관문 보류가 30분 이어지면 한 번만 알린다 — 야간 보류는 알리지 않는다", (t) => {
+test("일을 붙잡은 관문 보류가 30분 이어지면 알리고, 이어지면 3시간마다 다시 알린다 — 야간 보류는 알리지 않는다", (t) => {
   const sb = sandbox(t);
   const fk = fakeReclaim(sb, '{"ok":true,"free_before":15.8,"free_after":15.8,"steps":[]}');
   const env = { ...tickEnv(sb, { now: T0 }), ...fk.env, LG_DISK_FLOOR_GIB: "100000" };
@@ -61,8 +61,14 @@ test("일을 붙잡은 관문 보류가 30분 이어지면 한 번만 알린다 
   assert.doesNotMatch(run(env, ["tick"], at(T0)).out, /STUCK/, "처음 보류는 알리지 않는다");
   assert.doesNotMatch(run(env, ["tick"], at(T0 + 29 * MIN)).out, /STUCK/);
   const r = run(env, ["tick"], at(T0 + 31 * MIN));
-  assert.match(r.out, /^STUCK h1 관문 보류 31분째 — 디스크 여유 .* · 기다리는 일: h1/m, "알림(디스코드로 나가는 줄)");
-  assert.doesNotMatch(run(env, ["tick"], at(T0 + 62 * MIN)).out, /STUCK/, "같은 보류는 한 번만");
+  assert.match(r.out, /^STUCK h1 관문 보류 31분째\(알림 1회째\) — 디스크 여유 .* · 기다리는 일: h1/m, "알림(디스코드로 나가는 줄)");
+  assert.doesNotMatch(run(env, ["tick"], at(T0 + 62 * MIN)).out, /STUCK/, "3시간 안에는 다시 알리지 않는다");
+  // 10-09: 한 번만 알려 token_cap 보류 19시간이 조용했다 — 같은 보류가 이어지면 3시간마다 몇 번째인지·총 보류 시간과 함께 다시 알린다
+  assert.doesNotMatch(run(env, ["tick"], at(T0 + 210 * MIN)).out, /STUCK/);
+  assert.match(run(env, ["tick"], at(T0 + 212 * MIN)).out, /^STUCK h1 관문 보류 3시간 32분째\(알림 2회째\) — 디스크 여유 /m);
+  assert.match(run(env, ["tick"], at(T0 + 392 * MIN)).out, /^STUCK h1 관문 보류 6시간 32분째\(알림 3회째\) — /m);
+  // 다시 알리기를 끄면(0) 한 번만
+  assert.doesNotMatch(run({ ...env, LG_HOLD_RENOTIFY_MIN: "0" }, ["tick"], at(T0 + 900 * MIN)).out, /STUCK/);
 
   const sb2 = sandbox(t);
   const two = new Date(2026, 9, 4, 2, 0).getTime();

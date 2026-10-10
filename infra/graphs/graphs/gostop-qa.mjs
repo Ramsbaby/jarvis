@@ -10,6 +10,8 @@
 // 책갈피: 판 번호(next)가 체크포인트에 남는다. 에뮬레이터가 죽으면 emu 로 돌아가 같은 판부터, 게이트웨이가 재시작돼도
 //         분리 실행은 살아 있고 다음 틱의 확인 노드가 잇는다. 끝난 판은 다시 두지 않는다.
 // LLM: 스레드당 5회 상한이라 판마다 부르지 않는다 — 판 묶음(eyeEvery 묶음)마다 1차(haiku) 1회 + 확인(sonnet) 1회.
+//   LLM 을 지금 못 부르면(예산 관문·상한·로그인 만료 — 실행기의 llmHold 보류) 판을 세우지 않는다: 그 묶음의 AI 눈만 건너뛰고
+//   결정적 검사·지시함·정리는 그대로 한다. 건너뛴 묶음 수와 까닭은 결과 줄·요약에 남긴다(10-10: 관문이 걸린 날 40판이 10판·0판에서 멈췄다).
 // 부수효과: 지시함(orders.md) 줄만 — effect 'orders_append'(보고성이라 그림자에서도 실제로 쓴다, lib/effects.mjs REPORT_KINDS).
 //   같은 발견 id 는 effect 열쇠와 지시함 본문 대조로 날짜·스레드를 넘어 한 번만. 신호 파일(signals.json)은 우리 상태 파일이라 일꾼이 쓴다.
 // 끝(finish): 요약 파일과 '올린 id 가 전부 지시함에 있다'를 확인해 verify_log 에 남긴다(판정 M2) — 확인이 안 되면 비워 둔다.
@@ -44,6 +46,7 @@ const State = Annotation.Root({
   emuNeeded: Annotation({ reducer: last, default: () => false }),
   emuReady: Annotation({ reducer: last, default: () => false }),
   eyeRetry: Annotation({ reducer: last, default: () => false }),
+  eyeSkipped: Annotation({ reducer: last, default: () => [] }), // LLM 을 못 불러 AI 눈을 건너뛴 기록 [{ batch, stage, why }]
   failed: Annotation({ reducer: last }),
   tokens: Annotation({ reducer: last, default: () => 0 }),
   costUsd: Annotation({ reducer: last, default: () => 0 }),
@@ -231,16 +234,27 @@ export function build({ checkpointer, llm, tools }) {
     if (!j?.ok) throw new Error(`눈 검사 프롬프트 실패(${stage}): ${r.stderr?.slice?.(-200) ?? r.code}`);
     if (j.skip) return { h: { ...s.h, eye: null }, log: [`eye_${stage} 건너뜀(볼 것 없음)`] };
     const model = stage === "first" ? "haiku" : "sonnet";
-    const h = llm.launchAsk(j.prompt, { model, node: `eye_${stage}_${s.batchNo}`, attempt: s.att[`eye_${stage}`] ?? 1, tools: ["Read"], cwd: j.cwd,
-      timeoutMs: 12 * 60_000 });
+    let h;
+    try {
+      h = llm.launchAsk(j.prompt, { model, node: `eye_${stage}_${s.batchNo}`, attempt: s.att[`eye_${stage}`] ?? 1, tools: ["Read"], cwd: j.cwd,
+        timeoutMs: 12 * 60_000 });
+    } catch (e) {
+      // LLM 을 지금 못 부른다(예산 관문·상한·로그인) — 보류하면 남은 판까지 선다. 이 묶음의 AI 눈만 건너뛴다(1차를 건너뛰면 확인은 볼 것이 없어 저절로 건너뛴다)
+      if (e?.llmHold !== true) throw e;
+      return eyeSkip(s, stage, e.message);
+    }
     return { h: { ...s.h, eye: h }, log: [`eye_${stage}_launch ${model} ${j.files ?? j.items}건`] };
   }
+  const eyeSkip = (s, stage, why) => ({ h: { ...s.h, eye: null }, eyeRetry: false,
+    eyeSkipped: [...s.eyeSkipped, { batch: batchName(s), stage, why: String(why ?? "").replace(/\s+/g, " ").slice(0, 160) }],
+    log: [`eye_${stage} 건너뜀(LLM 못 부름) — ${String(why ?? "").slice(0, 100)}`] });
   async function eyeCheck(s, stage) {
     const h = s.h.eye;
     if (!h) return { eyeRetry: false, log: [`eye_${stage} 없음`] };
     const st = llm.checkAsk(h);
     if (st.state === "running") throw tools.pending(`AI ${stage} 진행 중`);
-    if (st.state === "failed" && (st.kind === "login" || st.kind === "usage_limit")) throw tools.hold(`AI ${stage}: ${st.error}`, st.kind);
+    // 로그인 만료·사용량 한도로 실패한 호출 — 표식이 남아 한동안 못 부른다. 판을 세우지 않고 이 묶음의 AI 눈만 건너뛴다
+    if (st.state === "failed" && (st.kind === "login" || st.kind === "usage_limit")) return eyeSkip(s, stage, `${st.kind === "login" ? "클로드 로그인 만료" : "사용량 한도"} — ${st.error ?? ""}`);
     if (st.state !== "done") {
       const key = `eye_${stage}`;
       if ((s.att[key] ?? 1) >= 2) return { h: { ...s.h, eye: null }, eyeRetry: false, log: [`eye_${stage} 실패(${st.reason ?? st.kind ?? st.state}) — AI 없이 진행`] };
@@ -301,6 +315,7 @@ export function build({ checkpointer, llm, tools }) {
     const rows = [];
     let total = 0;
     const sev = { 상: 0, 중: 0, 하: 0 };
+    const skipped = new Set(s.eyeSkipped.map((x) => x.batch)).size; // AI 눈을 (1차든 확인이든) 건너뛴 묶음 수
     for (const r of s.runs) {
       const f = path.join(sdir(s, r.run), "findings.json");
       let fs_ = [];
@@ -312,6 +327,7 @@ export function build({ checkpointer, llm, tools }) {
     const md = [`# 고스톱 실기 QA 묶음 — ${s.base} (${s.day})`, "",
       `- 판 ${s.next}/${s.games} · 커밋 ${String(s.sha ?? "").slice(0, 8)} · 씨앗 ${s.seed0}~ · 난이도 ${s.diffs} · 모드 ${tools.mode}`,
       `- 확정 발견 ${total}건(상 ${sev.상} · 중 ${sev.중} · 하 ${sev.하}) · 지시함 ${s.posted.length}건(이미 있던 것 포함) · AI 호출 ${s.llmCalls}회 토큰 ${s.tokens}(캐시 포함) 약 $${s.costUsd.toFixed(2)} · 판당 ${Math.round(s.tokens / Math.max(1, s.next))}토큰`,
+      skipped ? `- AI 눈 검사 건너뜀 ${skipped}묶음 — ${[...new Set(s.eyeSkipped.map((x) => x.why))].slice(0, 3).join(" / ")} (결정적 검사·지시함은 했다)` : "",
       s.failed ? `- 실패: ${s.failed}` : "", "", "| 묶음 | 판 | 결과 | 발견 | 요지 |", "|---|---|---|---|---|", ...rows].join("\n");
     const out = path.join(stateRoot(), s.day, `${s.base}-summary.md`);
     fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -321,7 +337,7 @@ export function build({ checkpointer, llm, tools }) {
     const missing = s.posted.filter((id) => !hasOrderId(ordersText, id));
     const verify_log = !s.failed && fs.existsSync(out) && !missing.length
       ? `gostop-qa 판 ${s.next}/${s.games} · 지시함 ${s.posted.length}/${s.posted.length} 확인 — ${out}` : null;
-    return { verify_log, result: `${s.failed ? "실패 — " + s.failed + " · " : ""}판 ${s.next}/${s.games} · 발견 ${total}(상 ${sev.상}) · 지시함 ${s.posted.length}${missing.length ? `(빠짐 ${missing.join(",")})` : ""} · ${out}`,
+    return { verify_log, result: `${s.failed ? "실패 — " + s.failed + " · " : ""}판 ${s.next}/${s.games} · 발견 ${total}(상 ${sev.상}) · 지시함 ${s.posted.length}${missing.length ? `(빠짐 ${missing.join(",")})` : ""}${skipped ? ` · AI 눈 건너뜀 ${skipped}묶음` : ""} · ${out}`,
       log: [`finish${verify_log ? " 확인됨" : ` 확인 못 함${s.failed ? "(실패)" : ""}${missing.length ? ` 지시함 빠짐 ${missing.length}` : ""}`}`] };
   }
 

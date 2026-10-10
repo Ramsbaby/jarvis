@@ -5,8 +5,11 @@
 //   작업 폴더 밖을 읽지 못한다(홈·/etc 읽기 거부 확인). 구독 로그인으로 호출된다. 옛 `--setting-sources project` 는 규칙이 실렸다(0a 위험 1).
 //   작업 폴더 기본값은 홈 밖 임시 폴더(빈 폴더, /var/folders/…) — 앞으로 CLI 가 바뀌어 상위 폴더 CLAUDE.md 를 다시 찾더라도 홈 것을 줍지 않게.
 //   --bare 는 훅을 끄지만 로그인 인증을 못 쓴다(API 키 전용) — 그래서 쓰지 않는다.
-// - 스레드당·하루당 호출 상한, 하루 토큰 상한을 넘으면 LlmBudgetHeld → 실행기가 그 스레드를 '보류'로 둔다.
-// - 로그인 만료·사용량 한도는 오류 문구로 판정해 보류하고 표식(llm-hold.json)을 남긴다 → 다음 틱 관문이 쉰다. 재시도로 세지 않는다.
+// - 스레드당·하루당 호출 상한, 하루 토큰 상한, 스레드당 하루 토큰 상한을 넘으면 LlmBudgetHeld → 실행기가 그 스레드를 '보류'로 둔다.
+// - 틱에서는 부르기 직전에 LLM 예산 관문(주간 사용량·로그인·한도 표식)을 본다 — 걸렸으면 LlmGateHeld 로 그 스레드만 보류(10-10: 틱 전체를 세우지 않는다).
+// - 호출 하나의 상한: --max-budget-usd(달러 어림, 설정 llm.callBudgetUsd). 닿으면 CLI 가 턴 사이에 멈추고 그 호출은 실패(call_cap)다 — 쓴 토큰은 적는다.
+//   프롬프트 글자 수 상한(llm.maxPromptChars)을 넘으면 부르지 않는다.
+// - 로그인 만료·사용량 한도는 오류 문구로 판정해 보류하고 표식(llm-hold.json)을 남긴다 → 표식이 있는 동안 호출 앞에서 쉰다. 재시도로 세지 않는다.
 // - 응답의 usage(입력·출력·캐시 토큰)와 total_cost_usd 를 장부(하루 상한)와 metrics.jsonl(판정 M6)에 남긴다.
 // - Fable(최상위) 모델은 막는다 — 한도를 가장 빨리 쓴다. 허용은 haiku·sonnet·opus 계열뿐.
 // - 긴 호출(opus 수정 등)은 launchAsk → checkAsk 두 노드로 분리 실행한다(lib/detach.mjs).
@@ -19,14 +22,19 @@ import { allowSpawn } from "./guard.mjs";
 
 // held = true 인 오류는 실행기가 '보류'(HELD, 종료 0)로 처리한다. holdReason 은 보류 까닭(관문·재시도 판단에 쓴다).
 // holdRef: 이 값이 그대로인 동안 틱은 그 스레드를 다시 돌리지 않는다(하루 상한 = 날짜, 스레드 상한 = 상한 값) — 노드 앞부분을 틱마다 되풀이하지 않게
+// llmHold: 'LLM 을 지금 못 부른다'는 보류 — 그래프가 잡아 LLM 없이 갈지 정할 수 있다(예: QA 는 AI 눈 없이 판을 이어 둔다)
 export class LlmBudgetHeld extends Error {
-  constructor(msg, reason = "llm_day", ref = null) { super(msg); this.name = "LlmBudgetHeld"; this.held = true; this.holdReason = reason; this.holdRef = ref; }
+  constructor(msg, reason = "llm_day", ref = null) { super(msg); this.name = "LlmBudgetHeld"; this.held = true; this.llmHold = true; this.holdReason = reason; this.holdRef = ref; }
+}
+// 부르기 직전 LLM 예산 관문(usage_high·usage_unreadable·usage_stale·login·usage_limit)에 걸림 — 관문이 풀릴 때까지 틱은 그 스레드를 다시 돌리지 않는다
+export class LlmGateHeld extends Error {
+  constructor(msg, reason) { super(msg); this.name = "LlmGateHeld"; this.held = true; this.llmHold = true; this.holdReason = reason; }
 }
 export class LlmAuthHeld extends Error {
-  constructor(msg) { super(msg); this.name = "LlmAuthHeld"; this.held = true; this.holdReason = "login"; }
+  constructor(msg) { super(msg); this.name = "LlmAuthHeld"; this.held = true; this.llmHold = true; this.holdReason = "login"; }
 }
 export class LlmLimitHeld extends Error {
-  constructor(msg) { super(msg); this.name = "LlmLimitHeld"; this.held = true; this.holdReason = "usage_limit"; }
+  constructor(msg) { super(msg); this.name = "LlmLimitHeld"; this.held = true; this.llmHold = true; this.holdReason = "usage_limit"; }
 }
 export class LlmModelBlocked extends Error {
   constructor(msg) { super(msg); this.name = "LlmModelBlocked"; this.codeDefect = true; }
@@ -61,11 +69,14 @@ export function checkTools(tools) {
 }
 
 // jsonSchema: 구조화 출력(--json-schema). 객체를 받아 JSON 글자로 넘긴다. --tools 는 값을 여러 개 받으므로 맨 뒤에 둔다.
-export function claudeArgs(model, tools = [], { jsonSchema = null } = {}) {
+// maxBudgetUsd: 호출 하나의 상한(달러 어림). 10-10 실측(2.1.285, 구독 로그인): 넘기면 턴 사이에 멈추고 종료 1 ·
+//   subtype error_max_budget_usd · modelUsage 에 그때까지의 토큰·비용이 실려 온다.
+export function claudeArgs(model, tools = [], { jsonSchema = null, maxBudgetUsd = null } = {}) {
   return [
     "-p", "--restricted", "--strict-mcp-config", "--no-session-persistence",
     "--output-format", "json", "--model", model, "--disable-slash-commands",
     ...(jsonSchema ? ["--json-schema", typeof jsonSchema === "string" ? jsonSchema : JSON.stringify(jsonSchema)] : []),
+    ...(Number.isFinite(maxBudgetUsd) && maxBudgetUsd > 0 ? ["--max-budget-usd", String(maxBudgetUsd)] : []),
     // 쓰기 도구(1b ⑦·⑨): -p 에서는 쓰기 허락을 물을 사람이 없어 거부된다(10-03 실호출 — Write 거부로 재현 시험 0개, sonnet 2회 허비).
     // acceptEdits 는 작업 폴더 안 파일 편집만 자동 허락한다. --restricted 가 작업 폴더 밖·설정·git 쓰기는 그대로 막는다(haiku 실측: 밖 쓰기 거부).
     // bypassPermissions 는 --restricted 가 거부한다 — 쓰지 않는다.
@@ -159,7 +170,7 @@ export function usageOf(j) {
   return { in: n(u.input_tokens), out: n(u.output_tokens), cacheCreate: n(u.cache_creation_input_tokens), cacheRead: n(u.cache_read_input_tokens), costUsd: j?.total_cost_usd ?? null };
 }
 
-// 출력 판정: { ok, text, models, usage, kind?, msg? }. kind = login · usage_limit · fable · error
+// 출력 판정: { ok, text, models, usage, kind?, msg? }. kind = login · usage_limit · fable · call_cap(호출당 상한에 닿아 CLI 가 멈춤) · error
 export function judge(res) {
   if (res.timedOut) return { ok: false, kind: "error", msg: `claude 시간 초과(${Math.round(res.timeoutMs / 1000)}초)` };
   let j;
@@ -171,6 +182,9 @@ export function judge(res) {
   const models = Object.keys(j.modelUsage ?? {});
   const usage = usageOf(j);
   if (models.some((k) => /fable/i.test(k))) return { ok: false, kind: "fable", msg: `응답 모델이 Fable 이다: ${models.join(",")}`, models, usage };
+  if (j.subtype === "error_max_budget_usd" || j.subtype === "error_max_turns") {
+    return { ok: false, kind: "call_cap", msg: `claude 가 호출당 상한에 닿아 멈춤(${j.subtype} · ${j.num_turns ?? "?"}턴 · 약 $${Number(j.total_cost_usd ?? 0).toFixed(2)})`, models, usage };
+  }
   if (j.is_error || j.subtype !== "success") {
     const text = String(j.result ?? "");
     return { ok: false, kind: classifyLlmFailure(text) ?? "error", msg: `claude 오류(${j.subtype ?? "?"}): ${text.slice(0, 160)}`, models, usage };
@@ -191,13 +205,17 @@ export const fitTimeout = (timeoutMs, timeLeft) => {
   return Math.min(timeoutMs, room);
 };
 
-export function createClaude({ store, cfg, now, thread, metric = () => {}, timeLeft = null }) {
+// gate: 틱에서만 — 부르기 직전에 볼 LLM 예산 관문(걸린 것들의 배열을 돌려주는 함수, lib/gates.mjs llmCallGates). 수동 명령은 관문을 보지 않는다(사람이 보고 있다).
+export function createClaude({ store, cfg, now, thread, metric = () => {}, timeLeft = null, gate = null }) {
   const setHold = (reason, msg) => {
     try { fs.writeFileSync(cfg.llmHoldPath, JSON.stringify({ reason, at: now(), detail: String(msg).slice(0, 200) }), { mode: 0o600 }); } catch { /* 관문은 다음 실패 때 다시 */ }
   };
   const clearHold = () => { try { fs.rmSync(cfg.llmHoldPath, { force: true }); } catch { /* 없음 */ } };
   const reserve = ({ model, node }) => {
-    const r = store.reserveLlmCall({ thread, node, model, now: now(), perThread: cfg.llm.perThread, perDay: cfg.llm.perDay, dayTokenCap: cfg.llm.dayTokenCap });
+    const hit = gate?.() ?? [];
+    if (hit.length) throw new LlmGateHeld(`LLM 예산 관문 — ${hit.map((x) => x.detail).join(" / ")} · 풀리면 이어 간다`, hit[0].gate);
+    const r = store.reserveLlmCall({ thread, node, model, now: now(), perThread: cfg.llm.perThread, perDay: cfg.llm.perDay, dayTokenCap: cfg.llm.dayTokenCap,
+      threadDayTokenCap: cfg.llm.threadDayTokenCap });
     if (!r.ok) throw new LlmBudgetHeld(r.reason, r.kind, r.kind === "llm_thread" && cfg.llm.perThreadRef != null ? String(cfg.llm.perThreadRef) : r.ref);
     return r.id;
   };
@@ -212,9 +230,15 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
     if (v.ok) clearHold();
     else if (v.kind === "login" || v.kind === "usage_limit") setHold(v.kind, v.msg);
   };
-  const prep = ({ model, tools, cwd, jsonSchema }) => {
+  const prep = ({ model, tools, cwd, jsonSchema, prompt, maxBudgetUsd }) => {
     const m = checkModel(model);
     checkTools(tools);
+    const chars = String(prompt ?? "").length;
+    if (cfg.llm.maxPromptChars && chars > cfg.llm.maxPromptChars) throw new LlmModelBlocked(`프롬프트가 ${chars}자 — 상한 ${cfg.llm.maxPromptChars}자(LG_LLM_MAX_PROMPT_CHARS)를 넘는다. 로그·파일을 통째로 싣지 말고 발췌한다`);
+    // 호출당 상한: 설정값이 천장이다 — 호출 옵션으로는 낮추기만 한다
+    const cap = cfg.llm.callBudgetUsd > 0 ? cfg.llm.callBudgetUsd : null;
+    const want = Number.isFinite(Number(maxBudgetUsd)) && Number(maxBudgetUsd) > 0 ? Number(maxBudgetUsd) : null;
+    const budget = cap != null && want != null ? Math.min(cap, want) : cap ?? want;
     if (jsonSchema != null && (typeof jsonSchema !== "object" || Array.isArray(jsonSchema) || JSON.stringify(jsonSchema).length > 16_384)) {
       throw new LlmModelBlocked("jsonSchema 는 16KB 이하의 JSON Schema 객체");
     }
@@ -222,16 +246,16 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
     const bin = resolveClaudeBin(cfg.llm.bin);
     const dir = cwd ?? defaultClaudeCwd();
     if (!path.isAbsolute(dir) || !fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) throw new LlmModelBlocked(`작업 폴더가 없다: ${dir}`);
-    return { m, bin, dir };
+    return { m, bin, dir, budget };
   };
   return {
     // 동기 호출 — 틱 예산 안에 끝나는 짧은 호출(haiku 분류·요약). 긴 것은 launchAsk/checkAsk.
-    async ask(prompt, { model = cfg.llm.defaultModel, node = "?", tools = [], timeoutMs = cfg.llm.timeoutMs, cwd, jsonSchema = null } = {}) {
-      const { m, bin, dir } = prep({ model, tools, cwd, jsonSchema });
+    async ask(prompt, { model = cfg.llm.defaultModel, node = "?", tools = [], timeoutMs = cfg.llm.timeoutMs, cwd, jsonSchema = null, maxBudgetUsd = null } = {}) {
+      const { m, bin, dir, budget } = prep({ model, tools, cwd, jsonSchema, prompt, maxBudgetUsd });
       const tmo = fitTimeout(timeoutMs, timeLeft);
       const callId = reserve({ model: m, node });
       const t0 = Date.now();
-      const res = await run(bin, claudeArgs(m, tools, { jsonSchema }), { env: cleanEnv(bin), cwd: dir, input: String(prompt), timeoutMs: tmo });
+      const res = await run(bin, claudeArgs(m, tools, { jsonSchema, maxBudgetUsd: budget }), { env: cleanEnv(bin), cwd: dir, input: String(prompt), timeoutMs: tmo });
       const v = judge({ ...res, timeoutMs: tmo });
       record(callId, { node, model: m, v, ms: Date.now() - t0 });
       if (v.ok) return { text: v.text, structured: v.structured, models: v.models, costUsd: v.costUsd, durationMs: v.durationMs, usage: v.usage };
@@ -242,12 +266,12 @@ export function createClaude({ store, cfg, now, thread, metric = () => {}, timeL
     },
     // 분리 실행: 같은 (노드, 시도)는 한 번만 띄운다. 돌려주는 handle 을 상태에 넣고 다음 노드에서 check 한다.
     // 최대 시간(maxMs)은 기본 시간 제한의 1.5배(15분 → 22.5분, 설계 §6) — 넘기면 checkAsk 가 묶음째 끄고 dead(timeout).
-    launchAsk(prompt, { model = cfg.llm.defaultModel, node, attempt = 1, tools = [], timeoutMs = 15 * 60_000, maxMs = detach.defaultMaxMs(timeoutMs), cwd, jsonSchema = null } = {}) {
-      const { m, bin, dir } = prep({ model, tools, cwd, jsonSchema });
+    launchAsk(prompt, { model = cfg.llm.defaultModel, node, attempt = 1, tools = [], timeoutMs = 15 * 60_000, maxMs = detach.defaultMaxMs(timeoutMs), cwd, jsonSchema = null, maxBudgetUsd = null } = {}) {
+      const { m, bin, dir, budget } = prep({ model, tools, cwd, jsonSchema, prompt, maxBudgetUsd });
       const ids = { thread, node, attempt, cmdId: "claude.ask" };
       if (fs.existsSync(detach.jobDir(cfg.jobsDir, ids))) return { dir: detach.jobDir(cfg.jobsDir, ids), ...ids, already: true };
       const callId = reserve({ model: m, node });
-      const h = detach.launch(cfg.jobsDir, ids, { bin, argv: claudeArgs(m, tools, { jsonSchema }), cwd: dir, env: cleanEnv(bin), stdinText: String(prompt), timeoutMs, maxMs });
+      const h = detach.launch(cfg.jobsDir, ids, { bin, argv: claudeArgs(m, tools, { jsonSchema, maxBudgetUsd: budget }), cwd: dir, env: cleanEnv(bin), stdinText: String(prompt), timeoutMs, maxMs });
       if (!h.already) fs.writeFileSync(path.join(h.dir, "llm.json"), JSON.stringify({ callId, model: m, node }), { mode: 0o600 });
       return h;
     },
