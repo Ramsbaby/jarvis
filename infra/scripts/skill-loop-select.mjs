@@ -90,6 +90,29 @@ function scanDiscord() {
 }
 
 // ── 2단: LLM 스코어링 ──────────────────────────────────────────
+// [2026-10-10] 실패 이유가 "Command failed: bash …ask-claude.sh skill-loop-score …"(명령줄 120자)뿐이라 원인을 알 수 없었다.
+//   ask-claude.sh 의 예산 가드(token-budget-guard)는 막을 때 stderr 에 아무것도 쓰지 않고 exit 2 로만 끝나고, 사유는
+//   logs/token-budget-guard.log 에만 남는다(10-10 재현: 상한을 극소로 주면 rc=2, stdout·stderr 빈 값).
+//   → exit 2 면 가드 로그의 마지막 차단 사유를 찾아 적는다.
+const GUARD_LOG = join(BOT_HOME, 'logs', 'token-budget-guard.log');
+function failReason(e) {
+  const status = e.status ?? e.code ?? '?';
+  let why = String(e.stderr || '').trim().split('\n').filter(Boolean).pop() || '';
+  if (!why && status === 2) {
+    try {
+      const tail = execFileSync('tail', ['-n', '300', GUARD_LOG], { encoding: 'utf8' }).split('\n').reverse();
+      for (const l of tail) {
+        try {
+          const o = JSON.parse(l);
+          if (o.task === 'skill-loop-score' && /EXCEEDED/.test(o.msg || '')) { why = String(o.msg).replace('[TOKEN_BUDGET_GUARD] ', ''); break; }
+        } catch { /* 줄 하나 깨져도 계속 */ }
+      }
+    } catch { /* 가드 로그를 못 읽으면 아래 기본 문구 */ }
+    why ||= '예산 가드 차단(exit 2) — logs/token-budget-guard.log 확인';
+  }
+  return `ask-claude 실패(exit ${status}): ${why || String(e.message).slice(0, 80)}`;
+}
+
 function firstUserText(transcriptPath) {
   for (const line of readFileSync(transcriptPath, 'utf8').split('\n')) {
     try {
@@ -120,7 +143,7 @@ function llmScore(cand, model) {
       timeout: 150_000, stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (e) {
-    return { score: -1, error: `ask-claude 실패: ${String(e.message).slice(0, 120)}` };
+    return { score: -1, error: failReason(e) };
   }
   // 결과는 results/skill-loop-score/ 최신 파일에서 회수
   const resDir = join(BOT_HOME, 'results', 'skill-loop-score');
@@ -153,11 +176,24 @@ if (NO_LLM) {
   console.log('[2단] --no-llm: 스코어링 생략 (휴리스틱 상위만 표시)');
 } else {
   const model = JSON.parse(readFileSync(MODEL_POLICY, 'utf8')).currentLatest.haiku; // E3: 중앙 참조
+  let attempted = 0; const failures = [];
   for (const c of candidates.slice(0, MAX_SCORING)) {
     const s = llmScore(c, model);
+    attempted++;
+    if (s.score < 0) failures.push(s.error || '원인 미상');
     console.log(`  점수=${s.score} ${s.topic || ''} ${s.error || ''}`);
     ledger('scored', { path: c.path, ...s });
     if (s.score >= THRESHOLD) selected.push({ ...c, ...s });
+  }
+  // [2026-10-10] 채점이 전부 실패한 밤(10-04·06·07·08 UTC 날짜 — 4밤 20회, 사유는 일일 예산 상한)도 점수 -1 이 임계치 미달로만 읽혀
+  //   "선별 0건 — 추출 생략 · ✅ 배치 완료 · 잡 ok" 로 끝났다. 7밤 "적용 0건" 의 절반이 '할 게 없어서'가 아니라 '평가를 못 해서'였다.
+  //   종료코드 3 으로 알린다(나머지 단계는 nightly 가 끝까지 돌린 뒤 잡을 실패로 끝낸다).
+  if (attempted > 0 && failures.length === attempted) {
+    console.log(`❌ 채점 ${failures.length}/${attempted}건 전부 실패 — 오늘 밤 '선별 0건'은 후보가 없어서가 아니라 평가를 못 해서다. 이유: ${failures[0]}`);
+    ledger('scoring-failed', { attempted, failed: failures.length, reason: failures[0] });
+    process.exitCode = 3;
+  } else if (failures.length > 0) {
+    console.log(`⚠️ 채점 ${failures.length}/${attempted}건 실패 — 나머지로만 선별했다. 이유: ${failures[0]}`);
   }
   selected = selected.sort((a, b) => b.score - a.score).slice(0, CAP);
   // [2026-07-11 P0] toISOString은 UTC 날짜 — 03:50 KST 실행 시 전날 파일명이 되어

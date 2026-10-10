@@ -38,7 +38,11 @@ echo "🔄 skill-loop 야간 배치 시작 (DRYRUN=${DRYRUN}, MAX=${MAX}, $(date
 node "${SCRIPTS_DIR}/skill-loop-promote.mjs" || echo "⚠️ promote 비정상 종료 (exit $?) — 배치 계속"
 
 # 1단+2단: 선별 (진행 중 세션 제외 — 야간이므로 보통 없음)
-node "${SCRIPTS_DIR}/skill-loop-select.mjs" --cap "${MAX}"
+# [2026-10-10] select 가 종료코드 3 = "채점 전부 실패"(예: 일일 예산 상한)로 알린다. 그 밤은 '선별 0건'이 아니라 '평가를 못 한 밤'이다.
+#   나머지 단계(추출 생략·만료 스윕·카드)는 끝까지 돌리고, 마지막에 잡을 실패로 끝낸다. 3 이 아닌 비정상 종료는 예전처럼 즉시 죽는다(ERR trap).
+SELECT_RC=0
+node "${SCRIPTS_DIR}/skill-loop-select.mjs" --cap "${MAX}" || SELECT_RC=$?
+if [ "${SELECT_RC}" != "0" ] && [ "${SELECT_RC}" != "3" ]; then (exit "${SELECT_RC}"); fi
 
 # 3단: 추출 (4중 게이트)
 SELECTED_FILE="${DRAFTS_DIR}/selected-${TODAY}.jsonl"
@@ -63,6 +67,11 @@ done
 
 pending_count="$(find "${DRAFTS_DIR}/pending" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
 echo "✅ 배치 완료 — pending ${pending_count}건, 만료 처리 ${expired}건"
+# [2026-10-10] '결재 0건 적용'이 ok 로만 보이던 구조 — 결재를 기다리는 초안과 가장 이른 만료일, 그리고 실제로 되는 결재 방법을 매일 한 줄로 남긴다.
+if [ "${pending_count}" -gt 0 ]; then
+  earliest="$(grep -h -m1 '^  expires:' "${DRAFTS_DIR}"/pending/*/SKILL.md 2>/dev/null | awk '{print $2}' | sort | head -1)"
+  echo "ℹ️ 결재 대기 ${pending_count}건 — 가장 이른 만료 ${earliest:-?}. 결재: node ${SCRIPTS_DIR}/skill-loop-decide.mjs list | approve|reject <이름> --apply (디스코드 카드 버튼은 봇이 없어져 동작하지 않는다)"
+fi
 
 # [2026-07-11 P3] 조용한 무산출 감시 — '선별>0인데 draft-created=0'이 3일+ 연속이면 경고.
 #   근거: 이번 30일 좀비(select UTC날짜 vs nightly KST날짜 불일치로 추출 조용히 스킵)는
@@ -98,4 +107,10 @@ fi
 # 본 가동 시: 신규 초안 Discord 결재 카드 송출 (DRYRUN=1이면 생략)
 if [ "${DRYRUN}" != "1" ]; then
   node "${SCRIPTS_DIR}/skill-loop-notify.mjs" || echo "⚠️ 카드 송출 실패 (배치 결과는 유효)"
+fi
+
+# 채점이 전부 실패한 밤은 잡을 실패로 끝낸다 — 예전엔 "선별 0건 · ✅ 배치 완료"로 ok 였다(10-04~08, 4밤). 연속 2회면 failureAlert 가 울린다.
+if [ "${SELECT_RC}" = "3" ]; then
+  echo "❌ 채점 전부 실패 — 오늘 밤은 후보를 평가하지 못했다(위 '이유' 줄). 잡을 실패로 끝낸다."
+  exit 1
 fi

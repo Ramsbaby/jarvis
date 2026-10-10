@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // skill-loop-notify.mjs — pending 초안의 Discord 결재 카드 송출 (+월요일 묶음 재안내)
-// 카드 버튼 처리: infra/discord/lib/approval.js (slapprove/slreject/slhold → decision 파일 기록)
+// [2026-10-10] 카드 버튼(slapprove/slreject/slhold)을 받던 infra/discord/lib/approval.js 의 봇이 2026-09-10 에 없어졌다 —
+//   버튼은 눌러도 "상호작용 실패"였고 결재가 한 건도 기록되지 못했다. 버튼을 떼고 실제로 되는 결재 방법(skill-loop-decide.mjs)을 적는다.
 // Usage: node skill-loop-notify.mjs [--digest-only]
 // 설계: ~/.openclaw-data/runtime/state/autoplan/2026-06-10-skill-evolution-loop.md (Step 6)
 
@@ -22,6 +23,7 @@ if (!TOKEN || !CHANNEL) { console.error('토큰 또는 l3_channel_id 누락'); p
 const DIGEST_ONLY = process.argv.includes('--digest-only');
 
 async function send(payload) {
+  if (process.env.SKILL_LOOP_NOTIFY_DRY === '1') { console.log('[DRY]', JSON.stringify(payload)); return {}; }   // 시험용 — 송출하지 않는다
   const res = await fetch(`https://discord.com/api/v10/channels/${CHANNEL}/messages`, {
     method: 'POST',
     headers: { 'Authorization': `Bot ${TOKEN}`, 'Content-Type': 'application/json' },
@@ -59,15 +61,8 @@ if (!DIGEST_ONLY) {
         `- ${d.description}`,
         `- 점수 **${d.score}**/10 · 실측 증거 **${d.evidenceCount}**건 · 만료 ${d.expires}${dupLine}`,
         `- 증거 발췌: \`${d.evidence.replace(/`/g, "'")}\``,
+        `- 결재: 자비스에게 "스킬 초안 ${d.slug} 승인" 또는 "폐기"라고 말씀하시면 됩니다 (만료 ${d.expires} 까지 — 기록 없이 지나면 보관함으로 이동)`,
       ].join('\n'),
-      components: [{
-        type: 1,
-        components: [
-          { type: 2, style: 3, label: '승인', custom_id: `slapprove:${d.slug}` },
-          { type: 2, style: 2, label: '보류', custom_id: `slhold:${d.slug}` },
-          { type: 2, style: 4, label: '폐기', custom_id: `slreject:${d.slug}` },
-        ],
-      }],
     });
     notified.push(slug);
     sent++;
@@ -82,6 +77,6 @@ if (!DIGEST_ONLY) {
 const kstDay = new Date(Date.now() + 9 * 3600_000).getUTCDay();
 if ((kstDay === 1 || DIGEST_ONLY) && pending.length > 0) {
   const lines = pending.map(s => { const d = parseDraft(s); return `- \`${s}\` (점수 ${d.score}, 만료 ${d.expires})`; });
-  await send({ content: `📋 **스킬 초안 주간 묶음 안내** — 미결재 ${pending.length}건\n${lines.join('\n')}\n결재는 각 카드 버튼으로 부탁드립니다.` });
+  await send({ content: `📋 **스킬 초안 주간 묶음 안내** — 미결재 ${pending.length}건\n${lines.join('\n')}\n결재는 자비스에게 "스킬 초안 <이름> 승인/폐기"라고 말씀하시면 됩니다.` });
 }
 console.log(`카드 ${sent}건 송출, pending ${pending.length}건`);
