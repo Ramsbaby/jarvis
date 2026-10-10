@@ -196,6 +196,35 @@ test("재현 안 됨: 두 번 다 초록이면 not_reproduced", async (t) => {
   assert.equal(resultOf(x, "bench:t1:r1").status, "not_reproduced");
 });
 
+// 10-10: 소크 신호를 접수(04:30) 때의 커밋에 고정해 재현하던 탓에, 그 사이 당직·대화가 이미 고친 문제를 옛 코드에서 다시 재현하고
+// 진단·수정에 AI 를 썼다(씨앗 203013939 한 스레드 477만 토큰, 줄 선 4건이 전부 고쳐진 신호). 소크는 지금 master 에서 본다.
+test("소크 신호는 지금 master 에서 재현한다 — 신호 커밋 뒤에 이미 고쳐졌으면 AI 0회로 not_reproduced · 벤치는 신호 커밋 그대로", async (t) => {
+  const x = setup(t, { flutter: { mode: "mismatch-old" } }); // 옛 코드(base)면 불일치 · 고쳐진 코드(answer = master)면 통과
+  const sig = soakSignals({ ...soakSummary("20261005", [11]), head: x.base.slice(0, 7) }).signals[0];
+  assert.equal(sig.rev, x.base.slice(0, 7), "신호는 소크가 돈 옛 커밋을 가리킨다");
+  assert.equal(startFix(x, sig.sigkey, sig).code, 0);
+  assert.equal((await drive(x, `gostop-fix:${sig.sigkey}`)).status, "done");
+  const res = resultOf(x, sig.sigkey);
+  assert.equal(res.base, x.answer, "사본 기준 = 지금 master(신호 커밋이 아니다)");
+  assert.equal(res.status, "not_reproduced");
+  assert.equal(x.fc.calls().length, 0, "이미 고쳐진 신호에 AI 0회(요약도 정해진 문장)");
+  assert.match(fs.readFileSync(path.join(C.runDir(x.sb.state, sig.sigkey), "plan.md"), "utf8"), /## 요약\n지금 코드\([0-9a-f]{8}\)에서 같은 씨앗을 두 번 돌렸지만 문제가 나오지 않았다/);
+  assert.match(metrics(x.sb).find((m) => m.ev === "done").verified, /^gostop-fix not_reproduced: 재현 실행 2회 판정 — /, "M2");
+  // 아직 안 고쳐진 소크 신호(master 도 옛 코드)는 전처럼 재현된다 — 느슨해진 것이 아니다
+  const z = setup(t, { flutter: { mode: "mismatch" } });
+  const sz = soakSignals({ ...soakSummary("20261005", [12]), head: z.base.slice(0, 7) }).signals[0];
+  assert.equal(startFix(z, sz.sigkey, sz).code, 0);
+  await drive(z, `gostop-fix:${sz.sigkey}`);
+  assert.equal(resultOf(z, sz.sigkey).repro, "reproduced");
+  // 벤치는 그대로 신호 커밋에서 — 옛 코드라 재현된다(기준 커밋이 곧 문제다)
+  const y = setup(t, { flutter: { mode: "mismatch-old" } });
+  assert.equal(startFix(y, "bench:t1:r1", benchSig(y)).code, 0);
+  await drive(y, "gostop-fix:bench:t1:r1");
+  const rb = resultOf(y, "bench:t1:r1");
+  assert.equal(rb.base, y.base, "벤치 사본 기준 = 신호 커밋");
+  assert.equal(rb.repro, "reproduced");
+});
+
 test("제보만 있는 신호는 재현을 건너뛰고 진단 — 규칙 공백이면 rule_decision(승인 질문 없이)", async (t) => {
   const x = setup(t, { diag: { hypothesis: "판이 끝날 때 뻑 더미 속 조커의 귀속을 규칙서가 정하지 않는다. 엔진은 스톱한 사람에게 준다.", files: ["lib/domain/game/turn_manager.dart"],
     rule_gap: true, rule_gap_detail: "판 끝 바닥 조커 귀속 조항 없음", confidence: 0.7, evidence: ["docs/rules/GAME_MECHANICS.md:3 — §3 에 판 끝 귀속 없음"] } });

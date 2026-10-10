@@ -2,6 +2,7 @@
 // 제어 파일(JSON): { mode, trace }
 //   mode: mismatch(차분 대조 불일치·코드 1) · pass(통과) · flaky(홀수 회차 불일치·짝수 통과) · fail(일반 시험 실패)
 //         compile(컴파일 오류) · hang(SIGTERM 무시 + 손주를 띄우고 멈춤 — 묶음째 끄기 시험)
+//         mismatch-old(사본 코드를 본다 — turn_manager 가 옛 코드 'score() => 4' 면 불일치, 고쳐진 코드면 통과)
 //   trace: 부를 때마다 한 줄(pid · 하위 명령 · 인자 · 작업 폴더)을 더하는 파일
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -34,6 +35,7 @@ switch (ctl.mode) {
   case "mismatch": mismatch(); break;
   case "pass": pass(); break;
   case "flaky": if (nTest % 2 === 1) mismatch(); else pass(); break;
+  case "mismatch-old": if (fs.readFileSync("lib/domain/game/turn_manager.dart", "utf8").includes("score() => 4")) mismatch(); else pass(); break;
   case "fail":
     fs.writeSync(1, "00:01 +0: loading test\n00:02 +3 -1: 판 끝 조커 귀속 바닥 조커는 바닥에 남는다 [E]\n00:02 +3 -1: Some tests failed.\n");
     process.exit(1);

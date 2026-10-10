@@ -158,6 +158,8 @@ gostop-intake:<날짜>  (LG_DAILY — 04:30 뒤 첫 틱이 대기열에 올림, 
   씨앗 없는 소크 문제·미커밋 소크는 기록만) → dedupe(gostop/intake-state.json · 새것이 없으면 벤치 1건) → enqueue(gostop-fix 대기열, 하루 3건 — 넘친 것은 다음 접수로)
 gostop-fix:<sigkey>  (meta.serial — 한 번에 하나, S13)
   ① preflight  대화 작업 표식(.jarvis-busy · 모든 가지 30분 안 커밋)이면 HOLD(busy). 대상 커밋을 전체 해시로
+               (소크 신호는 신호 커밋이 아니라 지금 master — 줄 서 있는 사이 이미 고쳐졌으면 재현 2회 초록 → not_reproduced, AI 0회.
+                더 돌 이유가 없어진 스레드는 `run.mjs cancel <스레드> --reason <이유>` 로 닫는다. 10-10)
   ② sandbox    git archive → gostop/sandbox/<키>/work(사본)·clean(깨끗한 내보내기, 1b 패치 기준). .git 없음(역사 0),
                .claude·.mcp.json·key.properties·*.jks·*.keystore·google-services.json 제외, 기록 문서(docs 중 rules 외·context·qa·
                coverage·루트 md 등 — 수정 원장에 정답이 있다) 정리, 벤치면 정답 표지 누설 검사(있으면 진단 없이 gave_up), pub get --offline

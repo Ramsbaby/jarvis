@@ -32,7 +32,7 @@ const THREAD_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 const GRAPH_RE = /^[a-z][a-z0-9-]{0,40}$/;
 // 값을 받는 플래그. 여기 없으면 `--games 40` 이 games=true 와 떠도는 "40" 으로 갈라져 그래프가 기본값으로 돈다
 // (10-04 실측: 매일 40판 QA 잡이 1판만 돌았다 — 시험은 `--games=4` 꼴만 써서 못 잡았다). 그래프 input() 이 읽는 키를 더하면 여기도 더한다.
-const VALUE_FLAGS = new Set(["days", "topic", "games", "per", "seed", "diffs", "rev", "tag", "eyeEvery", "day", "signal", "sigkey", "apk", "version", "restart_ms"]);
+const VALUE_FLAGS = new Set(["days", "topic", "games", "per", "seed", "diffs", "rev", "tag", "eyeEvery", "day", "signal", "sigkey", "apk", "version", "restart_ms", "reason"]);
 const STATUSES = ["queued", "running", "continue", "waiting", "held", "failed", "stalled", "gave_up", "expired", "blocked", "done"];
 const NOTIFY = /^(DONE|WAITING|EXPIRED|GAVE_UP|STUCK) /;
 
@@ -590,6 +590,27 @@ async function cmdRetry(ctx, [thread]) {
   });
 }
 
+// 수동 취소 — 더 돌 이유가 없어진 스레드(예: 줄 서 있는 사이 이미 고쳐진 신호, 10-10)를 이유를 적어 끝낸다. 그래프를 열지 않고 장부만 닫는다.
+// 끝 상태는 자동 취소와 같은 expired — 틱·재개·이어가기가 다시 건드리지 않고 사본은 평소대로 치워진다. 판정 집계(M1·M4)가 끝난 것으로 세게 expired 사건(kind cancel)을 남긴다.
+// 시킨 쪽이 이미 아는 일이라 EXPIRED 알림은 내지 않는다. 돌고 있던 분리 실행은 건드리지 않는다(제 시간 제한으로 끝나고 결과는 읽히지 않는다).
+// 실행 중인 스레드는 잠금이 거부한다. 이미 끝난 스레드는 기록을 바꾸지 않는다.
+const CANCELLABLE = ["queued", "continue", "held", "failed", "running", "waiting"];
+function cmdCancel(ctx, [thread], flags) {
+  checkThread(thread);
+  const reason = typeof flags.reason === "string" ? flags.reason.replace(/\s+/g, " ").trim().slice(0, 200) : "";
+  if (!reason) throw new UsageError("cancel <스레드> --reason <이유> — 이유 없이는 취소하지 않는다");
+  if (!ctx.store.getThread(thread)) { say(`ERROR ${thread} not-found 없는 스레드`); return 1; }
+  return withLock(ctx, thread, async () => {
+    const row = ctx.store.getThread(thread); // 잠근 뒤 다시 읽는다 — 그 사이 끝났을 수 있다
+    if (!row) { say(`ERROR ${thread} not-found 없는 스레드`); return 1; }
+    if (!CANCELLABLE.includes(row.status)) { say(`ERROR ${thread} ${row.status} 이미 끝난 스레드는 취소하지 않는다`); return 1; }
+    ctx.store.updateThread(thread, { status: "expired", note: `수동 취소 — ${reason}`, notified: 1 }, ctx.now());
+    ctx.metric("expired", { thread, graph: row.graph, kind: "cancel", status: row.status, reason });
+    say(`OK ${thread} cancelled ${row.status} → expired — ${reason}`);
+    return 0;
+  });
+}
+
 // 답만 적는다 — 그래프를 열지 않고, 잠금도 잡지 않고, 정리(sweep)도 하지 않는다(1초 안에). 진행은 다음 틱이 한다.
 function cmdAnswer(ctx, [thread, decision, qidArg]) {
   checkThread(thread);
@@ -1048,7 +1069,7 @@ async function main() {
   const cmd = pos.shift();
   active.cmd = cmd;
   if (!cmd || cmd === "help" || flags.help) {
-    raw("사용: run.mjs tick [--verbose] | answer <스레드> approved|rejected | start <그래프> <스레드> [--topic 값] [--llm] [--queue] | resume <스레드> approved|rejected | retry <스레드> | status [<스레드>] [--json] [--all] | sweep | gc [--days N] | selftest");
+    raw("사용: run.mjs tick [--verbose] | answer <스레드> approved|rejected | start <그래프> <스레드> [--topic 값] [--llm] [--queue] | resume <스레드> approved|rejected | retry <스레드> | cancel <스레드> --reason <이유> | status [<스레드>] [--json] [--all] | sweep | gc [--days N] | selftest");
     return cmd ? 0 : 1;
   }
   const st = selftest();
@@ -1080,6 +1101,7 @@ async function main() {
   active.ctx = ctx; active.store = store; active.now = now; active.metric = metric;
   if (cmd === "status") return cmdStatus(ctx, pos, flags);
   if (cmd === "answer") return cmdAnswer(ctx, pos);
+  if (cmd === "cancel") return cmdCancel(ctx, pos, flags); // 일을 줄이는 명령 — PAUSED 여도 받는다(답 기록과 같다)
   if (cmd === "tick") return cmdTick(ctx);
 
   const paused = fs.existsSync(cfg.pausedPath);

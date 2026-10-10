@@ -129,6 +129,50 @@ test("승인 기한 만료 → 자동 취소(EXPIRED), 재개·이어가기 거�
   assert.equal(readPending(sb), "");
 });
 
+// 10-10: 이미 고쳐진 신호를 붙잡고 AI 단계 앞에 선 스레드를 닫을 공식 길이 없었다(DB 를 손으로 고칠 수는 없다).
+test("수동 취소(cancel): 이유를 적어 끝내면 틱·재개·이어가기가 건드리지 않고, 자동 만료 알림도 나가지 않는다 · 끝난 스레드·이유 없는 취소는 거부", (t) => {
+  const sb = sandbox(t);
+  assert.equal(run(sb.env, ["start", "smoke", "k1"], at(T0)).code, 0);
+  assert.match(readPending(sb), /"thread":"k1"/);
+  const noReason = run(sb.env, ["cancel", "k1"], at(T0));
+  assert.equal(noReason.code, 1, "이유 없는 취소는 거부");
+  assert.equal(JSON.parse(run(sb.env, ["status", "k1", "--json"], at(T0)).out).status, "waiting");
+
+  const r = run(sb.env, ["cancel", "k1", "--reason", "이미 고쳐진 신호"], at(T0 + HOUR));
+  assert.equal(r.code, 0, r.out + r.err);
+  assert.match(r.first, /^OK k1 cancelled /);
+  assert.ok(!r.lines.some((l) => /^EXPIRED /.test(l)), "취소는 자동 만료 알림을 내지 않는다");
+  const v = JSON.parse(run(sb.env, ["status", "k1", "--json"], at(T0 + HOUR)).out);
+  assert.equal(v.status, "expired");
+  assert.match(v.note, /수동 취소 — 이미 고쳐진 신호/);
+  assert.doesNotMatch(readPending(sb), /"thread":"k1"/, "승인 대기 목록에서 빠진다");
+  assert.equal(run(sb.env, ["sweep"], at(T0 + 2 * HOUR)).first, "NO_REPLY", "뒤 sweep 도 EXPIRED 를 내지 않는다");
+
+  assert.equal(run(sb.env, ["resume", "k1", "approved"], at(T0 + 2 * HOUR)).code, 1);
+  assert.equal(run(sb.env, ["retry", "k1"], at(T0 + 2 * HOUR)).code, 1);
+  assert.equal(run(sb.env, ["tick"], at(T0 + 2 * HOUR)).code, 0);
+  assert.equal(counts(sb).finalize ?? 0, 0, "취소된 스레드는 마무리 노드를 돌리지 않는다");
+  const again = run(sb.env, ["cancel", "k1", "--reason=두 번째"], at(T0 + 2 * HOUR));
+  assert.equal(again.code, 1);
+  assert.match(again.first, /^ERROR k1 expired /);
+
+  // 끝난 스레드는 취소하지 않는다(기록을 바꾸지 않는다)
+  assert.equal(run(sb.env, ["start", "smoke", "k2"], at(T0)).code, 0);
+  assert.match(run(sb.env, ["resume", "k2", "approved"], at(T0)).first, /^DONE k2 /);
+  const done = run(sb.env, ["cancel", "k2", "--reason=끝난 것"], at(T0));
+  assert.equal(done.code, 1);
+  assert.match(done.first, /^ERROR k2 done /);
+  assert.equal(JSON.parse(run(sb.env, ["status", "k2", "--json"], at(T0)).out).status, "done");
+  assert.match(run(sb.env, ["cancel", "nope", "--reason=없는 것"], at(T0)).first, /^ERROR nope not-found /);
+
+  // 대기열(아직 시작 안 함)도 취소된다 — 틱이 시작하지 않는다
+  assert.equal(run(sb.env, ["start", "smoke", "k3", "--queue"], at(T0)).code, 0);
+  assert.match(run(sb.env, ["cancel", "k3", "--reason=대기열 취소"], at(T0)).first, /^OK k3 cancelled /);
+  const before = counts(sb).collect ?? 0;
+  assert.equal(run(sb.env, ["tick"], at(T0 + HOUR)).code, 0);
+  assert.equal(counts(sb).collect ?? 0, before, "취소된 대기열은 시작하지 않는다");
+});
+
 test("gc 뒤 상태 폴더 어디에도 평문 표식이 남지 않는다, 권한 700/600", (t) => {
   const sb = sandbox(t);
   const mark = `PLAINTEXT-CANARY-${randomUUID()}`;

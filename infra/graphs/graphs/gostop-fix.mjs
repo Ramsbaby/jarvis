@@ -167,12 +167,17 @@ export function build({ checkpointer, llm, tools }) {
     const lc = await tools.run("git.last-commit-time", { repo });
     const busy = busyReason(repo, tools.now(), lc.code === 0 ? lc.stdout.trim() : null);
     if (busy) throw tools.hold(`${busy} — 대화 작업과 겹치지 않게 보류`, "busy");
-    const rev = String(s.signal?.rev ?? "HEAD");
+    // 소크 신호는 지금 master 에서 재현한다(10-10). 접수(04:30)와 시작 사이에 당직·대화가 먼저 고치는 일이 흔해, 신호 커밋(signal.rev)에 고정하면
+    // 이미 고쳐진 문제를 옛 코드에서 늘 재현하고 진단·수정에 AI 를 쓴다(씨앗 203013939 한 스레드 477만 토큰). 지금 코드에서 두 번 초록이면
+    // not_reproduced 로 AI 0회에 끝난다. 아직 남은 문제면 master 에서도 재현되고, 씨앗 경로가 달라져 안 잡히면 매일 밤 새 씨앗의 소크가 다시 잡는다.
+    // 벤치·주입·CI 는 그 커밋이 곧 문제라 신호 커밋 그대로.
+    const rev = s.signal?.source === "soak" ? "master" : String(s.signal?.rev ?? "HEAD");
     const r = await tools.run("git.rev-parse", { repo, rev });
     const base = r.code === 0 ? r.stdout.trim() : "";
     if (!/^[0-9a-f]{40}$/.test(base)) throw new Error(`대상 커밋을 찾지 못함: ${rev}(코드 ${r.code})`);
     const stage = process.env.LG_GOSTOP_STAGE === "1a" ? "1a" : "1b";
-    return { mode: tools.mode, base, stage, log: [`preflight ${base.slice(0, 8)} ${tools.mode} ${stage}`] };
+    const moved = s.signal?.source === "soak" && s.signal?.rev && !base.startsWith(String(s.signal.rev)) ? ` · 신호 ${String(s.signal.rev).slice(0, 8)} → 지금 master` : "";
+    return { mode: tools.mode, base, stage, log: [`preflight ${base.slice(0, 8)} ${tools.mode} ${stage}${moved}`] };
   }
 
   // ② 역사 없는 사본(설계 §2): git archive → work(사본)·clean(깨끗한 내보내기)에 비밀·설정을 빼고 푼다 → pub get --offline.
@@ -871,7 +876,13 @@ export function build({ checkpointer, llm, tools }) {
     // 누설로 진단을 안 한 사례는 채점하지 않는다(분모에서 뺀다 — 진단 실패와 다르다, 재검토 B 하4)
     const match = bench && !s.leak ? diagMatch(bench.expect, s.diag, status) : null;
     let summary = null;
-    if (s.diag || status === "flaky" || status === "not_reproduced") {
+    if (status === "not_reproduced" && !s.diag) {
+      // 재현되지 않은 신호는 요약할 진단이 없다 — 정해진 문장으로 적고 AI 를 부르지 않는다(10-10: 이미 고쳐진 소크 신호는 AI 0회로 끝난다)
+      const at = String(s.base ?? "").slice(0, 8);
+      summary = s.signal?.source === "soak"
+        ? `지금 코드(${at})에서 같은 씨앗을 두 번 돌렸지만 문제가 나오지 않았다. 신호가 잡힌 뒤(${String(s.signal.rev ?? "?").slice(0, 8)}) 이미 고쳐졌거나 씨앗의 진행이 달라진 것이다. 할 일 없음 — 남아 있는 문제라면 밤샘 점검의 새 씨앗이 다시 잡는다.`
+        : `대상 커밋(${at})에서 두 번 돌렸지만 문제가 나오지 않았다. 할 일 없음.`;
+    } else if (s.diag || status === "flaky" || status === "not_reproduced") {
       // 주인님용 요약 — haiku 1회(설계 ⑭). 덤이다: 실패·상한 보류·시간 부족이어도 고칠 안은 남기고 넘어간다(H3 하 — 요약 때문에 대기열을 묶지 않는다)
       try {
         const facts = JSON.stringify({ sigkey: s.sigkey, status, note, repro: s.repro, diag: s.diag ? { hypothesis: s.diag.hypothesis, files: s.diag.files, rule_gap: s.diag.rule_gap, rule_gap_detail: s.diag.rule_gap_detail, confidence: s.diag.confidence } : null, scope: s.scope?.reasons ?? [],
