@@ -34,14 +34,10 @@ yellow(){ printf '\033[33m%s\033[0m\n' "$1"; }
 check() {
   local name="$1"
   shift
-  # [오픈클로 이식 2026-09-10] 디스코드를 전면 제거했다. 그 트리를 보는 검사 15건이 영구 FAIL 이 되고,
-  # jarvis-auditor 가 FAIL 수만큼 매일 코더 티켓을 만든다(2026-09-10 FAIL 1 → 19 급증).
-  # "없어서 실패"와 "일부러 없앰"을 가르지 않으면 감사 전체가 못 쓰게 된다.
-  # 재개: rm ~/.openclaw-data/runtime/state/stopped/discord-removed (검사도 함께 되살아난다)
-  if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/discord-removed" ]] && [[ "$* $name" == */discord/* || "$name" == *"discord"* || "$name" == *"Discord"* ]]; then
-    skip "$name (디스코드 의도적 제거 — 2026-09-10)"
-    return 0
-  fi
+  # [2026-10-10] 여기 있던 "디스코드 제거 플래그가 있으면 이름·명령에 discord 가 든 검사를 SKIP" 글롭을 없앴다.
+  #   디스코드 봇 전용 검사 16건은 아래에서 통째로 뺐고(대상이 영구히 없다), 글롭은 그 뒤에도 살아 있는 검사
+  #   "RAG query returns data"(명령 문자열에 /discord/ 경로가 있었다)를 09-10 부터 조용히 SKIP 시키고 있었다 —
+  #   건너뛴 점검이 '실패 없음'으로 읽혀 91개 중 26개가 아무것도 재지 않은 채 "65/91 passed" 로 보고됐다.
   if "$@" >/dev/null 2>&1; then
     green "✅ PASS: $name"
     ((PASS++))
@@ -93,10 +89,6 @@ echo "  $(date '+%Y-%m-%d %H:%M:%S')"
 echo "═══════════════════════════════════════════"
 echo ""
 
-# --- Process Tests ---
-echo "▶ Process Health"
-ci_check "Discord bot running" bash -c 'pgrep -f "discord-bot.js|orchestrator.mjs" > /dev/null 2>&1'
-
 # --- File Structure Tests ---
 echo ""
 echo "▶ File Structure"
@@ -107,7 +99,6 @@ check "RAG engine exists" test -f "$JARVIS_RAG_HOME/lib/rag-engine.mjs"
 check "RAG query script exists" test -f "$JARVIS_RAG_HOME/lib/rag-query.mjs"
 check "RAG indexer exists" test -f "$JARVIS_RAG_HOME/bin/rag-index.mjs"
 check "ask-claude.sh exists" test -f "$BOT_HOME/bin/ask-claude.sh"
-check "discord-bot.js exists" test -f "$BOT_HOME/discord/discord-bot.js"
 check "tasks.json exists" test -f "$BOT_HOME/config/tasks.json"
 ci_check "monitoring.json exists" test -f "$BOT_HOME/config/monitoring.json"
 
@@ -115,39 +106,24 @@ ci_check "monitoring.json exists" test -f "$BOT_HOME/config/monitoring.json"
 echo ""
 echo "▶ Dependencies"
 check "LanceDB package installed" test -d "${HOME}/projects/jarvis/rag/node_modules/@lancedb/lancedb"   # 2026-09-10: discord/ 제거로 경로 이동 — RAG 실제 설치 위치
-check "OpenAI package installed" test -d "${HOME}/projects/jarvis/infra/discord/node_modules/openai"   # 2026-09-10: runtime/discord 제거 후 infra/discord 잔존본이 실사용처
 check "apache-arrow installed" test -d "${HOME}/projects/jarvis/rag/node_modules/apache-arrow"   # 2026-09-10: RAG 실제 설치 위치
-check "discord-bot.js syntax valid" node --check "$BOT_HOME/discord/discord-bot.js"
-check "handlers.js syntax valid" node --check "$BOT_HOME/discord/lib/handlers.js"
-check "handlers.js no-undef (ESLint)" bash -c "
-  ESLINT=\$(command -v eslint 2>/dev/null \
-    || ls '$BOT_HOME/discord/node_modules/.bin/eslint' 2>/dev/null \
-    || echo '')
-  [ -z \"\$ESLINT\" ] && { echo 'eslint not found'; exit 1; }
-  \"\$ESLINT\" --no-eslintrc --no-ignore \
-    --rule '{\"no-undef\": \"error\"}' \
-    --env es2022,node \
-    --parser-options '{\"ecmaVersion\":2022,\"sourceType\":\"module\"}' \
-    '$BOT_HOME/discord/lib/handlers.js' 2>&1 | grep -q ' error ' && exit 1 || exit 0
-"
 
 # --- RAG Tests ---
 echo ""
 echo "▶ RAG Engine"
 
-# Run initial index if LanceDB directory doesn't exist
-if [[ ! -d "$BOT_HOME/rag/lancedb" ]]; then
-  echo "  ℹ️  Running initial RAG index..."
-  NODE_PATH="$BOT_HOME/discord/node_modules" node "$BOT_HOME/bin/rag-index.mjs" 2>/dev/null || true
-fi
-
 check "LanceDB directory exists" test -d "$BOT_HOME/rag/lancedb"
+# [2026-10-10] 이 검사는 $BOT_HOME/discord/node_modules·$BOT_HOME/lib/rag-query.mjs(둘 다 없다)를 읽어 영구 FAIL 이 될 것이었는데,
+#   위 check() 의 discord 글롭에 걸려 09-10 부터 SKIP 으로만 남았다 — 살아 있는 RAG 질의를 한 번도 못 쟀다.
+#   실제 엔진 위치(${JARVIS_RAG_HOME})로 옮기고, "문서를 한 건이라도 돌려줬는가"(### From: 줄)로 판정한다 —
+#   머리말만 있는 빈 결과는 통과가 아니다.
+#   env -u: RAG 엔진은 JARVIS_RAG_HOME 을 '데이터 폴더'로 읽는데 이 스크립트는 같은 이름을 '코드 폴더'로 쓴다(이름 충돌).
+#   자식에게 새어 나가면 엉뚱한 폴더를 보고 빈 결과가 나온다(10-10 시험에서 실측) — 데이터 위치는 BOT_HOME/rag 로 찾게 둔다.
 check "RAG query returns data" bash -c "
-  for i in {1..3}; do
-    result=\$(NODE_PATH=$BOT_HOME/discord/node_modules timeout 10 node $BOT_HOME/lib/rag-query.mjs 'system health' 2>&1 | grep -v '^[[:space:]]*\$' | grep -v '^\[rag-query\] ERROR' | head -1)
-    if [[ -n \"\$result\" && \"\$result\" =~ [^[:space:]] ]]; then
-      exit 0
-    fi
+  T=\$(command -v gtimeout || command -v timeout || true)
+  for i in 1 2 3; do
+    out=\$(env -u JARVIS_RAG_HOME \$T 20 node '$JARVIS_RAG_HOME/lib/rag-query.mjs' 'system health' 2>/dev/null)
+    if printf '%s\n' \"\$out\" | grep -q '^### From:'; then exit 0; fi
     [[ \$i -lt 3 ]] && sleep 2
   done
   exit 1
@@ -185,15 +161,6 @@ echo ""
 echo "▶ ask-claude.sh Integration"
 check "ask-claude.sh has RAG integration" grep -q "rag-query.mjs" "$BOT_HOME/lib/context-loader.sh"
 check "ask-claude.sh has fallback" grep -q "Fallback" "$BOT_HOME/lib/llm-gateway.sh"
-
-# --- Discord Bot Features ---
-echo ""
-echo "▶ Discord Bot Features"
-check "ntfy integration" grep -q "sendNtfy" "$BOT_HOME/discord/discord-bot.js"
-check "RAG context injection" grep -q "ragContext" "$BOT_HOME/discord/lib/claude-runner.js"
-check "/search command" grep -q "'search'" "$BOT_HOME/discord/discord-bot.js"
-check "/threads command" grep -q "'threads'" "$BOT_HOME/discord/discord-bot.js"
-check "/alert command" grep -q "'alert'" "$BOT_HOME/discord/discord-bot.js"
 
 # --- Cron Tests ---
 # [2026-09-11] crontab 만 보고 판정하던 검사 6건이 상시 FAIL 이었다.
@@ -317,23 +284,19 @@ _sched_load
 echo ""
 echo "▶ Cron Jobs (crontab ∪ 오픈클로 잡)"
 check_sched "RAG indexer cron exists" 'rag-index' 'rag-index'
-check_sched "morning-standup cron exists" 'morning-standup|smart-standup' 'morning-standup'
+# [2026-10-10] morning-standup·weekly-kpi 은퇴 점검 삭제 — tasks.json 에서 꺼졌고(enabled:false) 오픈클로 잡도 없다(measure-kpi 잡은 꺼짐).
+#   은퇴한 것을 매일 "건너뜀"으로 세면 재지 않은 점검이 통과처럼 읽힌다. 되살릴 때는 이 자리에 check_sched 한 줄을 다시 넣는다.
 check_sched "e2e-cron.sh registered" 'e2e-cron' 'e2e-cron'
-# [2026-09-11] weekly-kpi 는 라이브 tasks.json·crontab·오픈클로 잡 어디에도 없다.
-# 남은 흔적은 effective-tasks.json 백업(최신 2026-08-12)과 autonomy-levels.md 문서뿐이고,
-# 스크립트(measure-kpi.sh)만 살아 있다. 폐지 기록이 없어 "없앴다"고 단정하지 않고 WARN 으로 남긴다.
-# [2026-09-26] 폐지 기록을 찾았다 — 2026-09-09 tasks.json 에서 "미등록 고아"로 제거(capability-ledger.md),
-#   스크립트를 돌리던 measure-kpi 는 2026-09-10 "1회성 측정일 경과"로 중지. 둘 중 하나라도 되살리면 다시 요구한다.
-out_check "weekly-kpi cron exists" weekly-kpi 'weekly-kpi|measure-kpi' sched_has 'weekly-kpi|measure-kpi'
 check_sched "security-scan cron exists" 'security-scan' 'security-scan'
 check_sched "rag-health cron exists" 'rag-health' 'rag-health'
 
 # --- Phase 3~5 Tasks ---
 echo ""
 echo "▶ Phase 3~5 Context Files"
-for task in weekly-kpi monthly-review security-scan rag-health profile-weekly cost-monitor; do
-  ctx_check "$task context exists" "$task" test -f "$BOT_HOME/context/$task.md"
-done
+# [2026-10-10] 컨텍스트 파일은 옛 실행기(bot-cron.sh)가 tasks.json 의 켜진 태스크에만 읽는다. weekly-kpi·monthly-review·rag-health·
+#   profile-weekly·cost-monitor 는 전부 꺼졌거나 오픈클로 잡으로 옮겨가 파일을 읽는 쪽이 없어 매일 SKIP 이었다 → 삭제.
+#   살아 있는 security-scan 만 남긴다.
+ctx_check "security-scan context exists" security-scan test -f "$BOT_HOME/context/security-scan.md"
 check "autonomy-levels.md exists" test -f "$BOT_HOME/config/autonomy-levels.md"
 ci_check "company-dna.md SSoT" test -f "$BOT_HOME/config/company-dna.md"
 check "e2e-cron.sh executable" test -x "$BOT_HOME/scripts/e2e-cron.sh"
@@ -355,40 +318,12 @@ check "ask-claude.sh has cross-team context" grep -q "Cross-team Context" "$BOT_
 check "ask-claude.sh has insight filter" grep -q "system-health|rate-limit-check" "$BOT_HOME/lib/insight-recorder.sh"
 check "gen-inventory.sh exists" test -x "$BOT_HOME/scripts/gen-inventory.sh"
 check "cron-catalog.md exists" test -f "${VAULT_DIR:-$HOME/vault}/01-system/cron-catalog.md"
-ctx_check "council reads shared-inbox" council-insight grep -q "shared-inbox" "$BOT_HOME/context/council-insight.md"
-check "pending-tasks atomic write (renameSync)" grep -q "renameSync" "$BOT_HOME/discord/lib/handlers.js"
-check "apology cooldown implemented" grep -q "apologyCooldownFile" "$BOT_HOME/discord/discord-bot.js"
-check "active-session cleanup in finally" grep -q "active-session.*finally\|finally.*active-session\|activeProcesses.size === 0" "$BOT_HOME/discord/lib/handlers.js"
 check "semaphore TOCTOU guard (stat fallback)" grep -q "stat.*2>/dev/null.*echo.*0\|2>/dev/null || echo" "$BOT_HOME/bin/semaphore.sh"
 check "watchdog active_ts validation" grep -q "active_ts.*\^.*0-9" "$BOT_HOME/scripts/watchdog.sh"
 check "tasks.json disk-alert has allowEmptyResult" bash -c "jq -e '.tasks[] | select(.id==\"disk-alert\") | .allowEmptyResult' '$BOT_HOME/config/tasks.json' > /dev/null 2>&1"
-check "streaming GC hint in finalize" grep -q "this\.buffer = ''" "$BOT_HOME/discord/lib/streaming.js"
-check "handleMessage error rate OK (smoke)" bash -c "
-  python3 - <<'PYEOF'
-import json, sys
-from datetime import datetime, timezone, timedelta
-cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
-errors = total = 0
-try:
-    with open('$BOT_HOME/logs/discord-bot.jsonl') as f:
-        for line in f:
-            try:
-                d = json.loads(line)
-                ts = d.get('ts', '')
-                if not ts: continue
-                t = datetime.fromisoformat(ts.replace('Z', '+00:00'))
-                if t < cutoff: continue
-                msg = d.get('msg', '')
-                if msg == 'handleMessage error': errors += 1
-                elif msg in ('Starting Claude session', 'Session summary pre-injected for resume safety'): total += 1
-            except: pass
-except: sys.exit(0)
-if errors >= 5 and total > 0 and errors / max(total, 1) > 0.5:
-    print(f'handleMessage errors: {errors}/{max(total,1)} ({errors/max(total,1)*100:.0f}%)')
-    sys.exit(1)
-sys.exit(0)
-PYEOF
-"
+# [2026-10-10] 디스코드 봇 전용 검사 삭제: "pending-tasks atomic write"·"apology cooldown"·"active-session cleanup"·"streaming GC hint"
+#   (봇 소스 파일 grep — 봇은 09-10 제거) · "handleMessage error rate OK (smoke)"(logs/discord-bot.jsonl 이 없으면 `except: sys.exit(0)` 로
+#   무조건 통과하던 빈 점검 — 통과 65개 중 하나가 아무것도 안 재고 있었다).
 
 # Cron-catalog vs actual crontab consistency
 # Note: cron-catalog.md includes both tasks.json scheduled tasks AND actual crontab entries
@@ -469,11 +404,7 @@ else
   yellow "⚠️  WARN: wiki facts have source tags — 도입(2026-04-15) 뒤 태그 없는 줄 ${_wt%% *} · 추출기 회귀 의심"; ((WARN++))
 fi
 
-# 5. bot-quality-check 최근 실행 (24시간 내 로그 갱신 확인)
-out_check "bot-quality-check ran (last 24h)" bot-quality-check 'bot-quality' bash -c "
-  log='$BOT_HOME/logs/bot-quality-check.log'
-  [[ -f \"\$log\" ]] && find \"\$log\" -mmin -1440 | grep -q .
-"
+# 5. (삭제 2026-10-10) bot-quality-check 최근 실행 — 디스코드 봇 로그 의존 잡이라 봇 제거(09-10)로 분석 대상이 사라졌다. 매일 SKIP 이었다.
 
 # 6. 크론 결과물 환각 키워드 검사 (LLM 자기반성 패턴 과다 = 품질 문제)
 warn_check "cron results no hallucination patterns" bash -c "
@@ -557,7 +488,8 @@ if [[ "$SEND_NTFY" == "--ntfy" ]]; then
     -d "E2E test passed at $(date '+%H:%M:%S')" \
     "https://ntfy.sh/${NTFY_TOPIC:-test-topic}"
 else
-  skip "ntfy test send (use --ntfy flag to test)"
+  # 선택 시험(--ntfy)을 요청하지 않은 것은 '건너뛴 점검'이 아니다 — SKIP 으로 세면 매일 건너뜀 1건이 고정된다.
+  echo "  ℹ️  ntfy 송신 시험은 --ntfy 로만 돌린다(이번 실행엔 요청 없음 — 건너뜀으로 세지 않음)"
 fi
 
 # --- Summary ---

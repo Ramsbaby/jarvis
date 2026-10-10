@@ -293,14 +293,14 @@ check_cron_errors() {
 
 # ── 5. E2E 테스트 결과 ───────────────────────────────────────────────────────
 # e2e-cron.sh(오픈클로 잡 jarvis-e2e-cron, 매일 05:00)가 남기는 마지막 RESULT 줄만 본다.
-#   "RESULT: 62/90 passed (exit: 0)"  또는  "RESULT: 59/90 passed, 3 FAILED (exit: 1)"
+#   "RESULT: 65/65 passed (exit: 0)"  또는  "RESULT: 59/62 passed, 3 FAILED (exit: 1)"  (분모 = 실제로 잰 것, 건너뜀은 ", N skipped" 로 따로 — 10-10 이전엔 건너뜀이 분모에 섞여 "65/91"이 실패처럼 읽혔다)
 check_e2e() {
   local f="$BOT_HOME/logs/e2e-cron.log"
   if [[ ! -f "$f" ]]; then
     add_result "e2e" "WARN" "아직 미실행"
     return
   fi
-  local last ts pass total failed
+  local last ts pass total failed skipped note
   last=$(grep 'RESULT:' "$f" 2>/dev/null | tail -1 || true)
   if [[ -z "$last" ]]; then
     add_result "e2e" "WARN" "RESULT 줄 없음"
@@ -310,17 +310,19 @@ check_e2e() {
   pass=$(grep -oE '[0-9]+/[0-9]+ passed' <<<"$last" | cut -d/ -f1 || echo 0)
   total=$(grep -oE '[0-9]+/[0-9]+ passed' <<<"$last" | cut -d/ -f2 | cut -d' ' -f1 || echo 0)
   failed=$(grep -oE '[0-9]+ FAILED' <<<"$last" | grep -oE '[0-9]+' || echo 0)
-  pass=$((${pass:-0})); total=$((${total:-0})); failed=$((${failed:-0}))
+  skipped=$(grep -oE '[0-9]+ skipped' <<<"$last" | grep -oE '[0-9]+' || echo 0)
+  pass=$((${pass:-0})); total=$((${total:-0})); failed=$((${failed:-0})); skipped=$((${skipped:-0}))
+  note=""; (( skipped > 0 )) && note=" · 건너뜀 ${skipped}(재지 않음)"
 
   local age_h=$(( ( $(date +%s) - $(epoch_of "$ts") ) / 3600 ))
   if (( age_h > 48 )); then
     add_result "e2e" "WARN" "마지막 결과 ${age_h}h 전 (${ts}) — 잡 정체"
   elif (( failed >= 3 )); then
-    add_result "e2e" "FAIL" "${failed}개 실패 / ${pass}/${total} 통과"
+    add_result "e2e" "FAIL" "${failed}개 실패 / ${pass}/${total} 통과${note}"
   elif (( failed > 0 )); then
-    add_result "e2e" "WARN" "${failed}개 실패 / ${pass}/${total} 통과"
+    add_result "e2e" "WARN" "${failed}개 실패 / ${pass}/${total} 통과${note}"
   else
-    add_result "e2e" "OK" "${pass}/${total} 통과"
+    add_result "e2e" "OK" "${pass}/${total} 통과${note}"
   fi
 }
 

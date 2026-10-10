@@ -73,13 +73,31 @@ run_cron() {   # <가짜 e2e-test.sh 본문> → e2e-cron.sh 의 종료코드와
   mkdir -p "$jh/infra/scripts" "$bh"
   printf '#!/usr/bin/env bash\n%s\n' "$2" > "$jh/infra/scripts/e2e-test.sh"
   chmod +x "$jh/infra/scripts/e2e-test.sh"
-  OPENCLAW_JOB=1 JARVIS_NO_EXTERNAL=1 BOT_HOME="$bh" JARVIS_HOME="$jh" bash "$HERE/e2e-cron.sh" >/dev/null 2>&1
+  [[ -n "${3:-}" ]] && { mkdir -p "$bh/results/e2e-health"; printf '%s\n' "$3" | while IFS='|' read -r d body; do printf '%b\n' "$body" > "$bh/results/e2e-health/$d.txt"; done; }
+  OPENCLAW_JOB=1 JARVIS_NO_EXTERNAL=1 BOT_HOME="$bh" JARVIS_HOME="$jh" bash "$HERE/e2e-cron.sh" >"$bh/stdout.txt" 2>/dev/null
   echo "rc=$? $(grep 'RESULT:' "$bh/logs/e2e-cron.log" | tail -1 | sed 's/^\[[^]]*\] //')"
 }
+cron_stdout() { cat "$TMP/bh-$1/stdout.txt" 2>/dev/null; }
 expect "정상 종료 → 0"                        "$(run_cron ok 'echo "✅ PASS: a"; echo "  Results: 1 passed"; exit 0')" "rc=0 RESULT: 1/1 passed (exit: 0, suite rc=0)"
 expect "실패 줄 있는 1 → 1(기존 경로)"         "$(run_cron fail 'echo "❌ FAIL: a"; echo "  Results: 0 passed"; exit 1')" "rc=1 RESULT: 0/1 passed, 1 FAILED (exit: 1, suite rc=1)"
 expect "요약 전에 죽음 → 실패로 기록"          "$(run_cron abort 'echo "✅ PASS: a"; exit 3')" "rc=1 RESULT: 1/2 passed, 1 FAILED (exit: 1, suite rc=3)"
 expect "실패 줄 없이 rc≠0 → 실패로 기록"       "$(run_cron silent 'echo "✅ PASS: a"; echo "  Results: 1 passed"; exit 2')" "rc=1 RESULT: 1/2 passed, 1 FAILED (exit: 1, suite rc=2)"
+
+echo "▶ e2e-cron.sh 건너뜀·연속 실패 보고 (10-10: '65/91 passed, exit 0, OK' 가 건너뜀 26을 실패처럼 보이게 하던 것)"
+# 건너뜀은 분모에서 빼고 따로 센다 — 재지 않은 칸이 통과로도 실패로도 읽히면 안 된다
+expect "건너뜀은 분모에서 뺀다"                 "$(run_cron skip 'echo "✅ PASS: a"; echo "⏭️  SKIP: b (사유 x)"; echo "  Results: 1 passed"; exit 0')" "rc=0 RESULT: 1/1 passed, 1 skipped (exit: 0, suite rc=0)"
+expect "통과 줄에 개수가 나간다(잡 출력 한 줄)"   "$(cron_stdout skip)" "E2E 점검 통과 1/1 · 실패 0 · 경고 0 · 건너뜀 1"
+expect "건너뜀은 이름까지 낸다"                 "$(cron_stdout skip)" "건너뜀(재지 않은 점검): b"
+expect "경고는 이름까지 낸다" \
+  "$(run_cron warn 'echo "✅ PASS: a"; echo "⚠️  WARN: w1 — not yet generated"; echo "  Results: 1 passed"; exit 0' >/dev/null; cron_stdout warn)" "경고: w1"
+# 같은 실패의 연속 일수 — 오늘 실패가 전부 들어 있는 직전 결과 파일이 며칠 이어지는가
+PREV3=$'2026-10-07|✅ PASS: a\n2026-10-08|❌ FAIL: a\n2026-10-09|❌ FAIL: a'
+run_cron streak 'echo "❌ FAIL: a"; echo "  Results: 0 passed"; exit 1' "$PREV3" >/dev/null
+expect "같은 실패가 이틀 이어졌으면 3일째"       "$(cron_stdout streak)" "어제와 같은 실패 1개 · 같은 실패 연속 3일째"
+expect "실패 이름이 한 줄로 나간다"              "$(cron_stdout streak)" "실패: a"
+run_cron fresh 'echo "❌ FAIL: z"; echo "  Results: 0 passed"; exit 1' $'2026-10-09|❌ FAIL: a' >/dev/null
+expect "새 실패는 1일째·어제와 같은 것 0개"      "$(cron_stdout fresh)" "어제와 같은 실패 0개 · 같은 실패 연속 1일째"
+expect "실패 있으면 종료코드 1(잡이 error 로 끝난다)" "$(run_cron failrc 'echo "❌ FAIL: a"; echo "  Results: 0 passed"; exit 1')" "rc=1 RESULT: 0/1 passed, 1 FAILED"
 
 echo "▶ e2e-cron.sh 작업 트리 표식"
 # 09-19~26 에 infra 미커밋 파일이 있는데도 매일 "clean" 이었다(.env 가 JARVIS_HOME 을 런타임으로 덮어써 git 실패 → 빈 목록).

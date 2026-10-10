@@ -8,6 +8,7 @@ if [[ -f "${HOME}/.openclaw-data/runtime/state/stopped/e2e-cron" ]] && [[ "${OPE
 fi
 
 # e2e-cron.sh - E2E 자가 진단 크론 래퍼 (L1: 자동 실행, 실패 시만 ntfy 에스컬레이션)
+# 종료코드: 실패(❌) 1건 이상이면 1 — 잡이 error 로 끝나 failureAlert(연속 2회)가 울린다. 건너뜀·경고만 있으면 0 이되 출력 한 줄에 개수와 이름을 낸다.
 # Usage: e2e-cron.sh
 # Schedule: 0 5 * * * (매일 05:00 crontab — rag-health 03:00 이후. 2026-09-04 주석을 실제 crontab 에 맞춤; 예전 주석 03:30 은 오기)
 set -uo pipefail
@@ -44,39 +45,13 @@ if [[ -f "${SCRIPTS_DIR}/gen-inventory.sh" ]]; then
   sleep 2  # file sync 대기
 fi
 
-# E2E 테스트 실행 (최대 2회 재시도)
-# Discord bot이 일시적으로 응답하지 않을 수 있으므로 재시도 메커니즘 추가
-MAX_RETRIES=2
-RETRY_COUNT=0
-
-while [[ $RETRY_COUNT -le $MAX_RETRIES ]]; do
-  # [2026-09-26] 예전엔 `$(...) || true` 바로 뒤에서 $? 를 읽어 항상 0 이었고, 그 값은 어디서도 쓰이지 않았다.
-  #   판정은 ❌ 줄 수로만 했으므로 **스위트가 중간에 죽으면 실패 줄 없이 "통과"로 기록**됐다.
-  #   파이프 앞쪽(e2e-test.sh)의 종료코드를 직접 받는다(set -e 가 없어 || true 는 필요 없다).
-  OUTPUT=$("${SCRIPTS_DIR}/e2e-test.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; exit "${PIPESTATUS[0]}")
-  E2E_EXIT_CODE=$?
-
-  # 실패한 항목에서 "Discord bot running" 만 있으면 봇 재시작 후 재시도
-  FAIL_COUNT=$(echo "$OUTPUT" | grep -c "❌ FAIL" || true)
-  if [[ $FAIL_COUNT -eq 1 ]]; then
-    FAILED_ITEM=$(echo "$OUTPUT" | grep "❌ FAIL" | sed 's/❌ FAIL: //')
-    if [[ "$FAILED_ITEM" == "Discord bot running" ]] && [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; then
-      log "Discord bot check failed, restarting bot and retrying... (attempt $((RETRY_COUNT+2))/$((MAX_RETRIES+1)))"
-
-      # Discord bot 재시작 시도
-      launchctl stop ai.jarvis.discord-bot 2>/dev/null || true
-      sleep 2
-      launchctl start ai.jarvis.discord-bot 2>/dev/null || true
-      sleep 3  # 봇 시작 대기
-
-      RETRY_COUNT=$((RETRY_COUNT+1))
-      continue
-    fi
-  fi
-
-  # 성공 또는 재시도 불가능한 실패이면 루프 탈출
-  break
-done
+# E2E 테스트 실행.
+# [2026-10-10] 예전엔 "Discord bot running" 한 건만 실패하면 launchctl 로 ai.jarvis.discord-bot 을 껐다 켜고 최대 2번 재시도했다.
+#   그 점검도 봇도 09-10 에 없어졌다 — 없는 서비스를 껐다 켜는 죽은 분기라 뺐다. 한 번만 돌린다.
+#   (예전 09-26 주석) `$(...) || true` 바로 뒤에서 $? 를 읽으면 항상 0 이다 — 파이프 앞쪽(e2e-test.sh)의 종료코드를 직접 받는다.
+#   스위트가 중간에 죽으면 실패 줄 없이 "통과"로 기록되던 것을 막으려는 것이다.
+OUTPUT=$("${SCRIPTS_DIR}/e2e-test.sh" 2>&1 | sed 's/\x1b\[[0-9;]*m//g'; exit "${PIPESTATUS[0]}")
+E2E_EXIT_CODE=$?
 
 # 작업 트리 상태를 결과 파일 첫 줄에 기록한다 (`# TREE: clean` | `# TREE: dirty (N) — 파일…`).
 # 편집 중인 트리를 검사한 FAIL 은 코드 고장이 아니라 미완성 편집일 수 있다 — 2026-09-05 05:00 에
@@ -124,10 +99,42 @@ PASS_COUNT=$(echo "$OUTPUT" | grep -c "✅ PASS" || true)
 FAIL_COUNT=$(echo "$OUTPUT" | grep -c "❌ FAIL" || true)
 WARN_COUNT=$(echo "$OUTPUT" | grep -c "⚠️  WARN" || true)
 SKIP_COUNT=$(echo "$OUTPUT" | grep -c "⏭️  SKIP" || true)
-TOTAL=$((PASS_COUNT + FAIL_COUNT + WARN_COUNT + SKIP_COUNT))
+# [2026-10-10] 분모는 '실제로 잰 것'(통과+실패+경고)이다. 예전엔 건너뜀까지 분모에 넣어 "65/91 passed, exit 0, OK" 로 기록됐다 —
+#   26개는 실패가 아니라 아무것도 재지 않은 건너뜀(디스코드 봇 전용 검사·은퇴 태스크)이었는데, 12일 내내 "26개 실패"처럼 읽혔고
+#   system-doctor 도 "65/91 통과"를 정상으로 표시했다. 건너뜀은 따로 센다 — 재지 않은 칸은 통과가 아니다.
+MEASURED=$((PASS_COUNT + FAIL_COUNT + WARN_COUNT))
 
-SUMMARY="${PASS_COUNT}/${TOTAL} passed"
+SUMMARY="${PASS_COUNT}/${MEASURED} passed"
 if [[ $FAIL_COUNT -gt 0 ]]; then SUMMARY="${SUMMARY}, ${FAIL_COUNT} FAILED"; fi
+if [[ $WARN_COUNT -gt 0 ]]; then SUMMARY="${SUMMARY}, ${WARN_COUNT} warned"; fi
+if [[ $SKIP_COUNT -gt 0 ]]; then SUMMARY="${SUMMARY}, ${SKIP_COUNT} skipped"; fi
+
+# 항목 이름만 뽑아 쉼표로 잇는다(최대 5개) — 잡 출력 한 줄로 감지기가 읽을 수 있게.
+names_of() {   # <마커 정규식> → "a, b, c (외 N)"
+  local list n
+  list=$(printf '%s\n' "$OUTPUT" | grep -E "$1" | sed -E 's/^.*(FAIL|WARN|SKIP): //' | sed -E 's/ — .*$//; s/ \(.*\)$//' | awk 'NF')
+  n=$(printf '%s\n' "$list" | grep -c . || true)
+  [[ "$n" -gt 0 ]] || return 0
+  printf '%s' "$(printf '%s\n' "$list" | head -5 | paste -sd',' - | sed 's/,/, /g')"
+  [[ "$n" -gt 5 ]] && printf ' (외 %d)' $((n - 5))
+  return 0
+}
+
+# 어제(직전 결과 파일들)와 같은 실패가 며칠째인가 — 같은 실패가 매일 똑같이 찍혀도 아무도 안 보던 구조(10-10 주간 감사)를 끊는다.
+#   오늘 실패가 모두 들어 있는 직전 결과 파일이 며칠 이어지는지 센다(결과 파일 기준, 없는 날은 건너뛴다).
+STREAK_DAYS=1; SAME_AS_PREV=0
+if [[ $FAIL_COUNT -gt 0 ]]; then
+  TODAY_FAILS=$(printf '%s\n' "$OUTPUT" | grep "❌ FAIL" | sed 's/.*❌ FAIL: //' | sort -u)
+  TODAY_N=$(printf '%s\n' "$TODAY_FAILS" | grep -c . || true)
+  _first=1
+  while IFS= read -r _f; do
+    [[ -f "$_f" ]] || continue
+    _prev=$(grep "❌ FAIL" "$_f" 2>/dev/null | sed 's/.*❌ FAIL: //' | sort -u)
+    _common=$(comm -12 <(printf '%s\n' "$TODAY_FAILS") <(printf '%s\n' "$_prev") | grep -c . || true)
+    if [[ $_first -eq 1 ]]; then SAME_AS_PREV=$_common; _first=0; fi
+    if [[ "$_common" -eq "$TODAY_N" ]]; then STREAK_DAYS=$((STREAK_DAYS + 1)); else break; fi
+  done < <(ls -1 "$(dirname "$RESULT_FILE")"/*.txt 2>/dev/null | grep -v -F "$RESULT_FILE" | sort -r)
+fi
 
 # Determine exit code (0 if no failures, 1 if there are failures)
 if [[ $FAIL_COUNT -gt 0 ]]; then
@@ -138,6 +145,10 @@ if [[ $FAIL_COUNT -gt 0 ]]; then
     ALERT_MSG="E2E 자가진단 실패 (${FAIL_COUNT}건): ${FAILED_ITEMS}"
 
     log "ALERT: ${ALERT_MSG}"
+    log "STREAK: 어제와 같은 실패 ${SAME_AS_PREV}개 · 같은 실패 연속 ${STREAK_DAYS}일째"
+    # 잡 출력(자동 작업 목록·감지기가 읽는 한 줄). 종료코드 1 과 함께 나간다.
+    echo "E2E 점검 실패 ${FAIL_COUNT}건 (통과 ${PASS_COUNT}/${MEASURED}) — 어제와 같은 실패 ${SAME_AS_PREV}개 · 같은 실패 연속 ${STREAK_DAYS}일째"
+    echo "실패: ${FAILED_ITEMS}"
 
     # ntfy 에스컬레이션
     NTFY_SERVER=$(jq -r '.ntfy.server' "$MONITORING" 2>/dev/null || echo "https://ntfy.sh")
@@ -159,6 +170,10 @@ if [[ $FAIL_COUNT -gt 0 ]]; then
 else
     log "RESULT: ${SUMMARY} (exit: 0, suite rc=${E2E_EXIT_CODE})"
     log "OK: ${SUMMARY}"
+    # 잡 출력 — "command ok with no output" 으로 끝나던 것을 결과 한 줄로. 경고·건너뜀이 있으면 이름까지 낸다.
+    echo "E2E 점검 통과 ${PASS_COUNT}/${MEASURED} · 실패 0 · 경고 ${WARN_COUNT} · 건너뜀 ${SKIP_COUNT}"
+    [[ $WARN_COUNT -gt 0 ]] && echo "경고: $(names_of '⚠️  WARN')"
+    [[ $SKIP_COUNT -gt 0 ]] && echo "건너뜀(재지 않은 점검): $(names_of '⏭️  SKIP')"
 
     # 오래된 결과 정리 (30일 초과)
     find "$(dirname "$RESULT_FILE")" -name "*.txt" -mtime +30 -delete 2>/dev/null || true
