@@ -60,6 +60,30 @@ export const DEFAULTS = {
 };
 
 /**
+ * 일일 상한에서 빼는 source.
+ *
+ * [2026-10-11] 'openclaw' = 오픈클로 대화·하위 세션의 사용 기록(jarvis-ledger 플러그인이 같은 원장에 적는다).
+ *   09-09 부터 적혔지만 claude-cli 경로라 비용이 0 이어서 문제가 없었다. 10-03 예비 경로(anthropic 직통 opus-5)가
+ *   생기면서 그 대화 비용(구독 토큰이라 청구액이 아닌 환산값)이 하루 7~23 USD 로 찍혔고, 배치용 일일 상한(10 USD)을
+ *   혼자 넘겨 밤 배치(skill-loop 채점)를 10-05·07·08·09·11 다섯 밤 통째로 막았다.
+ *   이 상한은 배치(ask-claude·stop-hook·batch-daily)의 폭주를 막는 장치다 — 대화 사용량은 구독 사용량 관문이 따로 본다.
+ *   원장에는 계속 적고(SSoT), 상한 계산에서만 뺀다. 뺀 금액은 daily-total·report 의 excluded* 칸에 그대로 보인다.
+ */
+export const DAILY_CAP_EXCLUDED_SOURCES = ['openclaw'];
+
+/** 일일 상한 판정에 쓰는 최근 24시간 집계 (배치 지출만) */
+export function readDailyCapLedger() {
+  return readLedger(null, 24, DAILY_CAP_EXCLUDED_SOURCES);
+}
+
+/** 상한 계산에서 뺀 최근 24시간 금액 (보이게 하려고 따로 센다) */
+export function readDailyExcludedCostUsd() {
+  const all = readLedger(null, 24);
+  const counted = readDailyCapLedger();
+  return Math.max(0, all.totalCostUsd - counted.totalCostUsd);
+}
+
+/**
  * 예산 초과 시 throw되는 에러
  * exit code 2로 처리하여 기존 error(1), timeout(124)와 구분
  */
@@ -76,9 +100,10 @@ export class BudgetExceededError extends Error {
  * token-ledger.jsonl 파싱
  * @param {string} [taskId] - 특정 태스크만 필터 (없으면 전체)
  * @param {number} [windowHours] - 최근 N시간 이내 항목만 (없으면 전체)
+ * @param {string[]} [excludeSources] - 이 source 값의 줄은 집계에서 뺀다 (없으면 전부 센다)
  * @returns {{ entries: object[], totalCostUsd: number, totalInputTokens: number, totalOutputTokens: number }}
  */
-export function readLedger(taskId = null, windowHours = null) {
+export function readLedger(taskId = null, windowHours = null, excludeSources = null) {
   let lines = [];
   try {
     lines = readFileSync(LEDGER_PATH, 'utf8').split('\n').filter(Boolean);
@@ -95,6 +120,7 @@ export function readLedger(taskId = null, windowHours = null) {
     try {
       const entry = JSON.parse(line);
       if (taskId && entry.task !== taskId) continue;
+      if (excludeSources && excludeSources.includes(entry.source)) continue;
       if (windowHours) {
         const ts = new Date(entry.ts).getTime();
         if (ts < cutoff) continue;
@@ -174,7 +200,7 @@ export class TokenBudgetGuard {
    */
   check() {
     const taskLedger = readLedger(this.taskId, DEFAULTS.windowHours);
-    const dailyLedger = readLedger(null, 24);
+    const dailyLedger = readDailyCapLedger();
 
     // Sonnet 5 토크나이저 보정: 레져 실측값에 보정 계수를 곱해 예상 비용 상향 조정
     // 동일 텍스트 기준 ~30% 더 많은 토큰 → 비용 과소평가 위험 완화
@@ -246,7 +272,7 @@ export class TokenBudgetGuard {
    */
   report() {
     const taskLedger = readLedger(this.taskId, DEFAULTS.windowHours);
-    const dailyLedger = readLedger(null, 24);
+    const dailyLedger = readDailyCapLedger();
     const factor = this.tokenizerCorrectionFactor;
     const adjustedTaskCost = taskLedger.totalCostUsd * factor;
     const adjustedDailyCost = dailyLedger.totalCostUsd * factor;
@@ -260,6 +286,8 @@ export class TokenBudgetGuard {
       dailyCostUsd: +adjustedDailyCost.toFixed(6),
       dailyCostRawUsd: +dailyLedger.totalCostUsd.toFixed(6),
       dailyCallCount: dailyLedger.entries.length,
+      dailyExcludedCostRawUsd: +readDailyExcludedCostUsd().toFixed(6),
+      dailyExcludedSources: DAILY_CAP_EXCLUDED_SOURCES,
       tokenizerCorrectionFactor: factor,
       maxBudgetUsd: this.maxBudgetUsd,
       dailyCapUsd: this.dailyCapUsd,
@@ -320,13 +348,15 @@ if (process.argv[1] && process.argv[1].endsWith('token-budget-guard.mjs')) {
     case 'daily-total': {
       const dailyCap = parseFloat(getArg('--daily-cap') || process.env.JARVIS_DAILY_CAP_USD || DEFAULTS.dailyCapUsd);
       const factor = parseFloat(getArg('--correction-factor') || process.env.JARVIS_TOKENIZER_CORRECTION_FACTOR || DEFAULTS.tokenizerCorrectionFactor);
-      const dailyLedger = readLedger(null, 24);
+      const dailyLedger = readDailyCapLedger();
       const adjustedCost = dailyLedger.totalCostUsd * factor;
       const output = {
         dailyCostUsd: +adjustedCost.toFixed(6),
         dailyCostRawUsd: +dailyLedger.totalCostUsd.toFixed(6),
         tokenizerCorrectionFactor: factor,
         dailyCallCount: dailyLedger.entries.length,
+        dailyExcludedCostRawUsd: +readDailyExcludedCostUsd().toFixed(6),
+        dailyExcludedSources: DAILY_CAP_EXCLUDED_SOURCES,
         dailyCapUsd: dailyCap,
         dailyUsedPct: +((adjustedCost / dailyCap) * 100).toFixed(1),
       };
