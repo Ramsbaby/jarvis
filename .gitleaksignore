@@ -1,0 +1,5 @@
+# 가짜 자리표시 계정 이름(x)으로 쓴 홈 폴더 경로가 든 시험 예시 글자. 비밀 열쇠·개인정보 아님.
+# 2026-10-11 주인님 승인("권고대로해줘") — 이 지문들만 예외, 규칙(hardcoded-home-path)은 그대로 둔다.
+53797b7190ef7240ca3edcd5d28ac3c33b2f48e2:infra/graphs/test/gostop.test.mjs:hardcoded-home-path:485
+374d552c25c83e207f0369b381a2491d68f53e5a:infra/graphs/test/rules.test.mjs:hardcoded-home-path:98
+82fb62f308ae115c4e3313af458078eebd23e9d0:infra/graphs/test/rules.test.mjs:hardcoded-home-path:188
