@@ -13,6 +13,7 @@
 
 import { BoundedMap } from './bounded-map.js';
 import { importOptional } from './optional-import.js';
+import { loadModelsConfig } from './models-config.js';
 import { writeFileSync, rmSync, readFileSync, existsSync, renameSync, appendFileSync, mkdirSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { homedir } from 'node:os';
@@ -132,7 +133,7 @@ function _buildBatchContent(messages) {
 
 const _BOT_HOME = process.env.BOT_HOME || join(homedir(), 'jarvis/runtime');
 const PENDING_TASKS_PATH = join(_BOT_HOME, 'state', 'pending-tasks.json');
-const _MODELS = JSON.parse(readFileSync(join(_BOT_HOME, 'config', 'models.json'), 'utf-8'));
+const _MODELS = loadModelsConfig(_BOT_HOME);
 const PENDING_TASK_TTL_MS = 30 * 60 * 1000; // 30분
 
 function _pruneExpiredPendingTasks(tasks) {

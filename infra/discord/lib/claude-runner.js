@@ -43,6 +43,7 @@ import { checkSensitivePath } from './security-guard.js';
 
 import { recordSilentError } from './error-ledger.js';
 import { importOptional } from './optional-import.js';
+import { loadModelsConfig } from './models-config.js';
 
 // career-coding-mode.js is owner-only and not shipped in the public repo — without it the mode stays 'off'.
 const _careerCodingMode = await importOptional('./career-coding-mode.js');
@@ -128,7 +129,7 @@ export function processFeedback(userId, text) {
 
 const HOME = homedir();
 const BOT_HOME = join(process.env.BOT_HOME || join(HOME, 'jarvis/runtime'));
-const MODELS = JSON.parse(readFileSync(join(BOT_HOME, 'config', 'models.json'), 'utf-8'));
+const MODELS = loadModelsConfig(BOT_HOME);
 const DISCORD_MCP_PATH = join(BOT_HOME, 'config', 'discord-mcp.json');
 const USER_PROFILE_PATH = join(BOT_HOME, 'context', 'user-profile.md');
 const OWNER_PROFILE_PATH = join(BOT_HOME, 'context', 'owner', 'owner-profile.md');
