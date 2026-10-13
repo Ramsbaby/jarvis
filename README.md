@@ -9,12 +9,19 @@
   <img src="https://img.shields.io/badge/Claude_Code-plugin-8A2BE2?style=flat-square&logo=anthropic" alt="Claude Code plugin">
 </p>
 
+> ### 📦 Status — frozen reference snapshot (2026-10-13)
+>
+> **This is the last self-contained version of the standalone Jarvis stack (v2.60.6, 2026-08-23) plus 3 small boot fixes. It is no longer developed and comes with no support.**
+>
+> - **What happened.** In September 2026 the author's own setup moved onto [OpenClaw](https://github.com/openclaw/openclaw) as its runtime — one person cannot keep a 24/7 platform current.
+> - **What this branch is.** Reference code you can read, fork and boot. Re-checked on 2026-10-13: a clean clone installs and the Discord bot starts up to the Discord login step (macOS 26 arm64, Node 22.22 and 24.21). Live Discord replies, the cron/LaunchAgent fleet, RAG and the setup wizard were **not** re-tested for this snapshot — see [Known gaps](#known-gaps-in-this-snapshot).
+> - **What `main` is.** After v2.60.6, `main` became the author's machine-specific working tree (paths and private modules that exist only on that machine). It does not boot from a clean clone and is no longer updated in this repository.
+> - **If you want something maintained**, use OpenClaw.
+> - **Issues and PRs** are read, but expect slow or no replies. Forks are welcome (MIT).
 
-<<<<<<< Updated upstream
+<details><summary>Earlier notices (April – June 2026)</summary>
+
 > **⚠️ Migration Notice (2026-04-17)**: Runtime data relocated from `~/.jarvis/` → `~/jarvis/runtime/`.
-=======
-> **⚠️ Migration Notice (2026-04-17)**: Runtime data relocated from `~/jarvis/runtime/` → `~/jarvis/runtime/`.
->>>>>>> Stashed changes
 > Existing installations: `~/.jarvis` remains as a backward-compatible symlink through **2026-10-17** (D+180).
 > Fresh installs: use `~/jarvis/runtime/` directly. See [docs/A2-MIGRATION.md](infra/docs/A2-MIGRATION.md) (upcoming).
 
@@ -27,6 +34,8 @@
 
 > **🧩 Claude Code Plugins (2026-05-13)**: `jarvis-goal` · `jarvis-deep-interview` · `jarvis-plan-review` — Anthropic `/goal` port with irreversibility guard, Sorbh/interview-me convergent gating port, gstack `/plan-ceo-review` 11-section port. All OSS-safe English.
 > Install: `/plugin marketplace add Ramsbaby/jarvis` · See [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) for plugin details.
+
+</details>
 
 <p align="center">
   <strong>AI operations platform that manages itself 24/7</strong><br>
@@ -130,6 +139,35 @@ Zero API charges — runs on a Claude subscription. 100% of your data stays on y
 > Cross-platform abstraction: `lib/compat.sh` auto-detects the OS and routes service commands (`launchctl` on macOS, `pm2` on Linux/WSL2).
 
 ## Quick Start
+
+### Minimal boot (the path verified on 2026-10-13)
+
+This brings the Discord bot process up to the Discord login. It needs only Node.js 22+ and git — no Claude CLI login, Python, Ollama or API key. Everything below this section covers the full stack, which was **not** re-verified for this snapshot (see [Known gaps](#known-gaps-in-this-snapshot)).
+
+```bash
+git clone --branch standalone https://github.com/Ramsbaby/jarvis.git ~/jarvis
+cd ~/jarvis/infra/discord
+npm ci
+mkdir -p ~/jarvis/runtime/discord
+printf 'DISCORD_TOKEN=%s\n' 'paste-your-bot-token-here' > ~/jarvis/runtime/discord/.env
+node discord-bot.js
+```
+
+- The bot reads `DISCORD_TOKEN` from `~/jarvis/runtime/discord/.env` (root overridable with `JARVIS_HOME`) and keeps runtime state under `~/jarvis/runtime` (overridable with `BOT_HOME`).
+- Without a `.env` it exits with `DISCORD_TOKEN not set in .env`. With a made-up token it logs `TokenInvalid` — that is the expected result of this check. With a real token it goes on to connect to Discord; that part, and replies through the Claude CLI (Step 0 below), were not tested.
+- Warnings about a missing `models.json` (it falls back to `infra/config/models.example.json`), `personas.json` and `user_profiles.json` are expected on a fresh clone.
+- Two owner-only modules (`career-coding-mode.js`, `interview-fast-path.js`) are not part of this repository; the bot treats them as optional.
+
+### Known gaps in this snapshot
+
+Each item was read in the v2.60.6 code (the setup wizard was read, not run).
+
+- **The wizard demands more than this README says.** `scripts/setup_infra.py` aborts unless Ollama answers on `localhost:11434` (`check_ollama` at lines 120-134, abort at 534-536) and insists on an `ANTHROPIC_API_KEY` (225-227), while this README calls Ollama optional (RAG only) and says a Claude subscription is enough.
+- **The wizard and the bot use different folders.** The wizard writes `.env` (with `BOT_HOME`) to `~/.local/share/jarvis/` (`setup_infra.py:24,210,238`); the bot loads `$JARVIS_HOME/runtime/discord/.env` (`infra/discord/discord-bot.js:20`) and defaults `BOT_HOME` to `~/jarvis/runtime` (`discord-bot.js:38`). A `.env` written by the wizard is not the one the bot reads.
+- **No LaunchAgent templates are shipped, and the plist files that exist are the author's.** The wizard looks in `infra/templates/launchagents/` (`setup_infra.py:400`), which does not exist, so it skips LaunchAgent setup. `infra/launchd/ai.jarvis.discord-bot.plist` and `infra/config/ai.jarvis.discord-bot.plist` hard-code the author's macOS home directory.
+- **Release alerts and auto-update make no sense on a frozen snapshot.** `infra/scripts/release-checker.mjs` polls the latest GitHub release of the upstream repository (lines 33-34) and, in auto mode, runs `git pull` (line 136). Leave it disabled.
+- **`npm test` in `infra/discord` runs no tests.** Identical on v2.60.6 and here: `vitest` reports 3 failed test files and no tests — `test/fast-path-classify.test.js` imports the owner-only `interview-fast-path.js`, and `test/skill-trigger.test.js` calls `process.exit` at the top level.
+- **Windows** (including the WSL2/PM2 path) was not tested. The `discord.js` default-import change contributed in #52 targets a start-up crash reported on a fresh Windows machine; it could not be reproduced on macOS with Node 22/24, so it is included as a precaution and counted among the three boot fixes.
 
 ### Which plan do I need?
 
