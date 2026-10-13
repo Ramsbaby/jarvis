@@ -12,10 +12,7 @@
  */
 
 import { BoundedMap } from './bounded-map.js';
-import { getCareerCodingMode, setCareerCodingMode, parseCodingModeCommand, getOwnerDiscordId, CAREER_CHANNEL_ID } from './career-coding-mode.js';
-// v3.3 P0-D: interview-fast-path 모듈 eager import로 RAG warmup IIFE를 봇 기동 시 트리거.
-// dynamic import 시점(첫 질의)에 warmup하면 의미 없음 — 여기서 선행 실행.
-import './interview-fast-path.js';
+import { importOptional } from './optional-import.js';
 import { writeFileSync, rmSync, readFileSync, existsSync, renameSync, appendFileSync, mkdirSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { homedir } from 'node:os';
@@ -88,6 +85,18 @@ import { isTutoringQuery } from './prompt-sections.js';
 import { detectAndRecord as _trackCommitment } from './commitment-tracker.js';
 import { detectStatType, sendStatVisual } from './stat-visual.js';
 import { detectAnalyticalType, generateAndSendVisual } from './visual-gen.js';
+
+// Owner-only modules are not shipped in the public repo. Without them the coding-mode toggle
+// stays off and the interview fast-path is skipped; the bot itself still starts.
+const _careerCodingMode = await importOptional('./career-coding-mode.js');
+const getCareerCodingMode = _careerCodingMode ? _careerCodingMode.getCareerCodingMode : () => 'off';
+const setCareerCodingMode = _careerCodingMode ? _careerCodingMode.setCareerCodingMode : () => {};
+const parseCodingModeCommand = _careerCodingMode ? _careerCodingMode.parseCodingModeCommand : () => null;
+const getOwnerDiscordId = _careerCodingMode ? _careerCodingMode.getOwnerDiscordId : () => null;
+const CAREER_CHANNEL_ID = _careerCodingMode ? _careerCodingMode.CAREER_CHANNEL_ID : null;
+// v3.3 P0-D: interview-fast-path 모듈 eager import로 RAG warmup IIFE를 봇 기동 시 트리거.
+// dynamic import 시점(첫 질의)에 warmup하면 의미 없음 — 여기서 선행 실행.
+const _interviewFastPath = await importOptional('./interview-fast-path.js');
 
 // ---------------------------------------------------------------------------
 // Message debouncer — 연속 메시지를 1.5s 대기 후 배치로 묶어 단일 Claude 호출
@@ -1404,7 +1413,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
     // claude-agent-sdk의 Claude Code CLI subprocess spawn 오버헤드(60초+)를 회피하기 위해
     // 해당 채널만 OpenAI gpt-4o-mini 직접 호출로 5초 이내 응답 보장.
     // 세션/스킬/MCP 전부 skip — personas.json의 jarvis-interview 페르소나 + RAG만으로 답변.
-    if (message.channel.id === INTERVIEW_CHANNEL_ID) {
+    if (_interviewFastPath && message.channel.id === INTERVIEW_CHANNEL_ID) {
       clearInterval(typingInterval);
 
       // v4.36 (2026-04-26) Ralph 메타 명령 인터셉트 — fast-path 진입 전.
@@ -1480,7 +1489,7 @@ async function _processBatch(messages, { sessions, rateTracker, semaphore, activ
         }
       }
 
-      const { runInterviewFastPath } = await import('./interview-fast-path.js');
+      const { runInterviewFastPath } = _interviewFastPath;
       try {
         await runInterviewFastPath({ message, userInput: userPrompt });
       } catch (err) {

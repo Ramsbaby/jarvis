@@ -20,7 +20,6 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { userMemory } from '../../lib/user-memory.mjs';
-import { getCareerCodingMode } from './career-coding-mode.js';
 import {
   detectFeedback as _sharedDetectFeedback,
   processFeedback as _sharedProcessFeedback,
@@ -43,6 +42,11 @@ import { buildChannelFeedSection } from './channel-feed.js';
 import { checkSensitivePath } from './security-guard.js';
 
 import { recordSilentError } from './error-ledger.js';
+import { importOptional } from './optional-import.js';
+
+// career-coding-mode.js is owner-only and not shipped in the public repo — without it the mode stays 'off'.
+const _careerCodingMode = await importOptional('./career-coding-mode.js');
+const getCareerCodingMode = _careerCodingMode ? _careerCodingMode.getCareerCodingMode : () => 'off';
 
 // LLM Wiki 실시간 기록 — 대화 종료 시 facts를 위키에도 저장
 let _addFactToWiki = null;
