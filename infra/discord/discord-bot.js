@@ -13,13 +13,9 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, rmSync, renameSync } from 'node:fs';
-import {
-  Client,
-  GatewayIntentBits,
-  SlashCommandBuilder,
-  REST,
-  Routes,
-} from 'discord.js';
+// discord.js is CJS — use default import to avoid ESM named-export errors
+import discordPkg from 'discord.js';
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = discordPkg;
 import { config as loadEnv } from 'dotenv';
 loadEnv({ path: join(process.env.JARVIS_HOME || join(homedir(), 'jarvis'), 'runtime/discord/.env') });
 
