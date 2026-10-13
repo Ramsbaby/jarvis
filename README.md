@@ -10,21 +10,13 @@
 </p>
 
 
-> ### 📦 Project status — 2026-09-09
+> ### 📦 Project status — 2026-10-13
 >
-> **Jarvis is moving onto [OpenClaw 2.0](https://github.com/openclaw/openclaw) as its runtime.**
-> The ideas stay. The plumbing is being handed to a maintained upstream.
+> **You are looking at `main`, which is not the installable version.**
+> After v2.60.6 (2026-08-23) this branch became the author's machine-specific working tree: it expects paths and private modules that exist only on that machine, and it does not boot from a clean clone. It is no longer updated in this repository.
 >
-> | Layer | What it is | Status |
-> |---|---|---|
-> | **Plugins & skills** | `infra/openclaw-plugins/` (OpenClaw) · [`.claude-plugin/`](.claude-plugin/marketplace.json) (Claude Code) | **Actively developed** |
-> | **Standalone stack** | Discord bot · cron + LaunchAgent fleet · RAG · wiki slots | **Frozen** — kept public for reference. Issues and PRs stay open, but expect slow replies |
->
-> **Why.** One person cannot keep a 24/7 platform current. OpenClaw has 900+ contributors doing the plumbing;
-> what is actually mine is the token ledger, budget caps, wiki slots and channel personas — those become plugins.
-> The full log, failures included, is in [`docs/plan/openclaw2-migration-plan.md`](docs/plan/openclaw2-migration-plan.md).
->
-> **This repository is not archived and not going away.** Only the layer underneath it is changing.
+> **Use the [`standalone`](https://github.com/Ramsbaby/jarvis/tree/standalone) branch** — the frozen, bootable reference snapshot (v2.60.6 + boot fixes). No active development, no support.
+> The author's running system now lives on [OpenClaw](https://github.com/openclaw/openclaw).
 
 <details>
 <summary>Earlier notices (April – June 2026)</summary>
