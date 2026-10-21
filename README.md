@@ -563,6 +563,15 @@ jarvis/
 
 </details>
 
+## Background Reading (Korean)
+
+Write-ups on why and how Jarvis was built, on the author's blog:
+
+- [Part 1 — Why I built a personal AI butler](https://blog.ramsbaby.com/ai/jarvis-my-ai-butler-part1-why-i-built-it/)
+- [Part 2 — Architecture](https://blog.ramsbaby.com/ai/jarvis-my-ai-butler-part2-architecture/)
+- [Part 3 — RAG memory](https://blog.ramsbaby.com/ai/jarvis-my-ai-butler-part3-rag-memory/)
+- [Hybrid search: BM25 + vector](https://blog.ramsbaby.com/ai/jarvis-rag-hybrid-search-bm25-vector/)
+
 ## Contributing & Support
 
 Jarvis is built in the open. If it helped you — or you just find the architecture interesting — **a ⭐ means a lot** and helps others discover it.
